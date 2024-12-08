@@ -1,0 +1,21 @@
+{
+    "name": "forge-engine",
+    "version": "0.1.0",
+    "dependencies": [
+        "tensorflow",
+        "sol2",
+        "sfml",
+        "sdl2",
+        "spdlog",
+        "catch2"
+    ],
+    "builtin-baseline": "latest",
+    "overrides": [
+        {"name": "tensorflow", "version": "2.15.0"},
+        {"name": "sol2", "version": "3.3.0"},
+        {"name": "sfml", "version": "2.6.0"},
+        {"name": "sdl2", "version": "2.28.2"},
+        {"name": "spdlog", "version": "1.12.0"},
+        {"name": "catch2", "version": "3.4.0"}
+    ]
+}

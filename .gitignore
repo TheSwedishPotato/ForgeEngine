@@ -1,0 +1,44 @@
+# Build directories
+build/
+out/
+bin/
+lib/
+
+# IDE files
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln.docstates
+*.sln.ide/
+*.vcxproj.user
+
+# Compiled files
+*.obj
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.so
+*.dylib
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Dependency directories
+vcpkg_installed/
+packages/
+
+# Debug files
+*.log
+*.tlog
+*.lastbuildstate
+
+# OS-specific files
+.DS_Store
+Thumbs.db
