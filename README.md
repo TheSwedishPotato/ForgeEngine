@@ -36,10 +36,15 @@ Forge Engine is an advanced medieval life simulation system that models complex 
 - Cultural exchange
 
 ### Visualization
-- SFML-based rendering
+- SFML-based rendering (C++ engine)
 - Interactive UI
 - Camera controls
 - Minimap system
+- Web-based 3D visualization (Medieval Stockholm 1554)
+  - React Three Fiber for stunning 3D graphics
+  - Day/night cycle with dynamic lighting
+  - Animated NPCs and environmental effects
+  - See [web-visualization/README.md](web-visualization/README.md)
 
 ## Getting Started
 
@@ -66,6 +71,14 @@ cmake --build .
 cd build
 ctest
 ```
+
+### Web Visualization (Stockholm 1554)
+```bash
+cd web-visualization
+npm install
+npm run dev
+```
+Then open http://localhost:3000 in your browser to see the stunning 3D visualization!
 
 ## Documentation
 - [User Guide](docs/user_guide.md)
