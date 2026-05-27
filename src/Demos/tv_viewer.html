@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📺 ForgeEngine TV Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ─── Room Background ─── */
+    .room {
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(to bottom,
+          #2c2c3e 0%,
+          #3a3a52 40%,
+          #4a4a60 60%,
+          #2e2e2e 60%,
+          #1a1a1a 100%
+        );
+      z-index: 0;
+    }
+
+    /* wall texture */
+    .room::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 40% 0;
+      background-image:
+        repeating-linear-gradient(
+          90deg,
+          rgba(255,255,255,0.015) 0px,
+          rgba(255,255,255,0.015) 1px,
+          transparent 1px,
+          transparent 80px
+        ),
+        repeating-linear-gradient(
+          0deg,
+          rgba(255,255,255,0.015) 0px,
+          rgba(255,255,255,0.015) 1px,
+          transparent 1px,
+          transparent 80px
+        );
+    }
+
+    /* floor texture */
+    .room::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 40%;
+      background:
+        linear-gradient(to bottom, #2a2a2a, #111);
+      border-top: 3px solid #555;
+    }
+
+    /* ─── TV Stand ─── */
+    .tv-stand-wrapper {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 8vh;
+    }
+
+    /* ─── TV Body ─── */
+    .tv-body {
+      background: linear-gradient(160deg, #2a2a2a 0%, #111 60%, #1a1a1a 100%);
+      border-radius: 18px 18px 12px 12px;
+      padding: 18px 18px 22px;
+      box-shadow:
+        0 0 0 2px #444,
+        0 0 0 4px #222,
+        0 30px 80px rgba(0,0,0,0.9),
+        0 10px 30px rgba(0,0,0,0.8),
+        inset 0 1px 0 rgba(255,255,255,0.07);
+      position: relative;
+    }
+
+    /* TV brand badge */
+    .tv-brand {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #555;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-weight: 300;
+    }
+
+    /* power LED */
+    .tv-led {
+      position: absolute;
+      bottom: 8px;
+      right: 24px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #00ff88;
+      box-shadow: 0 0 8px #00ff88, 0 0 16px #00ff8855;
+      animation: ledPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes ledPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ─── Bezel ─── */
+    .tv-bezel {
+      background: #0a0a0a;
+      border-radius: 8px;
+      padding: 6px;
+      box-shadow:
+        inset 0 0 12px rgba(0,0,0,0.9),
+        inset 0 2px 4px rgba(0,0,0,0.8);
+    }
+
+    /* ─── Screen ─── */
+    .tv-screen {
+      position: relative;
+      width: min(70vw, 860px);
+      aspect-ratio: 16 / 9;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #000;
+      box-shadow:
+        inset 0 0 40px rgba(0,0,0,0.6),
+        0 0 60px rgba(80,120,255,0.15);
+    }
+
+    /* screen glare overlay */
+    .tv-screen::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(135deg,
+          rgba(255,255,255,0.04) 0%,
+          transparent 50%,
+          rgba(255,255,255,0.01) 100%
+        );
+      pointer-events: none;
+      z-index: 5;
+      border-radius: 4px;
+    }
+
+    .tv-screen iframe,
+    .tv-screen video {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    /* ─── TV Neck + Base ─── */
+    .tv-neck {
+      width: 60px;
+      height: 28px;
+      background: linear-gradient(to bottom, #222, #1a1a1a);
+      margin: 0 auto;
+      clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    }
+
+    .tv-base {
+      width: 200px;
+      height: 14px;
+      background: linear-gradient(to bottom, #2a2a2a, #1a1a1a);
+      border-radius: 4px 4px 6px 6px;
+      box-shadow:
+        0 6px 20px rgba(0,0,0,0.7),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    /* TV glow on floor */
+    .tv-floor-glow {
+      position: absolute;
+      bottom: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 500px;
+      height: 40px;
+      background: radial-gradient(ellipse, rgba(80,120,255,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ─── Side table ─── */
+    .side-table {
+      position: fixed;
+      bottom: 8vh;
+      left: 5vw;
+      z-index: 8;
+    }
+
+    .side-table-top {
+      width: 90px;
+      height: 8px;
+      background: linear-gradient(to bottom, #8B6F47, #6B4F27);
+      border-radius: 3px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+    }
+
+    .side-table-leg {
+      width: 6px;
+      height: 50px;
+      background: linear-gradient(to bottom, #7B5F37, #5B4027);
+      margin: 0 auto;
+      border-radius: 0 0 3px 3px;
+    }
+
+    /* Tissue box on table */
+    .tissue-box {
+      width: 50px;
+      height: 30px;
+      background: linear-gradient(135deg, #e8e8e8, #d0d0d0);
+      border-radius: 4px;
+      margin-bottom: 4px;
+      position: relative;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+
+    .tissue-box::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 20px;
+      height: 10px;
+      background: white;
+      border-radius: 50% 50% 0 0;
+      border: 1px solid #ddd;
+    }
+
+    /* ─── Plant ─── */
+    .plant {
+      position: fixed;
+      bottom: 8vh;
+      right: 8vw;
+      z-index: 8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .plant-pot {
+      width: 50px;
+      height: 40px;
+      background: linear-gradient(to bottom, #c67c3a, #a05c2a);
+      clip-path: polygon(10% 0%, 90% 0%, 100% 100%, 0% 100%);
+      border-radius: 0 0 4px 4px;
+    }
+
+    .plant-leaves {
+      position: relative;
+      width: 80px;
+      height: 80px;
+    }
+
+    .leaf {
+      position: absolute;
+      border-radius: 50% 0 50% 0;
+      background: linear-gradient(135deg, #2d8a2d, #1a5c1a);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .leaf:nth-child(1) { width:40px; height:55px; bottom:0; left:20px; transform:rotate(-20deg); }
+    .leaf:nth-child(2) { width:35px; height:50px; bottom:5px; left:10px; transform:rotate(-60deg); background: linear-gradient(135deg, #3aa03a, #2a7a2a); }
+    .leaf:nth-child(3) { width:38px; height:52px; bottom:0; right:10px; transform:rotate(20deg) scaleX(-1); }
+    .leaf:nth-child(4) { width:32px; height:45px; bottom:10px; right:5px; transform:rotate(50deg) scaleX(-1); background: linear-gradient(135deg, #3aa03a, #2a7a2a); }
+    .leaf:nth-child(5) { width:36px; height:50px; bottom:5px; left:22px; transform:rotate(5deg); background: linear-gradient(135deg, #4ab04a, #2a7a2a); }
+
+    /* ─── Remote control ─── */
+    .remote {
+      position: fixed;
+      bottom: 12vh;
+      left: 12vw;
+      z-index: 9;
+      transform: rotate(-35deg);
+    }
+
+    .remote-body {
+      width: 36px;
+      height: 90px;
+      background: linear-gradient(to bottom, #222, #111);
+      border-radius: 10px 10px 14px 14px;
+      box-shadow:
+        0 4px 16px rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+      padding: 8px 5px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .remote-btn-row {
+      display: flex;
+      gap: 3px;
+    }
+
+    .r-btn {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #333;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .r-btn.red   { background: #8B0000; }
+    .r-btn.green { background: #006400; }
+    .r-btn.yellow{ background: #8B6000; }
+    .r-btn.blue  { background: #00008B; }
+
+    /* ─── Ambient light glow ─── */
+    .ambient-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(
+        ellipse 80% 60% at 50% 40%,
+        rgba(60,100,200,0.06) 0%,
+        transparent 70%
+      );
+    }
+
+    /* ─── Controls UI ─── */
+    .controls {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 8px 16px;
+      backdrop-filter: blur(12px);
+    }
+
+    .controls label {
+      color: #aaa;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .controls select, .controls input {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .controls input {
+      width: 260px;
+      font-size: 11px;
+    }
+
+    .controls button {
+      background: #4a7cff;
+      border: none;
+      color: #fff;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover { background: #3a6ce0; }
+
+    /* ─── Scanlines effect ─── */
+    .scanlines {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 4;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Room -->
+  <div class="room"></div>
+  <div class="ambient-glow"></div>
+
+  <!-- Plant -->
+  <div class="plant">
+    <div class="plant-leaves">
+      <div class="leaf"></div>
+      <div class="leaf"></div>
+      <div class="leaf"></div>
+      <div class="leaf"></div>
+      <div class="leaf"></div>
+    </div>
+    <div class="plant-pot"></div>
+  </div>
+
+  <!-- Side table with tissue box -->
+  <div class="side-table">
+    <div class="tissue-box"></div>
+    <div class="side-table-top"></div>
+    <div class="side-table-leg"></div>
+  </div>
+
+  <!-- Remote control -->
+  <div class="remote">
+    <div class="remote-body">
+      <div class="r-btn red"></div>
+      <div class="remote-btn-row">
+        <div class="r-btn"></div>
+        <div class="r-btn"></div>
+      </div>
+      <div class="remote-btn-row">
+        <div class="r-btn green"></div>
+        <div class="r-btn yellow"></div>
+      </div>
+      <div class="remote-btn-row">
+        <div class="r-btn"></div>
+        <div class="r-btn blue"></div>
+      </div>
+      <div class="r-btn"></div>
+      <div class="remote-btn-row">
+        <div class="r-btn"></div>
+        <div class="r-btn"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <label>📺 Channel:</label>
+    <select id="channelSelect" onchange="switchChannel(this.value)">
+      <option value="nature">🌿 Nature Documentary</option>
+      <option value="space">🚀 Space & Universe</option>
+      <option value="lofi">🎵 Lo-Fi Music</option>
+      <option value="fireplace">🔥 Fireplace</option>
+      <option value="ocean">🌊 Ocean Waves</option>
+      <option value="custom">🔗 Custom URL...</option>
+    </select>
+    <span id="customUrlWrap" style="display:none">
+      <input id="customUrl" type="text" placeholder="Paste YouTube URL here..." />
+      <button onclick="loadCustom()">▶ Play</button>
+    </span>
+  </div>
+
+  <!-- TV -->
+  <div class="tv-stand-wrapper">
+    <div class="tv-body">
+      <div class="tv-bezel">
+        <div class="tv-screen" id="tvScreen">
+          <!-- Video loads here -->
+          <div class="scanlines"></div>
+        </div>
+      </div>
+      <div class="tv-brand">FORGE TV</div>
+      <div class="tv-led"></div>
+    </div>
+    <div class="tv-neck"></div>
+    <div class="tv-base"></div>
+    <div class="tv-floor-glow"></div>
+  </div>
+
+  <script>
+    const channels = {
+      nature:    'https://www.youtube.com/embed/1EiC9bvVGnk?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
+      space:     'https://www.youtube.com/embed/0jHsq36_NTU?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
+      lofi:      'https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
+      fireplace: 'https://www.youtube.com/embed/L_LUpnjgPso?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
+      ocean:     'https://www.youtube.com/embed/WHPEKLQID4U?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
+    };
+
+    function getYouTubeEmbedUrl(url) {
+      try {
+        const u = new URL(url);
+        let id = u.searchParams.get('v');
+        if (!id && u.hostname === 'youtu.be') id = u.pathname.slice(1);
+        if (!id) return null;
+        return `https://www.youtube.com/embed/${id}?autoplay=1&controls=1&rel=0&modestbranding=1`;
+      } catch { return null; }
+    }
+
+    function setScreenContent(src) {
+      const screen = document.getElementById('tvScreen');
+      // remove old iframe/video
+      screen.querySelectorAll('iframe, video').forEach(el => el.remove());
+      const iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.allow = 'autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      // insert before scanlines
+      screen.insertBefore(iframe, screen.querySelector('.scanlines'));
+    }
+
+    function switchChannel(val) {
+      const wrap = document.getElementById('customUrlWrap');
+      if (val === 'custom') {
+        wrap.style.display = 'inline-flex';
+        wrap.style.gap = '6px';
+        return;
+      }
+      wrap.style.display = 'none';
+      if (channels[val]) setScreenContent(channels[val]);
+    }
+
+    function loadCustom() {
+      const raw = document.getElementById('customUrl').value.trim();
+      const embed = getYouTubeEmbedUrl(raw);
+      if (embed) {
+        setScreenContent(embed);
+      } else {
+        alert('Please paste a valid YouTube URL (e.g. https://www.youtube.com/watch?v=...)');
+      }
+    }
+
+    // Load default channel on start
+    switchChannel('nature');
+  </script>
+</body>
+</html>
