@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>📺 ForgeEngine TV Viewer</title>
+  <title>📺 Forge TV</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       background: #1a1a2e;
@@ -13,476 +13,273 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-end;
-      font-family: 'Segoe UI', sans-serif;
+      justify-content: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
       overflow: hidden;
-      position: relative;
     }
 
-    /* ─── Room Background ─── */
+    /* ── Room ── */
     .room {
-      position: fixed;
-      inset: 0;
-      background:
-        linear-gradient(to bottom,
-          #2c2c3e 0%,
-          #3a3a52 40%,
-          #4a4a60 60%,
-          #2e2e2e 60%,
-          #1a1a1a 100%
-        );
-      z-index: 0;
+      position: fixed; inset: 0; z-index: 0;
+      background: linear-gradient(to bottom,
+        #23233a 0%, #2e2e48 45%, #3a3a58 55%,
+        #262626 55%, #141414 100%);
     }
-
-    /* wall texture */
-    .room::before {
+    .room::before { /* wall grid */
       content: '';
-      position: absolute;
-      inset: 0 0 40% 0;
+      position: absolute; inset: 0 0 45% 0;
       background-image:
-        repeating-linear-gradient(
-          90deg,
-          rgba(255,255,255,0.015) 0px,
-          rgba(255,255,255,0.015) 1px,
-          transparent 1px,
-          transparent 80px
-        ),
-        repeating-linear-gradient(
-          0deg,
-          rgba(255,255,255,0.015) 0px,
-          rgba(255,255,255,0.015) 1px,
-          transparent 1px,
-          transparent 80px
-        );
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 100px),
+        repeating-linear-gradient(0deg,  rgba(255,255,255,0.012) 0 1px, transparent 1px 100px);
     }
-
-    /* floor texture */
-    .room::after {
+    .room::after { /* floor shine */
       content: '';
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      height: 40%;
-      background:
-        linear-gradient(to bottom, #2a2a2a, #111);
-      border-top: 3px solid #555;
+      position: absolute; bottom: 0; left: 0; right: 0; height: 45%;
+      background: linear-gradient(to bottom, #282828, #0e0e0e);
+      border-top: 2px solid #444;
+    }
+    .ambient {
+      position: fixed; inset: 0; z-index: 1; pointer-events: none;
+      background: radial-gradient(ellipse 70% 50% at 50% 42%,
+        rgba(60,100,220,0.07) 0%, transparent 70%);
+      transition: background 0.6s;
     }
 
-    /* ─── TV Stand ─── */
-    .tv-stand-wrapper {
-      position: relative;
-      z-index: 10;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 8vh;
-    }
-
-    /* ─── TV Body ─── */
-    .tv-body {
-      background: linear-gradient(160deg, #2a2a2a 0%, #111 60%, #1a1a1a 100%);
-      border-radius: 18px 18px 12px 12px;
-      padding: 18px 18px 22px;
-      box-shadow:
-        0 0 0 2px #444,
-        0 0 0 4px #222,
-        0 30px 80px rgba(0,0,0,0.9),
-        0 10px 30px rgba(0,0,0,0.8),
-        inset 0 1px 0 rgba(255,255,255,0.07);
-      position: relative;
-    }
-
-    /* TV brand badge */
-    .tv-brand {
-      position: absolute;
-      bottom: 6px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #555;
-      font-size: 11px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      font-weight: 300;
-    }
-
-    /* power LED */
-    .tv-led {
-      position: absolute;
-      bottom: 8px;
-      right: 24px;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #00ff88;
-      box-shadow: 0 0 8px #00ff88, 0 0 16px #00ff8855;
-      animation: ledPulse 3s ease-in-out infinite;
-    }
-
-    @keyframes ledPulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-
-    /* ─── Bezel ─── */
-    .tv-bezel {
-      background: #0a0a0a;
-      border-radius: 8px;
-      padding: 6px;
-      box-shadow:
-        inset 0 0 12px rgba(0,0,0,0.9),
-        inset 0 2px 4px rgba(0,0,0,0.8);
-    }
-
-    /* ─── Screen ─── */
-    .tv-screen {
-      position: relative;
-      width: min(70vw, 860px);
-      aspect-ratio: 16 / 9;
-      border-radius: 4px;
-      overflow: hidden;
-      background: #000;
-      box-shadow:
-        inset 0 0 40px rgba(0,0,0,0.6),
-        0 0 60px rgba(80,120,255,0.15);
-    }
-
-    /* screen glare overlay */
-    .tv-screen::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background:
-        linear-gradient(135deg,
-          rgba(255,255,255,0.04) 0%,
-          transparent 50%,
-          rgba(255,255,255,0.01) 100%
-        );
-      pointer-events: none;
-      z-index: 5;
-      border-radius: 4px;
-    }
-
-    .tv-screen iframe,
-    .tv-screen video {
-      width: 100%;
-      height: 100%;
-      border: none;
-      display: block;
-    }
-
-    /* ─── TV Neck + Base ─── */
-    .tv-neck {
-      width: 60px;
-      height: 28px;
-      background: linear-gradient(to bottom, #222, #1a1a1a);
-      margin: 0 auto;
-      clip-path: polygon(20% 0%, 80% 0%, 100% 100%, 0% 100%);
-      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-    }
-
-    .tv-base {
-      width: 200px;
-      height: 14px;
-      background: linear-gradient(to bottom, #2a2a2a, #1a1a1a);
-      border-radius: 4px 4px 6px 6px;
-      box-shadow:
-        0 6px 20px rgba(0,0,0,0.7),
-        inset 0 1px 0 rgba(255,255,255,0.05);
-    }
-
-    /* TV glow on floor */
-    .tv-floor-glow {
-      position: absolute;
-      bottom: -40px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 500px;
-      height: 40px;
-      background: radial-gradient(ellipse, rgba(80,120,255,0.12) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    /* ─── Side table ─── */
-    .side-table {
-      position: fixed;
-      bottom: 8vh;
-      left: 5vw;
-      z-index: 8;
-    }
-
-    .side-table-top {
-      width: 90px;
-      height: 8px;
-      background: linear-gradient(to bottom, #8B6F47, #6B4F27);
-      border-radius: 3px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
-    }
-
-    .side-table-leg {
-      width: 6px;
-      height: 50px;
-      background: linear-gradient(to bottom, #7B5F37, #5B4027);
-      margin: 0 auto;
-      border-radius: 0 0 3px 3px;
-    }
-
-    /* Tissue box on table */
-    .tissue-box {
-      width: 50px;
-      height: 30px;
-      background: linear-gradient(135deg, #e8e8e8, #d0d0d0);
-      border-radius: 4px;
-      margin-bottom: 4px;
-      position: relative;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    }
-
-    .tissue-box::after {
-      content: '';
-      position: absolute;
-      top: 3px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 20px;
-      height: 10px;
-      background: white;
-      border-radius: 50% 50% 0 0;
-      border: 1px solid #ddd;
-    }
-
-    /* ─── Plant ─── */
+    /* ── Decorations ── */
     .plant {
-      position: fixed;
-      bottom: 8vh;
-      right: 8vw;
-      z-index: 8;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      position: fixed; bottom: 7vh; right: 7vw; z-index: 5;
+      display: flex; flex-direction: column; align-items: center;
     }
-
-    .plant-pot {
-      width: 50px;
-      height: 40px;
-      background: linear-gradient(to bottom, #c67c3a, #a05c2a);
-      clip-path: polygon(10% 0%, 90% 0%, 100% 100%, 0% 100%);
-      border-radius: 0 0 4px 4px;
-    }
-
-    .plant-leaves {
-      position: relative;
-      width: 80px;
-      height: 80px;
-    }
-
+    .plant-leaves { position: relative; width: 90px; height: 90px; }
     .leaf {
       position: absolute;
       border-radius: 50% 0 50% 0;
       background: linear-gradient(135deg, #2d8a2d, #1a5c1a);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    }
+    .leaf:nth-child(1){width:42px;height:58px;bottom:0;left:22px;transform:rotate(-20deg)}
+    .leaf:nth-child(2){width:36px;height:52px;bottom:6px;left:8px;transform:rotate(-62deg);background:linear-gradient(135deg,#3aa03a,#2a7a2a)}
+    .leaf:nth-child(3){width:40px;height:55px;bottom:0;right:8px;transform:rotate(22deg) scaleX(-1)}
+    .leaf:nth-child(4){width:33px;height:46px;bottom:10px;right:4px;transform:rotate(52deg) scaleX(-1);background:linear-gradient(135deg,#3aa03a,#2a7a2a)}
+    .leaf:nth-child(5){width:38px;height:52px;bottom:4px;left:24px;transform:rotate(4deg);background:linear-gradient(135deg,#4ab04a,#2a7a2a)}
+    .plant-pot{width:52px;height:42px;background:linear-gradient(to bottom,#c67c3a,#a05c2a);clip-path:polygon(10% 0%,90% 0%,100% 100%,0% 100%)}
+
+    .side-table{position:fixed;bottom:7vh;left:5vw;z-index:5}
+    .st-top{width:95px;height:9px;background:linear-gradient(to bottom,#8B6F47,#6B4F27);border-radius:3px;box-shadow:0 3px 8px rgba(0,0,0,.4)}
+    .st-leg{width:7px;height:55px;background:linear-gradient(to bottom,#7B5F37,#5B4027);margin:0 auto;border-radius:0 0 3px 3px}
+    .tissue{width:52px;height:32px;background:linear-gradient(135deg,#e8e8e8,#d0d0d0);border-radius:4px;margin-bottom:4px;position:relative;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+    .tissue::after{content:'';position:absolute;top:3px;left:50%;transform:translateX(-50%);width:22px;height:11px;background:#fff;border-radius:50% 50% 0 0;border:1px solid #ddd}
+
+    .remote{position:fixed;bottom:11vh;left:13vw;z-index:6;transform:rotate(-38deg)}
+    .remote-body{width:38px;height:95px;background:linear-gradient(to bottom,#222,#111);border-radius:10px 10px 14px 14px;box-shadow:0 4px 16px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);padding:8px 5px;display:flex;flex-direction:column;gap:4px;align-items:center}
+    .rb{width:8px;height:8px;border-radius:50%;background:#333;box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}
+    .rb.r{background:#8B0000}.rb.g{background:#006400}.rb.y{background:#8B6000}.rb.b{background:#00008B}
+    .rb-row{display:flex;gap:3px}
+
+    /* ── TV wrapper ── */
+    .tv-wrap {
+      position: relative; z-index: 10;
+      display: flex; flex-direction: column; align-items: center;
+      margin-bottom: 6vh;
     }
 
-    .leaf:nth-child(1) { width:40px; height:55px; bottom:0; left:20px; transform:rotate(-20deg); }
-    .leaf:nth-child(2) { width:35px; height:50px; bottom:5px; left:10px; transform:rotate(-60deg); background: linear-gradient(135deg, #3aa03a, #2a7a2a); }
-    .leaf:nth-child(3) { width:38px; height:52px; bottom:0; right:10px; transform:rotate(20deg) scaleX(-1); }
-    .leaf:nth-child(4) { width:32px; height:45px; bottom:10px; right:5px; transform:rotate(50deg) scaleX(-1); background: linear-gradient(135deg, #3aa03a, #2a7a2a); }
-    .leaf:nth-child(5) { width:36px; height:50px; bottom:5px; left:22px; transform:rotate(5deg); background: linear-gradient(135deg, #4ab04a, #2a7a2a); }
-
-    /* ─── Remote control ─── */
-    .remote {
-      position: fixed;
-      bottom: 12vh;
-      left: 12vw;
-      z-index: 9;
-      transform: rotate(-35deg);
-    }
-
-    .remote-body {
-      width: 36px;
-      height: 90px;
-      background: linear-gradient(to bottom, #222, #111);
-      border-radius: 10px 10px 14px 14px;
+    /* ── TV body ── */
+    .tv-body {
+      background: linear-gradient(160deg, #2a2a2a 0%, #111 60%, #1a1a1a 100%);
+      border-radius: 18px 18px 12px 12px;
+      padding: 16px 16px 28px;
       box-shadow:
-        0 4px 16px rgba(0,0,0,0.6),
-        inset 0 1px 0 rgba(255,255,255,0.05);
-      padding: 8px 5px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      align-items: center;
+        0 0 0 2px #444, 0 0 0 4px #222,
+        0 30px 80px rgba(0,0,0,.9),
+        0 10px 30px rgba(0,0,0,.8),
+        inset 0 1px 0 rgba(255,255,255,.07);
+      position: relative;
     }
+    .tv-brand{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);color:#555;font-size:10px;letter-spacing:3px;text-transform:uppercase;font-weight:300;white-space:nowrap}
+    .tv-led{position:absolute;bottom:9px;right:24px;width:6px;height:6px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88,0 0 16px #00ff8844;animation:ledBlink 3s ease-in-out infinite}
+    @keyframes ledBlink{0%,100%{opacity:1}50%{opacity:.3}}
 
-    .remote-btn-row {
-      display: flex;
-      gap: 3px;
-    }
+    /* ── Bezel ── */
+    .tv-bezel{background:#0a0a0a;border-radius:8px;padding:6px;box-shadow:inset 0 0 14px rgba(0,0,0,.9),inset 0 2px 5px rgba(0,0,0,.8)}
 
-    .r-btn {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #333;
-      box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
-    }
-
-    .r-btn.red   { background: #8B0000; }
-    .r-btn.green { background: #006400; }
-    .r-btn.yellow{ background: #8B6000; }
-    .r-btn.blue  { background: #00008B; }
-
-    /* ─── Ambient light glow ─── */
-    .ambient-glow {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 2;
-      background: radial-gradient(
-        ellipse 80% 60% at 50% 40%,
-        rgba(60,100,200,0.06) 0%,
-        transparent 70%
-      );
-    }
-
-    /* ─── Controls UI ─── */
-    .controls {
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px;
-      padding: 8px 16px;
-      backdrop-filter: blur(12px);
-    }
-
-    .controls label {
-      color: #aaa;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-
-    .controls select, .controls input {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.15);
-      color: #fff;
-      border-radius: 6px;
-      padding: 4px 8px;
-      font-size: 12px;
-      outline: none;
-      cursor: pointer;
-    }
-
-    .controls input {
-      width: 260px;
-      font-size: 11px;
-    }
-
-    .controls button {
-      background: #4a7cff;
-      border: none;
-      color: #fff;
-      border-radius: 6px;
-      padding: 5px 12px;
-      font-size: 12px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .controls button:hover { background: #3a6ce0; }
-
-    /* ─── Scanlines effect ─── */
-    .scanlines {
-      position: absolute;
-      inset: 0;
-      background: repeating-linear-gradient(
-        to bottom,
-        transparent 0px,
-        transparent 2px,
-        rgba(0,0,0,0.03) 2px,
-        rgba(0,0,0,0.03) 4px
-      );
-      pointer-events: none;
-      z-index: 4;
+    /* ── Screen ── */
+    .tv-screen {
+      position: relative;
+      width: min(68vw, 840px);
+      aspect-ratio: 16/9;
       border-radius: 4px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: inset 0 0 40px rgba(0,0,0,.6), 0 0 60px rgba(80,120,255,.12);
     }
+    .tv-screen::after { /* glare */
+      content:'';position:absolute;inset:0;pointer-events:none;z-index:10;border-radius:4px;
+      background:linear-gradient(135deg,rgba(255,255,255,.05) 0%,transparent 45%,rgba(255,255,255,.01) 100%);
+    }
+    .scanlines{position:absolute;inset:0;z-index:9;pointer-events:none;border-radius:4px;
+      background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.04) 2px 4px)}
+
+    .tv-screen iframe,
+    .tv-screen video {
+      position:absolute;inset:0;width:100%;height:100%;border:none;display:block;
+    }
+
+    /* ── Idle screen ── */
+    #idle {
+      position:absolute;inset:0;z-index:6;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+      background:radial-gradient(ellipse at center, #0a0a1a 0%, #000 100%);
+      color:#fff;text-align:center;padding:20px;
+    }
+    #idle .tv-icon { font-size: clamp(32px, 5vw, 56px); }
+    #idle h2 { font-size: clamp(13px, 2vw, 18px); font-weight:400; color:#ccc; letter-spacing:1px; }
+    #idle p  { font-size: clamp(10px, 1.4vw, 13px); color:#666; line-height:1.6; max-width:360px; }
+    #idle code { background:rgba(255,255,255,.07); border-radius:4px; padding:1px 5px; font-size:.9em; color:#aaf; }
+
+    /* ── TV neck + base ── */
+    .tv-neck{width:64px;height:30px;background:linear-gradient(to bottom,#222,#1a1a1a);margin:0 auto;clip-path:polygon(20% 0%,80% 0%,100% 100%,0% 100%);box-shadow:0 4px 8px rgba(0,0,0,.5)}
+    .tv-base{width:210px;height:14px;background:linear-gradient(to bottom,#2a2a2a,#1a1a1a);border-radius:4px 4px 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05)}
+    .floor-glow{position:absolute;bottom:-45px;left:50%;transform:translateX(-50%);width:520px;height:45px;background:radial-gradient(ellipse,rgba(80,120,255,.1) 0%,transparent 70%);pointer-events:none}
+
+    /* ── URL bar ── */
+    .url-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+      padding: 12px 20px;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .url-bar .logo { font-size: 18px; flex-shrink:0; }
+    .url-bar .label { color:#888; font-size:12px; white-space:nowrap; flex-shrink:0; }
+    .url-bar input {
+      flex: 1;
+      background: rgba(255,255,255,.08);
+      border: 1.5px solid rgba(255,255,255,.12);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 13px;
+      padding: 7px 12px;
+      outline: none;
+      transition: border-color .2s, background .2s;
+      min-width: 0;
+    }
+    .url-bar input:focus {
+      border-color: #4a7cff;
+      background: rgba(74,124,255,.08);
+    }
+    .url-bar input::placeholder { color: #555; }
+    .url-bar button {
+      flex-shrink:0;
+      background: #4a7cff;
+      border: none; color: #fff;
+      border-radius: 8px;
+      padding: 7px 18px;
+      font-size: 13px; font-weight:500;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      white-space:nowrap;
+    }
+    .url-bar button:hover { background:#3a6ce0; }
+    .url-bar button:active { transform:scale(.97); }
+    .url-bar .clear-btn {
+      flex-shrink:0;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      color: #888;
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size:12px;
+      cursor:pointer;
+      transition: background .2s;
+    }
+    .url-bar .clear-btn:hover { background:rgba(255,255,255,.15); color:#ccc; }
+
+    /* ── Toast ── */
+    #toast {
+      position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);
+      z-index:50;background:#222;color:#fff;border-radius:10px;
+      padding:10px 20px;font-size:13px;
+      box-shadow:0 4px 20px rgba(0,0,0,.5);
+      border:1px solid rgba(255,255,255,.1);
+      opacity:0;transition:all .35s cubic-bezier(.34,1.56,.64,1);
+      pointer-events:none;white-space:nowrap;
+    }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    #toast.error { border-color:#ff4444; color:#ff8888; }
   </style>
 </head>
 <body>
 
-  <!-- Room -->
+  <!-- Room atmosphere -->
   <div class="room"></div>
-  <div class="ambient-glow"></div>
+  <div class="ambient" id="ambient"></div>
 
-  <!-- Plant -->
+  <!-- Decorations -->
   <div class="plant">
     <div class="plant-leaves">
-      <div class="leaf"></div>
-      <div class="leaf"></div>
-      <div class="leaf"></div>
-      <div class="leaf"></div>
-      <div class="leaf"></div>
+      <div class="leaf"></div><div class="leaf"></div><div class="leaf"></div>
+      <div class="leaf"></div><div class="leaf"></div>
     </div>
     <div class="plant-pot"></div>
   </div>
 
-  <!-- Side table with tissue box -->
   <div class="side-table">
-    <div class="tissue-box"></div>
-    <div class="side-table-top"></div>
-    <div class="side-table-leg"></div>
+    <div class="tissue"></div>
+    <div class="st-top"></div>
+    <div class="st-leg"></div>
   </div>
 
-  <!-- Remote control -->
   <div class="remote">
     <div class="remote-body">
-      <div class="r-btn red"></div>
-      <div class="remote-btn-row">
-        <div class="r-btn"></div>
-        <div class="r-btn"></div>
-      </div>
-      <div class="remote-btn-row">
-        <div class="r-btn green"></div>
-        <div class="r-btn yellow"></div>
-      </div>
-      <div class="remote-btn-row">
-        <div class="r-btn"></div>
-        <div class="r-btn blue"></div>
-      </div>
-      <div class="r-btn"></div>
-      <div class="remote-btn-row">
-        <div class="r-btn"></div>
-        <div class="r-btn"></div>
-      </div>
+      <div class="rb r"></div>
+      <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
+      <div class="rb-row"><div class="rb g"></div><div class="rb y"></div></div>
+      <div class="rb-row"><div class="rb"></div><div class="rb b"></div></div>
+      <div class="rb"></div>
+      <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
     </div>
   </div>
 
-  <!-- Controls -->
-  <div class="controls">
-    <label>📺 Channel:</label>
-    <select id="channelSelect" onchange="switchChannel(this.value)">
-      <option value="nature">🌿 Nature Documentary</option>
-      <option value="space">🚀 Space & Universe</option>
-      <option value="lofi">🎵 Lo-Fi Music</option>
-      <option value="fireplace">🔥 Fireplace</option>
-      <option value="ocean">🌊 Ocean Waves</option>
-      <option value="custom">🔗 Custom URL...</option>
-    </select>
-    <span id="customUrlWrap" style="display:none">
-      <input id="customUrl" type="text" placeholder="Paste YouTube URL here..." />
-      <button onclick="loadCustom()">▶ Play</button>
-    </span>
+  <!-- URL Bar -->
+  <div class="url-bar">
+    <span class="logo">📺</span>
+    <span class="label">Paste URL:</span>
+    <input id="urlInput"
+      type="text"
+      placeholder="youtube.com/watch?v=...  or  youtu.be/...  or  direct .mp4 link"
+      autocomplete="off" spellcheck="false"
+    />
+    <button onclick="loadVideo()">▶ Play</button>
+    <button class="clear-btn" onclick="clearTV()">✕ Off</button>
   </div>
 
   <!-- TV -->
-  <div class="tv-stand-wrapper">
+  <div class="tv-wrap">
     <div class="tv-body">
       <div class="tv-bezel">
         <div class="tv-screen" id="tvScreen">
-          <!-- Video loads here -->
+
+          <!-- Idle / off screen -->
+          <div id="idle">
+            <div class="tv-icon">📺</div>
+            <h2>FORGE TV</h2>
+            <p>
+              Paste a video URL in the bar above and press <strong>▶ Play</strong><br><br>
+              Supported formats:<br>
+              <code>youtube.com/watch?v=…</code><br>
+              <code>youtu.be/…</code><br>
+              <code>direct .mp4 / .webm link</code><br><br>
+              <span style="color:#444;font-size:.9em">
+                ⚠️ YouTube requires this page to be served via a web server.<br>
+                Run: <code>python -m http.server 8080</code> then open<br>
+                <code>localhost:8080/tv_viewer.html</code>
+              </span>
+            </p>
+          </div>
+
           <div class="scanlines"></div>
         </div>
       </div>
@@ -491,63 +288,112 @@
     </div>
     <div class="tv-neck"></div>
     <div class="tv-base"></div>
-    <div class="tv-floor-glow"></div>
+    <div class="floor-glow"></div>
   </div>
 
-  <script>
-    const channels = {
-      nature:    'https://www.youtube.com/embed/1EiC9bvVGnk?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
-      space:     'https://www.youtube.com/embed/0jHsq36_NTU?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
-      lofi:      'https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
-      fireplace: 'https://www.youtube.com/embed/L_LUpnjgPso?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
-      ocean:     'https://www.youtube.com/embed/WHPEKLQID4U?autoplay=1&mute=0&controls=1&rel=0&modestbranding=1',
-    };
+  <div id="toast"></div>
 
-    function getYouTubeEmbedUrl(url) {
+  <script>
+    // ── URL helpers ──────────────────────────────────────────────
+    function getYouTubeId(raw) {
       try {
-        const u = new URL(url);
+        const u = new URL(raw.trim());
+        // standard: youtube.com/watch?v=ID
         let id = u.searchParams.get('v');
-        if (!id && u.hostname === 'youtu.be') id = u.pathname.slice(1);
-        if (!id) return null;
-        return `https://www.youtube.com/embed/${id}?autoplay=1&controls=1&rel=0&modestbranding=1`;
+        // short: youtu.be/ID
+        if (!id && (u.hostname === 'youtu.be'))
+          id = u.pathname.slice(1).split('?')[0];
+        // already embed: youtube.com/embed/ID
+        if (!id && u.pathname.startsWith('/embed/'))
+          id = u.pathname.split('/embed/')[1].split('?')[0];
+        // shorts: youtube.com/shorts/ID
+        if (!id && u.pathname.startsWith('/shorts/'))
+          id = u.pathname.split('/shorts/')[1].split('?')[0];
+        return id ? id.trim() : null;
       } catch { return null; }
     }
 
-    function setScreenContent(src) {
-      const screen = document.getElementById('tvScreen');
-      // remove old iframe/video
-      screen.querySelectorAll('iframe, video').forEach(el => el.remove());
-      const iframe = document.createElement('iframe');
-      iframe.src = src;
-      iframe.allow = 'autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture';
-      iframe.allowFullscreen = true;
-      // insert before scanlines
-      screen.insertBefore(iframe, screen.querySelector('.scanlines'));
+    function isDirectVideo(url) {
+      return /\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(url.trim());
     }
 
-    function switchChannel(val) {
-      const wrap = document.getElementById('customUrlWrap');
-      if (val === 'custom') {
-        wrap.style.display = 'inline-flex';
-        wrap.style.gap = '6px';
+    // ── Screen helpers ───────────────────────────────────────────
+    function clearScreen() {
+      const scr = document.getElementById('tvScreen');
+      scr.querySelectorAll('iframe, video').forEach(el => el.remove());
+    }
+
+    function showIdle(show) {
+      document.getElementById('idle').style.display = show ? 'flex' : 'none';
+    }
+
+    function setAmbientColor(color) {
+      document.getElementById('ambient').style.background =
+        `radial-gradient(ellipse 70% 50% at 50% 42%, ${color} 0%, transparent 70%)`;
+    }
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'show' + (isError ? ' error' : '');
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => { t.className = ''; }, 3000);
+    }
+
+    // ── Load video ───────────────────────────────────────────────
+    function loadVideo() {
+      const raw = document.getElementById('urlInput').value.trim();
+      if (!raw) { showToast('⚠️ Paste a video URL first!', true); return; }
+
+      // Direct video file
+      if (isDirectVideo(raw)) {
+        clearScreen();
+        showIdle(false);
+        const v = document.createElement('video');
+        v.src = raw;
+        v.controls = true;
+        v.autoplay = true;
+        v.style.background = '#000';
+        v.onerror = () => showToast('❌ Could not load video file.', true);
+        const scr = document.getElementById('tvScreen');
+        scr.insertBefore(v, scr.querySelector('.scanlines'));
+        setAmbientColor('rgba(120,60,200,0.08)');
+        showToast('▶ Playing video');
         return;
       }
-      wrap.style.display = 'none';
-      if (channels[val]) setScreenContent(channels[val]);
-    }
 
-    function loadCustom() {
-      const raw = document.getElementById('customUrl').value.trim();
-      const embed = getYouTubeEmbedUrl(raw);
-      if (embed) {
-        setScreenContent(embed);
-      } else {
-        alert('Please paste a valid YouTube URL (e.g. https://www.youtube.com/watch?v=...)');
+      // YouTube
+      const ytId = getYouTubeId(raw);
+      if (ytId) {
+        clearScreen();
+        showIdle(false);
+        const iframe = document.createElement('iframe');
+        iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
+        iframe.allow = 'autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture';
+        iframe.allowFullscreen = true;
+        const scr = document.getElementById('tvScreen');
+        scr.insertBefore(iframe, scr.querySelector('.scanlines'));
+        setAmbientColor('rgba(60,100,220,0.09)');
+        showToast('📺 Loading YouTube video…');
+        return;
       }
+
+      // Unknown
+      showToast('❌ Unrecognised URL. Try a YouTube or direct .mp4 link.', true);
     }
 
-    // Load default channel on start
-    switchChannel('nature');
+    function clearTV() {
+      clearScreen();
+      showIdle(true);
+      setAmbientColor('rgba(60,100,220,0.07)');
+      document.getElementById('urlInput').value = '';
+      showToast('📺 TV off');
+    }
+
+    // Enter key in input
+    document.getElementById('urlInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') loadVideo();
+    });
   </script>
 </body>
 </html>
