@@ -5,58 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>📺 Forge TV</title>
   <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
     body {
-      background: #1a1a2e;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      overflow: hidden;
+      background:#1a1a2e;
+      min-height:100vh;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      font-family:'Segoe UI', system-ui, sans-serif;
+      overflow:hidden;
     }
 
     /* ── Room ── */
-    .room {
-      position: fixed; inset: 0; z-index: 0;
-      background: linear-gradient(to bottom,
-        #23233a 0%, #2e2e48 45%, #3a3a58 55%,
-        #262626 55%, #141414 100%);
-    }
-    .room::before { /* wall grid */
-      content: '';
-      position: absolute; inset: 0 0 45% 0;
+    .room { position:fixed; inset:0; z-index:0;
+      background:linear-gradient(to bottom,#23233a 0%,#2e2e48 45%,#3a3a58 55%,#262626 55%,#141414 100%); }
+    .room::before { content:''; position:absolute; inset:0 0 45% 0;
       background-image:
-        repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 100px),
-        repeating-linear-gradient(0deg,  rgba(255,255,255,0.012) 0 1px, transparent 1px 100px);
-    }
-    .room::after { /* floor shine */
-      content: '';
-      position: absolute; bottom: 0; left: 0; right: 0; height: 45%;
-      background: linear-gradient(to bottom, #282828, #0e0e0e);
-      border-top: 2px solid #444;
-    }
-    .ambient {
-      position: fixed; inset: 0; z-index: 1; pointer-events: none;
-      background: radial-gradient(ellipse 70% 50% at 50% 42%,
-        rgba(60,100,220,0.07) 0%, transparent 70%);
-      transition: background 0.6s;
-    }
+        repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 100px),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px,transparent 1px 100px); }
+    .room::after { content:''; position:absolute; bottom:0; left:0; right:0; height:45%;
+      background:linear-gradient(to bottom,#282828,#0e0e0e); border-top:2px solid #444; }
+    .ambient { position:fixed; inset:0; z-index:1; pointer-events:none; transition:background .8s;
+      background:radial-gradient(ellipse 70% 50% at 50% 42%,rgba(60,100,220,.07) 0%,transparent 70%); }
 
-    /* ── Decorations ── */
-    .plant {
-      position: fixed; bottom: 7vh; right: 7vw; z-index: 5;
-      display: flex; flex-direction: column; align-items: center;
-    }
-    .plant-leaves { position: relative; width: 90px; height: 90px; }
-    .leaf {
-      position: absolute;
-      border-radius: 50% 0 50% 0;
-      background: linear-gradient(135deg, #2d8a2d, #1a5c1a);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-    }
+    /* ── Decor ── */
+    .plant { position:fixed; bottom:7vh; right:7vw; z-index:5;
+      display:flex; flex-direction:column; align-items:center; }
+    .plant-leaves { position:relative; width:90px; height:90px; }
+    .leaf { position:absolute; border-radius:50% 0 50% 0;
+      background:linear-gradient(135deg,#2d8a2d,#1a5c1a); box-shadow:0 2px 8px rgba(0,0,0,.35); }
     .leaf:nth-child(1){width:42px;height:58px;bottom:0;left:22px;transform:rotate(-20deg)}
     .leaf:nth-child(2){width:36px;height:52px;bottom:6px;left:8px;transform:rotate(-62deg);background:linear-gradient(135deg,#3aa03a,#2a7a2a)}
     .leaf:nth-child(3){width:40px;height:55px;bottom:0;right:8px;transform:rotate(22deg) scaleX(-1)}
@@ -76,324 +52,398 @@
     .rb.r{background:#8B0000}.rb.g{background:#006400}.rb.y{background:#8B6000}.rb.b{background:#00008B}
     .rb-row{display:flex;gap:3px}
 
-    /* ── TV wrapper ── */
+    /* ── URL bar ── */
+    .url-bar {
+      position:fixed; top:0; left:0; right:0; z-index:30;
+      padding:10px 16px;
+      background:rgba(0,0,0,.78);
+      backdrop-filter:blur(16px);
+      border-bottom:1px solid rgba(255,255,255,.08);
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    }
+    .url-bar .logo { font-size:18px; flex-shrink:0; }
+    .url-bar input {
+      flex:1; min-width:160px;
+      background:rgba(255,255,255,.08); border:1.5px solid rgba(255,255,255,.12);
+      border-radius:8px; color:#fff; font-size:13px; padding:7px 12px; outline:none;
+      transition:border-color .2s, background .2s;
+    }
+    .url-bar input:focus { border-color:#4a7cff; background:rgba(74,124,255,.08); }
+    .url-bar input::placeholder { color:#555; }
+    .url-bar .play-btn {
+      flex-shrink:0; background:#4a7cff; border:none; color:#fff;
+      border-radius:8px; padding:7px 16px; font-size:13px; font-weight:500;
+      cursor:pointer; transition:background .2s, transform .1s; white-space:nowrap;
+    }
+    .url-bar .play-btn:hover { background:#3a6ce0; }
+    .url-bar .play-btn:active { transform:scale(.97); }
+    .url-bar .off-btn {
+      flex-shrink:0; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
+      color:#888; border-radius:8px; padding:7px 11px; font-size:12px; cursor:pointer; transition:background .2s;
+    }
+    .url-bar .off-btn:hover { background:rgba(255,255,255,.14); color:#ccc; }
+
+    /* ── Sample channels ── */
+    .samples {
+      position:fixed; top:52px; left:0; right:0; z-index:29;
+      padding:6px 16px;
+      background:rgba(0,0,0,.6);
+      backdrop-filter:blur(10px);
+      border-bottom:1px solid rgba(255,255,255,.05);
+      display:flex; align-items:center; gap:6px; overflow-x:auto;
+    }
+    .samples::-webkit-scrollbar { height:3px; }
+    .samples::-webkit-scrollbar-thumb { background:#444; border-radius:2px; }
+    .samples span { color:#555; font-size:11px; flex-shrink:0; margin-right:2px; }
+    .sample-btn {
+      flex-shrink:0; background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.1);
+      color:#aaa; border-radius:20px; padding:4px 12px; font-size:11px;
+      cursor:pointer; transition:all .2s; white-space:nowrap;
+    }
+    .sample-btn:hover { background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.25); }
+    .sample-btn.active { background:#4a7cff22; border-color:#4a7cff; color:#88aaff; }
+
+    /* ── TV wrap ── */
     .tv-wrap {
-      position: relative; z-index: 10;
-      display: flex; flex-direction: column; align-items: center;
-      margin-bottom: 6vh;
+      position:relative; z-index:10;
+      display:flex; flex-direction:column; align-items:center;
+      margin-top:4px; margin-bottom:5vh;
     }
 
     /* ── TV body ── */
     .tv-body {
-      background: linear-gradient(160deg, #2a2a2a 0%, #111 60%, #1a1a1a 100%);
-      border-radius: 18px 18px 12px 12px;
-      padding: 16px 16px 28px;
-      box-shadow:
-        0 0 0 2px #444, 0 0 0 4px #222,
-        0 30px 80px rgba(0,0,0,.9),
-        0 10px 30px rgba(0,0,0,.8),
-        inset 0 1px 0 rgba(255,255,255,.07);
-      position: relative;
+      background:linear-gradient(160deg,#2a2a2a 0%,#111 60%,#1a1a1a 100%);
+      border-radius:18px 18px 12px 12px;
+      padding:14px 14px 26px;
+      box-shadow:0 0 0 2px #444,0 0 0 4px #222,0 30px 80px rgba(0,0,0,.9),0 10px 30px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.07);
+      position:relative;
     }
     .tv-brand{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);color:#555;font-size:10px;letter-spacing:3px;text-transform:uppercase;font-weight:300;white-space:nowrap}
-    .tv-led{position:absolute;bottom:9px;right:24px;width:6px;height:6px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88,0 0 16px #00ff8844;animation:ledBlink 3s ease-in-out infinite}
-    @keyframes ledBlink{0%,100%{opacity:1}50%{opacity:.3}}
-
-    /* ── Bezel ── */
+    .tv-led{position:absolute;bottom:9px;right:22px;width:6px;height:6px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88,0 0 16px #00ff8844;animation:blink 3s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
     .tv-bezel{background:#0a0a0a;border-radius:8px;padding:6px;box-shadow:inset 0 0 14px rgba(0,0,0,.9),inset 0 2px 5px rgba(0,0,0,.8)}
 
     /* ── Screen ── */
     .tv-screen {
-      position: relative;
-      width: min(68vw, 840px);
-      aspect-ratio: 16/9;
-      border-radius: 4px;
-      overflow: hidden;
-      background: #000;
-      box-shadow: inset 0 0 40px rgba(0,0,0,.6), 0 0 60px rgba(80,120,255,.12);
+      position:relative;
+      width:min(66vw,820px);
+      aspect-ratio:16/9;
+      border-radius:4px; overflow:hidden; background:#000;
+      box-shadow:inset 0 0 40px rgba(0,0,0,.6),0 0 60px rgba(80,120,255,.1);
     }
     .tv-screen::after { /* glare */
-      content:'';position:absolute;inset:0;pointer-events:none;z-index:10;border-radius:4px;
-      background:linear-gradient(135deg,rgba(255,255,255,.05) 0%,transparent 45%,rgba(255,255,255,.01) 100%);
+      content:''; position:absolute; inset:0; pointer-events:none; z-index:20; border-radius:4px;
+      background:linear-gradient(135deg,rgba(255,255,255,.055) 0%,transparent 45%,rgba(255,255,255,.01) 100%);
     }
-    .scanlines{position:absolute;inset:0;z-index:9;pointer-events:none;border-radius:4px;
+    .scanlines{position:absolute;inset:0;z-index:19;pointer-events:none;border-radius:4px;
       background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.04) 2px 4px)}
 
     .tv-screen iframe,
     .tv-screen video {
-      position:absolute;inset:0;width:100%;height:100%;border:none;display:block;
+      position:absolute; inset:0; width:100%; height:100%; border:none; display:block; z-index:1;
     }
 
     /* ── Idle screen ── */
     #idle {
-      position:absolute;inset:0;z-index:6;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
-      background:radial-gradient(ellipse at center, #0a0a1a 0%, #000 100%);
-      color:#fff;text-align:center;padding:20px;
+      position:absolute; inset:0; z-index:5;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+      background:radial-gradient(ellipse at center,#0a0a1a 0%,#000 100%);
+      color:#fff; text-align:center; padding:16px;
     }
-    #idle .tv-icon { font-size: clamp(32px, 5vw, 56px); }
-    #idle h2 { font-size: clamp(13px, 2vw, 18px); font-weight:400; color:#ccc; letter-spacing:1px; }
-    #idle p  { font-size: clamp(10px, 1.4vw, 13px); color:#666; line-height:1.6; max-width:360px; }
-    #idle code { background:rgba(255,255,255,.07); border-radius:4px; padding:1px 5px; font-size:.9em; color:#aaf; }
+    #idle .ic { font-size:clamp(28px,4vw,48px); }
+    #idle h2 { font-size:clamp(12px,1.8vw,16px); font-weight:400; color:#bbb; letter-spacing:2px; }
+    #idle p  { font-size:clamp(9px,1.2vw,12px); color:#555; line-height:1.7; max-width:320px; }
 
-    /* ── TV neck + base ── */
+    /* ── YouTube blocked screen ── */
+    #ytBlocked {
+      position:absolute; inset:0; z-index:8; display:none;
+      flex-direction:column; align-items:center; justify-content:center; gap:12px;
+      background:radial-gradient(ellipse at center,#100808 0%,#000 100%);
+      color:#fff; text-align:center; padding:20px;
+    }
+    #ytBlocked .ic { font-size:clamp(28px,4vw,44px); }
+    #ytBlocked h3 { font-size:clamp(12px,1.6vw,15px); color:#ff8888; font-weight:500; }
+    #ytBlocked p  { font-size:clamp(9px,1.1vw,12px); color:#666; max-width:300px; line-height:1.6; }
+    #ytBlocked a {
+      display:inline-block; margin-top:4px;
+      background:#ff0000; color:#fff; text-decoration:none;
+      border-radius:8px; padding:8px 20px; font-size:12px; font-weight:600;
+      transition:background .2s; letter-spacing:.5px;
+    }
+    #ytBlocked a:hover { background:#cc0000; }
+
     .tv-neck{width:64px;height:30px;background:linear-gradient(to bottom,#222,#1a1a1a);margin:0 auto;clip-path:polygon(20% 0%,80% 0%,100% 100%,0% 100%);box-shadow:0 4px 8px rgba(0,0,0,.5)}
     .tv-base{width:210px;height:14px;background:linear-gradient(to bottom,#2a2a2a,#1a1a1a);border-radius:4px 4px 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05)}
     .floor-glow{position:absolute;bottom:-45px;left:50%;transform:translateX(-50%);width:520px;height:45px;background:radial-gradient(ellipse,rgba(80,120,255,.1) 0%,transparent 70%);pointer-events:none}
 
-    /* ── URL bar ── */
-    .url-bar {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 30;
-      padding: 12px 20px;
-      background: rgba(0,0,0,0.75);
-      backdrop-filter: blur(16px);
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .url-bar .logo { font-size: 18px; flex-shrink:0; }
-    .url-bar .label { color:#888; font-size:12px; white-space:nowrap; flex-shrink:0; }
-    .url-bar input {
-      flex: 1;
-      background: rgba(255,255,255,.08);
-      border: 1.5px solid rgba(255,255,255,.12);
-      border-radius: 8px;
-      color: #fff;
-      font-size: 13px;
-      padding: 7px 12px;
-      outline: none;
-      transition: border-color .2s, background .2s;
-      min-width: 0;
-    }
-    .url-bar input:focus {
-      border-color: #4a7cff;
-      background: rgba(74,124,255,.08);
-    }
-    .url-bar input::placeholder { color: #555; }
-    .url-bar button {
-      flex-shrink:0;
-      background: #4a7cff;
-      border: none; color: #fff;
-      border-radius: 8px;
-      padding: 7px 18px;
-      font-size: 13px; font-weight:500;
-      cursor: pointer;
-      transition: background .2s, transform .1s;
-      white-space:nowrap;
-    }
-    .url-bar button:hover { background:#3a6ce0; }
-    .url-bar button:active { transform:scale(.97); }
-    .url-bar .clear-btn {
-      flex-shrink:0;
-      background: rgba(255,255,255,.08);
-      border: 1px solid rgba(255,255,255,.12);
-      color: #888;
-      border-radius: 8px;
-      padding: 7px 12px;
-      font-size:12px;
-      cursor:pointer;
-      transition: background .2s;
-    }
-    .url-bar .clear-btn:hover { background:rgba(255,255,255,.15); color:#ccc; }
-
     /* ── Toast ── */
     #toast {
-      position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);
-      z-index:50;background:#222;color:#fff;border-radius:10px;
-      padding:10px 20px;font-size:13px;
-      box-shadow:0 4px 20px rgba(0,0,0,.5);
-      border:1px solid rgba(255,255,255,.1);
-      opacity:0;transition:all .35s cubic-bezier(.34,1.56,.64,1);
-      pointer-events:none;white-space:nowrap;
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(60px);
+      z-index:50; background:#1e1e1e; color:#fff; border-radius:10px;
+      padding:9px 18px; font-size:12px;
+      box-shadow:0 4px 20px rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.1);
+      opacity:0; transition:all .3s cubic-bezier(.34,1.56,.64,1); pointer-events:none; white-space:nowrap;
     }
     #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-    #toast.error { border-color:#ff4444; color:#ff8888; }
+    #toast.err  { border-color:#ff4444; color:#ff9999; }
   </style>
 </head>
 <body>
 
-  <!-- Room atmosphere -->
-  <div class="room"></div>
-  <div class="ambient" id="ambient"></div>
+<div class="room"></div>
+<div class="ambient" id="ambient"></div>
 
-  <!-- Decorations -->
-  <div class="plant">
-    <div class="plant-leaves">
-      <div class="leaf"></div><div class="leaf"></div><div class="leaf"></div>
-      <div class="leaf"></div><div class="leaf"></div>
-    </div>
-    <div class="plant-pot"></div>
+<!-- Decor -->
+<div class="plant">
+  <div class="plant-leaves">
+    <div class="leaf"></div><div class="leaf"></div><div class="leaf"></div>
+    <div class="leaf"></div><div class="leaf"></div>
   </div>
-
-  <div class="side-table">
-    <div class="tissue"></div>
-    <div class="st-top"></div>
-    <div class="st-leg"></div>
+  <div class="plant-pot"></div>
+</div>
+<div class="side-table">
+  <div class="tissue"></div>
+  <div class="st-top"></div>
+  <div class="st-leg"></div>
+</div>
+<div class="remote">
+  <div class="remote-body">
+    <div class="rb r"></div>
+    <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
+    <div class="rb-row"><div class="rb g"></div><div class="rb y"></div></div>
+    <div class="rb-row"><div class="rb"></div><div class="rb b"></div></div>
+    <div class="rb"></div>
+    <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
   </div>
+</div>
 
-  <div class="remote">
-    <div class="remote-body">
-      <div class="rb r"></div>
-      <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
-      <div class="rb-row"><div class="rb g"></div><div class="rb y"></div></div>
-      <div class="rb-row"><div class="rb"></div><div class="rb b"></div></div>
-      <div class="rb"></div>
-      <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
-    </div>
-  </div>
+<!-- URL Bar -->
+<div class="url-bar">
+  <span class="logo">📺</span>
+  <input id="urlInput" type="text"
+    placeholder="Paste YouTube URL or direct .mp4 link — then press Enter or ▶ Play"
+    autocomplete="off" spellcheck="false" />
+  <button class="play-btn" onclick="loadVideo()">▶ Play</button>
+  <button class="off-btn"  onclick="turnOff()">✕</button>
+</div>
 
-  <!-- URL Bar -->
-  <div class="url-bar">
-    <span class="logo">📺</span>
-    <span class="label">Paste URL:</span>
-    <input id="urlInput"
-      type="text"
-      placeholder="youtube.com/watch?v=...  or  youtu.be/...  or  direct .mp4 link"
-      autocomplete="off" spellcheck="false"
-    />
-    <button onclick="loadVideo()">▶ Play</button>
-    <button class="clear-btn" onclick="clearTV()">✕ Off</button>
-  </div>
+<!-- Sample presets -->
+<div class="samples">
+  <span>Quick play:</span>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')">🐰 Big Buck Bunny</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4')">🐘 Elephants Dream</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4')">🔥 For Bigger Blazes</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4')">🚗 Subaru Drive</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4')">⚔️ Tears of Steel</button>
+</div>
 
-  <!-- TV -->
-  <div class="tv-wrap">
-    <div class="tv-body">
-      <div class="tv-bezel">
-        <div class="tv-screen" id="tvScreen">
+<!-- TV -->
+<div class="tv-wrap">
+  <div class="tv-body">
+    <div class="tv-bezel">
+      <div class="tv-screen" id="tvScreen">
 
-          <!-- Idle / off screen -->
-          <div id="idle">
-            <div class="tv-icon">📺</div>
-            <h2>FORGE TV</h2>
-            <p>
-              Paste a video URL in the bar above and press <strong>▶ Play</strong><br><br>
-              Supported formats:<br>
-              <code>youtube.com/watch?v=…</code><br>
-              <code>youtu.be/…</code><br>
-              <code>direct .mp4 / .webm link</code><br><br>
-              <span style="color:#444;font-size:.9em">
-                ⚠️ YouTube requires this page to be served via a web server.<br>
-                Run: <code>python -m http.server 8080</code> then open<br>
-                <code>localhost:8080/tv_viewer.html</code>
-              </span>
-            </p>
-          </div>
-
-          <div class="scanlines"></div>
+        <!-- Idle -->
+        <div id="idle">
+          <div class="ic">📺</div>
+          <h2>FORGE TV</h2>
+          <p>Paste a URL above and press <strong>▶ Play</strong>,<br>
+             or pick a channel from the Quick Play bar.</p>
         </div>
+
+        <!-- YouTube blocked error -->
+        <div id="ytBlocked">
+          <div class="ic">🚫</div>
+          <h3>Embedding disabled by video owner</h3>
+          <p>This YouTube video does not allow embedding.<br>
+             You can still watch it directly on YouTube.</p>
+          <a id="ytOpenLink" href="#" target="_blank" rel="noopener">▶ Watch on YouTube</a>
+          <p style="margin-top:8px;font-size:10px;color:#444">
+            Tip: try a direct .mp4 link or the sample videos above — those always work.
+          </p>
+        </div>
+
+        <div class="scanlines"></div>
       </div>
-      <div class="tv-brand">FORGE TV</div>
-      <div class="tv-led"></div>
     </div>
-    <div class="tv-neck"></div>
-    <div class="tv-base"></div>
-    <div class="floor-glow"></div>
+    <div class="tv-brand">FORGE TV</div>
+    <div class="tv-led"></div>
   </div>
+  <div class="tv-neck"></div>
+  <div class="tv-base"></div>
+  <div class="floor-glow"></div>
+</div>
 
-  <div id="toast"></div>
+<div id="toast"></div>
 
-  <script>
-    // ── URL helpers ──────────────────────────────────────────────
-    function getYouTubeId(raw) {
-      try {
-        const u = new URL(raw.trim());
-        // standard: youtube.com/watch?v=ID
-        let id = u.searchParams.get('v');
-        // short: youtu.be/ID
-        if (!id && (u.hostname === 'youtu.be'))
-          id = u.pathname.slice(1).split('?')[0];
-        // already embed: youtube.com/embed/ID
-        if (!id && u.pathname.startsWith('/embed/'))
-          id = u.pathname.split('/embed/')[1].split('?')[0];
-        // shorts: youtube.com/shorts/ID
-        if (!id && u.pathname.startsWith('/shorts/'))
-          id = u.pathname.split('/shorts/')[1].split('?')[0];
-        return id ? id.trim() : null;
-      } catch { return null; }
-    }
+<!-- YouTube IFrame API -->
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+  let ytPlayer = null;
+  let currentYtUrl = '';
+  let activeSampleBtn = null;
 
-    function isDirectVideo(url) {
-      return /\.(mp4|webm|ogg|mov|m4v)(\?|$)/i.test(url.trim());
-    }
+  // ── YouTube IFrame API callback ──────────────────────────────
+  function onYouTubeIframeAPIReady() {
+    // API ready; players are created on demand
+  }
 
-    // ── Screen helpers ───────────────────────────────────────────
-    function clearScreen() {
-      const scr = document.getElementById('tvScreen');
-      scr.querySelectorAll('iframe, video').forEach(el => el.remove());
-    }
+  // ── URL parsing ──────────────────────────────────────────────
+  function getYouTubeId(raw) {
+    try {
+      const u = new URL(raw.trim());
+      let id = u.searchParams.get('v');
+      if (!id && u.hostname === 'youtu.be')          id = u.pathname.slice(1).split('?')[0];
+      if (!id && u.pathname.startsWith('/embed/'))   id = u.pathname.split('/embed/')[1].split('?')[0];
+      if (!id && u.pathname.startsWith('/shorts/'))  id = u.pathname.split('/shorts/')[1].split('?')[0];
+      return id ? id.trim() : null;
+    } catch { return null; }
+  }
 
-    function showIdle(show) {
-      document.getElementById('idle').style.display = show ? 'flex' : 'none';
-    }
+  function isDirectVideo(url) {
+    return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url.trim());
+  }
 
-    function setAmbientColor(color) {
-      document.getElementById('ambient').style.background =
-        `radial-gradient(ellipse 70% 50% at 50% 42%, ${color} 0%, transparent 70%)`;
-    }
+  // ── Screen state ─────────────────────────────────────────────
+  function clearScreen() {
+    // Destroy YouTube player if exists
+    if (ytPlayer) { try { ytPlayer.destroy(); } catch(e){} ytPlayer = null; }
+    document.getElementById('tvScreen').querySelectorAll('iframe, video').forEach(e => e.remove());
+    show('idle', false);
+    show('ytBlocked', false);
+  }
 
-    function showToast(msg, isError = false) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.className = 'show' + (isError ? ' error' : '');
-      clearTimeout(t._timer);
-      t._timer = setTimeout(() => { t.className = ''; }, 3000);
-    }
+  function show(id, visible) {
+    const el = document.getElementById(id);
+    el.style.display = visible ? 'flex' : 'none';
+  }
 
-    // ── Load video ───────────────────────────────────────────────
-    function loadVideo() {
-      const raw = document.getElementById('urlInput').value.trim();
-      if (!raw) { showToast('⚠️ Paste a video URL first!', true); return; }
+  function setAmbient(color) {
+    document.getElementById('ambient').style.background =
+      `radial-gradient(ellipse 70% 50% at 50% 42%, ${color} 0%, transparent 70%)`;
+  }
 
-      // Direct video file
-      if (isDirectVideo(raw)) {
-        clearScreen();
-        showIdle(false);
-        const v = document.createElement('video');
-        v.src = raw;
-        v.controls = true;
-        v.autoplay = true;
-        v.style.background = '#000';
-        v.onerror = () => showToast('❌ Could not load video file.', true);
-        const scr = document.getElementById('tvScreen');
-        scr.insertBefore(v, scr.querySelector('.scanlines'));
-        setAmbientColor('rgba(120,60,200,0.08)');
-        showToast('▶ Playing video');
-        return;
+  function toast(msg, isErr = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show' + (isErr ? ' err' : '');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.className = '', 3200);
+  }
+
+  function clearActiveSample() {
+    if (activeSampleBtn) { activeSampleBtn.classList.remove('active'); activeSampleBtn = null; }
+  }
+
+  // ── Play a direct video ──────────────────────────────────────
+  function playDirectVideo(url) {
+    clearScreen();
+    const v = document.createElement('video');
+    v.src = url;
+    v.controls = true;
+    v.autoplay = true;
+    v.style.background = '#000';
+    v.onerror = () => { show('idle', true); toast('❌ Could not load video file.', true); };
+    const scr = document.getElementById('tvScreen');
+    scr.insertBefore(v, scr.querySelector('.scanlines'));
+    setAmbient('rgba(100,60,200,.08)');
+  }
+
+  // ── Play a YouTube video via IFrame API ──────────────────────
+  function playYouTube(id, originalUrl) {
+    clearScreen();
+    currentYtUrl = originalUrl;
+
+    // Create a container div for the YT player
+    const container = document.createElement('div');
+    container.id = 'yt-player-container';
+    container.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:1';
+    const scr = document.getElementById('tvScreen');
+    scr.insertBefore(container, scr.querySelector('.scanlines'));
+
+    ytPlayer = new YT.Player('yt-player-container', {
+      videoId: id,
+      playerVars: { autoplay:1, rel:0, modestbranding:1, playsinline:1 },
+      events: {
+        onReady: () => {
+          setAmbient('rgba(60,100,220,.09)');
+          toast('📺 Playing…');
+        },
+        onError: (e) => {
+          // 2=bad param, 5=HTML5 error, 100=not found/private,
+          // 101/150=embedding disabled
+          const blocked = [101, 150];
+          if (blocked.includes(e.data)) {
+            // Clean up player div
+            if (ytPlayer) { try { ytPlayer.destroy(); } catch(_){} ytPlayer = null; }
+            container.remove();
+            // Show blocked screen with link
+            document.getElementById('ytOpenLink').href = currentYtUrl;
+            show('ytBlocked', true);
+            setAmbient('rgba(200,40,40,.05)');
+          } else if (e.data === 100) {
+            if (ytPlayer) { try { ytPlayer.destroy(); } catch(_){} ytPlayer = null; }
+            container.remove();
+            show('idle', true);
+            toast('❌ Video not found or private.', true);
+          } else {
+            if (ytPlayer) { try { ytPlayer.destroy(); } catch(_){} ytPlayer = null; }
+            container.remove();
+            show('idle', true);
+            toast('❌ YouTube error ' + e.data, true);
+          }
+        }
       }
-
-      // YouTube
-      const ytId = getYouTubeId(raw);
-      if (ytId) {
-        clearScreen();
-        showIdle(false);
-        const iframe = document.createElement('iframe');
-        iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0&modestbranding=1`;
-        iframe.allow = 'autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture';
-        iframe.allowFullscreen = true;
-        const scr = document.getElementById('tvScreen');
-        scr.insertBefore(iframe, scr.querySelector('.scanlines'));
-        setAmbientColor('rgba(60,100,220,0.09)');
-        showToast('📺 Loading YouTube video…');
-        return;
-      }
-
-      // Unknown
-      showToast('❌ Unrecognised URL. Try a YouTube or direct .mp4 link.', true);
-    }
-
-    function clearTV() {
-      clearScreen();
-      showIdle(true);
-      setAmbientColor('rgba(60,100,220,0.07)');
-      document.getElementById('urlInput').value = '';
-      showToast('📺 TV off');
-    }
-
-    // Enter key in input
-    document.getElementById('urlInput').addEventListener('keydown', e => {
-      if (e.key === 'Enter') loadVideo();
     });
-  </script>
+  }
+
+  // ── Main load function ───────────────────────────────────────
+  function loadVideo() {
+    const raw = document.getElementById('urlInput').value.trim();
+    if (!raw) { toast('⚠️ Paste a URL first!', true); return; }
+    clearActiveSample();
+
+    if (isDirectVideo(raw)) { playDirectVideo(raw); toast('▶ Loading…'); return; }
+
+    const ytId = getYouTubeId(raw);
+    if (ytId) {
+      if (typeof YT === 'undefined' || !YT.Player) {
+        toast('⚠️ YouTube API not loaded. Check your internet connection.', true);
+        return;
+      }
+      playYouTube(ytId, raw);
+      toast('📺 Loading YouTube…');
+      return;
+    }
+
+    toast('❌ Unrecognised URL. Try a YouTube link or a direct .mp4 URL.', true);
+  }
+
+  // ── Sample presets ───────────────────────────────────────────
+  function playSample(btn, url) {
+    clearActiveSample();
+    activeSampleBtn = btn;
+    btn.classList.add('active');
+    document.getElementById('urlInput').value = url;
+    playDirectVideo(url);
+    toast('▶ Playing sample…');
+  }
+
+  // ── Turn off ─────────────────────────────────────────────────
+  function turnOff() {
+    clearScreen();
+    clearActiveSample();
+    show('idle', true);
+    setAmbient('rgba(60,100,220,.07)');
+    document.getElementById('urlInput').value = '';
+    toast('📺 TV off');
+  }
+
+  // ── Enter key ────────────────────────────────────────────────
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadVideo();
+  });
+</script>
 </body>
 </html>
