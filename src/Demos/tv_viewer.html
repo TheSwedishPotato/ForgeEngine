@@ -52,70 +52,68 @@
     .rb.r{background:#8B0000}.rb.g{background:#006400}.rb.y{background:#8B6000}.rb.b{background:#00008B}
     .rb-row{display:flex;gap:3px}
 
-    /* ── URL bar ── */
+    /* ── Top bar ── */
     .url-bar {
       position:fixed; top:0; left:0; right:0; z-index:30;
       padding:10px 16px;
-      background:rgba(0,0,0,.78);
+      background:rgba(0,0,0,.8);
       backdrop-filter:blur(16px);
       border-bottom:1px solid rgba(255,255,255,.08);
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;
     }
     .url-bar .logo { font-size:18px; flex-shrink:0; }
-    .url-bar input {
+    .url-bar input[type=text] {
       flex:1; min-width:160px;
       background:rgba(255,255,255,.08); border:1.5px solid rgba(255,255,255,.12);
       border-radius:8px; color:#fff; font-size:13px; padding:7px 12px; outline:none;
       transition:border-color .2s, background .2s;
     }
-    .url-bar input:focus { border-color:#4a7cff; background:rgba(74,124,255,.08); }
-    .url-bar input::placeholder { color:#555; }
-    .url-bar .play-btn {
-      flex-shrink:0; background:#4a7cff; border:none; color:#fff;
-      border-radius:8px; padding:7px 16px; font-size:13px; font-weight:500;
-      cursor:pointer; transition:background .2s, transform .1s; white-space:nowrap;
-    }
-    .url-bar .play-btn:hover { background:#3a6ce0; }
-    .url-bar .play-btn:active { transform:scale(.97); }
-    .url-bar .off-btn {
-      flex-shrink:0; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12);
-      color:#888; border-radius:8px; padding:7px 11px; font-size:12px; cursor:pointer; transition:background .2s;
-    }
-    .url-bar .off-btn:hover { background:rgba(255,255,255,.14); color:#ccc; }
+    .url-bar input[type=text]:focus { border-color:#4a7cff; background:rgba(74,124,255,.08); }
+    .url-bar input[type=text]::placeholder { color:#555; }
 
-    /* ── Sample channels ── */
+    .btn {
+      flex-shrink:0; border:none; border-radius:8px; padding:7px 14px;
+      font-size:12px; font-weight:500; cursor:pointer;
+      transition:background .2s, transform .1s; white-space:nowrap;
+    }
+    .btn:active { transform:scale(.97); }
+    .btn-play  { background:#4a7cff; color:#fff; }
+    .btn-play:hover  { background:#3a6ce0; }
+    .btn-file  { background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.18); color:#ddd; }
+    .btn-file:hover  { background:rgba(255,255,255,.18); color:#fff; }
+    .btn-off   { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:#777; }
+    .btn-off:hover   { background:rgba(255,255,255,.13); color:#ccc; }
+
+    #fileInput { display:none; }
+
+    /* ── Sample bar ── */
     .samples {
       position:fixed; top:52px; left:0; right:0; z-index:29;
       padding:6px 16px;
-      background:rgba(0,0,0,.6);
-      backdrop-filter:blur(10px);
+      background:rgba(0,0,0,.6); backdrop-filter:blur(10px);
       border-bottom:1px solid rgba(255,255,255,.05);
       display:flex; align-items:center; gap:6px; overflow-x:auto;
     }
-    .samples::-webkit-scrollbar { height:3px; }
-    .samples::-webkit-scrollbar-thumb { background:#444; border-radius:2px; }
+    .samples::-webkit-scrollbar{height:3px}
+    .samples::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
     .samples span { color:#555; font-size:11px; flex-shrink:0; margin-right:2px; }
     .sample-btn {
-      flex-shrink:0; background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.1);
+      flex-shrink:0; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
       color:#aaa; border-radius:20px; padding:4px 12px; font-size:11px;
       cursor:pointer; transition:all .2s; white-space:nowrap;
     }
     .sample-btn:hover { background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.25); }
     .sample-btn.active { background:#4a7cff22; border-color:#4a7cff; color:#88aaff; }
 
-    /* ── TV wrap ── */
+    /* ── TV ── */
     .tv-wrap {
       position:relative; z-index:10;
       display:flex; flex-direction:column; align-items:center;
       margin-top:4px; margin-bottom:5vh;
     }
-
-    /* ── TV body ── */
     .tv-body {
       background:linear-gradient(160deg,#2a2a2a 0%,#111 60%,#1a1a1a 100%);
-      border-radius:18px 18px 12px 12px;
-      padding:14px 14px 26px;
+      border-radius:18px 18px 12px 12px; padding:14px 14px 26px;
       box-shadow:0 0 0 2px #444,0 0 0 4px #222,0 30px 80px rgba(0,0,0,.9),0 10px 30px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.07);
       position:relative;
     }
@@ -126,20 +124,16 @@
 
     /* ── Screen ── */
     .tv-screen {
-      position:relative;
-      width:min(66vw,820px);
-      aspect-ratio:16/9;
+      position:relative; width:min(66vw,820px); aspect-ratio:16/9;
       border-radius:4px; overflow:hidden; background:#000;
       box-shadow:inset 0 0 40px rgba(0,0,0,.6),0 0 60px rgba(80,120,255,.1);
     }
-    .tv-screen::after { /* glare */
+    .tv-screen::after {
       content:''; position:absolute; inset:0; pointer-events:none; z-index:20; border-radius:4px;
       background:linear-gradient(135deg,rgba(255,255,255,.055) 0%,transparent 45%,rgba(255,255,255,.01) 100%);
     }
     .scanlines{position:absolute;inset:0;z-index:19;pointer-events:none;border-radius:4px;
       background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.04) 2px 4px)}
-
-    .tv-screen iframe,
     .tv-screen video {
       position:absolute; inset:0; width:100%; height:100%; border:none; display:block; z-index:1;
     }
@@ -147,31 +141,22 @@
     /* ── Idle screen ── */
     #idle {
       position:absolute; inset:0; z-index:5;
-      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
       background:radial-gradient(ellipse at center,#0a0a1a 0%,#000 100%);
       color:#fff; text-align:center; padding:16px;
+      transition:background .2s, border .2s;
     }
-    #idle .ic { font-size:clamp(28px,4vw,48px); }
-    #idle h2 { font-size:clamp(12px,1.8vw,16px); font-weight:400; color:#bbb; letter-spacing:2px; }
-    #idle p  { font-size:clamp(9px,1.2vw,12px); color:#555; line-height:1.7; max-width:320px; }
-
-    /* ── YouTube blocked screen ── */
-    #ytBlocked {
-      position:absolute; inset:0; z-index:8; display:none;
-      flex-direction:column; align-items:center; justify-content:center; gap:12px;
-      background:radial-gradient(ellipse at center,#100808 0%,#000 100%);
-      color:#fff; text-align:center; padding:20px;
+    .drag-over #idle {
+      background:rgba(74,124,255,.07);
+      outline:3px dashed #4a7cff;
+      outline-offset:-3px;
     }
-    #ytBlocked .ic { font-size:clamp(28px,4vw,44px); }
-    #ytBlocked h3 { font-size:clamp(12px,1.6vw,15px); color:#ff8888; font-weight:500; }
-    #ytBlocked p  { font-size:clamp(9px,1.1vw,12px); color:#666; max-width:300px; line-height:1.6; }
-    #ytBlocked a {
-      display:inline-block; margin-top:4px;
-      background:#ff0000; color:#fff; text-decoration:none;
-      border-radius:8px; padding:8px 20px; font-size:12px; font-weight:600;
-      transition:background .2s; letter-spacing:.5px;
-    }
-    #ytBlocked a:hover { background:#cc0000; }
+    #idle .ic  { font-size:clamp(28px,4vw,48px); }
+    #idle h2   { font-size:clamp(12px,1.8vw,16px); font-weight:400; color:#bbb; letter-spacing:2px; }
+    #idle p    { font-size:clamp(9px,1.2vw,12px); color:#555; line-height:1.8; max-width:300px; }
+    #idle .drop-hint { color:#4a7cff; font-size:clamp(9px,1.1vw,12px); display:none; }
+    .drag-over #idle .drop-hint { display:block; }
+    .drag-over #idle p { display:none; }
 
     .tv-neck{width:64px;height:30px;background:linear-gradient(to bottom,#222,#1a1a1a);margin:0 auto;clip-path:polygon(20% 0%,80% 0%,100% 100%,0% 100%);box-shadow:0 4px 8px rgba(0,0,0,.5)}
     .tv-base{width:210px;height:14px;background:linear-gradient(to bottom,#2a2a2a,#1a1a1a);border-radius:4px 4px 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05)}
@@ -218,23 +203,25 @@
   </div>
 </div>
 
-<!-- URL Bar -->
+<!-- Top bar -->
 <div class="url-bar">
   <span class="logo">📺</span>
   <input id="urlInput" type="text"
-    placeholder="Paste YouTube URL or direct .mp4 link — then press Enter or ▶ Play"
+    placeholder="Paste a direct .mp4 URL — then press Enter or ▶ Play"
     autocomplete="off" spellcheck="false" />
-  <button class="play-btn" onclick="loadVideo()">▶ Play</button>
-  <button class="off-btn"  onclick="turnOff()">✕</button>
+  <button class="btn btn-play" onclick="loadUrl()">▶ Play</button>
+  <button class="btn btn-file" onclick="document.getElementById('fileInput').click()">📂 Open .mp4 from PC</button>
+  <button class="btn btn-off"  onclick="turnOff()">✕ Off</button>
+  <input type="file" id="fileInput" accept=".mp4,video/mp4" onchange="loadLocalFile(this)" />
 </div>
 
-<!-- Sample presets -->
+<!-- Sample bar -->
 <div class="samples">
-  <span>Quick play:</span>
+  <span>Samples:</span>
   <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')">🐰 Big Buck Bunny</button>
   <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4')">🐘 Elephants Dream</button>
-  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4')">🔥 For Bigger Blazes</button>
-  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4')">🚗 Subaru Drive</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4')">🔥 Blazes</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4')">🚗 Subaru</button>
   <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4')">⚔️ Tears of Steel</button>
 </div>
 
@@ -244,24 +231,16 @@
     <div class="tv-bezel">
       <div class="tv-screen" id="tvScreen">
 
-        <!-- Idle -->
         <div id="idle">
           <div class="ic">📺</div>
           <h2>FORGE TV</h2>
-          <p>Paste a URL above and press <strong>▶ Play</strong>,<br>
-             or pick a channel from the Quick Play bar.</p>
-        </div>
-
-        <!-- YouTube blocked error -->
-        <div id="ytBlocked">
-          <div class="ic">🚫</div>
-          <h3>Embedding disabled by video owner</h3>
-          <p>This YouTube video does not allow embedding.<br>
-             You can still watch it directly on YouTube.</p>
-          <a id="ytOpenLink" href="#" target="_blank" rel="noopener">▶ Watch on YouTube</a>
-          <p style="margin-top:8px;font-size:10px;color:#444">
-            Tip: try a direct .mp4 link or the sample videos above — those always work.
+          <p>
+            Paste an <strong>.mp4 URL</strong> above and press ▶ Play<br>
+            or click <strong>📂 Open .mp4 from PC</strong><br>
+            or drag an .mp4 file onto this screen<br>
+            or pick a sample video above
           </p>
+          <div class="drop-hint">⬇ Drop your .mp4 here</div>
         </div>
 
         <div class="scanlines"></div>
@@ -277,46 +256,25 @@
 
 <div id="toast"></div>
 
-<!-- YouTube IFrame API -->
-<script src="https://www.youtube.com/iframe_api"></script>
 <script>
-  let ytPlayer = null;
-  let currentYtUrl = '';
   let activeSampleBtn = null;
+  const scr = document.getElementById('tvScreen');
 
-  // ── YouTube IFrame API callback ──────────────────────────────
-  function onYouTubeIframeAPIReady() {
-    // API ready; players are created on demand
+  // ── Helpers ──────────────────────────────────────────────────
+  function isMP4url(url) {
+    return /\.mp4(\?.*)?$/i.test(url.trim());
   }
 
-  // ── URL parsing ──────────────────────────────────────────────
-  function getYouTubeId(raw) {
-    try {
-      const u = new URL(raw.trim());
-      let id = u.searchParams.get('v');
-      if (!id && u.hostname === 'youtu.be')          id = u.pathname.slice(1).split('?')[0];
-      if (!id && u.pathname.startsWith('/embed/'))   id = u.pathname.split('/embed/')[1].split('?')[0];
-      if (!id && u.pathname.startsWith('/shorts/'))  id = u.pathname.split('/shorts/')[1].split('?')[0];
-      return id ? id.trim() : null;
-    } catch { return null; }
-  }
-
-  function isDirectVideo(url) {
-    return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url.trim());
-  }
-
-  // ── Screen state ─────────────────────────────────────────────
   function clearScreen() {
-    // Destroy YouTube player if exists
-    if (ytPlayer) { try { ytPlayer.destroy(); } catch(e){} ytPlayer = null; }
-    document.getElementById('tvScreen').querySelectorAll('iframe, video').forEach(e => e.remove());
-    show('idle', false);
-    show('ytBlocked', false);
+    scr.querySelectorAll('video').forEach(v => {
+      URL.revokeObjectURL(v.src); // safe to call on non-blob too
+      v.remove();
+    });
+    showIdle(false);
   }
 
-  function show(id, visible) {
-    const el = document.getElementById(id);
-    el.style.display = visible ? 'flex' : 'none';
+  function showIdle(on) {
+    document.getElementById('idle').style.display = on ? 'flex' : 'none';
   }
 
   function setAmbient(color) {
@@ -336,88 +294,44 @@
     if (activeSampleBtn) { activeSampleBtn.classList.remove('active'); activeSampleBtn = null; }
   }
 
-  // ── Play a direct video ──────────────────────────────────────
-  function playDirectVideo(url) {
+  // ── Play a video src (URL or blob) ───────────────────────────
+  function playVideo(src, label) {
     clearScreen();
     const v = document.createElement('video');
-    v.src = url;
+    v.src      = src;
     v.controls = true;
     v.autoplay = true;
     v.style.background = '#000';
-    v.onerror = () => { show('idle', true); toast('❌ Could not load video file.', true); };
-    const scr = document.getElementById('tvScreen');
+    v.onerror  = () => { showIdle(true); toast('❌ Could not play this file.', true); };
     scr.insertBefore(v, scr.querySelector('.scanlines'));
-    setAmbient('rgba(100,60,200,.08)');
+    setAmbient('rgba(100,60,200,.09)');
+    if (label) toast(`▶ ${label}`);
   }
 
-  // ── Play a YouTube video via IFrame API ──────────────────────
-  function playYouTube(id, originalUrl) {
-    clearScreen();
-    currentYtUrl = originalUrl;
-
-    // Create a container div for the YT player
-    const container = document.createElement('div');
-    container.id = 'yt-player-container';
-    container.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:1';
-    const scr = document.getElementById('tvScreen');
-    scr.insertBefore(container, scr.querySelector('.scanlines'));
-
-    ytPlayer = new YT.Player('yt-player-container', {
-      videoId: id,
-      playerVars: { autoplay:1, rel:0, modestbranding:1, playsinline:1 },
-      events: {
-        onReady: () => {
-          setAmbient('rgba(60,100,220,.09)');
-          toast('📺 Playing…');
-        },
-        onError: (e) => {
-          // 2=bad param, 5=HTML5 error, 100=not found/private,
-          // 101/150=embedding disabled
-          const blocked = [101, 150];
-          if (blocked.includes(e.data)) {
-            // Clean up player div
-            if (ytPlayer) { try { ytPlayer.destroy(); } catch(_){} ytPlayer = null; }
-            container.remove();
-            // Show blocked screen with link
-            document.getElementById('ytOpenLink').href = currentYtUrl;
-            show('ytBlocked', true);
-            setAmbient('rgba(200,40,40,.05)');
-          } else if (e.data === 100) {
-            if (ytPlayer) { try { ytPlayer.destroy(); } catch(_){} ytPlayer = null; }
-            container.remove();
-            show('idle', true);
-            toast('❌ Video not found or private.', true);
-          } else {
-            if (ytPlayer) { try { ytPlayer.destroy(); } catch(_){} ytPlayer = null; }
-            container.remove();
-            show('idle', true);
-            toast('❌ YouTube error ' + e.data, true);
-          }
-        }
-      }
-    });
-  }
-
-  // ── Main load function ───────────────────────────────────────
-  function loadVideo() {
+  // ── Load from URL input ──────────────────────────────────────
+  function loadUrl() {
     const raw = document.getElementById('urlInput').value.trim();
-    if (!raw) { toast('⚠️ Paste a URL first!', true); return; }
+    if (!raw) { toast('⚠️ Paste an .mp4 URL first!', true); return; }
+    if (!isMP4url(raw)) { toast('❌ Only .mp4 URLs are supported.', true); return; }
     clearActiveSample();
+    playVideo(raw, 'Loading…');
+  }
 
-    if (isDirectVideo(raw)) { playDirectVideo(raw); toast('▶ Loading…'); return; }
-
-    const ytId = getYouTubeId(raw);
-    if (ytId) {
-      if (typeof YT === 'undefined' || !YT.Player) {
-        toast('⚠️ YouTube API not loaded. Check your internet connection.', true);
-        return;
-      }
-      playYouTube(ytId, raw);
-      toast('📺 Loading YouTube…');
+  // ── Load from file picker ────────────────────────────────────
+  function loadLocalFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.type !== 'video/mp4' && !file.name.toLowerCase().endsWith('.mp4')) {
+      toast('❌ Only .mp4 files are supported.', true);
+      input.value = '';
       return;
     }
-
-    toast('❌ Unrecognised URL. Try a YouTube link or a direct .mp4 URL.', true);
+    clearActiveSample();
+    const blob = URL.createObjectURL(file);
+    const mb   = (file.size / 1024 / 1024).toFixed(1);
+    document.getElementById('urlInput').value = '';
+    playVideo(blob, `"${file.name}" (${mb} MB)`);
+    input.value = ''; // allow re-selecting same file
   }
 
   // ── Sample presets ───────────────────────────────────────────
@@ -425,16 +339,15 @@
     clearActiveSample();
     activeSampleBtn = btn;
     btn.classList.add('active');
-    document.getElementById('urlInput').value = url;
-    playDirectVideo(url);
-    toast('▶ Playing sample…');
+    document.getElementById('urlInput').value = '';
+    playVideo(url, btn.textContent.trim());
   }
 
   // ── Turn off ─────────────────────────────────────────────────
   function turnOff() {
     clearScreen();
     clearActiveSample();
-    show('idle', true);
+    showIdle(true);
     setAmbient('rgba(60,100,220,.07)');
     document.getElementById('urlInput').value = '';
     toast('📺 TV off');
@@ -442,7 +355,31 @@
 
   // ── Enter key ────────────────────────────────────────────────
   document.getElementById('urlInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') loadVideo();
+    if (e.key === 'Enter') loadUrl();
+  });
+
+  // ── Drag & drop ──────────────────────────────────────────────
+  scr.addEventListener('dragover', e => {
+    e.preventDefault();
+    scr.classList.add('drag-over');
+  });
+  scr.addEventListener('dragleave', e => {
+    if (!scr.contains(e.relatedTarget)) scr.classList.remove('drag-over');
+  });
+  scr.addEventListener('drop', e => {
+    e.preventDefault();
+    scr.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (file.type !== 'video/mp4' && !file.name.toLowerCase().endsWith('.mp4')) {
+      toast('❌ Only .mp4 files are supported.', true);
+      return;
+    }
+    clearActiveSample();
+    const blob = URL.createObjectURL(file);
+    const mb   = (file.size / 1024 / 1024).toFixed(1);
+    document.getElementById('urlInput').value = '';
+    playVideo(blob, `"${file.name}" (${mb} MB)`);
   });
 </script>
 </body>
