@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📺 Forge TV</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background:#1a1a2e;
+      min-height:100vh;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      font-family:'Segoe UI', system-ui, sans-serif;
+      overflow:hidden;
+    }
+
+    /* ── Room ── */
+    .room { position:fixed; inset:0; z-index:0;
+      background:linear-gradient(to bottom,#23233a 0%,#2e2e48 45%,#3a3a58 55%,#262626 55%,#141414 100%); }
+    .room::before { content:''; position:absolute; inset:0 0 45% 0;
+      background-image:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.012) 0 1px,transparent 1px 100px),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px,transparent 1px 100px); }
+    .room::after { content:''; position:absolute; bottom:0; left:0; right:0; height:45%;
+      background:linear-gradient(to bottom,#282828,#0e0e0e); border-top:2px solid #444; }
+    .ambient { position:fixed; inset:0; z-index:1; pointer-events:none; transition:background .8s;
+      background:radial-gradient(ellipse 70% 50% at 50% 42%,rgba(60,100,220,.07) 0%,transparent 70%); }
+
+    /* ── Decor ── */
+    .plant { position:fixed; bottom:7vh; right:7vw; z-index:5;
+      display:flex; flex-direction:column; align-items:center; }
+    .plant-leaves { position:relative; width:90px; height:90px; }
+    .leaf { position:absolute; border-radius:50% 0 50% 0;
+      background:linear-gradient(135deg,#2d8a2d,#1a5c1a); box-shadow:0 2px 8px rgba(0,0,0,.35); }
+    .leaf:nth-child(1){width:42px;height:58px;bottom:0;left:22px;transform:rotate(-20deg)}
+    .leaf:nth-child(2){width:36px;height:52px;bottom:6px;left:8px;transform:rotate(-62deg);background:linear-gradient(135deg,#3aa03a,#2a7a2a)}
+    .leaf:nth-child(3){width:40px;height:55px;bottom:0;right:8px;transform:rotate(22deg) scaleX(-1)}
+    .leaf:nth-child(4){width:33px;height:46px;bottom:10px;right:4px;transform:rotate(52deg) scaleX(-1);background:linear-gradient(135deg,#3aa03a,#2a7a2a)}
+    .leaf:nth-child(5){width:38px;height:52px;bottom:4px;left:24px;transform:rotate(4deg);background:linear-gradient(135deg,#4ab04a,#2a7a2a)}
+    .plant-pot{width:52px;height:42px;background:linear-gradient(to bottom,#c67c3a,#a05c2a);clip-path:polygon(10% 0%,90% 0%,100% 100%,0% 100%)}
+
+    .side-table{position:fixed;bottom:7vh;left:5vw;z-index:5}
+    .st-top{width:95px;height:9px;background:linear-gradient(to bottom,#8B6F47,#6B4F27);border-radius:3px;box-shadow:0 3px 8px rgba(0,0,0,.4)}
+    .st-leg{width:7px;height:55px;background:linear-gradient(to bottom,#7B5F37,#5B4027);margin:0 auto;border-radius:0 0 3px 3px}
+    .tissue{width:52px;height:32px;background:linear-gradient(135deg,#e8e8e8,#d0d0d0);border-radius:4px;margin-bottom:4px;position:relative;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+    .tissue::after{content:'';position:absolute;top:3px;left:50%;transform:translateX(-50%);width:22px;height:11px;background:#fff;border-radius:50% 50% 0 0;border:1px solid #ddd}
+
+    .remote{position:fixed;bottom:11vh;left:13vw;z-index:6;transform:rotate(-38deg)}
+    .remote-body{width:38px;height:95px;background:linear-gradient(to bottom,#222,#111);border-radius:10px 10px 14px 14px;box-shadow:0 4px 16px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);padding:8px 5px;display:flex;flex-direction:column;gap:4px;align-items:center}
+    .rb{width:8px;height:8px;border-radius:50%;background:#333;box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}
+    .rb.r{background:#8B0000}.rb.g{background:#006400}.rb.y{background:#8B6000}.rb.b{background:#00008B}
+    .rb-row{display:flex;gap:3px}
+
+    /* ── Top bar ── */
+    .url-bar {
+      position:fixed; top:0; left:0; right:0; z-index:30;
+      padding:10px 16px;
+      background:rgba(0,0,0,.8);
+      backdrop-filter:blur(16px);
+      border-bottom:1px solid rgba(255,255,255,.08);
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    }
+    .url-bar .logo { font-size:18px; flex-shrink:0; }
+    .url-bar input[type=text] {
+      flex:1; min-width:160px;
+      background:rgba(255,255,255,.08); border:1.5px solid rgba(255,255,255,.12);
+      border-radius:8px; color:#fff; font-size:13px; padding:7px 12px; outline:none;
+      transition:border-color .2s, background .2s;
+    }
+    .url-bar input[type=text]:focus { border-color:#4a7cff; background:rgba(74,124,255,.08); }
+    .url-bar input[type=text]::placeholder { color:#555; }
+
+    .btn {
+      flex-shrink:0; border:none; border-radius:8px; padding:7px 14px;
+      font-size:12px; font-weight:500; cursor:pointer;
+      transition:background .2s, transform .1s; white-space:nowrap;
+    }
+    .btn:active { transform:scale(.97); }
+    .btn-play  { background:#4a7cff; color:#fff; }
+    .btn-play:hover  { background:#3a6ce0; }
+    .btn-file  { background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.18); color:#ddd; }
+    .btn-file:hover  { background:rgba(255,255,255,.18); color:#fff; }
+    .btn-off   { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); color:#777; }
+    .btn-off:hover   { background:rgba(255,255,255,.13); color:#ccc; }
+
+    #fileInput { display:none; }
+
+    /* ── Sample bar ── */
+    .samples {
+      position:fixed; top:52px; left:0; right:0; z-index:29;
+      padding:6px 16px;
+      background:rgba(0,0,0,.6); backdrop-filter:blur(10px);
+      border-bottom:1px solid rgba(255,255,255,.05);
+      display:flex; align-items:center; gap:6px; overflow-x:auto;
+    }
+    .samples::-webkit-scrollbar{height:3px}
+    .samples::-webkit-scrollbar-thumb{background:#444;border-radius:2px}
+    .samples span { color:#555; font-size:11px; flex-shrink:0; margin-right:2px; }
+    .sample-btn {
+      flex-shrink:0; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1);
+      color:#aaa; border-radius:20px; padding:4px 12px; font-size:11px;
+      cursor:pointer; transition:all .2s; white-space:nowrap;
+    }
+    .sample-btn:hover { background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.25); }
+    .sample-btn.active { background:#4a7cff22; border-color:#4a7cff; color:#88aaff; }
+
+    /* ── TV ── */
+    .tv-wrap {
+      position:relative; z-index:10;
+      display:flex; flex-direction:column; align-items:center;
+      margin-top:4px; margin-bottom:5vh;
+    }
+    .tv-body {
+      background:linear-gradient(160deg,#2a2a2a 0%,#111 60%,#1a1a1a 100%);
+      border-radius:18px 18px 12px 12px; padding:14px 14px 26px;
+      box-shadow:0 0 0 2px #444,0 0 0 4px #222,0 30px 80px rgba(0,0,0,.9),0 10px 30px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.07);
+      position:relative;
+    }
+    .tv-brand{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);color:#555;font-size:10px;letter-spacing:3px;text-transform:uppercase;font-weight:300;white-space:nowrap}
+    .tv-led{position:absolute;bottom:9px;right:22px;width:6px;height:6px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88,0 0 16px #00ff8844;animation:blink 3s ease-in-out infinite}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+    .tv-bezel{background:#0a0a0a;border-radius:8px;padding:6px;box-shadow:inset 0 0 14px rgba(0,0,0,.9),inset 0 2px 5px rgba(0,0,0,.8)}
+
+    /* ── Screen ── */
+    .tv-screen {
+      position:relative; width:min(66vw,820px); aspect-ratio:16/9;
+      border-radius:4px; overflow:hidden; background:#000;
+      box-shadow:inset 0 0 40px rgba(0,0,0,.6),0 0 60px rgba(80,120,255,.1);
+    }
+    .tv-screen::after {
+      content:''; position:absolute; inset:0; pointer-events:none; z-index:20; border-radius:4px;
+      background:linear-gradient(135deg,rgba(255,255,255,.055) 0%,transparent 45%,rgba(255,255,255,.01) 100%);
+    }
+    .scanlines{position:absolute;inset:0;z-index:19;pointer-events:none;border-radius:4px;
+      background:repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.04) 2px 4px)}
+    .tv-screen video {
+      position:absolute; inset:0; width:100%; height:100%; border:none; display:block; z-index:1;
+    }
+
+    /* ── Idle screen ── */
+    #idle {
+      position:absolute; inset:0; z-index:5;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+      background:radial-gradient(ellipse at center,#0a0a1a 0%,#000 100%);
+      color:#fff; text-align:center; padding:16px;
+      transition:background .2s, border .2s;
+    }
+    .drag-over #idle {
+      background:rgba(74,124,255,.07);
+      outline:3px dashed #4a7cff;
+      outline-offset:-3px;
+    }
+    #idle .ic  { font-size:clamp(28px,4vw,48px); }
+    #idle h2   { font-size:clamp(12px,1.8vw,16px); font-weight:400; color:#bbb; letter-spacing:2px; }
+    #idle p    { font-size:clamp(9px,1.2vw,12px); color:#555; line-height:1.8; max-width:300px; }
+    #idle .drop-hint { color:#4a7cff; font-size:clamp(9px,1.1vw,12px); display:none; }
+    .drag-over #idle .drop-hint { display:block; }
+    .drag-over #idle p { display:none; }
+
+    .tv-neck{width:64px;height:30px;background:linear-gradient(to bottom,#222,#1a1a1a);margin:0 auto;clip-path:polygon(20% 0%,80% 0%,100% 100%,0% 100%);box-shadow:0 4px 8px rgba(0,0,0,.5)}
+    .tv-base{width:210px;height:14px;background:linear-gradient(to bottom,#2a2a2a,#1a1a1a);border-radius:4px 4px 6px 6px;box-shadow:0 6px 20px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05)}
+    .floor-glow{position:absolute;bottom:-45px;left:50%;transform:translateX(-50%);width:520px;height:45px;background:radial-gradient(ellipse,rgba(80,120,255,.1) 0%,transparent 70%);pointer-events:none}
+
+    /* ── Toast ── */
+    #toast {
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(60px);
+      z-index:50; background:#1e1e1e; color:#fff; border-radius:10px;
+      padding:9px 18px; font-size:12px;
+      box-shadow:0 4px 20px rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.1);
+      opacity:0; transition:all .3s cubic-bezier(.34,1.56,.64,1); pointer-events:none; white-space:nowrap;
+    }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    #toast.err  { border-color:#ff4444; color:#ff9999; }
+  </style>
+</head>
+<body>
+
+<div class="room"></div>
+<div class="ambient" id="ambient"></div>
+
+<!-- Decor -->
+<div class="plant">
+  <div class="plant-leaves">
+    <div class="leaf"></div><div class="leaf"></div><div class="leaf"></div>
+    <div class="leaf"></div><div class="leaf"></div>
+  </div>
+  <div class="plant-pot"></div>
+</div>
+<div class="side-table">
+  <div class="tissue"></div>
+  <div class="st-top"></div>
+  <div class="st-leg"></div>
+</div>
+<div class="remote">
+  <div class="remote-body">
+    <div class="rb r"></div>
+    <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
+    <div class="rb-row"><div class="rb g"></div><div class="rb y"></div></div>
+    <div class="rb-row"><div class="rb"></div><div class="rb b"></div></div>
+    <div class="rb"></div>
+    <div class="rb-row"><div class="rb"></div><div class="rb"></div></div>
+  </div>
+</div>
+
+<!-- Top bar -->
+<div class="url-bar">
+  <span class="logo">📺</span>
+  <input id="urlInput" type="text"
+    placeholder="Paste a direct .mp4 URL — then press Enter or ▶ Play"
+    autocomplete="off" spellcheck="false" />
+  <button class="btn btn-play" onclick="loadUrl()">▶ Play</button>
+  <button class="btn btn-file" onclick="document.getElementById('fileInput').click()">📂 Open .mp4 from PC</button>
+  <button class="btn btn-off"  onclick="turnOff()">✕ Off</button>
+  <input type="file" id="fileInput" accept=".mp4,video/mp4" onchange="loadLocalFile(this)" />
+</div>
+
+<!-- Sample bar -->
+<div class="samples">
+  <span>Samples:</span>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')">🐰 Big Buck Bunny</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4')">🐘 Elephants Dream</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4')">🔥 Blazes</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4')">🚗 Subaru</button>
+  <button class="sample-btn" onclick="playSample(this,'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4')">⚔️ Tears of Steel</button>
+</div>
+
+<!-- TV -->
+<div class="tv-wrap">
+  <div class="tv-body">
+    <div class="tv-bezel">
+      <div class="tv-screen" id="tvScreen">
+
+        <div id="idle">
+          <div class="ic">📺</div>
+          <h2>FORGE TV</h2>
+          <p>
+            Paste an <strong>.mp4 URL</strong> above and press ▶ Play<br>
+            or click <strong>📂 Open .mp4 from PC</strong><br>
+            or drag an .mp4 file onto this screen<br>
+            or pick a sample video above
+          </p>
+          <div class="drop-hint">⬇ Drop your .mp4 here</div>
+        </div>
+
+        <div class="scanlines"></div>
+      </div>
+    </div>
+    <div class="tv-brand">FORGE TV</div>
+    <div class="tv-led"></div>
+  </div>
+  <div class="tv-neck"></div>
+  <div class="tv-base"></div>
+  <div class="floor-glow"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let activeSampleBtn = null;
+  const scr = document.getElementById('tvScreen');
+
+  // ── Helpers ──────────────────────────────────────────────────
+  function isMP4url(url) {
+    return /\.mp4(\?.*)?$/i.test(url.trim());
+  }
+
+  function clearScreen() {
+    scr.querySelectorAll('video').forEach(v => {
+      URL.revokeObjectURL(v.src); // safe to call on non-blob too
+      v.remove();
+    });
+    showIdle(false);
+  }
+
+  function showIdle(on) {
+    document.getElementById('idle').style.display = on ? 'flex' : 'none';
+  }
+
+  function setAmbient(color) {
+    document.getElementById('ambient').style.background =
+      `radial-gradient(ellipse 70% 50% at 50% 42%, ${color} 0%, transparent 70%)`;
+  }
+
+  function toast(msg, isErr = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show' + (isErr ? ' err' : '');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.className = '', 3200);
+  }
+
+  function clearActiveSample() {
+    if (activeSampleBtn) { activeSampleBtn.classList.remove('active'); activeSampleBtn = null; }
+  }
+
+  // ── Play a video src (URL or blob) ───────────────────────────
+  function playVideo(src, label) {
+    clearScreen();
+    const v = document.createElement('video');
+    v.src      = src;
+    v.controls = true;
+    v.autoplay = true;
+    v.style.background = '#000';
+    v.onerror  = () => { showIdle(true); toast('❌ Could not play this file.', true); };
+    scr.insertBefore(v, scr.querySelector('.scanlines'));
+    setAmbient('rgba(100,60,200,.09)');
+    if (label) toast(`▶ ${label}`);
+  }
+
+  // ── Load from URL input ──────────────────────────────────────
+  function loadUrl() {
+    const raw = document.getElementById('urlInput').value.trim();
+    if (!raw) { toast('⚠️ Paste an .mp4 URL first!', true); return; }
+    if (!isMP4url(raw)) { toast('❌ Only .mp4 URLs are supported.', true); return; }
+    clearActiveSample();
+    playVideo(raw, 'Loading…');
+  }
+
+  // ── Load from file picker ────────────────────────────────────
+  function loadLocalFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.type !== 'video/mp4' && !file.name.toLowerCase().endsWith('.mp4')) {
+      toast('❌ Only .mp4 files are supported.', true);
+      input.value = '';
+      return;
+    }
+    clearActiveSample();
+    const blob = URL.createObjectURL(file);
+    const mb   = (file.size / 1024 / 1024).toFixed(1);
+    document.getElementById('urlInput').value = '';
+    playVideo(blob, `"${file.name}" (${mb} MB)`);
+    input.value = ''; // allow re-selecting same file
+  }
+
+  // ── Sample presets ───────────────────────────────────────────
+  function playSample(btn, url) {
+    clearActiveSample();
+    activeSampleBtn = btn;
+    btn.classList.add('active');
+    document.getElementById('urlInput').value = '';
+    playVideo(url, btn.textContent.trim());
+  }
+
+  // ── Turn off ─────────────────────────────────────────────────
+  function turnOff() {
+    clearScreen();
+    clearActiveSample();
+    showIdle(true);
+    setAmbient('rgba(60,100,220,.07)');
+    document.getElementById('urlInput').value = '';
+    toast('📺 TV off');
+  }
+
+  // ── Enter key ────────────────────────────────────────────────
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadUrl();
+  });
+
+  // ── Drag & drop ──────────────────────────────────────────────
+  scr.addEventListener('dragover', e => {
+    e.preventDefault();
+    scr.classList.add('drag-over');
+  });
+  scr.addEventListener('dragleave', e => {
+    if (!scr.contains(e.relatedTarget)) scr.classList.remove('drag-over');
+  });
+  scr.addEventListener('drop', e => {
+    e.preventDefault();
+    scr.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (file.type !== 'video/mp4' && !file.name.toLowerCase().endsWith('.mp4')) {
+      toast('❌ Only .mp4 files are supported.', true);
+      return;
+    }
+    clearActiveSample();
+    const blob = URL.createObjectURL(file);
+    const mb   = (file.size / 1024 / 1024).toFixed(1);
+    document.getElementById('urlInput').value = '';
+    playVideo(blob, `"${file.name}" (${mb} MB)`);
+  });
+</script>
+</body>
+</html>
