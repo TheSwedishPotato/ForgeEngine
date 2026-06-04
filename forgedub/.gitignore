@@ -1,0 +1,15 @@
+# Runtime data (uploads, job outputs, downloaded videos)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Models / caches that may land here
+models/
+*.onnx
+*.pth

@@ -1,0 +1,14 @@
+# ForgeDub — AI model pack (the "real" engine). Install on a capable machine,
+# ideally with an NVIDIA GPU. Also requires the ffmpeg system package:
+#   Linux:   sudo apt install ffmpeg
+#   macOS:   brew install ffmpeg
+#   Windows: winget install Gyan.FFmpeg   (or https://ffmpeg.org/download.html)
+
+yt-dlp>=2024.8.6           # import videos from a URL ("paste a link")
+faster-whisper>=1.0.0      # English transcription (CPU/GPU)
+argostranslate>=1.9.0      # offline English -> Swedish translation
+TTS>=0.22.0                # Coqui XTTS-v2: Swedish TTS + voice cloning
+
+# Optional extras:
+# piper-tts                # lighter Swedish voice (no cloning); set FORGEDUB_PIPER_MODEL
+# demucs                   # voice/background separation (keep original music bed)
