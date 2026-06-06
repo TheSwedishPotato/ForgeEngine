@@ -1,0 +1,6 @@
+# ForgeDub — base requirements (the app + demo engine).
+# These are light and pure-Python; the app runs in demo/mock mode with just these.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+pywebview>=4.4          # native desktop window (falls back to browser if missing)

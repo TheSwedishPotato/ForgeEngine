@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ForgeDub — AI Video Dubbing</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">⚒️</span>
+      <div>
+        <h1>ForgeDub</h1>
+        <p class="tagline">AI video dubbing · English → Swedish</p>
+      </div>
+    </div>
+    <div class="badges">
+      <span id="lang-badge" class="badge badge-lang">EN → SV</span>
+      <span id="mode-badge" class="badge badge-mode" title="Engine mode">…</span>
+    </div>
+  </header>
+
+  <div id="mode-note" class="mode-note hidden"></div>
+
+  <main class="layout">
+    <!-- ───────────────── Sidebar: new dub + history ───────────────── -->
+    <aside class="sidebar">
+      <section class="card">
+        <h2>New dub</h2>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="upload">Upload file</button>
+          <button class="tab" data-tab="url">From link</button>
+        </div>
+
+        <!-- Upload -->
+        <div class="tab-panel" data-panel="upload">
+          <label id="dropzone" class="dropzone" for="file-input">
+            <input id="file-input" type="file" accept="video/*,audio/*" hidden />
+            <div class="dz-icon">⬆️</div>
+            <div class="dz-text"><strong>Drop a video here</strong><br />or click to browse</div>
+            <div id="file-name" class="dz-file"></div>
+          </label>
+        </div>
+
+        <!-- URL -->
+        <div class="tab-panel hidden" data-panel="url">
+          <label class="field-label" for="url-input">Paste a video link</label>
+          <input id="url-input" class="text-input" type="url"
+                 placeholder="https://www.youtube.com/watch?v=…" />
+          <p class="hint">YouTube and most sites (needs the model pack / yt-dlp).</p>
+        </div>
+
+        <!-- Options -->
+        <div class="options">
+          <label class="switch">
+            <input id="opt-clone" type="checkbox" checked />
+            <span class="slider"></span>
+            <span class="switch-label">Clone original voice</span>
+          </label>
+          <label class="switch">
+            <input id="opt-bg" type="checkbox" />
+            <span class="slider"></span>
+            <span class="switch-label">Keep background music</span>
+          </label>
+        </div>
+
+        <button id="start-btn" class="btn btn-primary btn-block" disabled>
+          Start dubbing
+        </button>
+        <p id="form-error" class="form-error hidden"></p>
+      </section>
+
+      <section class="card">
+        <h2>History</h2>
+        <ul id="history" class="history"><li class="muted">No dubs yet.</li></ul>
+      </section>
+    </aside>
+
+    <!-- ───────────────── Workspace: progress + result ───────────────── -->
+    <section class="workspace">
+      <!-- Empty state -->
+      <div id="empty-state" class="empty">
+        <div class="empty-icon">🎬</div>
+        <h2>Dub your video into Swedish</h2>
+        <p>Upload a file or paste a link, then press <strong>Start dubbing</strong>.<br />
+           ForgeDub transcribes the English, translates it, and regenerates the
+           speech in Swedish — keeping the original speaker's voice.</p>
+      </div>
+
+      <!-- Active job -->
+      <div id="job-view" class="job-view hidden">
+        <div class="job-head">
+          <h2 id="job-title">Dub</h2>
+          <span id="job-status" class="badge">queued</span>
+        </div>
+
+        <!-- Progress -->
+        <div id="progress-box" class="progress-box">
+          <div class="progress-top">
+            <span id="stage-label">Queued</span>
+            <span id="progress-pct">0%</span>
+          </div>
+          <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+          <p id="progress-msg" class="progress-msg"></p>
+        </div>
+
+        <!-- Result -->
+        <div id="result-box" class="result-box hidden">
+          <div class="player-wrap">
+            <video id="player-video" class="player" controls playsinline></video>
+            <audio id="player-audio" class="player hidden" controls></audio>
+          </div>
+          <div class="result-actions">
+            <a id="download-btn" class="btn btn-primary" href="#" download>⬇ Download</a>
+            <button id="rerender-btn" class="btn btn-ghost">↻ Apply edits & re-render</button>
+          </div>
+        </div>
+
+        <!-- Transcript / translation editor -->
+        <div id="segments-box" class="segments-box hidden">
+          <h3>Transcript &amp; translation <span class="muted">(edit the Swedish, then re-render)</span></h3>
+          <div class="seg-head">
+            <span>Time</span><span>English</span><span>Swedish</span>
+          </div>
+          <div id="segments" class="segments"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
