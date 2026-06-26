@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge Engine — Fantasy Kingdom Economy Dashboard</title>
+<style>
+  :root{
+    --bg:#15110c; --panel:#1f1810; --panel2:#27200f; --ink:#f3e9d2;
+    --muted:#b6a98a; --gold:#e7b948; --grain:#9bcf5f; --fire:#ef5a3a;
+    --coin:#6fb3ff; --line:#3a2f1d; --good:#69c779; --bad:#ef5a3a; --warn:#e7b948;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:radial-gradient(1200px 600px at 70% -10%, #2a2010, var(--bg));
+    color:var(--ink); font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+  }
+  header{padding:22px 26px 8px; border-bottom:1px solid var(--line)}
+  h1{margin:0; font-size:26px; letter-spacing:.5px}
+  h1 .crest{color:var(--gold)}
+  .sub{color:var(--muted); margin-top:4px; font-size:14px}
+  .wrap{display:grid; grid-template-columns:320px 1fr; gap:18px; padding:18px 26px 40px}
+  @media (max-width:900px){.wrap{grid-template-columns:1fr}}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:14px; padding:16px}
+  .panel h2{margin:0 0 12px; font-size:15px; text-transform:uppercase; letter-spacing:1.5px; color:var(--gold)}
+  .ctrl{margin-bottom:14px}
+  .ctrl label{display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:5px}
+  .ctrl label b{color:var(--ink); font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%; accent-color:var(--gold); cursor:pointer}
+  .presets{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px}
+  button{font-family:inherit; cursor:pointer; border:1px solid var(--line); background:#2c2412;
+    color:var(--ink); padding:7px 11px; border-radius:9px; font-size:13px; transition:.15s}
+  button:hover{border-color:var(--gold); color:var(--gold)}
+  button.primary{background:var(--gold); color:#241a05; border-color:var(--gold); font-weight:700}
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px}
+  @media (max-width:1100px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:14px; padding:14px 16px; position:relative; overflow:hidden}
+  .kpi .t{font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--muted)}
+  .kpi .v{font-size:30px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums}
+  .kpi .d{font-size:12px; margin-top:2px; color:var(--muted)}
+  .kpi .bar{position:absolute; left:0; bottom:0; height:4px; background:var(--gold); transition:width .25s}
+  .chartbox{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--line);
+    border-radius:14px; padding:14px 16px 6px; margin-bottom:18px}
+  .chartbox .head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
+  .chartbox h3{margin:0; font-size:14px; letter-spacing:.5px}
+  .legend{display:flex; gap:14px; font-size:12px; color:var(--muted)}
+  .legend i{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px}
+  canvas{width:100%; display:block}
+  table{width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums}
+  th,td{text-align:right; padding:6px 8px; border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left; color:var(--muted)}
+  thead th{color:var(--gold); font-size:11px; text-transform:uppercase; letter-spacing:1px}
+  .pill{display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:700}
+  .verdict{font-size:14px; margin:2px 0 14px; color:var(--muted)}
+  .footnote{color:var(--muted); font-size:12px; line-height:1.6; margin-top:6px}
+  code{background:#000a; padding:1px 5px; border-radius:5px; color:var(--grain)}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="crest">⚔️</span> The Kingdom of Forgehold — Royal Treasury Dashboard</h1>
+  <div class="sub">A live simulation of grain, gold &amp; dragonfire. Drag the levers — the realm responds at once.
+    <span id="seed"></span></div>
+</header>
+
+<div class="wrap">
+  <!-- ============ CONTROLS ============ -->
+  <aside class="panel" aria-label="controls">
+    <h2>Royal Decrees</h2>
+    <div class="presets">
+      <button data-preset="balanced" class="primary">Balanced Realm</button>
+      <button data-preset="golden">Golden Age</button>
+      <button data-preset="dragons">Dragon Plague</button>
+      <button data-preset="famine">Great Famine</button>
+    </div>
+
+    <div class="ctrl">
+      <label>Farmland <small>(acres)</small> <b id="l_acres"></b></label>
+      <input type="range" id="acres" min="2000" max="40000" step="500">
+    </div>
+    <div class="ctrl">
+      <label>Base grain yield <small>(bushels/acre)</small> <b id="l_yield"></b></label>
+      <input type="range" id="yield" min="4" max="30" step="0.5">
+    </div>
+    <div class="ctrl">
+      <label>Population <small>(souls)</small> <b id="l_pop"></b></label>
+      <input type="range" id="pop" min="1000" max="30000" step="250">
+    </div>
+    <div class="ctrl">
+      <label>Mint rate <small>(new gold / year %)</small> <b id="l_mint"></b></label>
+      <input type="range" id="mint" min="0" max="25" step="0.5">
+    </div>
+    <div class="ctrl">
+      <label>Tax rate <small>(% of output)</small> <b id="l_tax"></b></label>
+      <input type="range" id="tax" min="0" max="60" step="1">
+    </div>
+    <div class="ctrl">
+      <label>Dragon raids <small>(per year)</small> <b id="l_raids"></b></label>
+      <input type="range" id="raids" min="0" max="12" step="1">
+    </div>
+    <div class="ctrl">
+      <label>Dragon ferocity <small>(damage/raid)</small> <b id="l_fero"></b></label>
+      <input type="range" id="fero" min="0" max="100" step="5">
+    </div>
+    <div class="ctrl">
+      <label>Knight garrison <small>(defense)</small> <b id="l_knights"></b></label>
+      <input type="range" id="knights" min="0" max="100" step="5">
+    </div>
+    <div class="ctrl">
+      <label>Weather / blight <small>(harvest factor)</small> <b id="l_weather"></b></label>
+      <input type="range" id="weather" min="40" max="130" step="1">
+    </div>
+    <div class="ctrl">
+      <label>Horizon <small>(seasons simulated)</small> <b id="l_turns"></b></label>
+      <input type="range" id="turns" min="8" max="48" step="2">
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:8px">
+      <button id="randomize">🎲 Roll the bones</button>
+      <button id="reset">↺ Reset</button>
+    </div>
+    <p class="footnote">Every change re-runs the full multi-season model instantly. Charts &amp; the chronicle
+      below redraw in real-time — no save needed.</p>
+  </aside>
+
+  <!-- ============ DASHBOARD ============ -->
+  <main>
+    <div class="kpis" id="kpis"></div>
+
+    <div class="verdict" id="verdict"></div>
+
+    <div class="chartbox">
+      <div class="head">
+        <h3>Inflation &amp; Grain Price over the Seasons</h3>
+        <div class="legend">
+          <span><i style="background:var(--gold)"></i>Inflation %</span>
+          <span><i style="background:var(--grain)"></i>Grain price (gp/bushel)</span>
+        </div>
+      </div>
+      <canvas id="chartA" height="220"></canvas>
+    </div>
+
+    <div class="chartbox">
+      <div class="head">
+        <h3>Grain Stockpile, Treasury &amp; Dragon Damage</h3>
+        <div class="legend">
+          <span><i style="background:var(--grain)"></i>Granary (k bushels)</span>
+          <span><i style="background:var(--coin)"></i>Treasury (k gp)</span>
+          <span><i style="background:var(--fire)"></i>Dragon damage (k gp)</span>
+        </div>
+      </div>
+      <canvas id="chartB" height="220"></canvas>
+    </div>
+
+    <div class="chartbox">
+      <div class="head"><h3>Season-by-Season Chronicle</h3></div>
+      <div style="overflow:auto; max-height:360px">
+        <table id="ledger">
+          <thead><tr>
+            <th>Season</th><th>Grain in</th><th>Grain eaten</th><th>Granary</th>
+            <th>Price</th><th>Inflation</th><th>Dragon dmg</th><th>Treasury</th><th>Unrest</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="footnote">Model: grain price ∝ scarcity × money supply; inflation rises with the mint rate and
+        with grain scarcity; dragon damage = raids × ferocity × (1 − garrison effectiveness); unrest blends
+        hunger, taxes &amp; inflation. All figures are illustrative game-balance numbers, not economic forecasts.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (n,d=0) => n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+const FIELDS = ['acres','yield','pop','mint','tax','raids','fero','knights','weather','turns'];
+
+const PRESETS = {
+  balanced: {acres:18000, yield:14, pop:12000, mint:4, tax:20, raids:2, fero:35, knights:50, weather:100, turns:24},
+  golden:   {acres:30000, yield:22, pop:14000, mint:2, tax:14, raids:0, fero:20, knights:70, weather:118, turns:24},
+  dragons:  {acres:16000, yield:13, pop:11000, mint:9, tax:30, raids:9, fero:80, knights:35, weather:95,  turns:24},
+  famine:   {acres:9000,  yield:6,  pop:16000, mint:14,tax:35, raids:3, fero:45, knights:40, weather:62,  turns:24},
+};
+
+let S = {...PRESETS.balanced};
+
+/* ---------- the simulation ---------- */
+function simulate(s){
+  const rows=[];
+  // starting conditions
+  let granary = s.pop * 8;            // seed stockpile
+  let treasury = 50000;
+  let priceBase = 2.0;                // gp per bushel in a normal year
+  let moneyIndex = 1.0;               // grows with mint rate -> monetary inflation
+  const consumePerCapita = 9;         // bushels/season per soul
+  const garrisonUpkeep = s.knights * 120;
+
+  for(let t=1; t<=s.turns; t++){
+    // seasonal weather wobble around the chosen factor
+    const wobble = 1 + 0.10*Math.sin(t*1.3) + 0.04*Math.cos(t*2.1);
+    const weather = (s.weather/100) * wobble;
+
+    // dragons burn fields + torch the treasury
+    const raidsThisSeason = s.raids/4;                  // raids/year -> per season
+    const defense = s.knights/100 * 0.85;               // garrison soaks up to 85%
+    const dragonDmgGold = raidsThisSeason * s.fero * 1000 * (1-defense);
+    const fieldsBurned = raidsThisSeason * (1-defense) * 0.05; // up to 5% of harvest per raid
+
+    // grain
+    let grainIn = s.acres * s.yield * weather * (1-fieldsBurned) / 4; // per season
+    grainIn = Math.max(0, grainIn);
+    const grainEaten = s.pop * consumePerCapita;
+    granary = Math.max(0, granary + grainIn - grainEaten);
+
+    // scarcity drives price; money supply drives inflation
+    const coverage = grainIn / grainEaten;              // >1 surplus, <1 deficit
+    moneyIndex *= (1 + s.mint/100/4);                   // quarterly mint growth
+    const scarcity = Math.min(3.5, Math.max(0.4, 1/coverage));
+    const price = priceBase * scarcity * moneyIndex;
+
+    // inflation = year-over-year price change (annualised from previous season)
+    const prevPrice = rows.length ? rows[rows.length-1].price : priceBase;
+    const inflation = (price/prevPrice - 1) * 100 * 4;  // annualised %
+
+    // treasury: taxes in, dragon repair + upkeep out
+    const taxes = grainIn * price * (s.tax/100);
+    treasury = treasury + taxes - dragonDmgGold - garrisonUpkeep;
+
+    // unrest 0..100
+    const hunger = Math.max(0, (1-coverage)) * 60;
+    const taxPain = (s.tax/100) * 25;
+    const inflPain = Math.max(0, inflation) * 0.4;
+    const broke = treasury < 0 ? 25 : 0;
+    const unrest = Math.min(100, hunger + taxPain + inflPain + broke);
+
+    rows.push({t, grainIn, grainEaten, granary, price, inflation, dragonDmgGold, treasury, unrest, coverage});
+  }
+  return rows;
+}
+
+/* ---------- KPIs & verdict ---------- */
+function summarize(rows){
+  const last = rows[rows.length-1];
+  const avgInfl = rows.reduce((a,r)=>a+r.inflation,0)/rows.length;
+  const totalDragon = rows.reduce((a,r)=>a+r.dragonDmgGold,0);
+  const foodSecure = rows.filter(r=>r.coverage>=1).length/rows.length*100;
+  return {last, avgInfl, totalDragon, foodSecure};
+}
+
+function color(val, good, bad){ return val<=good?'var(--good)':val>=bad?'var(--bad)':'var(--warn)'; }
+
+function renderKPIs(rows){
+  const {last, avgInfl, totalDragon, foodSecure} = summarize(rows);
+  const cards = [
+    {t:'Treasury', v:fmt(last.treasury)+' gp', d:(last.treasury<0?'In debt to the guilds':'Coffers holding'),
+      bar: Math.max(0,Math.min(100, last.treasury/200000*100)), c: last.treasury<0?'var(--bad)':'var(--coin)'},
+    {t:'Avg Inflation', v:fmt(avgInfl,1)+'%', d:(avgInfl>15?'Prices spiralling':avgInfl>6?'Climbing':'Stable'),
+      bar: Math.min(100,Math.abs(avgInfl)*4), c: color(avgInfl,6,15)},
+    {t:'Food Security', v:fmt(foodSecure)+'%', d:'seasons in surplus',
+      bar: foodSecure, c: foodSecure>=70?'var(--good)':foodSecure>=40?'var(--warn)':'var(--bad)'},
+    {t:'Dragon Toll', v:fmt(totalDragon/1000)+'k gp', d:'burned over the horizon',
+      bar: Math.min(100,totalDragon/300000*100), c:'var(--fire)'},
+    {t:'Granary', v:fmt(last.granary/1000)+'k bu', d:(last.granary<=0?'Empty — riots loom':'bushels in store'),
+      bar: Math.min(100,last.granary/(S.pop*20)*100), c:'var(--grain)'},
+    {t:'Grain Price', v:fmt(last.price,2)+' gp', d:'per bushel, latest season',
+      bar: Math.min(100,last.price/10*100), c:'var(--grain)'},
+    {t:'Unrest', v:fmt(last.unrest)+'/100', d:(last.unrest>60?'Pitchforks ready':last.unrest>30?'Grumbling':'Content'),
+      bar: last.unrest, c: color(last.unrest,30,60)},
+    {t:'Net Output', v:fmt(last.grainIn/1000,1)+'k bu', d:'grain harvested / season',
+      bar: Math.min(100,last.grainIn/(S.pop*12)*100), c:'var(--grain)'},
+  ];
+  $('kpis').innerHTML = cards.map(c=>`
+    <div class="kpi">
+      <div class="t">${c.t}</div>
+      <div class="v" style="color:${c.c}">${c.v}</div>
+      <div class="d">${c.d}</div>
+      <div class="bar" style="width:${c.bar}%; background:${c.c}"></div>
+    </div>`).join('');
+
+  // verdict
+  let verdict, pill;
+  if(foodSecure<40 || last.unrest>60){ verdict='The realm teeters on revolt — feed the people or lose the crown.'; pill=['var(--bad)','#2a0f0a','Crisis']; }
+  else if(avgInfl>15 || last.treasury<0){ verdict='Gold flows freely but its worth bleeds away; the treasury strains.'; pill=['var(--warn)','#2a230a','Strained']; }
+  else if(foodSecure>80 && last.unrest<25){ verdict='Forgehold prospers: full granaries, quiet streets, a fat treasury.'; pill=['var(--good)','#0f2a14','Flourishing']; }
+  else { verdict='A workable balance — the kingdom endures, though challenges remain.'; pill=['var(--coin)','#0f1d2a','Steady']; }
+  $('verdict').innerHTML = `<span class="pill" style="color:${pill[0]};background:${pill[1]}">${pill[2]}</span> &nbsp; ${verdict}`;
+}
+
+/* ---------- tiny canvas charting (no deps) ---------- */
+function setupCanvas(cv){
+  const dpr = window.devicePixelRatio||1;
+  const w = cv.clientWidth, h = cv.height;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr,dpr);
+  return {ctx,w,h};
+}
+function drawLines(cv, series, labels){
+  const {ctx,w,h} = setupCanvas(cv);
+  const padL=46, padR=12, padT=12, padB=24;
+  ctx.clearRect(0,0,w,h);
+  const all = series.flatMap(s=>s.data);
+  let min=Math.min(...all,0), max=Math.max(...all,1);
+  if(max===min) max=min+1;
+  const x = i => padL + i*(w-padL-padR)/(labels.length-1);
+  const y = v => h-padB - (v-min)/(max-min)*(h-padT-padB);
+  // grid
+  ctx.strokeStyle='#3a2f1d'; ctx.fillStyle='#b6a98a'; ctx.font='11px Georgia'; ctx.lineWidth=1;
+  for(let g=0; g<=4; g++){
+    const gv = min+(max-min)*g/4, gy=y(gv);
+    ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(w-padR,gy); ctx.stroke();
+    ctx.fillText(fmt(gv, max-min<10?1:0), 4, gy+3);
+  }
+  // x labels (sparse)
+  const step=Math.ceil(labels.length/8);
+  for(let i=0;i<labels.length;i+=step){ ctx.fillText('S'+labels[i], x(i)-6, h-8); }
+  // lines
+  series.forEach(s=>{
+    ctx.strokeStyle=s.color; ctx.lineWidth=2.2; ctx.beginPath();
+    s.data.forEach((v,i)=>{ i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)); });
+    ctx.stroke();
+    // last point dot
+    ctx.fillStyle=s.color; const li=s.data.length-1;
+    ctx.beginPath(); ctx.arc(x(li),y(s.data[li]),3,0,7); ctx.fill();
+  });
+}
+
+/* ---------- ledger ---------- */
+function renderLedger(rows){
+  const body = rows.map(r=>{
+    const uc = r.unrest>60?'var(--bad)':r.unrest>30?'var(--warn)':'var(--good)';
+    const ic = r.inflation>15?'var(--bad)':r.inflation>6?'var(--warn)':'var(--good)';
+    return `<tr>
+      <td>${r.t}</td>
+      <td>${fmt(r.grainIn)}</td>
+      <td>${fmt(r.grainEaten)}</td>
+      <td>${fmt(r.granary)}</td>
+      <td>${fmt(r.price,2)}</td>
+      <td style="color:${ic}">${fmt(r.inflation,1)}%</td>
+      <td style="color:var(--fire)">${fmt(r.dragonDmgGold)}</td>
+      <td style="color:${r.treasury<0?'var(--bad)':'var(--coin)'}">${fmt(r.treasury)}</td>
+      <td style="color:${uc}">${fmt(r.unrest)}</td>
+    </tr>`;
+  }).join('');
+  $('ledger').querySelector('tbody').innerHTML = body;
+}
+
+/* ---------- master render ---------- */
+function render(){
+  const rows = simulate(S);
+  const labels = rows.map(r=>r.t);
+  renderKPIs(rows);
+  drawLines($('chartA'), [
+    {data:rows.map(r=>r.inflation), color:'var(--gold)'},
+    {data:rows.map(r=>r.price),     color:'var(--grain)'},
+  ], labels);
+  drawLines($('chartB'), [
+    {data:rows.map(r=>r.granary/1000),       color:'var(--grain)'},
+    {data:rows.map(r=>r.treasury/1000),      color:'var(--coin)'},
+    {data:rows.map(r=>r.dragonDmgGold/1000), color:'var(--fire)'},
+  ], labels);
+  renderLedger(rows);
+}
+
+/* ---------- bind controls ---------- */
+const labelText = {
+  acres:v=>fmt(v)+' ac', yield:v=>fmt(v,1)+' bu/ac', pop:v=>fmt(v),
+  mint:v=>fmt(v,1)+'%', tax:v=>v+'%', raids:v=>v+'/yr', fero:v=>fmt(v),
+  knights:v=>v+'%', weather:v=>v+'%', turns:v=>v+' seasons'
+};
+function syncInputs(){
+  FIELDS.forEach(f=>{ $(f).value = S[f]; $('l_'+f).textContent = labelText[f](S[f]); });
+}
+FIELDS.forEach(f=>{
+  $(f).addEventListener('input', e=>{
+    S[f] = parseFloat(e.target.value);
+    $('l_'+f).textContent = labelText[f](S[f]);
+    render();
+  });
+});
+document.querySelectorAll('[data-preset]').forEach(b=>{
+  b.addEventListener('click', ()=>{ S={...PRESETS[b.dataset.preset]}; syncInputs(); render(); });
+});
+$('reset').addEventListener('click', ()=>{ S={...PRESETS.balanced}; syncInputs(); render(); });
+$('randomize').addEventListener('click', ()=>{
+  const rnd=(min,max,step)=>{ const n=Math.round((min+Math.random()*(max-min))/step)*step; return n; };
+  S = {acres:rnd(2000,40000,500), yield:rnd(4,30,0.5), pop:rnd(1000,30000,250),
+       mint:rnd(0,25,0.5), tax:rnd(0,60,1), raids:rnd(0,12,1), fero:rnd(0,100,5),
+       knights:rnd(0,100,5), weather:rnd(40,130,1), turns:S.turns};
+  syncInputs(); render();
+});
+window.addEventListener('resize', render);
+
+/* ---------- go ---------- */
+$('seed').textContent = '— rendered ' + new Date().toLocaleString();
+syncInputs();
+render();
+</script>
+</body>
+</html>
