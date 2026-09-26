@@ -394,7 +394,10 @@ function setupInput() {
     if (document.pointerLockElement !== canvas && canvas.requestPointerLock && !matchMedia('(pointer: coarse)').matches) { try { const pr = canvas.requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) { /* not available */ } return; }
     use(S.hovered);
   });
-  document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas && !S.ended && !S._noPauseOnUnlock) pause(true); S._noPauseOnUnlock = false; });
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement !== canvas && !S.ended && !S._noPauseOnUnlock) { pause(true); S._unlockT = performance.now(); }
+    S._noPauseOnUnlock = false;
+  });
   document.addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) player.look(e.movementX, e.movementY); });
   // touch / drag to look
   let drag = null;
@@ -421,7 +424,11 @@ function setupInput() {
       }
       case 'Equal': case 'NumpadAdd': setSpeed(nextSpeed(1)); break;
       case 'Minus': case 'NumpadSubtract': setSpeed(nextSpeed(-1)); break;
-      case 'Escape': if (!document.getElementById('card').hidden) { ui.toggleCard(false); break; } if (S.ui.pauseOpen()) pause(false); else pause(true); break;
+      case 'Escape':
+        if (performance.now() - (S._unlockT || 0) < 400) break; // the same Esc already released the pointer lock and paused
+        if (!document.getElementById('card').hidden) { ui.toggleCard(false); break; }
+        if (S.ui.pauseOpen()) pause(false); else pause(true);
+        break;
       default: break;
     }
   };

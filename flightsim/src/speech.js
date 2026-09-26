@@ -22,25 +22,39 @@ export class Voice {
   // items: [{text, lang:'sv'|'en', speaker:{name, gender, pitch, rate}, pa:true, onStart, volume}]
   say(items, { priority = 1, onDone, channel = 'pa' } = {}) {
     const job = { items: [...items], priority, onDone, channel };
-    if (this.current && priority > this.current.priority) { this._cancelCurrent(); this.queue.unshift(job); }
+    if (this.current && priority > this.current.priority) {
+      // interrupt a lower-priority job, then resume it afterwards
+      const cur = this.current; cur.cancelled = true; if (synth) synth.cancel(); clearTimeout(cur.timer); this.current = null;
+      const resumed = { ...cur, cancelled: false, items: cur.items, timer: null };
+      this.queue.unshift(job, resumed);
+    }
     else if (priority >= 3) this.queue.unshift(job); else this.queue.push(job);
     this._pump();
     return job;
   }
   busy(channel) { return (this.current && (!channel || this.current.channel === channel)) || this.queue.some((j) => !channel || j.channel === channel); }
+  // Cancelled or skipped jobs still report completion so the flight timeline keeps moving.
+  _finish(job) { if (job && !job.finished) { job.finished = true; if (job.onDone) job.onDone(); } }
   clearChannel(channel) {
+    const drop = this.queue.filter((j) => j.channel === channel);
     this.queue = this.queue.filter((j) => j.channel !== channel);
     if (this.current && this.current.channel === channel) this._cancelCurrent();
+    drop.forEach((j) => this._finish(j));
+    this._pump();
   }
-  _cancelCurrent() { if (this.current) { this.current.cancelled = true; if (synth) synth.cancel(); clearTimeout(this.current.timer); this.ui.caption(null); this.current = null; } }
-  skipAll() { this.queue = []; this._cancelCurrent(); }
+  _cancelCurrent() {
+    const job = this.current; if (!job) return;
+    job.cancelled = true; if (synth) synth.cancel(); clearTimeout(job.timer); this.ui.caption(null); this.current = null;
+    this._finish(job);
+  }
+  skipAll() { const q = this.queue; this.queue = []; this._cancelCurrent(); q.forEach((j) => this._finish(j)); }
   _pump() {
     if (this.current || !this.queue.length) return;
     const job = this.current = this.queue.shift();
     const next = () => {
       if (job.cancelled) return;
       const it = job.items.shift();
-      if (!it) { this.current = null; this.ui.caption(null); if (job.onDone) job.onDone(); this._pump(); return; }
+      if (!it) { this.current = null; this.ui.caption(null); this._finish(job); this._pump(); return; }
       if (it.lang === 'sv' && this.langs === 'en') { next(); return; }
       if (it.onStart) it.onStart();
       this.ui.caption({ who: it.speaker?.name || '', text: it.text, lang: it.lang, pa: it.pa });

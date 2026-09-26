@@ -181,21 +181,37 @@ vec4 curveView(vec4 mv) {
 // Shared uniform object for view-space up vector; updated per frame by the world renderer.
 export const sharedUniforms = {
   uViewUp: { value: new THREE.Vector3(0, 1, 0) },
+  uGFog: { value: new THREE.Vector4(0, 0, 1, 0) }, uGFogTop: { value: 60 }, uGFogCol: { value: new THREE.Color(0.8, 0.82, 0.85) },
+  uCamPosW: { value: new THREE.Vector3() },
 };
 
 // Patch a built-in material so it follows earth curvature.
 export function curveMaterial(mat) {
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uViewUp = sharedUniforms.uViewUp;
+    for (const k of ['uViewUp', 'uGFog', 'uGFogTop', 'uGFogCol', 'uCamPosW']) shader.uniforms[k] = sharedUniforms[k];
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\n' + CURVE_GLSL)
+      .replace('#include <common>', '#include <common>\n' + CURVE_GLSL + `
+        uniform vec4 uGFog; uniform float uGFogTop; uniform vec3 uCamPosW; varying float vGF;`)
       .replace('#include <project_vertex>', `
         vec4 mvPosition = vec4( transformed, 1.0 );
         #ifdef USE_INSTANCING
           mvPosition = instanceMatrix * mvPosition;
         #endif
+        vec3 gfW = (modelMatrix * mvPosition).xyz;
         mvPosition = curveView(modelViewMatrix * mvPosition);
-        gl_Position = projectionMatrix * mvPosition;`);
+        gl_Position = projectionMatrix * mvPosition;
+        vGF = 0.0;
+        if (uGFog.w > 0.0) {
+          // optical depth through a fog layer that thins out exponentially with height
+          float Hf = uGFogTop * 0.6; vec3 dv = gfW - uCamPosW; float dist = length(dv);
+          float hc = max(uCamPosW.y, 0.0), hp = max(gfW.y, 0.0), dh = hc - hp;
+          float od = abs(dh) < 0.5 ? exp(-hc / Hf) * dist : Hf * dist / dh * (exp(-hp / Hf) - exp(-hc / Hf));
+          float wgt = 1.0 - smoothstep(uGFog.z * 0.6, uGFog.z, length(gfW.xz - uGFog.xy));
+          vGF = 1.0 - exp(-uGFog.w * od * wgt);
+        }`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uGFogCol; varying float vGF;')
+      .replace('#include <fog_fragment>', '#include <fog_fragment>\n gl_FragColor.rgb = mix(gl_FragColor.rgb, uGFogCol, vGF);');
   };
   mat.customProgramCacheKey = () => 'curved';
   return mat;

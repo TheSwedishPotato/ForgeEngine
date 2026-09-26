@@ -28,6 +28,9 @@ export const ATMOS_GLSL = /* glsl */`
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uHorizonSun; uniform vec3 uGroundHaze;
 uniform float uCamAlt; uniform float uHazeD; uniform float uHazeH; uniform float uInCloud; uniform vec3 uCloudFog; uniform float uNight;
 uniform vec3 uCamPos; uniform float uOvercastBelow;
+uniform vec4 uGFog; // x,z centre, radius, visibility-scaled density
+uniform float uGFogTop; uniform vec3 uGFogCol;
+float gfogWeight(vec2 xz){ return uGFog.w <= 0.0 ? 0.0 : 1.0 - smoothstep(uGFog.z * 0.6, uGFog.z, length(xz - uGFog.xy)); }
 vec3 skyCol(vec3 d){
   float dip = -sqrt(2.0*max(uCamAlt,2.0)/6371000.0);
   float e = d.y - dip;
@@ -55,6 +58,15 @@ vec4 aerial(vec3 p){
   vec3 fc = skyCol(vec3(d.x, max(d.y, -0.02)*0.25, d.z));
   float mu = max(dot(d, uSunDir), 0.0);
   fc += uSunCol * 0.12 * pow(mu, 8.0) * (1.0 - uNight);
+  // shallow radiation fog lying over the airfield
+  if (uGFog.w > 0.0) {
+    float Hf = uGFogTop * 0.6;
+    float odf = abs(dh) < 0.5 ? exp(-hc / Hf) * dist : Hf * dist / dh * (exp(-hp / Hf) - exp(-hc / Hf));
+    float wgt = max(gfogWeight(p.xz), gfogWeight(uCamPos.xz));
+    float ff = 1.0 - exp(-uGFog.w * odf * wgt);
+    fc = mix(fc, uGFogCol, ff / max(ff + f * (1.0 - ff), 1e-4) * ff);
+    f = 1.0 - (1.0 - f) * (1.0 - ff);
+  }
   // in-cloud fog
   float cf = 1.0 - exp(-dist * uInCloud / 55.0);
   fc = mix(fc, uCloudFog, cf); f = max(f, cf);
@@ -181,7 +193,14 @@ export class World {
       uCloudCov: { value: this.weather.cumulus }, uCloudAlt: { value: (this.weather.cuBase + this.weather.cuTop) / 2 },
       uWet: { value: this.weather.rain > 0 ? 1 : 0 },
       uLandingLight: { value: 0 }, uLLPos: { value: new THREE.Vector3() }, uLLDir: { value: new THREE.Vector3() },
+      uGFog: sharedUniforms.uGFog, uGFogTop: sharedUniforms.uGFogTop, uGFogCol: sharedUniforms.uGFogCol,
     };
+    if (this.weather.fog) {
+      const c = project(59.6519, 17.9186);
+      this.u.uGFog.value.set(c.x, c.z, 16000, 3.0 / 250);
+      this.u.uGFogTop.value = this.weather.fog.top;
+    }
+    this.scene.fog = new THREE.FogExp2(0xffffff, 0); // haze & fog for scenery objects
     this.geo = buildGeoTextures();
     this._buildCloudMap();
     this._buildSky();
@@ -237,6 +256,7 @@ export class World {
           float mm = dot(d, uMoonDir);
           col += vec3(0.9,0.92,1.0) * uMoon * (smoothstep(0.99992, 0.99996, mm) * 3.0 + pow(max(mm,0.0), 400.0)*0.15);
           col = mix(col, uCloudFog, clamp(uInCloud, 0.0, 1.0));
+          if (uGFog.w > 0.0) { float inF = gfogWeight(uCamPos.xz) * (1.0 - smoothstep(uGFogTop * 0.6, uGFogTop * 1.6, uCamAlt)); col = mix(col, uGFogCol, inF * (1.0 - smoothstep(0.02, 0.45, d.y))); }
           gl_FragColor = vec4(col, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -619,7 +639,7 @@ export class World {
     u.uMoonDir.value.copy(azElToVec(moon.az, moon.el));
     this.sky.material.uniforms.uMoon.value = moon.el > 0 ? 0.3 + moon.illum : 0;
     const alt = camPos.y;
-    u.uCamAlt.value = alt; u.uCamPos.value.copy(camPos);
+    u.uCamAlt.value = alt; u.uCamPos.value.copy(camPos); sharedUniforms.uCamPosW.value.copy(camPos);
     this.lastCamY = alt;
     const W = this.weather;
     const el = this.sunEl;
@@ -651,7 +671,17 @@ export class World {
     u.uAmbient.value.copy(zen).lerp(hor, 0.5).multiplyScalar(0.55).add(new THREE.Color(0.004, 0.005, 0.008));
     // haze
     u.uHazeD.value = 3.2 / W.vis; u.uHazeH.value = 1300;
+    u.uGFogCol.value.setRGB(0.78, 0.8, 0.83).multiplyScalar(lerp(0.06, 1.0, twi)).lerp(new THREE.Color(1, 0.86, 0.7).multiplyScalar(lerp(0.06, 1.0, twi)), low * 0.35);
     u.uCloudFog.value.setRGB(0.72, 0.74, 0.78).multiplyScalar(lerp(0.05, 1.0, twi) * (st ? lerp(0.55, 1.0, clamp((alt - st.base) / (st.top - st.base), 0, 1)) : 1));
+    // exponential-squared fog for buildings, trees and aircraft (the terrain has its own aerial perspective)
+    const F = this.scene.fog;
+    let dens = 1.3 / W.vis, fcol = hor.clone().lerp(new THREE.Color(0.5, 0.52, 0.55), 0.2);
+    if (W.fog) {
+      const g = u.uGFog.value; const inside = (1 - smoothstep(g.z * 0.6, g.z, Math.hypot(camPos.x - g.x, camPos.z - g.y))) * (1 - smoothstep(W.fog.top, W.fog.top * 4, alt));
+      dens = lerp(dens, 1 / 280, inside); fcol.lerp(u.uGFogCol.value, inside);
+    }
+    if (st && alt < st.base) dens = Math.max(dens, 1 / 6000);
+    F.density = dens; F.color.copy(fcol);
     // in-cloud (stratus or near cumulus)
     let inCloud = inside;
     this.inCloud = inCloud;
