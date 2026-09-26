@@ -71,7 +71,7 @@ export const CPH_LAYOUT = {
     { name: 'B', u: 430, len: 470 },
     { name: 'C', u: 760, len: 430 },
   ],
-  standU: 360,              // our stand, nose towards pier B (+u)
+  standU: 393,              // our stand (main-gear point): nose ~7 m from pier B (+u)
   standV: 1000,
 };
 

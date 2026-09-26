@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTex, glowTex, rr } from './textures.js';
-import { windowList, CAB } from './cabin.js';
+import { windowList, CAB, DOORS, DOOR_W, DOOR_H } from './cabin.js';
 import { DEG, clamp, lerp } from './core.js';
 
 // ---- planform (s = spanwise distance from centreline, m) ----
@@ -347,6 +347,12 @@ export class Exterior {
       const th = Math.asin((CAB.winY - CAB.yc) / CAB.Rw);
       const vc = (th / DEG + 90) / 180, hv = (CAB.paneH / CAB.Rskin) / DEG / 180 / 2;
       holes.push({ z0: w.z - CAB.paneW / 2, z1: w.z + CAB.paneW / 2, v0: vc - hv, v1: vc + hv });
+    }
+    // door openings (only visible when a door is open)
+    for (const d of Object.values(DOORS)) {
+      if (d.side > 0) continue;
+      const a0 = Math.asin((0.0 - CAB.yc) / CAB.Rskin) / DEG, a1 = Math.asin((DOOR_H + 0.02 - CAB.yc) / CAB.Rskin) / DEG;
+      holes.push({ z0: d.z - DOOR_W / 2 + 0.02, z1: d.z + DOOR_W / 2 - 0.02, v0: (a0 + 90) / 180, v1: (a1 + 90) / 180 });
     }
     const tex = skinTexture(holes);
     // radius profile along z (nose & tail cones)

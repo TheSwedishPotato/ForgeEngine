@@ -10,6 +10,8 @@ export class Player {
     this.cabin = cabin; this.scene = scene; this.audio = audio;
     this.seat = cabin.seat(seatId);
     this.state = 'seated';
+    // start looking forward and a little towards the window side
+    this.initialYaw = Math.sign(this.seat.x) < 0 ? 0.45 : -0.45;
     this.yaw = 0; this.pitch = -0.08; // relative to aircraft (0 = looking forward)
     this.lean = new THREE.Vector3();
     this.leanCmd = new THREE.Vector3();
@@ -25,6 +27,7 @@ export class Player {
     this._buildBody(appearance);
     this._buildTray();
     this._buildPsuHotspots();
+    this.yaw = this.initialYaw;
     this.update(0, {});
   }
 

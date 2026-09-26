@@ -123,10 +123,12 @@ export class Human {
     // chest
     const chestRings = [
       { y: 0, rx: S(f ? 0.14 : 0.155) * b, rz: S(0.1) * b },
-      { y: S(0.1), rx: S(f ? 0.15 : 0.172) * b, rz: S(f ? 0.125 : 0.112) * b, z: S(f ? 0.012 : 0) },
-      { y: S(0.19), rx: S(f ? 0.16 : 0.185) * b, rz: S(0.105) * b },
-      { y: S(0.255), rx: S(f ? 0.165 : 0.19), rz: S(0.085) },
-      { y: S(0.29), rx: S(0.08), rz: S(0.06) },
+      { y: S(0.1), rx: S(f ? 0.15 : 0.17) * b, rz: S(f ? 0.124 : 0.112) * b, z: S(f ? 0.012 : 0) },
+      { y: S(0.18), rx: S(f ? 0.162 : 0.185) * b, rz: S(0.106) * b },
+      { y: S(0.235), rx: S(f ? 0.175 : 0.2), rz: S(0.09) },
+      { y: S(0.262), rx: S(f ? 0.14 : 0.16), rz: S(0.078) },
+      { y: S(0.285), rx: S(0.095), rz: S(0.066) },
+      { y: S(0.302), rx: S(0.062), rz: S(0.056) },
     ];
     add(j.chest, loft(chestRings, seg), top);
     if (app.collar) {
@@ -163,7 +165,7 @@ export class Human {
       { y: S(0.238), rx: S(0.028), rz: S(0.036), z: -S(0.01) },
     ];
     const headGeo = loft(headRings, 16);
-    this.faceTex = faceTexture(skin, { female: f, age: app.age, eye: app.eye, seed: app.seed, beard: app.beard, lipstick: app.lipstick, freckles: app.freckles });
+    this.faceTex = faceTexture(skin, { female: f, age: app.age, eye: app.eye, seed: app.seed, beard: app.beard, lipstick: app.lipstick, freckles: app.freckles, hi: detail >= 2 });
     this.headGeo = headGeo;
     // nose & ears
     const nose = new THREE.ConeGeometry(S(0.014), S(0.045), 4); nose.rotateX(-Math.PI / 2 - 0.35); nose.translate(0, S(0.09), S(0.098)); add(j.head, nose, skin, 'head');
@@ -184,12 +186,14 @@ export class Human {
     const sleeve = app.sleeves === 'long' || app.uniform;
     for (const side of ['l', 'r']) {
       const sx = side === 'l' ? -1 : 1;
-      add(j[side + 'Shoulder'], new THREE.SphereGeometry(S(0.055) * b, seg, 6), top);
-      add(j[side + 'Shoulder'], limb(S(0.29), S(0.048) * b, S(0.04) * b, seg), sleeve || true ? top : skin);
-      add(j[side + 'Elbow'], limb(S(0.255), S(0.04) * b, S(0.03), seg), sleeve ? top : skin);
+      const delt = new THREE.SphereGeometry(S(0.047) * b, seg, 6); delt.scale(1, 1.15, 1); delt.translate(0, -S(0.012), 0);
+      add(j[side + 'Shoulder'], delt, top);
+      add(j[side + 'Shoulder'], limb(S(0.29), S(0.045) * b, S(0.037) * b, seg), top);
+      add(j[side + 'Elbow'], limb(S(0.255), S(0.037) * b, S(0.027), seg), sleeve ? top : skin);
       if (sleeve) add(j[side + 'Elbow'], loft([{ y: -S(0.255), rx: S(0.033), rz: S(0.033) }, { y: -S(0.22), rx: S(0.034), rz: S(0.034) }], seg, { capTop: false, capBottom: false }), app.uniform ? '#1b2a63' : top);
-      const hand = new RoundedBoxGeometry(S(0.035), S(0.09), S(0.075), 2, S(0.015)); hand.translate(0, -S(0.05), S(0.005)); add(j[side + 'Wrist'], hand, skin);
-      const thumb = new THREE.CapsuleGeometry(S(0.011), S(0.035), 2, 5); thumb.rotateX(0.5); thumb.translate(sx * -S(0.012), -S(0.035), S(0.04)); add(j[side + 'Wrist'], thumb, skin);
+      const palm = new RoundedBoxGeometry(S(0.028), S(0.075), S(0.07), 2, S(0.012)); palm.translate(0, -S(0.04), S(0.004)); add(j[side + 'Wrist'], palm, skin);
+      for (let k = 0; k < 4; k++) { const fg = new THREE.CapsuleGeometry(S(0.0075), S(0.045), 2, 5); fg.rotateX(0.25); fg.translate(0, -S(0.098), S(-0.022 + k * 0.0145)); add(j[side + 'Wrist'], fg, skin); }
+      const thumb = new THREE.CapsuleGeometry(S(0.009), S(0.035), 2, 5); thumb.rotateX(0.6); thumb.translate(sx * -S(0.012), -S(0.035), S(0.04)); add(j[side + 'Wrist'], thumb, skin);
       // legs
       add(j[side + 'Hip'], limb(S(0.44), S(0.078) * b, S(0.052), seg), app.skirt ? skin : bot);
       add(j[side + 'Knee'], limb(S(0.42), S(0.052), S(0.036), seg), app.skirt ? '#d7b9a3' : bot);

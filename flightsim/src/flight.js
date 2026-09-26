@@ -447,6 +447,7 @@ export class FlightModel {
       const inCloud = this.h > this.cloudBase && this.h < this.cloudTop;
       turb = this.turbulence * (this.h < 1500 ? 1 : this.h < 5000 ? 0.55 : 0.28) + (inCloud ? 0.45 : 0);
       if (this.phase === 'approach' || this.phase === 'flare') turb += 0.15 * this.turbulence;
+      turb *= this.turbBoost || 1;
     }
     this.turbLevel = turb;
     const tt = this.t;

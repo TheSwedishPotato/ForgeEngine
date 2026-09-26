@@ -247,14 +247,17 @@ export const hatchTex = () => once('hatch', () => canvasTex(256, 512, (g, w, h) 
 }));
 
 // ---------------- faces ----------------
-export function faceTexture(skin, { female = false, age = 35, eye = '#3b5a7a', seed = 1, beard = null, lipstick = false, freckles = false } = {}) {
-  const key = `face-${skin}-${female}-${age > 55 ? 'o' : 'y'}-${eye}-${beard}-${lipstick}-${freckles}-${seed % 3}`;
-  return once(key, () => canvasTex(256, 128, (g, w, h) => {
+export function faceTexture(skin, { female = false, age = 35, eye = '#3b5a7a', seed = 1, beard = null, lipstick = false, freckles = false, hi = false } = {}) {
+  const key = `face-${skin}-${female}-${age > 55 ? 'o' : 'y'}-${eye}-${beard}-${lipstick}-${freckles}-${seed % 3}-${hi}`;
+  const k = hi ? 3 : 1;
+  return once(key, () => canvasTex(256 * k, 128 * k, (g, W, H) => {
+    g.scale(k, k); const w = 256, h = 128;
+    g.imageSmoothingEnabled = true;
     // u in [0,1] wraps around the head; the face is centred at u=0.5 (front, +z).
     g.fillStyle = skin; g.fillRect(0, 0, w, h);
     const r = rng(seed);
-    const img = g.getImageData(0, 0, w, h); const d = img.data;
-    for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 10; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+    const img = g.getImageData(0, 0, W, H); const d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 8; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
     g.putImageData(img, 0, 0);
     const cx = w * 0.5, ey = h * 0.44;
     // cheeks

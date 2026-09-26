@@ -59,8 +59,8 @@ function sampleGesture(g, t) {
 
 // ---------------- Actor (articulated, can walk) ----------------
 export class Actor {
-  constructor(app, scene, { name = '', crew = false } = {}) {
-    this.h = new Human(app, { detail: 1 });
+  constructor(app, scene, { name = '', crew = false, hiFace = false } = {}) {
+    this.h = new Human(app, { detail: hiFace ? 2 : 1 });
     this.app = app; this.name = name; this.crew = crew;
     this.root = this.h.root; scene.add(this.root);
     this.x = 0; this.z = 0; this.heading = Math.PI; // facing -z (forward)
@@ -274,7 +274,7 @@ export class People {
     const persona = r.pick(['erik', 'maja', 'linnea', 'jonas', 'ingrid', 'david', 'sofia', 'anders']);
     const P = NEIGHBOURS[persona];
     const app = randomAppearance(r, P.app);
-    const a = new Actor(app, this.scene, { name: P.name });
+    const a = new Actor(app, this.scene, { name: P.name, hiFace: true });
     a.seated = true; a.base = composePose(POSES.stand, POSES.sit);
     a.seatY = 0.455 - 0.84 * a.h.s; a.x = s.x; a.z = s.z + 0.1; a.heading = a.targetHeading = Math.PI;
     const belt = new THREE.Mesh(colorize(new THREE.BoxGeometry(0.34, 0.045, 0.03), '#2b2f37'), HUMAN_MATS.body); belt.position.set(0, -0.07, 0.13); a.h.j.pelvis.add(belt);
@@ -292,7 +292,7 @@ export class People {
     ];
     for (const sp of specs) {
       const app = crewAppearance(r, sp);
-      const a = new Actor(app, this.scene, { name: sp.name, crew: true });
+      const a = new Actor(app, this.scene, { name: sp.name, crew: true, hiFace: true });
       a.role = sp.role;
       this.crew.push(a);
     }
@@ -542,6 +542,29 @@ export class People {
   }
 
   servicing() { return this.carts.some((r) => !r.finished); }
+
+  windowFor(seat) {
+    let best = null, bd = 9;
+    for (const w of this.cabin.windows) { if (Math.sign(w.side) !== Math.sign(seat.x)) continue; const d = Math.abs(w.z - (seat.z - 0.25)); if (d < bd) { bd = d; best = w; } }
+    return best;
+  }
+  // Cruise habits: some passengers recline, close their blinds, switch on reading lights.
+  cruiseHabits(night, playerSeat) {
+    for (const p of this.pax) {
+      if (p.away) continue;
+      if (this.r() < 0.16 && !p.seat.business) { p.seat.recline = 1; this.cabin.updateSeat(p.seat); }
+      const win = p.seat.letter === 'A' || p.seat.letter === 'F';
+      if (win && (p.sleep || this.r() < 0.28)) { const w = this.windowFor(p.seat); if (w && Math.abs(w.z - playerSeat.z) > 0.8) w.shadeTarget = 1; }
+      if (night && (p.act === 'read' || this.r() < 0.12)) this.cabin.setReadingLight(p.seat, true);
+    }
+  }
+  // Crew check before landing: upright seats and open blinds in a row.
+  secureRow(row) {
+    for (const s of this.cabin.seats) if (s.row === row) {
+      if (s.recline && s !== this.cabin.seat(this.playerSeat)) { s.recline = 0; this.cabin.updateSeat(s); }
+      if (s.letter === 'A' || s.letter === 'F') { const w = this.windowFor(s); if (w && s.id !== this.playerSeat) w.shadeTarget = 0; }
+    }
+  }
 
   // Idle head motion for seated NPCs & neighbour, plus deplaning shuffle
   update(dt, ctx) {

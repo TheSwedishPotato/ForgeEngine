@@ -356,6 +356,42 @@ export class Scenery {
     const lp2 = a.clone().lerp(b, 0.75); leg.position.set(lp2.x, 1.7, lp2.y); this.scene.add(leg);
   }
 
+  // A jet bridge whose cab is docked against our forward left door; its interior is
+  // what you see when the door opens.
+  _dockedJetBridge(f, doorU, doorV, pierU) {
+    // interiors are lit by their own ceiling lights
+    const inner = curveMaterial(new THREE.MeshBasicMaterial({ color: '#a9aaa6', side: THREE.BackSide }));
+    const floorM = curveMaterial(new THREE.MeshBasicMaterial({ color: '#3c414c' }));
+    const hidden = new THREE.MeshBasicMaterial({ visible: false });
+    const outer = this.mats.jetway;
+    const floorY = 3.36, H = 2.4, W = 2.7;
+    const X = new THREE.Vector3(f.u.x, 0, f.u.y), Y = new THREE.Vector3(0, 1, 0);
+    const Z = new THREE.Vector3(-f.v.x, 0, -f.v.y); // outward from the left side of the aircraft
+    const basis = new THREE.Matrix4().makeBasis(X, Y, new THREE.Vector3().crossVectors(X, Y)); // right-handed; box is symmetric along z
+    const door = f.to(doorU, doorV);
+    const mk = (len, cx, cz, angle = 0) => {
+      const g = new THREE.Group();
+      // both ends open: one faces the aircraft door, the other continues into the next section
+      const inside = new THREE.Mesh(new THREE.BoxGeometry(W, H, len), [inner, inner, inner, hidden, hidden, hidden]);
+      const shell = new THREE.Mesh(new THREE.BoxGeometry(W + 0.2, H + 0.2, len), [outer, outer, outer, outer, hidden, hidden]);
+      const fl = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.05, len), floorM); fl.rotation.x = -Math.PI / 2; fl.position.y = -H / 2 + 0.02;
+      const lights = [0.25, 0.75].map((k) => { const l = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.8), new THREE.MeshBasicMaterial({ color: '#fff4e0' })); l.rotation.x = Math.PI / 2; l.position.set(0, H / 2 - 0.02, (k - 0.5) * len); return l; });
+      g.add(inside, shell, fl, ...lights);
+      g.position.set(cx, floorY + H / 2, cz);
+      return g;
+    };
+    // cab (4 m) straight out from the door, then the tunnel angled back to the pier
+    const cabLen = 4.2;
+    const cabC = new THREE.Vector3(door.x, 0, door.y).addScaledVector(Z, cabLen / 2);
+    const cab = mk(cabLen, cabC.x, cabC.z); cab.quaternion.setFromRotationMatrix(basis); this.scene.add(cab);
+    const cabEnd = new THREE.Vector3(door.x, 0, door.y).addScaledVector(Z, cabLen);
+    const pierPt = f.to(pierU, doorV - 12);
+    const tv = new THREE.Vector3(pierPt.x - cabEnd.x, 0, pierPt.y - cabEnd.z); const tl = tv.length(); tv.normalize();
+    const tun = mk(tl + 0.3, (cabEnd.x + pierPt.x) / 2, (cabEnd.z + pierPt.y) / 2);
+    tun.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(Y, tv), Y, tv)); this.scene.add(tun);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.6, floorY, 0.6), this.mats.dark); leg.position.set(cabEnd.x, floorY / 2, cabEnd.z); this.scene.add(leg);
+  }
+
   _trees(frame, fn, count, seed) {
     const r = rng(seed);
     const cone = new THREE.ConeGeometry(1, 1, 7); cone.translate(0, 0.5, 0);
@@ -534,7 +570,7 @@ export class Scenery {
       for (let v = L.terminalV - 70; v > L.terminalV - p.len + 20; v -= 55) {
         for (const side of [-1, 1]) {
           const u = p.u + side * (11 + 26);
-          if (Math.abs(u - L.standU + 26) < 30 && Math.abs(v - L.standV) < 30) continue; // our stand
+          if (Math.abs(u - (L.standU + 4)) < 30 && Math.abs(v - L.standV) < 30) continue; // our stand
           const hdg = side < 0 ? f.heading : (f.heading + 180) % 360;
           this._parked(f, u, v, hdg, livs[k++ % livs.length]);
           this._jetway(f, p.u + side * 11, v - 8 * side, u + side * -12, v - 2.5 * side, side);
@@ -542,7 +578,10 @@ export class Scenery {
       }
     }
     // jet bridge waiting at our stand
-    this._jetway(f, L.standU + 70, L.standV - 8, L.standU + 50, L.standV - 3, 1);
+    // jet bridge docked at our L1 door (door is 2.3 m ahead of the cabin origin, on the left side)
+    const pierB = L.piers.find((p) => p.name === 'B');
+    // the route ends at the main-gear point, 11.5 m behind the cabin origin: door L1 is 13.8 m ahead of it
+    this._dockedJetBridge(f, L.standU + 13.8, L.standV - 2.02, pierB.u - 11);
     // departing traffic on 22R during our approach
     const dep = makeAirliner(LIVERIES.lufthansa, { len: 37.6 }); this.scene.add(dep); dep.visible = false;
     this.traffic.push({ obj: dep, kind: 'cph-departure', rw: runwayGeom(RUNWAYS.EKCH[0]) });

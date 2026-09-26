@@ -298,6 +298,15 @@ export class Cabin {
       wash.rotation.x = Math.PI / 2; wash.position.set(side * 0.99, yb + 0.04, (z0 + z1) / 2);
       g.add(wash);
     }
+    // end caps closing the bin run at both ends
+    const capShape = (side) => {
+      const sh = new THREE.Shape(); const pts = [[xw, yb], [0.97, yb + 0.045], [0.87, 2.1], [0.84, 2.14], [xw - 0.05, 2.14]];
+      pts.forEach(([x, y], i) => (i ? sh.lineTo(side * x, y) : sh.moveTo(side * x, y))); sh.closePath(); return new THREE.ShapeGeometry(sh);
+    };
+    for (const side of [-1, 1]) for (const z of [z0, z1]) {
+      const cap = new THREE.Mesh(capShape(side), this.mat.wall2 || (this.mat.wall2 = Object.assign(this.mat.wall.clone(), { side: THREE.DoubleSide })));
+      cap.position.z = z; g.add(cap);
+    }
     // bin doors: segments ~1.52 m, hinge at top, open upward
     this.bins = [];
     const segLen = (z1 - z0) / 16;
@@ -529,12 +538,17 @@ export class Cabin {
       for (let i = 0; i <= n; i++) { const y = 0.02 + (DOOR_H) * i / n; prof.push([Math.min(wallX(y), R) - 0.02, y]); }
       const geo = sweepProfile(prof, -DOOR_W / 2, DOOR_W / 2, { uScale: DOOR_W, vScale: DOOR_H, flipX: d.side < 0, invert: d.side > 0 });
       // uv fix: swap so texture is upright (u across width, v up)
-      const pivot = new THREE.Group(); pivot.position.set(0, 0, d.z);
+      // hinge on the forward edge, just outside the skin
+      const hx = d.side * (CAB.Rskin - 0.05), hz = d.z - DOOR_W / 2;
+      const pivot = new THREE.Group(); pivot.position.set(hx, 0, hz);
       const mesh = new THREE.Mesh(geo, doorMat); mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.position.set(-hx, 0, d.z - hz);
       pivot.add(mesh); g.add(pivot);
       // door surround (upper wall where bins are absent)
-      const up = sweepProfile([[wallX(CAB.binBottomY), CAB.binBottomY], [wallX(2.0) - 0.02, 2.0], [0.86, 2.13]], d.z - 0.75, d.z + 0.75, { flipX: d.side < 0, invert: true });
-      g.add(new THREE.Mesh(up, this.mat.wall));
+      const za = d.z < 0 ? -3.05 : 23.44, zb = d.z < 0 ? -1.24 : 24.95;
+      const up = sweepProfile([[wallX(CAB.binBottomY), CAB.binBottomY], [wallX(2.0) - 0.02, 2.0], [0.86, 2.13]], za, zb, { flipX: d.side < 0, invert: true });
+      if (!this.mat.wall2) { this.mat.wall2 = this.mat.wall.clone(); this.mat.wall2.side = THREE.DoubleSide; }
+      g.add(new THREE.Mesh(up, this.mat.wall2));
       // door lining (frame) — dark seal around the opening
       const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, DOOR_H + 0.05, DOOR_W + 0.1), this._std({ color: '#d0d1d3', roughness: 0.6 }));
       frame.position.set(d.side * (wallX(1.0) + 0.05), DOOR_H / 2, d.z); g.add(frame);
@@ -542,11 +556,10 @@ export class Cabin {
       // window in the door (small)
       const pane = new THREE.Mesh(new THREE.CircleGeometry(0.1, 20), this.paneMat);
       const th = thOfY(CAB.Rw, 1.38);
-      pane.position.set(d.side * (wallX(1.38) - 0.01), 1.38, 0);
-      pane.lookAt(new THREE.Vector3(0, 1.38 + Math.sin(th) * -1, 0));
+      pane.position.set(d.side * (wallX(1.38) - 0.01) - hx, 1.38, d.z - hz);
       pane.rotation.set(0, d.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0);
       pivot.add(pane);
-      this.doors[name] = { name, side: d.side, z: d.z, pivot, mesh, open: 0, target: 0, armed: true };
+      this.doors[name] = { name, side: d.side, z: d.z, pivot, mesh, open: 0, target: 0, armed: true, hx, hz };
     }
     // overwing exit hatches
     const hatchMat = this._std({ color: '#ffffff', roughness: 0.5, map: TX.hatchTex() });
@@ -606,6 +619,22 @@ export class Cabin {
     }
   }
 
+  // Passenger reading light: a glowing lens and a faint cone of light.
+  setReadingLight(seat, on) {
+    this._rl = this._rl || new Map();
+    let m = this._rl.get(seat.id);
+    if (!m && on) {
+      const side = Math.sign(seat.x), li = { A: 0, B: 1, C: 2, D: 2, E: 1, F: 0 }[seat.letter];
+      const g = new THREE.Group(); g.position.set(side * (1.3 - li * 0.11), CAB.binBottomY + 0.015, seat.z - 0.28);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(0.018, 12), new THREE.MeshBasicMaterial({ color: '#fff6dd' })); lens.rotation.x = Math.PI / 2; g.add(lens);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.05, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#ffeccc', transparent: true, opacity: 0.05, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+      cone.position.y = -0.53; cone.rotation.z = side * 0.18; g.add(cone);
+      this.group.add(g); this._rl.set(seat.id, m = g);
+    }
+    if (m) m.visible = on;
+  }
+  allReadingLights(on) { if (this._rl) for (const m of this._rl.values()) m.visible = on && m.visible; }
+
   setSigns(belt, smoke = true) {
     this.beltSignMat.emissiveIntensity = belt ? 1.4 : 0.0;
     this.beltSignMat.color.set(belt ? '#222' : '#15171b');
@@ -657,10 +686,10 @@ export class Cabin {
     }
     for (const d of Object.values(this.doors)) {
       if (Math.abs(d.open - d.target) > 1e-3) d.open += Math.sign(d.target - d.open) * Math.min(Math.abs(d.target - d.open), dt * 0.35);
-      // A320 doors lift slightly, move outboard, then swing forward
-      const o = d.open;
-      d.pivot.position.set(d.side * Math.min(o * 3, 1) * 0.25, Math.min(o * 3, 1) * 0.03, d.z - Math.max(0, o - 0.33) * 1.2);
-      d.pivot.rotation.y = d.side * Math.max(0, o - 0.33) * 1.3;
+      // A320 doors lift slightly, push outboard, then swing forward against the fuselage
+      const o = d.open, k1 = Math.min(o * 3, 1), k2 = Math.max(0, (o - 0.33) / 0.67);
+      d.pivot.position.set(d.hx + d.side * k1 * 0.12, k1 * 0.04, d.hz);
+      d.pivot.rotation.y = d.side * k2 * 1.72;
     }
   }
   setShadeInternal(w) {

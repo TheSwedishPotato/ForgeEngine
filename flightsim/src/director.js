@@ -92,6 +92,7 @@ export class Director {
   checkRow(actor, row) {
     const S = this.sim, P = S.player;
     const key = `chk-${this.phaseTag}-${row}`;
+    if (this.phaseTag === 'ldg') this.sim.people.secureRow(row);
     if (row === P.seat.row) {
       const issues = this.playerIssues();
       if (!issues.length) { if (this.flags[key + '-asked']) { this.crewLine(actor, 'Tack! Thank you.'); } return true; }
@@ -255,6 +256,15 @@ export class Director {
       this.mark('serviceStart');
     }
     if (this.after('serviceDone', 150) && this.flag('trash')) people.collectTrash(() => this.mark('trashDone'));
+    if (this.after('beltOff', 100) && this.flag('habits')) people.cruiseHabits(this.nightish(), P.seat);
+    // a patch of moderate turbulence in cruise on unsettled days
+    const W = S.world.weather;
+    if (this.times.topOfClimb != null && W.turb >= 0.4 && this.flag('turbPlan')) this.times.turbStart = this.times.topOfClimb + 60 + this.r() * 120;
+    if (this.times.turbStart != null && t > this.times.turbStart && this.flag('turb')) {
+      this.say(SCRIPTS.turbulence); this.setSeatbelt(true); fm.turbBoost = 3.2; S.dialogue?.event('turbulence', {});
+      this.times.turbEnd = t + 75 + this.r() * 40;
+    }
+    if (this.times.turbEnd != null && t > this.times.turbEnd && this.flag('turbEnd')) { fm.turbBoost = 1; if (fm.phase === 'cruise') this.setSeatbelt(false); }
     if (this.times.topOfClimb != null && this.times.crossing == null) this.times.crossing = this.times.topOfClimb + 150;
     // lavatory visits while the belt sign is off
     if (!this.seatbelt && fm.phase !== 'descent' && t > this.nextLav && people.walkers.length < 2 && !people.servicing()) {
@@ -266,6 +276,7 @@ export class Director {
     const d2td = fm.m.touchdown - fm.s;
     if (!fm.onGround && fm.phase !== 'climb' && d2td < 78000 && this.flag('landingPrep')) {
       this.setSeatbelt(true);
+      S.cabin.allReadingLights(false); fm.turbBoost = 1;
       this.say(SCRIPTS.prepareLanding, { onDone: () => {
         this.phaseTag = 'ldg'; people.stowAllTrays(); S.cabin.setCurtain(false);
         for (const b of S.cabin.bins) b.target = 0;

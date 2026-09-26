@@ -123,7 +123,7 @@ function buildWindowMask(cabin) {
   for (const d of Object.values(cabin.doors)) d.pivot.traverse((o) => { if (o.isMesh && o.material === cabin.paneMat) doorPanes.push({ src: o, m: add(o) }); });
   scene.userData.doorPanes = doorPanes;
   // open L1 door (shown when the door opens at the gate)
-  const hole = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.0), mat); hole.position.set(-1.75, 1.0, -2.3); hole.rotation.y = Math.PI / 2; hole.visible = false; scene.add(hole);
+  const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.95), mat); hole.position.set(-1.8, 0.98, -2.3); hole.rotation.y = Math.PI / 2; hole.visible = false; scene.add(hole);
   scene.userData.doorHole = hole;
   return scene;
 }
