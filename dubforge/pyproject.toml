@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dubforge"
+version = "0.1.0"
+description = "Private, fully local AI dubbing: voice-cloned, emotion-preserving, lip-synced."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+license = { text = "Private use" }
+dependencies = [
+    "numpy>=1.26", "scipy>=1.13", "soundfile>=0.12", "soxr>=0.3", "pyyaml>=6.0", "requests>=2.31",
+    "tqdm>=4.66", "huggingface_hub>=0.30",
+]
+
+[project.optional-dependencies]
+full = [
+    "faster-whisper>=1.2.0", "whisperx>=3.8.0", "transformers>=4.57", "sentencepiece>=0.2", "accelerate>=1.0",
+    "demucs>=4.1.0", "speechbrain>=1.0", "coqui-tts>=0.27", "opencv-python>=4.9", "librosa>=0.11", "Pillow>=10",
+    "gradio>=5.0", "sounddevice>=0.5", "silero-vad>=6.0", "mss>=10.0", "pyvirtualcam>=0.12", "imageio-ffmpeg>=0.5",
+]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+dubforge = "dubforge.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["dubforge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F", "E9", "B"]
+ignore = ["B008", "B024", "B027", "B905"]

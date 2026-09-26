@@ -1,0 +1,17 @@
+# No NVIDIA GPU: works, but expect roughly 20-60x slower than real time.
+general:
+  device: cpu
+asr:
+  model: medium
+  compute_type: int8
+translation:
+  nllb_model: facebook/nllb-200-distilled-600M
+  num_beams: 3
+  num_candidates: 3
+tts:
+  max_takes: 1
+lipsync:
+  backend: none
+live:
+  asr_model: small
+  asr_compute_type: int8

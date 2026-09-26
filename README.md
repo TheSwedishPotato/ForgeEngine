@@ -95,6 +95,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [List of academic publications using Forge Engine]
 - [Research papers and findings]
 
+## Side project: DubForge
+`dubforge/` is a separate, self-contained Python tool for private, fully local AI dubbing
+(voice cloning, emotion transfer, lip sync). It is unrelated to the engine build. See
+[dubforge/README.md](dubforge/README.md).
+
 ## Contact
 - Project Website: [URL]
 - Academic Inquiries: [Email]

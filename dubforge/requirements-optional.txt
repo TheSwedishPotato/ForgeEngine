@@ -1,0 +1,3 @@
+# Optional quality upgrades
+audio-separator[gpu]>=0.30   # BS-RoFormer / MelBand-RoFormer dialogue separation (separation.backend: audio_separator)
+pyrubberband>=0.4            # best time-stretching (also needs the `rubberband` CLI on PATH)

@@ -1,0 +1,9 @@
+# Plumbing test: no ML models, runs anywhere in seconds (used by tests and --mock).
+general:
+  device: cpu
+separation: {backend: mock}
+asr: {backend: mock, diarization: none}
+translation: {backend: mock}
+emotion: {backend: prosody}
+tts: {backend: mock, max_takes: 2}
+lipsync: {backend: mock}

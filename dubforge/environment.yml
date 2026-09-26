@@ -1,0 +1,11 @@
+# conda env create -f environment.yml && conda activate dubforge
+# then install CUDA PyTorch + the pip requirements (README step 3-4).
+name: dubforge
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - ffmpeg>=6            # includes ffprobe; conda-forge builds ship librubberband
+  - rubberband           # CLI for the best time-stretching (optional)
+  - git

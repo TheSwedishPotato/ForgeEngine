@@ -1,0 +1,46 @@
+# DubForge — install PyTorch with CUDA FIRST (README step 3), then:
+#   pip install -r requirements.txt
+# Tested combination (2026-09): Python 3.11, torch 2.8.0 + cu128, whisperx 3.8, coqui-tts 0.27, gradio 6.
+
+# --- core --------------------------------------------------------------------
+numpy>=1.26
+scipy>=1.13
+soundfile>=0.12
+soxr>=0.3              # high-quality resampling
+pyyaml>=6.0
+requests>=2.31
+tqdm>=4.66
+huggingface_hub>=0.30
+imageio-ffmpeg>=0.5    # fallback ffmpeg binary if none is on PATH
+
+# --- speech recognition, alignment, diarization ------------------------------
+faster-whisper>=1.2.0
+whisperx>=3.8.0        # pins torch 2.8.x / torchaudio 2.8.x / pyannote.audio 4
+
+# --- translation --------------------------------------------------------------
+transformers>=4.57     # NLLB-200 + SeamlessM4T v2
+sentencepiece>=0.2
+accelerate>=1.0
+
+# --- dialogue separation --------------------------------------------------------
+demucs>=4.1.0
+
+# --- emotion + speaker embeddings -----------------------------------------------
+speechbrain>=1.0
+
+# --- voice cloning TTS ----------------------------------------------------------
+coqui-tts>=0.27        # maintained fork of Coqui TTS (XTTS-v2)
+
+# --- video / lip sync -----------------------------------------------------------
+opencv-python>=4.9
+librosa>=0.11
+Pillow>=10
+
+# --- GUI ------------------------------------------------------------------------
+gradio>=5.0            # tested with 6.28
+
+# --- live "while watching" modes -------------------------------------------------
+sounddevice>=0.5
+silero-vad>=6.0
+mss>=10.0
+pyvirtualcam>=0.12     # only for the OBS virtual camera output

@@ -1,0 +1,21 @@
+# 8 GB VRAM (RTX 3060 Ti / 3070 / 4060 / 4060 Ti 8GB, 2080 ...)
+# Every stage unloads its model before the next one loads, so the peak is one model.
+asr:
+  model: large-v3
+  compute_type: int8_float16   # ~3 GB instead of ~4.5 GB
+  batch_size: 4
+translation:
+  nllb_model: facebook/nllb-200-distilled-1.3B
+  batch_size: 8
+separation:
+  chunk_seconds: 120
+tts:
+  max_takes: 2
+lipsync:
+  wav2lip_batch_size: 32
+  wav2lip_face_batch_size: 4
+  musetalk_batch_size: 4
+  musetalk_float16: true
+live:
+  asr_model: large-v3-turbo
+  asr_compute_type: int8_float16

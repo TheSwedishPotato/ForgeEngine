@@ -1,0 +1,21 @@
+# 24 GB+ VRAM (RTX 3090 / 4090 / 5090): maximum quality settings
+separation:
+  backend: demucs
+  demucs_model: htdemucs_ft
+  shifts: 2
+asr:
+  model: large-v3
+  compute_type: float16
+  batch_size: 16
+  beam_size: 5
+translation:
+  nllb_model: facebook/nllb-200-3.3B
+  num_beams: 6
+  num_candidates: 5
+tts:
+  max_takes: 4
+lipsync:
+  wav2lip_batch_size: 128
+  wav2lip_face_batch_size: 16
+  musetalk_batch_size: 16
+  musetalk_float16: false

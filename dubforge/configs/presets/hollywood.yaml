@@ -1,0 +1,25 @@
+# Slowest, best-sounding settings. Combine with a GPU preset:
+#   python main.py batch movie.mkv --preset hollywood --set lipsync.backend=musetalk
+# Needs a local LLM server for translation (see README > Local LLM translation).
+separation:
+  backend: audio_separator       # BS-RoFormer: cleaner dialogue stem than Demucs
+asr:
+  model: large-v3
+  beam_size: 5
+translation:
+  backend: local_llm             # context-aware, syllable-budgeted dubbing script
+  num_candidates: 3
+emotion:
+  backend: speechbrain
+tts:
+  prosody_reference: segment
+  style_mix: 0.7
+  max_takes: 5
+  verify_asr_model: small        # re-listen to every take, reject garbled ones
+timing:
+  max_tts_speed: 1.2
+  max_stretch: 1.12              # less DSP squeezing, more re-phrasing
+  try_shorter_candidates: true
+lipsync:
+  backend: musetalk
+  crf: 15

@@ -1,0 +1,12 @@
+# 12-16 GB VRAM (RTX 3060 12GB, 4070 / 4070 Ti / 4080, 5070 ...)
+asr:
+  model: large-v3
+  compute_type: float16
+  batch_size: 8
+translation:
+  nllb_model: facebook/nllb-200-distilled-1.3B
+tts:
+  max_takes: 3
+lipsync:
+  wav2lip_batch_size: 64
+  musetalk_batch_size: 8

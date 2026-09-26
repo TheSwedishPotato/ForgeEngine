@@ -1,0 +1,62 @@
+# DubForge default configuration.
+# Every key is optional: anything not set here uses the built-in default from
+# dubforge/config.py. Override per run with --preset, --config my.yaml, or
+# --set section.key=value  (e.g. --set tts.temperature=0.6)
+
+source_lang: auto        # auto-detect, or e.g. en / de / ja
+target_lang: de
+
+general:
+  device: auto           # auto | cuda | cuda:1 | cpu
+  work_dir: work         # resumable per-video caches
+  models_dir: models     # every model is stored here (HF_HOME/TORCH_HOME point here)
+  output_dir: output
+  offline: false         # set true after `python scripts/download_models.py` -> nothing is fetched online
+  log_level: INFO
+
+separation:
+  backend: demucs        # demucs | audio_separator (RoFormer, cleaner) | none
+  demucs_model: htdemucs_ft
+  shifts: 1              # 2+ = slightly cleaner dialogue stem, proportionally slower
+
+asr:
+  backend: whisperx      # whisperx (aligned words + pyannote speakers) | faster_whisper
+  model: large-v3
+  compute_type: float16
+  diarization: auto      # auto: pyannote if you have a HF token / cached model, else ECAPA clustering
+  initial_prompt: null   # e.g. "Frodo, Gandalf, Mordor." helps spelling of names
+
+translation:
+  backend: nllb          # nllb | seamless | local_llm (best: context-aware, needs a local LLM server)
+  nllb_model: facebook/nllb-200-distilled-1.3B
+  num_candidates: 4      # alternatives kept in script.json for length fitting
+  length_aware: true
+
+emotion:
+  backend: speechbrain   # speechbrain | prosody | none
+
+tts:
+  backend: xtts          # xtts | gpt_sovits
+  prosody_reference: segment   # segment | emotion_matched | speaker
+  style_mix: 0.65
+  temperature: 0.7
+  max_takes: 3
+
+timing:
+  max_tts_speed: 1.25
+  max_stretch: 1.2
+  max_overflow_seconds: 0.6
+
+mix:
+  keep_nonspeech_vocals: true
+  keep_original_track: true
+  export_srt: true
+
+lipsync:
+  backend: none          # none | wav2lip | musetalk
+
+live:
+  input_device: "CABLE Output"   # VB-Audio Virtual Cable: route the player's audio into it
+  output_device: null            # your real speakers/headphones (null = system default)
+  background_mode: duck          # duck | center_cancel | mute | passthrough
+  asr_model: large-v3-turbo
