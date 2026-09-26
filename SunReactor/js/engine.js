@@ -194,7 +194,7 @@
         valveD: 0, valveT: 0, valveH: 0, pelletHz: 0
       },
       pl: {
-        on: false, tStart: 0, Ip: 0, IpSet: 22, ramp: 0.25, ND: 0, NT: 0, NH: 0, NHe: 0,
+        on: false, tStart: 0, Ip: 0, IpSet: 23, ramp: 0.25, ND: 0, NT: 0, NH: 0, NHe: 0,
         cAr: 0, cW: 0, W: 0, hmode: false, z: 0, elmAcc: 0, elmCount: 0, elmType: 'NONE',
         ntm: false, ntmTime: 0, ecOnNtm: 0, rampDown: false, burnAuto: false, PfusSet: 1900,
         flash: 0, elmFlash: 0, dCount: 0, lastDisruption: null, lhCount: 0, pulse: 0,

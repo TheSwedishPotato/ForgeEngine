@@ -41,6 +41,11 @@ Forge Engine is an advanced medieval life simulation system that models complex 
 - Camera controls
 - Minimap system
 
+## HELIOS-1 Sun Reactor Simulator
+A browser-based main control room for a D-T spherical tokamak that confines a star in a
+magnetic bottle and feeds a city grid. Open [`SunReactor/index.html`](SunReactor/index.html)
+in a browser; see the [operator's manual](SunReactor/README.md).
+
 ## Getting Started
 
 ### Prerequisites
