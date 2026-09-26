@@ -32,6 +32,7 @@ button { font: inherit; color: inherit; }
   radial-gradient(120% 80% at 80% 0%, #1b2d55 0%, rgba(10,17,32,0) 60%),
   linear-gradient(180deg, #0d1628 0%, #0a1120 100%); z-index: 20; padding-block: 28px; padding-inline: max(16px, 4vw); }
 .card { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: #0f1829; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,0.45); }
+.card > * { min-width: 0; }
 .stub { padding: 30px 32px; background: linear-gradient(160deg, #13244a 0%, #0f1829 70%); border-right: 1px dashed var(--line-strong); display: flex; flex-direction: column; gap: 22px; }
 .airline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .airline b { font: 700 16px/1 var(--display); letter-spacing: 0.22em; text-transform: uppercase; }
@@ -146,6 +147,10 @@ select { width: 100%; background: var(--ink-2); color: var(--text); border: 1px 
 @media (hover: none) and (pointer: coarse) { #touch { display: flex; } #crosshair { display: none; } }
 @media (max-width: 860px) {
   .card { grid-template-columns: 1fr; }
+  .stub, .options { padding: 22px 18px; }
+  .route .code { font-size: clamp(44px, 15vw, 80px); }
+  .route .plane { font-size: 11px; }
+  .facts .v { font-size: 15px; overflow-wrap: anywhere; }
   .stub { border-right: none; border-bottom: 1px dashed var(--line-strong); }
   .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #card .grid { grid-template-columns: 1fr 1fr; }

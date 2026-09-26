@@ -229,10 +229,10 @@ export class Human {
       const len = st === 'long' ? S(0.3) : S(0.14);
       // hair falling behind the ears and down the back
       const h = loft([
-        { y: S(0.13) - len, rx: S(0.1), rz: S(0.05), z: -S(0.05) },
-        { y: S(0.13) - len * 0.5, rx: S(0.098), rz: S(0.07), z: -S(0.035) },
-        { y: S(0.1), rx: S(0.094), rz: S(0.095), z: -S(0.022) },
-        { y: S(0.17), rx: S(0.09), rz: S(0.1), z: -S(0.015) },
+        { y: S(0.13) - len, rx: S(0.075), rz: S(0.028), z: -S(0.075) },
+        { y: S(0.13) - len * 0.55, rx: S(0.092), rz: S(0.045), z: -S(0.06) },
+        { y: S(0.07), rx: S(0.094), rz: S(0.075), z: -S(0.035) },
+        { y: S(0.16), rx: S(0.09), rz: S(0.098), z: -S(0.016) },
       ], 14, { capTop: false });
       // open the front: squash the front-facing vertices behind the face plane
       const pa = h.attributes.position; for (let i = 0; i < pa.count; i++) { if (pa.getZ(i) > S(0.035)) pa.setZ(i, S(0.035)); }

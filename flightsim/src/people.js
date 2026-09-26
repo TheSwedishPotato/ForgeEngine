@@ -509,6 +509,15 @@ export class People {
   }
   startDeplaning() {
     this.deplaning = true;
+    // later waves: middle and window passengers stand up row by row, front to back
+    const rest = this.pax.filter((p) => !p.away).sort((a, b) => a.seat.z - b.seat.z);
+    rest.forEach((p, i) => setTimeout(() => {
+      if (p.away || !this.deplaning) return;
+      const act = new Actor(p.app, this.scene, {});
+      act.place(Math.sign(p.seat.x) * 0.12, p.seat.z - 0.2, Math.PI);
+      p.group.visible = false; p.away = true; this.refreshTrays();
+      this.deplaners.push({ act, p, out: false }); this.walkers.push(act);
+    }, 25000 + i * 3500));
   }
 
   near(actor, d) { return this.listener ? Math.hypot(actor.x - this.listener.x, actor.z - this.listener.z) < d : false; }

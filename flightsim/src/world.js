@@ -347,18 +347,18 @@ export class World {
           float cid = v.y;
           float rape = smoothstep(59.0, 56.3, lat) * 0.26;
           vec3 fieldCol;
-          if (cid < rape) fieldCol = vec3(0.78, 0.66, 0.08);
-          else if (cid < rape + 0.3) fieldCol = vec3(0.19, 0.31, 0.08);
-          else if (cid < rape + 0.5) fieldCol = vec3(0.34, 0.27, 0.18);
-          else if (cid < rape + 0.68) fieldCol = vec3(0.27, 0.36, 0.12);
-          else if (cid < rape + 0.82) fieldCol = vec3(0.4, 0.38, 0.2);
-          else fieldCol = vec3(0.23, 0.33, 0.14);
+          if (cid < rape) fieldCol = vec3(0.72, 0.6, 0.06);          // rapeseed in bloom
+          else if (cid < rape + 0.32) fieldCol = vec3(0.16, 0.27, 0.07); // winter wheat
+          else if (cid < rape + 0.5) fieldCol = vec3(0.27, 0.21, 0.14);  // freshly sown soil
+          else if (cid < rape + 0.68) fieldCol = vec3(0.21, 0.3, 0.1);   // ley / pasture
+          else if (cid < rape + 0.8) fieldCol = vec3(0.3, 0.29, 0.16);   // stubble
+          else fieldCol = vec3(0.19, 0.28, 0.11);
           fieldCol *= 0.85 + 0.3*vn(w/60.0);
           // rows / tramlines
           fieldCol *= 1.0 - 0.08 * detail * step(0.5, fract(dot(w, vec2(cos(cid*20.0), sin(cid*20.0)))/9.0)) * step(cid, 0.8);
           // hedges / field borders
           float border = smoothstep(0.035, 0.0, v.x) * detail;
-          vec3 avgField = vec3(0.27, 0.32, 0.13);
+          vec3 avgField = vec3(0.21, 0.27, 0.1);
           fieldCol = mix(avgField, fieldCol, detail*0.9 + 0.1);
           fieldCol = mix(fieldCol, vec3(0.1, 0.15, 0.06), border*0.6);
           vec3 conifer = vec3(0.045, 0.075, 0.035), broad = vec3(0.12, 0.2, 0.06);
@@ -366,7 +366,7 @@ export class World {
           forestCol *= 0.75 + 0.5*vn(w/35.0) * detail + 0.25*(1.0-detail);
           // clearings, bogs and rock outcrops in the forest
           float bog = smoothstep(0.62, 0.66, vn(w/700.0+40.0)) * (1.0-farm);
-          forestCol = mix(forestCol, vec3(0.3, 0.3, 0.2), bog*0.6);
+          forestCol = mix(forestCol, vec3(0.2, 0.21, 0.13), bog*0.5);
           vec3 urbanCol = vec3(0.3, 0.3, 0.3) * (0.7 + 0.5*vn(w/45.0)*detail);
           vec3 blocks = voro(w/140.0);
           urbanCol = mix(urbanCol, vec3(0.16,0.2,0.12), step(0.8, blocks.y)*0.8);

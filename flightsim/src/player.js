@@ -126,19 +126,26 @@ export class Player {
   }
 
   // walkable test for standing mode
+  _inLavBox(l, x, z, m = 0.18) { return x > l.x0 + m && x < l.x1 - m && z > l.z0 + m && z < l.z1 - m; }
   _walkable(x, z) {
-    if (this.inLav) { const l = this.inLav; return x > Math.min(l.x0, l.x1) + 0.2 && x < Math.max(l.x0, l.x1) - 0.2 && z > l.z0 + 0.2 && z < l.z1 - 0.2 || (Math.abs(x - l.cx) < 0.3 && Math.abs(z - l.doorZ) < 0.35); }
+    // inside a lavatory: walk freely inside; leave only through an open door
+    for (const l of this.cabin.lavs) {
+      if (this._inLavBox(l, this.pos.x, this.pos.z, 0.05)) {
+        if (this._inLavBox(l, x, z)) return true;
+        return l.open > 0.8 && Math.abs(x - l.cx) < 0.32 && Math.abs(z - l.doorZ) < 0.5;
+      }
+    }
+    for (const l of this.cabin.lavs) if (l.open > 0.8 && (this._inLavBox(l, x, z) || (Math.abs(x - l.cx) < 0.32 && Math.abs(z - l.doorZ) < 0.5))) return true;
     if (Math.abs(x) < 0.22 && z > -2.9 && z < 24.95) return true;
     if (z > -2.95 && z < -1.05 && Math.abs(x) < 1.35) return true; // forward door area
     if (z > 23.6 && z < 24.9 && Math.abs(x) < 1.45) return true; // aft door area
     // own row, to get back into the seat
     const s = this.seat;
     if (Math.abs(z - (s.z - 0.28)) < 0.2 && Math.sign(x) === Math.sign(s.x) && Math.abs(x) < Math.abs(s.x) + 0.1) return true;
-    for (const l of this.cabin.lavs) if (l.open > 0.8 && Math.abs(x - l.cx) < 0.35 && Math.abs(z - l.doorZ) < 0.45) return true;
     return false;
   }
 
-  enterLav(lav) { this.inLav = lav; }
+  currentLav() { return this.cabin.lavs.find((l) => this._inLavBox(l, this.pos.x, this.pos.z, 0.05)) || null; }
 
   update(dt, ctx) {
     const k = this.keys;

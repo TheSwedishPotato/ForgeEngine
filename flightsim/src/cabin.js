@@ -79,11 +79,11 @@ export class Cabin {
 
   _buildMaterials() {
     this.mat = {
-      wall: this._std({ color: '#f1f1ee', roughness: 0.62, metalness: 0 }),
+      wall: this._std({ color: '#e4e3df', roughness: 0.62, metalness: 0 }),
       plastic: this._std({ color: '#eeeeeb', roughness: 0.55, map: TX.plasticTex() }),
-      ceiling: this._std({ color: '#ffffff', roughness: 0.7, map: TX.ceilingTex() }),
+      ceiling: this._std({ color: '#ecebe8', roughness: 0.7, map: TX.ceilingTex() }),
       carpet: this._std({ color: '#ffffff', roughness: 0.95, map: TX.carpetTex() }),
-      bin: this._std({ color: '#ffffff', roughness: 0.5, map: TX.binTex() }),
+      bin: this._std({ color: '#efeeeb', roughness: 0.5, map: TX.binTex() }),
       binInside: this._std({ color: '#4a4f58', roughness: 0.9 }),
       seatFabric: this._std({ vertexColors: true, roughness: 0.92, map: TX.fabricTex() }),
       seatHard: this._std({ vertexColors: true, roughness: 0.5, metalness: 0.05 }),
@@ -91,7 +91,7 @@ export class Cabin {
       metal: this._std({ color: '#c7cbd1', roughness: 0.35, metalness: 0.7, map: TX.metalTex() }),
       galley: this._std({ color: '#ffffff', roughness: 0.35, metalness: 0.55, map: TX.galleyTex() }),
       dark: this._std({ color: '#2a2e36', roughness: 0.8 }),
-      reveal: this._std({ color: '#ecebe7', roughness: 0.5, side: THREE.DoubleSide }),
+      reveal: this._std({ color: '#e2e1dd', roughness: 0.5, side: THREE.DoubleSide }),
       shade: this._std({ color: '#e4e3df', roughness: 0.6, side: THREE.DoubleSide, map: TX.plasticTex() }),
       curtain: this._std({ color: '#2c3a5e', roughness: 0.95, map: TX.fabricTex(), side: THREE.DoubleSide }),
       floorStrip: this._std({ color: '#cfd8c8', roughness: 0.5, emissive: '#9fb89a', emissiveIntensity: 0.25 }),
@@ -138,7 +138,7 @@ export class Cabin {
     for (const side of [-1, 1]) {
       const geo = sweepProfile(prof, zA, zB, { segZ: 1, uScale: L, vScale: arcLen, flipX: side < 0, invert: true });
       // second uv set for the tiled colour texture
-      const mat = this._std({ color: '#ffffff', roughness: 0.6, alphaMap: this.wallTex.alpha, alphaTest: 0.5, map: this.wallTex.color, side: THREE.FrontSide });
+      const mat = this._std({ color: '#ecebe8', roughness: 0.6, alphaMap: this.wallTex.alpha, alphaTest: 0.5, map: this.wallTex.color, side: THREE.FrontSide });
       mat.map.repeat.set(L / 1.2, 1);
       mat.onBeforeCompile = (sh) => { // separate uv transform for map (tiled) vs alpha (whole)
         sh.fragmentShader = sh.fragmentShader.replace('#include <alphamap_fragment>', 'diffuseColor.a *= texture2D( alphaMap, vAlphaMapUv ).g;');
@@ -636,7 +636,7 @@ export class Cabin {
     this.hemi.color.copy(this.mood); this.hemi.intensity = 0.45 * L + 0.2 * daylight + 0.02;
     this.hemi.groundColor.set('#3a4458').multiplyScalar(0.6 + daylight * 0.4);
     this.amb.intensity = 0.12 * L + 0.18 * daylight + 0.015;
-    for (const l of this.pl) { l.color.copy(this.mood); l.intensity = 2.2 * L; }
+    for (const l of this.pl) { l.color.copy(this.mood); l.intensity = 1.7 * L; }
     for (const m of this.coveMats || []) m.color.copy(this.mood).multiplyScalar((0.35 + 1.4 * L) * m.userData.k);
     this.exitMat.color.setScalar(L < 0.3 ? 1.4 : 1.1);
     for (const m of this.psuMats || []) { m.emissive.copy(this.mood); m.emissiveIntensity = 0.05 + 0.2 * L; }

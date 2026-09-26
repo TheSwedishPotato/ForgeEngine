@@ -4,6 +4,7 @@ import { SCRIPTS, SPEAKERS, context } from './speech.js';
 import { rowZ, ROWS, BUSINESS_ROWS } from './cabin.js';
 import { clamp, fmtClock, rng, KT, project } from './core.js';
 import { LANDMARKS } from './places.js';
+import { FlightModel } from './flight.js';
 
 export const MENU = [
   { id: 'focaccia', name: 'Chicken & pesto focaccia', price: 95 },
@@ -52,17 +53,31 @@ export class Director {
     const fm = this.sim.fm;
     const c = { ...this.ctx };
     c.hour = this.clockH; c.timeSv = fmtClock(this.clockH).replace(':', '.'); c.timeEn = fmtClock(this.clockH);
-    const eta = this.eta(); c.etaEn = fmtClock(eta); c.etaSv = fmtClock(eta).replace(':', '.');
+    const land = this.eta() - 390 / 3600; c.etaEn = fmtClock(land); c.etaSv = fmtClock(land).replace(':', '.');
     c.mins = Math.max(8, Math.round((fm.m.touchdown - fm.s) / Math.max(fm.v, 120) / 60 / 5) * 5 + 5);
     return c;
   }
+  // Estimated arrival at the gate (local hours): a reference run of the same flight
+  // model gives the time-to-go for every point of the route.
   eta() {
     const fm = this.sim.fm;
-    const remaining = Math.max(0, fm.m.touchdown - fm.s);
-    const tFlight = this.times.liftoff != null ? remaining / 205 : 3300;
-    return this.clockH + (tFlight + (this.times.liftoff == null ? 300 : 0)) / 3600;
+    if (!this._ref) {
+      const ref = new FlightModel({ path: fm.path, m: fm.m }, {});
+      ref.clearTaxi = true; const tab = []; let t = 0;
+      while (ref.phase !== 'arrived' && t < 7200) {
+        ref.update(0.5); t += 0.5; ref.events.length = 0;
+        if (ref.phase === 'hold') ref.clearLineup = true; if (ref.phase === 'lineup') ref.clearTakeoff = true;
+        if (!tab.length || ref.s - tab[tab.length - 1][0] > 500) tab.push([ref.s, t]);
+      }
+      tab.push([fm.m.stand, t]); this._ref = tab;
+    }
+    const tab = this._ref, total = tab[tab.length - 1][1];
+    let i = 0; while (i < tab.length - 2 && tab[i + 1][0] < fm.s) i++;
+    const [s0, t0] = tab[i], [s1, t1] = tab[i + 1];
+    const tNow = t0 + (t1 - t0) * clamp((fm.s - s0) / Math.max(1, s1 - s0), 0, 1);
+    const hold = fm.phase === 'parked' ? 60 : fm.phase === 'hold' ? 40 : 0;
+    return this.clockH + (total - tNow + hold) / 3600;
   }
-
   setSeatbelt(on, chime = true) {
     if (this.seatbelt === on) return;
     this.seatbelt = on; this.sim.cabin.setSigns(on);
