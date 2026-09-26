@@ -42,3 +42,8 @@ packages/
 # OS-specific files
 .DS_Store
 Thumbs.db
+
+# Flight simulator (web)
+flightsim/node_modules/
+flightsim/dist/web/
+flightsim/dev/

@@ -1,0 +1,672 @@
+// A320neo cabin interior in SAS configuration (180 seats, 3-3, rows 1-31 without 13).
+// Aircraft-local frame: x = right (starboard), y = up (cabin floor = 0), z = aft.
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { sweepProfile, rrLoop, tunnel, mergeColored, trs, colorize } from './geom.js';
+import * as TX from './textures.js';
+import { rng } from './core.js';
+
+export const CAB = {
+  yc: 1.02, Rw: 1.82, Rpane: 1.962, Rskin: 1.99,
+  zFront: -4.6, zAft: 26.6,
+  winY: 1.10, winW: 0.268, winH: 0.378, paneW: 0.228, paneH: 0.33,
+  binBottomY: 1.62, ceilingY: 2.24,
+};
+export const wallX = (y) => Math.sqrt(Math.max(0, CAB.Rw * CAB.Rw - (y - CAB.yc) ** 2));
+export const ROWS = [...Array(12).keys()].map((i) => i + 1).concat([...Array(18).keys()].map((i) => i + 14));
+export const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+export const SEAT_X = { A: -1.512, B: -1.005, C: -0.498, D: 0.498, E: 1.005, F: 1.512 };
+export const BUSINESS_ROWS = 4;
+export const EXIT_ROWS = [11, 12];
+
+const ROW_Z = (() => {
+  const m = {}; let z = 0.1;
+  for (const r of ROWS) { if (r !== 1) z += (r === 11 || r === 12) ? 0.94 : 0.762; m[r] = z; }
+  return m;
+})();
+export const rowZ = (r) => ROW_Z[r];
+export const HATCH_Z = [rowZ(11) - 0.47, rowZ(12) - 0.47];
+export const DOORS = { L1: { side: -1, z: -2.3 }, R1: { side: 1, z: -2.3 }, L4: { side: -1, z: 24.2 }, R4: { side: 1, z: 24.2 } };
+export const DOOR_W = 0.81, DOOR_H = 1.85;
+
+export function windowList() {
+  const wins = [];
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 46; k++) {
+      const z = -0.95 + k * 0.5334;
+      if (HATCH_Z.some((h) => Math.abs(h - z) < 0.36)) continue;
+      wins.push({ side, z, hatch: false });
+    }
+    for (const hz of HATCH_Z) wins.push({ side, z: hz, hatch: true });
+  }
+  return wins;
+}
+
+// point on the fuselage circle of radius R at angle th (from +x about (0,yc)) for a side
+const cyl = (side, R, th, z) => new THREE.Vector3(side * R * Math.cos(th), CAB.yc + R * Math.sin(th), z);
+const thOfY = (R, y) => Math.asin((y - CAB.yc) / R);
+
+function windowLoop(side, R, z, w, h, r, yCentre = CAB.winY) {
+  const th0 = thOfY(CAB.Rw, yCentre);
+  return rrLoop(w, h, r, 32).map(([a, b]) => cyl(side, R, th0 + b / R, z + a * (side > 0 ? 1 : -1)));
+}
+
+export class Cabin {
+  constructor({ quality = 'medium', seed = 7 } = {}) {
+    this.group = new THREE.Group();
+    this.group.name = 'cabin';
+    this.interactables = [];
+    this.windows = [];
+    this.seats = [];
+    this.signMats = { belt: [], smoke: [] };
+    this.moodMats = [];
+    this.quality = quality;
+    this.r = rng(seed);
+    this.lightLevel = 1;
+    this.mood = new THREE.Color('#fff4e6');
+    this._buildMaterials();
+    this._buildShell();
+    this._buildWindows();
+    this._buildBins();
+    this._buildSeats();
+    this._buildMonuments();
+    this._buildDoors();
+    this._buildSigns();
+    this._buildLights();
+  }
+
+  _std(opts) { const m = new THREE.MeshStandardMaterial(opts); return m; }
+
+  _buildMaterials() {
+    this.mat = {
+      wall: this._std({ color: '#f1f1ee', roughness: 0.62, metalness: 0 }),
+      plastic: this._std({ color: '#eeeeeb', roughness: 0.55, map: TX.plasticTex() }),
+      ceiling: this._std({ color: '#ffffff', roughness: 0.7, map: TX.ceilingTex() }),
+      carpet: this._std({ color: '#ffffff', roughness: 0.95, map: TX.carpetTex() }),
+      bin: this._std({ color: '#ffffff', roughness: 0.5, map: TX.binTex() }),
+      binInside: this._std({ color: '#4a4f58', roughness: 0.9 }),
+      seatFabric: this._std({ vertexColors: true, roughness: 0.92, map: TX.fabricTex() }),
+      seatHard: this._std({ vertexColors: true, roughness: 0.5, metalness: 0.05 }),
+      seatBack: this._std({ color: '#b9bec6', roughness: 0.45, map: TX.seatBackTex() }),
+      metal: this._std({ color: '#c7cbd1', roughness: 0.35, metalness: 0.7, map: TX.metalTex() }),
+      galley: this._std({ color: '#ffffff', roughness: 0.35, metalness: 0.55, map: TX.galleyTex() }),
+      dark: this._std({ color: '#2a2e36', roughness: 0.8 }),
+      reveal: this._std({ color: '#ecebe7', roughness: 0.5, side: THREE.DoubleSide }),
+      shade: this._std({ color: '#e4e3df', roughness: 0.6, side: THREE.DoubleSide, map: TX.plasticTex() }),
+      curtain: this._std({ color: '#2c3a5e', roughness: 0.95, map: TX.fabricTex(), side: THREE.DoubleSide }),
+      floorStrip: this._std({ color: '#cfd8c8', roughness: 0.5, emissive: '#9fb89a', emissiveIntensity: 0.25 }),
+    };
+    for (const m of Object.values(this.mat)) m.envMapIntensity = 0.6;
+  }
+
+  // --------------- shell: floor, sidewalls, ceiling ---------------
+  _buildShell() {
+    const zA = CAB.zFront, zB = CAB.zAft, L = zB - zA;
+    const g = this.group;
+    // floor
+    const fw = wallX(0);
+    const floor = new THREE.PlaneGeometry(fw * 2, L, 1, 1);
+    floor.rotateX(-Math.PI / 2); floor.translate(0, 0, (zA + zB) / 2);
+    const uv = floor.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * fw * 2 / 1.2, uv.getY(i) * L / 1.2);
+    const fm = new THREE.Mesh(floor, this.mat.carpet); fm.receiveShadow = true; g.add(fm);
+    // floor path marking strips
+    for (const s of [-1, 1]) {
+      const st = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.004, 23.5), this.mat.floorStrip);
+      st.position.set(s * 0.262, 0.002, 11.3); g.add(st);
+    }
+    // sidewalls with alpha-tested window and door holes
+    const th0 = thOfY(CAB.Rw, 0), th1 = thOfY(CAB.Rw, CAB.binBottomY + 0.02);
+    const arcLen = CAB.Rw * (th1 - th0);
+    const holes = [];
+    const hole = (z0, z1, y0, y1, r) => {
+      const v0 = (CAB.Rw * (thOfY(CAB.Rw, y0) - th0)) / arcLen, v1 = (CAB.Rw * (Math.min(thOfY(CAB.Rw, Math.min(y1, 2.8)), th1 + 0.5) - th0)) / arcLen;
+      holes.push({ u0: (z0 - zA) / L, u1: (z1 - zA) / L, v0, v1, rx: r / L, ry: r / arcLen });
+    };
+    // window holes are cut 6 mm inside the reveal so no gap can show at the corners
+    const thW = thOfY(CAB.Rw, CAB.winY);
+    for (const w of windowList()) {
+      const ya = CAB.yc + CAB.Rw * Math.sin(thW - (CAB.winH / 2 - 0.006) / CAB.Rw), yb = CAB.yc + CAB.Rw * Math.sin(thW + (CAB.winH / 2 - 0.006) / CAB.Rw);
+      hole(w.z - CAB.winW / 2 + 0.006, w.z + CAB.winW / 2 - 0.006, ya, yb, 0.08);
+    }
+    for (const d of Object.values(DOORS)) hole(d.z - DOOR_W / 2, d.z + DOOR_W / 2, 0.02, 3, 0.1);
+    for (const hz of HATCH_Z) hole(hz - 0.255, hz + 0.255, 0.3, 1.36, 0.12);
+    // left and right alpha maps are mirrored in z-direction (u flips), so build one per side
+    const holesL = holes.filter((h, i) => true);
+    this.wallTex = TX.sidewallTextures(4096, 512, holesL);
+    const segs = 24;
+    const prof = []; for (let i = 0; i <= segs; i++) { const th = th0 + (th1 - th0) * i / segs; prof.push([CAB.Rw * Math.cos(th), CAB.yc + CAB.Rw * Math.sin(th)]); }
+    for (const side of [-1, 1]) {
+      const geo = sweepProfile(prof, zA, zB, { segZ: 1, uScale: L, vScale: arcLen, flipX: side < 0, invert: true });
+      // second uv set for the tiled colour texture
+      const mat = this._std({ color: '#ffffff', roughness: 0.6, alphaMap: this.wallTex.alpha, alphaTest: 0.5, map: this.wallTex.color, side: THREE.FrontSide });
+      mat.map.repeat.set(L / 1.2, 1);
+      mat.onBeforeCompile = (sh) => { // separate uv transform for map (tiled) vs alpha (whole)
+        sh.fragmentShader = sh.fragmentShader.replace('#include <alphamap_fragment>', 'diffuseColor.a *= texture2D( alphaMap, vAlphaMapUv ).g;');
+      };
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      g.add(mesh);
+      this.moodMats.push(mat);
+    }
+    // upper sidewall above bins at door zones & the band behind the bins
+    // ceiling (centre panel) and cove
+    const ceilProf = [];
+    for (let i = 0; i <= 10; i++) { const x = -0.86 + 1.72 * i / 10; ceilProf.push([x, CAB.ceilingY - 0.14 * (x / 0.86) ** 2]); }
+    const ceil = sweepProfile(ceilProf, zA, zB, { uScale: 1.6, vScale: 1.72 });
+    const cm = new THREE.Mesh(ceil, this.mat.ceiling); cm.receiveShadow = true; g.add(cm);
+    // end bulkheads (cockpit wall & aft pressure bulkhead)
+    for (const [z, flip] of [[zA, 1], [zB, -1]]) {
+      const sh = new THREE.Shape();
+      for (let i = 0; i <= 40; i++) { const th = -Math.PI / 2 + Math.PI * 2 * i / 40; const x = CAB.Rw * Math.cos(th), y = CAB.yc + CAB.Rw * Math.sin(th); if (i === 0) sh.moveTo(x, Math.max(0, y)); else sh.lineTo(x, Math.max(0, y)); }
+      const bg = new THREE.ShapeGeometry(sh, 4);
+      const bm = new THREE.Mesh(bg, this.mat.wall); bm.position.z = z; if (flip < 0) bm.rotation.y = Math.PI; g.add(bm);
+    }
+  }
+
+  // --------------- windows: reveals, shades, panes ---------------
+  _buildWindows() {
+    const g = this.group;
+    const paneMat = this.paneMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: { uFrost: { value: 0 }, uRain: { value: 0 }, uTime: { value: 0 }, uSpeed: { value: 0 }, uFog: { value: 0 }, uTint: { value: new THREE.Color('#bfd3d6') }, uLight: { value: 1 } },
+      vertexShader: `varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix*vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix*viewMatrix*w; }`,
+      fragmentShader: `
+        varying vec2 vUv; varying vec3 vW;
+        uniform float uFrost, uRain, uTime, uSpeed, uFog, uLight; uniform vec3 uTint;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+        float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
+        float sdRR(vec2 p, vec2 b, float r){ vec2 q = abs(p)-b+r; return length(max(q,0.0)) + min(max(q.x,q.y),0.0) - r; }
+        void main(){
+          vec2 p = (vUv-0.5)*vec2(0.228,0.33);
+          float d = sdRR(p, vec2(0.114,0.165), 0.07);
+          if (d > 0.0) discard;
+          float edge = clamp(-d/0.05, 0.0, 1.0);
+          float a = 0.05;
+          vec3 col = uTint;
+          // scratches & bleed hole
+          float sc = smoothstep(0.985, 1.0, n(vUv*vec2(160.0,6.0)+3.0)) * 0.10;
+          a += sc; col = mix(col, vec3(1.0), sc*4.0);
+          float bh = length((vUv - vec2(0.5, 0.12))*vec2(0.228,0.33));
+          if (bh < 0.0016) { col = vec3(0.1); a = 0.8; }
+          // frost crystals creeping from the edges at cruise
+          float fr = n(vUv*vec2(40.0,58.0)) * 0.6 + n(vUv*vec2(120.0,170.0))*0.4;
+          float frost = uFrost * smoothstep(0.35, 0.9, (1.0-edge)*1.1 + fr*0.5);
+          col = mix(col, vec3(0.93,0.96,1.0), frost); a = max(a, frost*0.85);
+          // condensation fog
+          a = max(a, uFog * 0.35 * (0.6+0.4*fr)); col = mix(col, vec3(0.9), uFog*0.4);
+          // rain: small beads that streak aft along the pane as airspeed rises
+          if (uRain > 0.0) {
+            float stretch = 1.0 + uSpeed * 0.06;
+            vec2 dir = normalize(vec2(-1.0, 0.18 + 0.4 / stretch));
+            for (int k = 0; k < 3; k++) {
+              float sc = 14.0 + float(k) * 9.0;
+              vec2 q = vUv * vec2(sc * 0.7, sc);
+              q -= dir * uTime * (0.3 + uSpeed * 0.02) * float(k + 1);
+              vec2 cell = floor(q); vec2 f = fract(q) - 0.5;
+              float rnd = h(cell + float(k) * 7.1);
+              if (rnd < uRain * 0.55) {
+                vec2 o = f - (vec2(h(cell * 3.1), h(cell * 4.3)) - 0.5) * 0.6;
+                o.x /= stretch;
+                float r = 0.08 + 0.1 * h(cell * 1.7);
+                float d = length(o);
+                float body = smoothstep(r, r * 0.55, d);
+                float rim = smoothstep(r * 0.5, r * 0.9, d) * body;
+                float spark = smoothstep(r * 0.35, 0.0, length(o - vec2(-r * 0.3, r * 0.35)));
+                col = mix(col, vec3(1.0), spark * 0.6);
+                a = max(a, body * 0.07 + rim * 0.12 + spark * 0.35);
+              }
+            }
+          }
+          gl_FragColor = vec4(col*uLight, a);
+        }`,
+    });
+    this.paneMat = paneMat;
+    const shadeGeoCache = new Map();
+    for (const w of windowList()) {
+      const side = w.side;
+      const th = thOfY(CAB.Rw, CAB.winY);
+      const inner = windowLoop(side, CAB.Rw - 0.001, w.z, CAB.winW, CAB.winH, 0.085);
+      const mid = windowLoop(side, CAB.Rw + 0.06, w.z, CAB.winW - 0.028, CAB.winH - 0.03, 0.08);
+      const outer = windowLoop(side, CAB.Rskin + 0.01, w.z, CAB.paneW, CAB.paneH, 0.07);
+      const rev = mergeColored([{ geo: tunnel(inner, mid), color: '#ecebe7' }, { geo: tunnel(mid, outer), color: '#d8d8d4' }]);
+      const rm = new THREE.Mesh(rev, this.mat.reveal); rm.castShadow = true; rm.receiveShadow = true;
+      this.group.add(rm);
+      // pane
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), paneMat);
+      const c = cyl(side, CAB.Rpane, th, w.z);
+      const nrm = new THREE.Vector3(side * Math.cos(th), Math.sin(th), 0); // outward
+      pane.position.copy(c);
+      pane.lookAt(c.clone().sub(nrm)); // face inward
+      pane.scale.set(CAB.paneW, CAB.paneH, 1);
+      pane.renderOrder = 5;
+      g.add(pane);
+      // shade (curved panel sliding in the reveal)
+      const key = side;
+      if (!shadeGeoCache.has(key)) {
+        const sw = CAB.winW - 0.03, sh = CAB.winH + 0.01;
+        const R = CAB.Rw + 0.025;
+        const prof = []; const n = 8;
+        for (let i = 0; i <= n; i++) { const b = -sh / 2 + sh * i / n; const t2 = b / R; prof.push([R * Math.cos(t2), R * Math.sin(t2)]); }
+        const sg = sweepProfile(prof, -sw / 2, sw / 2, { flipX: side < 0, invert: side > 0 });
+        shadeGeoCache.set(key, sg);
+      }
+      const shadeRoot = new THREE.Group(); shadeRoot.position.set(0, CAB.yc, w.z); shadeRoot.rotation.z = side > 0 ? th : -th;
+      const shade = new THREE.Mesh(shadeGeoCache.get(key), this.mat.shade); shade.castShadow = true; shade.receiveShadow = true;
+      shadeRoot.add(shade); g.add(shadeRoot);
+      const win = { side, z: w.z, hatch: w.hatch, centre: cyl(side, CAB.Rw, th, w.z), normal: nrm.clone().negate(), shade: 0, shadeTarget: 0, shadeRoot, shadeMesh: shade, th, pane };
+      shade.userData.interact = { kind: 'shade', win, prompt: () => (win.shadeTarget > 0.5 ? 'Open window shade' : 'Close window shade') };
+      this.windows.push(win);
+      this.setShade(win, 0, true);
+    }
+  }
+
+  setShade(win, v, instant = false) {
+    win.shadeTarget = v; if (instant) win.shade = v;
+    const R = CAB.Rw + 0.025;
+    const open = 1 - win.shade; // 1 = fully open -> shade slid up by winH
+    const off = (open * (CAB.winH + 0.02)) / R;
+    win.shadeRoot.rotation.z = (win.side > 0 ? win.th + off : -(win.th + off));
+    win.shadeMesh.visible = win.shade > 0.02;
+  }
+
+  // --------------- overhead bins, PSU, cove lights ---------------
+  _buildBins() {
+    const g = this.group;
+    const z0 = -1.25, z1 = 23.45;
+    const L = z1 - z0;
+    const yb = CAB.binBottomY;
+    const xw = wallX(yb) - 0.01;
+    // PSU / bin bottom surface
+    const psuProf = [[0.97, yb + 0.045], [xw, yb]];
+    const rows = ROWS.map((r) => ({ row: r, z: rowZ(r) - 0.28 }));
+    for (const side of [-1, 1]) {
+      const tex = TX.psuTexture(4096, rows, z0, z1, side < 0 ? 'L' : 'R');
+      const mat = this._std({ color: '#ffffff', roughness: 0.55, map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.18 });
+      this.psuMats = this.psuMats || []; this.psuMats.push(mat);
+      const geo = sweepProfile(psuProf, z0, z1, { uScale: L, vScale: 0.76, flipX: side < 0 });
+      if (side < 0) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i)); }
+      const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = true; g.add(m);
+      // bin body back (between bin top and wall) - hidden mostly, darker
+      const back = sweepProfile([[xw, yb], [xw - 0.05, 2.1], [0.84, 2.13]], z0, z1, { flipX: side < 0, invert: true });
+      const bm = new THREE.Mesh(back, this.mat.binInside); g.add(bm);
+      // cove light strip (between bin top and ceiling)
+      const cove = new THREE.Mesh(new THREE.PlaneGeometry(0.06, L), this._coveMat());
+      cove.rotation.x = -Math.PI / 2; cove.rotation.y = side * 0.5; cove.position.set(side * 0.865, 2.115, (z0 + z1) / 2);
+      g.add(cove);
+      // wash light under bin lip, lighting the window band
+      const wash = new THREE.Mesh(new THREE.PlaneGeometry(0.03, L), this._coveMat(0.6));
+      wash.rotation.x = Math.PI / 2; wash.position.set(side * 0.99, yb + 0.04, (z0 + z1) / 2);
+      g.add(wash);
+    }
+    // bin doors: segments ~1.52 m, hinge at top, open upward
+    this.bins = [];
+    const segLen = (z1 - z0) / 16;
+    const lidProf = [];
+    for (let i = 0; i <= 8; i++) { const t = i / 8; lidProf.push([0.97 - 0.1 * Math.sin(t * Math.PI / 2) - 0.02 * t, yb + 0.045 + (2.1 - yb - 0.045) * t]); }
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 16; k++) {
+        const za = z0 + k * segLen + 0.004, zb = za + segLen - 0.008;
+        const geo = sweepProfile(lidProf.map(([x, y]) => [x, y - 2.1]), za, zb, { uScale: segLen, vScale: 0.5, flipX: side < 0, invert: true });
+        const lid = new THREE.Mesh(geo, this.mat.bin); lid.castShadow = true; lid.receiveShadow = true;
+        const pivot = new THREE.Group(); pivot.position.set(side * 0.85, 2.1, 0); lid.position.set(-side * 0.85, 0, 0);
+        pivot.add(lid); g.add(pivot);
+        // interior (visible when open)
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.4, segLen - 0.02), this.mat.binInside);
+        box.position.set(side * 1.3, 1.86, (za + zb) / 2); g.add(box);
+        const bin = { side, z0: za, z1: zb, pivot, open: 0, target: 0 };
+        lid.userData.interact = { kind: 'bin', bin, prompt: () => (bin.target > 0.5 ? 'Close overhead bin' : 'Open overhead bin') };
+        this.bins.push(bin);
+      }
+    }
+  }
+
+  _coveMat(k = 1) {
+    const m = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: true });
+    m.userData.k = k; this.coveMats = this.coveMats || []; this.coveMats.push(m); return m;
+  }
+
+  // --------------- seats (instanced) ---------------
+  _buildSeats() {
+    const FLAT = TX.FLAT_UV;
+    const fabric = '#40444c', headCover = '#1f2c4a', shell = '#c9ccd1', frame = '#8e939b';
+    // base: cushion + pan + legs + one armrest (left)
+    const cushion = new RoundedBoxGeometry(0.43, 0.11, 0.46, 3, 0.035);
+    const basePartsFab = [{ geo: cushion, color: fabric, matrix: trs(0, 0.40, -0.03) }];
+    const baseHard = [
+      { geo: new THREE.BoxGeometry(0.43, 0.04, 0.44), color: '#5a5f68', matrix: trs(0, 0.33, -0.02), flatUV: FLAT },
+      { geo: new THREE.CylinderGeometry(0.018, 0.018, 0.5, 6), color: frame, matrix: trs(0, 0.28, -0.2, 0, 0, Math.PI / 2), flatUV: FLAT },
+      { geo: new THREE.CylinderGeometry(0.018, 0.018, 0.5, 6), color: frame, matrix: trs(0, 0.28, 0.16, 0, 0, Math.PI / 2), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.03, 0.3, 0.03), color: frame, matrix: trs(-0.2, 0.14, -0.18), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.03, 0.3, 0.03), color: frame, matrix: trs(-0.2, 0.14, 0.16), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.03, 0.02, 0.44), color: frame, matrix: trs(-0.2, 0.01, -0.01), flatUV: FLAT },
+      { geo: new RoundedBoxGeometry(0.05, 0.05, 0.38, 2, 0.02), color: '#4b505a', matrix: trs(-0.235, 0.635, 0.02), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.02, 0.2, 0.04), color: '#6c717a', matrix: trs(-0.235, 0.52, 0.14), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.34, 0.07, 0.2), color: '#454a52', matrix: trs(0, 0.24, 0.02), flatUV: FLAT }, // life vest pouch
+    ];
+    const baseGeoF = mergeColored(basePartsFab);
+    const baseGeoH = mergeColored(baseHard);
+    // back (pivot at bottom rear of cushion), in back-local frame: y up the backrest
+    const backFab = mergeColored([
+      { geo: new RoundedBoxGeometry(0.43, 0.48, 0.075, 3, 0.03), color: fabric, matrix: trs(0, 0.25, 0) },
+      { geo: new RoundedBoxGeometry(0.40, 0.2, 0.09, 3, 0.035), color: headCover, matrix: trs(0, 0.58, -0.006) },
+    ]);
+    const backShell = new THREE.BoxGeometry(0.43, 0.62, 0.02);
+    backShell.translate(0, 0.33, 0.05);
+    // map the seat back texture onto the +z (rear) face only; other faces flat
+    const uvs = backShell.attributes.uv, nrm = backShell.attributes.normal;
+    for (let i = 0; i < uvs.count; i++) if (nrm.getZ(i) < 0.9) uvs.setXY(i, 0.5, 0.95);
+    this.seatGeo = { baseGeoF, baseGeoH, backFab, backShell };
+
+    // build seat records
+    const seats = [];
+    for (const r of ROWS) for (const L of LETTERS) {
+      const blocked = r <= BUSINESS_ROWS && (L === 'B' || L === 'E');
+      seats.push({ row: r, letter: L, id: `${r}${L}`, x: SEAT_X[L], z: rowZ(r), recline: 0, occupant: null, blocked, business: r <= BUSINESS_ROWS, exitRow: EXIT_ROWS.includes(r), index: seats.length });
+    }
+    this.seats = seats;
+    const N = seats.length;
+    const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, N); m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; this.group.add(m); return m; };
+    this.iBaseF = mk(baseGeoF, this.mat.seatFabric);
+    this.iBaseH = mk(baseGeoH, this.mat.seatHard);
+    this.iBackF = mk(backFab, this.mat.seatFabric);
+    this.iBackS = mk(backShell, this.mat.seatBack);
+    // extra right armrests for C and F, and aisle armrests on D (left of D is aisle side)
+    const armGeo = mergeColored([{ geo: new RoundedBoxGeometry(0.05, 0.05, 0.38, 2, 0.02), color: '#4b505a', matrix: trs(0, 0.635, 0.02), flatUV: FLAT }, { geo: new THREE.BoxGeometry(0.02, 0.2, 0.04), color: '#6c717a', matrix: trs(0, 0.52, 0.14), flatUV: FLAT }]);
+    const extra = seats.filter((s) => s.letter === 'C' || s.letter === 'F');
+    this.iArm = new THREE.InstancedMesh(armGeo, this.mat.seatHard, extra.length);
+    extra.forEach((s, i) => this.iArm.setMatrixAt(i, trs(s.x + 0.235, 0, s.z)));
+    this.iArm.castShadow = true; this.group.add(this.iArm);
+    for (const s of seats) this.updateSeat(s);
+    // blocked middle seats in SAS Business: cocktail table on the seat
+    const tbl = mergeColored([
+      { geo: new RoundedBoxGeometry(0.4, 0.03, 0.34, 2, 0.01), color: '#d8d9dc', matrix: trs(0, 0.66, -0.02), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.36, 0.2, 0.3), color: '#30343c', matrix: trs(0, 0.55, 0.0), flatUV: FLAT },
+    ]);
+    for (const s of seats.filter((q) => q.blocked)) {
+      const m = new THREE.Mesh(tbl, this.mat.seatHard); m.position.set(s.x, 0, s.z); m.castShadow = true; this.group.add(m);
+    }
+    // empty-seat belts lying buckled on the cushion
+    this.beltGeo = mergeColored([
+      { geo: new THREE.BoxGeometry(0.2, 0.006, 0.045), color: '#2b2f37', matrix: trs(-0.1, 0.458, 0.05, 0, 0.3, 0), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.2, 0.006, 0.045), color: '#2b2f37', matrix: trs(0.1, 0.458, 0.05, 0, -0.3, 0), flatUV: FLAT },
+      { geo: new THREE.BoxGeometry(0.06, 0.012, 0.05), color: '#b9bdc4', matrix: trs(0, 0.46, 0.02), flatUV: FLAT },
+    ]);
+    this.iBelts = new THREE.InstancedMesh(this.beltGeo, this.mat.seatHard, N);
+    this.iBelts.count = 0; this.group.add(this.iBelts);
+  }
+
+  seatBackMatrix(s, extraTilt = 0) {
+    const tilt = (14 + s.recline * 9) * Math.PI / 180 + extraTilt;
+    return trs(s.x, 0.455, s.z + 0.2, tilt, 0, 0);
+  }
+
+  updateSeat(s) {
+    const i = s.index;
+    const base = trs(s.x, 0, s.z);
+    this.iBaseF.setMatrixAt(i, base); this.iBaseH.setMatrixAt(i, base);
+    const bm = this.seatBackMatrix(s);
+    this.iBackF.setMatrixAt(i, bm); this.iBackS.setMatrixAt(i, bm);
+    this.iBaseF.instanceMatrix.needsUpdate = this.iBaseH.instanceMatrix.needsUpdate = true;
+    this.iBackF.instanceMatrix.needsUpdate = this.iBackS.instanceMatrix.needsUpdate = true;
+  }
+
+  refreshEmptyBelts(except = null) {
+    let n = 0;
+    for (const s of this.seats) {
+      if (s.occupant || s.blocked || s === except) continue;
+      this.iBelts.setMatrixAt(n++, trs(s.x, 0, s.z));
+    }
+    this.iBelts.count = n; this.iBelts.instanceMatrix.needsUpdate = true;
+  }
+
+  seat(id) { return this.seats.find((s) => s.id === id); }
+
+  // --------------- galleys, lavatories, cockpit door, jump seats, curtains ---------------
+  _buildMonuments() {
+    const g = this.group, M = this.mat;
+    const box = (w, h, d, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+    // forward lavatory (left) and galley (right)
+    this.lavs = [];
+    const lavDoorMat = this._std({ color: '#ffffff', roughness: 0.5, map: TX.lavDoorTex() });
+    const mkLav = (x0, x1, z0, z1, doorFace, name) => {
+      const w = x1 - x0, d = z1 - z0;
+      const walls = new THREE.Group();
+      const t = 0.04;
+      const ww = (sw, sh, sd, px, py, pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), M.wall); m.position.set(px, py, pz); m.castShadow = true; m.receiveShadow = true; walls.add(m); };
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      ww(w, 2.15, t, cx, 1.075, doorFace < 0 ? z1 : z0); // back wall
+      ww(t, 2.15, d, x0, 1.075, cz); ww(t, 2.15, d, x1, 1.075, cz);
+      ww(w, 0.04, d, cx, 2.15, cz);
+      g.add(walls);
+      // door (bifold) facing aisle
+      const dz = doorFace < 0 ? z0 : z1;
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.9, 0.03), lavDoorMat);
+      const hingeX = cx - 0.3 * Math.sign(cx);
+      const pivot = new THREE.Group(); pivot.position.set(hingeX, 0.97, dz); door.position.set(0.3 * Math.sign(cx), 0, 0);
+      pivot.add(door); g.add(pivot);
+      // front wall pieces around the door
+      const rem = w - 0.62;
+      if (rem > 0.02) { const m = new THREE.Mesh(new THREE.BoxGeometry(rem, 2.15, t), M.wall); m.position.set(cx + Math.sign(cx) * (0.31 + rem / 2), 1.075, dz); g.add(m); }
+      // occupied indicator
+      const ind = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.04), new THREE.MeshBasicMaterial({ color: '#2ecc71' }));
+      ind.position.set(cx, 1.97, dz + (doorFace < 0 ? -0.02 : 0.02)); if (doorFace < 0) ind.rotation.y = Math.PI; g.add(ind);
+      // interior fixtures: toilet, sink, mirror
+      const toilet = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.42, 12), this._std({ color: '#d9dcdf', roughness: 0.25, metalness: 0.5 }));
+      toilet.position.set(cx + Math.sign(cx) * 0.15, 0.21, doorFace < 0 ? z1 - 0.3 : z0 + 0.3); g.add(toilet);
+      const sink = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.34), this._std({ color: '#e9eaea', roughness: 0.3 }));
+      sink.position.set(cx - Math.sign(cx) * 0.18, 0.85, cz); g.add(sink);
+      const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.5), this._std({ color: '#b8c4cc', roughness: 0.05, metalness: 1 }));
+      mirror.position.set(x1 - 0.03 * Math.sign(cx) * 0 + (cx > 0 ? -0.022 : 0.022) + (cx > 0 ? 0 : 0), 1.45, cz);
+      mirror.position.x = cx > 0 ? x1 - 0.03 : x0 + 0.03; mirror.rotation.y = cx > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(mirror);
+      const lamp = new THREE.PointLight('#fff1dc', 0, 2.2, 2); lamp.position.set(cx, 2.0, cz); g.add(lamp);
+      const lav = { name, x0, x1, z0, z1, door: pivot, doorMesh: door, indicator: ind, open: 0, target: 0, occupied: false, lamp, toilet, doorZ: dz, doorFace, cx, cz };
+      door.userData.interact = { kind: 'lavdoor', lav, prompt: () => (lav.occupied ? 'Occupied' : lav.target > 0.5 ? 'Close door' : 'Open lavatory door') };
+      toilet.userData.interact = { kind: 'flush', lav, prompt: () => 'Flush' };
+      sink.userData.interact = { kind: 'sink', lav, prompt: () => 'Wash hands' };
+      this.lavs.push(lav);
+      return lav;
+    };
+    mkLav(-1.72, -0.5, -4.6, -3.05, 1, 'Lavatory A');
+    mkLav(-1.75, -0.92, 24.95, 26.58, -1, 'Lavatory D');
+    mkLav(0.92, 1.75, 24.95, 26.58, -1, 'Lavatory E');
+    // forward galley (right)
+    const fg = box(1.25, 2.1, 1.5, 1.12, 1.05, -3.85, M.galley);
+    fg.material = [M.wall, M.wall, M.wall, M.wall, M.wall, M.galley].map((m, i) => (i === 4 ? M.galley : m));
+    fg.material = M.wall; const fgFace = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.0), M.galley); fgFace.position.set(1.12, 1.02, -3.09); g.add(fgFace);
+    fgFace.rotation.y = 0; fg.position.z = -3.86; fg.scale.z = 1;
+    // aft galley (centre)
+    const ag = box(1.82, 2.1, 1.3, 0, 1.05, 25.95, M.wall);
+    const agFace = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.0), M.galley); agFace.position.set(0, 1.02, 25.29); agFace.rotation.y = Math.PI; g.add(agFace);
+    agFace.userData.interact = { kind: 'galley', prompt: () => 'Galley' };
+    this.aftGalley = { z: 25.2 };
+    // cockpit door
+    const cd = box(0.86, 1.98, 0.06, 0, 0.99, -4.56, this._std({ color: '#d5d7da', roughness: 0.4 }));
+    const peep = new THREE.Mesh(new THREE.CircleGeometry(0.018, 12), M.dark); peep.position.set(0, 1.55, -4.525); g.add(peep);
+    const keypad = box(0.08, 0.12, 0.02, -0.55, 1.3, -4.57, M.dark);
+    cd.userData.interact = { kind: 'cockpit', prompt: () => 'Cockpit door (locked)' };
+    // forward partition behind row 1? (open plan); jump seats
+    this.jumpSeats = [];
+    const js = (x, z, face) => {
+      const seat = new THREE.Group(); seat.position.set(x, 0, z); seat.rotation.y = face > 0 ? 0 : Math.PI;
+      const cush = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.08, 0.36, 2, 0.02), M.curtain); cush.position.set(0, 0.47, -0.18); seat.add(cush);
+      const back = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.55, 0.06, 2, 0.02), M.curtain); back.position.set(0, 0.8, 0.02); seat.add(back);
+      g.add(seat); this.jumpSeats.push({ x, z: z + (face > 0 ? -0.18 : 0.18), face, root: seat });
+    };
+    // front double jump seat on the lav wall (facing aft)
+    js(-1.3, -3.0, -1); js(-0.85, -3.0, -1);
+    // aft jump seats on the galley face (facing forward)
+    js(-0.45, 25.25, 1); js(0.45, 25.25, 1);
+    // business curtain (open, gathered at the bins)
+    this.curtains = [];
+    const zc = rowZ(BUSINESS_ROWS) + 0.47;
+    for (const s of [-1, 1]) {
+      const c = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 1.35, 6, 1), M.curtain);
+      const pos = c.geometry.attributes.position; for (let i = 0; i < pos.count; i++) pos.setZ(i, Math.sin(pos.getX(i) * 40) * 0.03);
+      c.geometry.computeVertexNormals();
+      c.position.set(s * 0.95, 1.5, zc); c.rotation.y = Math.PI / 2; g.add(c);
+      this.curtains.push({ mesh: c, side: s, z: zc, closed: 0 });
+    }
+    const rail = box(2.0, 0.02, 0.03, 0, 2.2, zc, M.metal);
+  }
+
+  setCurtain(closed) {
+    for (const c of this.curtains) {
+      c.closed = closed;
+      c.mesh.scale.x = closed ? 3.2 : 1;
+      c.mesh.position.x = c.side * (closed ? 0.52 : 0.95);
+      c.mesh.position.y = closed ? 1.2 : 1.5; c.mesh.scale.y = closed ? 1.6 : 1;
+    }
+  }
+
+  // --------------- doors & overwing hatches ---------------
+  _buildDoors() {
+    const g = this.group;
+    const doorMat = this._std({ color: '#ffffff', roughness: 0.5, map: TX.doorTex() });
+    this.doors = {};
+    for (const [name, d] of Object.entries(DOORS)) {
+      const R = CAB.Rw - 0.02;
+      const prof = []; const n = 10;
+      for (let i = 0; i <= n; i++) { const y = 0.02 + (DOOR_H) * i / n; prof.push([Math.min(wallX(y), R) - 0.02, y]); }
+      const geo = sweepProfile(prof, -DOOR_W / 2, DOOR_W / 2, { uScale: DOOR_W, vScale: DOOR_H, flipX: d.side < 0, invert: d.side > 0 });
+      // uv fix: swap so texture is upright (u across width, v up)
+      const pivot = new THREE.Group(); pivot.position.set(0, 0, d.z);
+      const mesh = new THREE.Mesh(geo, doorMat); mesh.castShadow = true; mesh.receiveShadow = true;
+      pivot.add(mesh); g.add(pivot);
+      // door surround (upper wall where bins are absent)
+      const up = sweepProfile([[wallX(CAB.binBottomY), CAB.binBottomY], [wallX(2.0) - 0.02, 2.0], [0.86, 2.13]], d.z - 0.75, d.z + 0.75, { flipX: d.side < 0, invert: true });
+      g.add(new THREE.Mesh(up, this.mat.wall));
+      // door lining (frame) — dark seal around the opening
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, DOOR_H + 0.05, DOOR_W + 0.1), this._std({ color: '#d0d1d3', roughness: 0.6 }));
+      frame.position.set(d.side * (wallX(1.0) + 0.05), DOOR_H / 2, d.z); g.add(frame);
+      frame.visible = false;
+      // window in the door (small)
+      const pane = new THREE.Mesh(new THREE.CircleGeometry(0.1, 20), this.paneMat);
+      const th = thOfY(CAB.Rw, 1.38);
+      pane.position.set(d.side * (wallX(1.38) - 0.01), 1.38, 0);
+      pane.lookAt(new THREE.Vector3(0, 1.38 + Math.sin(th) * -1, 0));
+      pane.rotation.set(0, d.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0);
+      pivot.add(pane);
+      this.doors[name] = { name, side: d.side, z: d.z, pivot, mesh, open: 0, target: 0, armed: true };
+    }
+    // overwing exit hatches
+    const hatchMat = this._std({ color: '#ffffff', roughness: 0.5, map: TX.hatchTex() });
+    this.hatches = [];
+    for (const side of [-1, 1]) for (const hz of HATCH_Z) {
+      const prof = []; const n = 8;
+      for (let i = 0; i <= n; i++) { const y = 0.3 + 1.06 * i / n; prof.push([wallX(y) - 0.012, y]); }
+      const geo = sweepProfile(prof, hz - 0.255, hz + 0.255, { uScale: 0.51, vScale: 1.06, flipX: side < 0, invert: side > 0 });
+      // cut a hole for the window using alpha map
+      const m = new THREE.Mesh(geo, hatchMat); m.castShadow = true; g.add(m);
+      this.hatches.push({ side, z: hz, mesh: m });
+    }
+    hatchMat.alphaTest = 0.5;
+    hatchMat.alphaMap = TX.canvasTex(64, 128, (gg, w, h) => {
+      gg.fillStyle = '#fff'; gg.fillRect(0, 0, w, h);
+      // window hole: hatch spans y 0.3..1.36, window centre at winY
+      const v0 = (CAB.winY - CAB.winH / 2 - 0.3) / 1.06, v1 = (CAB.winY + CAB.winH / 2 - 0.3) / 1.06;
+      const u0 = (0.255 - CAB.winW / 2) / 0.51, u1 = (0.255 + CAB.winW / 2) / 0.51;
+      gg.fillStyle = '#000'; TX.rr(gg, u0 * w, (1 - v1) * h, (u1 - u0) * w, (v1 - v0) * h, 10); gg.fill();
+    }, { srgb: false });
+  }
+
+  // --------------- signs (PSU pictograms, EXIT) ---------------
+  _buildSigns() {
+    const g = this.group;
+    const beltTex = TX.signTexture('belt'), smokeTex = TX.signTexture('nosmoke');
+    const mkSignMat = (tex) => { const m = new THREE.MeshStandardMaterial({ color: '#222', emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 1, roughness: 0.4, map: tex }); return m; };
+    this.beltSignMat = mkSignMat(beltTex); this.smokeSignMat = mkSignMat(smokeTex);
+    const geo = new THREE.PlaneGeometry(0.09, 0.045);
+    const yb = CAB.binBottomY;
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < ROWS.length; k += 2) {
+        const r = ROWS[k];
+        const z = rowZ(r) - 0.46;
+        for (const [j, mat] of [[0, this.beltSignMat], [1, this.smokeSignMat]]) {
+          const m = new THREE.Mesh(geo, mat);
+          const x = side * (1.05 + 0.02);
+          m.position.set(side * 1.1, yb + 0.034, z + (j ? 0.1 : 0));
+          m.rotation.x = Math.PI / 2; m.rotation.z = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+          m.rotation.y = side * -0.06;
+          g.add(m);
+        }
+      }
+    }
+    // EXIT signs hanging from the ceiling (double-sided)
+    const exitTex = TX.exitSignTexture();
+    const exitMat = new THREE.MeshBasicMaterial({ map: exitTex, side: THREE.DoubleSide });
+    this.exitMat = exitMat;
+    for (const z of [-1.1, (HATCH_Z[0] + HATCH_Z[1]) / 2, 23.7]) {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.105), exitMat);
+      s.position.set(0, 2.08, z); g.add(s);
+    }
+    // life vest placards on seat backs are in texture; "EXIT" placards next to hatches
+    for (const side of [-1, 1]) for (const hz of HATCH_Z) {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.075), exitMat);
+      s.position.set(side * (wallX(1.5) - 0.01), 1.5, hz); s.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(s);
+    }
+  }
+
+  setSigns(belt, smoke = true) {
+    this.beltSignMat.emissiveIntensity = belt ? 1.4 : 0.0;
+    this.beltSignMat.color.set(belt ? '#222' : '#15171b');
+    this.smokeSignMat.emissiveIntensity = smoke ? 1.4 : 0;
+  }
+
+  // --------------- cabin lighting ---------------
+  _buildLights() {
+    this.hemi = new THREE.HemisphereLight('#fff6ea', '#39445a', 1.0);
+    this.group.add(this.hemi);
+    this.amb = new THREE.AmbientLight('#ffffff', 0.25);
+    this.group.add(this.amb);
+    // two long ceiling "light lines" approximated by a few point lights along the aisle (no shadows)
+    this.pl = [];
+    for (let i = 0; i < 4; i++) {
+      const l = new THREE.PointLight('#fff4e6', 1.0, 9, 1.6);
+      l.position.set(0, 2.0, 1 + i * 6.5); this.group.add(l); this.pl.push(l);
+    }
+    // reading light for the player's seat (spot)
+    this.readingLight = new THREE.SpotLight('#fff3dd', 0, 2.4, 0.38, 0.6, 1.5);
+    this.group.add(this.readingLight); this.group.add(this.readingLight.target);
+  }
+
+  setLighting(level, moodColor, daylight = 0) {
+    this.lightLevel = level;
+    this.mood.set(moodColor);
+    const L = level;
+    this.hemi.color.copy(this.mood); this.hemi.intensity = 0.45 * L + 0.2 * daylight + 0.02;
+    this.hemi.groundColor.set('#3a4458').multiplyScalar(0.6 + daylight * 0.4);
+    this.amb.intensity = 0.12 * L + 0.18 * daylight + 0.015;
+    for (const l of this.pl) { l.color.copy(this.mood); l.intensity = 2.2 * L; }
+    for (const m of this.coveMats || []) m.color.copy(this.mood).multiplyScalar((0.35 + 1.4 * L) * m.userData.k);
+    this.exitMat.color.setScalar(L < 0.3 ? 1.4 : 1.1);
+    for (const m of this.psuMats || []) { m.emissive.copy(this.mood); m.emissiveIntensity = 0.05 + 0.2 * L; }
+  }
+
+  update(dt) {
+    for (const w of this.windows) {
+      if (Math.abs(w.shade - w.shadeTarget) > 1e-3) { w.shade += Math.sign(w.shadeTarget - w.shade) * Math.min(Math.abs(w.shadeTarget - w.shade), dt * 1.6); this.setShade(w, w.shadeTarget, false); this.setShadeInternal(w); }
+    }
+    for (const b of this.bins) {
+      if (Math.abs(b.open - b.target) > 1e-3) { b.open += Math.sign(b.target - b.open) * Math.min(Math.abs(b.target - b.open), dt * 2.2); }
+      b.pivot.rotation.z = b.side * b.open * 1.05;
+    }
+    for (const l of this.lavs) {
+      if (Math.abs(l.open - l.target) > 1e-3) l.open += Math.sign(l.target - l.open) * Math.min(Math.abs(l.target - l.open), dt * 2.5);
+      l.door.rotation.y = -Math.sign(l.cx) * l.open * 1.35 * (l.doorFace < 0 ? -1 : 1);
+      l.indicator.material.color.set(l.occupied ? '#e74c3c' : '#2ecc71');
+    }
+    for (const d of Object.values(this.doors)) {
+      if (Math.abs(d.open - d.target) > 1e-3) d.open += Math.sign(d.target - d.open) * Math.min(Math.abs(d.target - d.open), dt * 0.35);
+      // A320 doors lift slightly, move outboard, then swing forward
+      const o = d.open;
+      d.pivot.position.set(d.side * Math.min(o * 3, 1) * 0.25, Math.min(o * 3, 1) * 0.03, d.z - Math.max(0, o - 0.33) * 1.2);
+      d.pivot.rotation.y = d.side * Math.max(0, o - 0.33) * 1.3;
+    }
+  }
+  setShadeInternal(w) {
+    const R = CAB.Rw + 0.025;
+    const off = ((1 - w.shade) * (CAB.winH + 0.02)) / R;
+    w.shadeRoot.rotation.z = w.side > 0 ? w.th + off : -(w.th + off);
+    w.shadeMesh.visible = w.shade > 0.02;
+  }
+}
