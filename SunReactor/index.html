@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HELIOS-1 Control Room</title>
+<meta name="description" content="Main control room simulator for a D-T spherical tokamak power plant that confines a star in a magnetic bottle and feeds the Solhavn grid.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Saira+Stencil+One&display=swap">
+<link rel="stylesheet" href="css/mcr.css">
+</head>
+<body>
+<!--BODY-START-->
+<div id="app">
+
+<header class="topbar" aria-label="Instructor station">
+  <div class="ident">
+    <span class="plant">HELIOS-1</span>
+    <span class="unit">UNIT 1 · MAIN CONTROL ROOM<br><small>SPHERICAL TOKAMAK POWER PLANT · D-T · SOLHAVN 400 kV</small></span>
+  </div>
+  <div class="clock" aria-live="off"><span id="clock">05:00:00</span><small id="simstate">RUN ×1</small></div>
+  <div class="instructor">
+    <div class="ibox" role="group" aria-label="Initial conditions">
+      <span class="ilabel">INITIAL CONDITION</span>
+      <button class="ibtn" data-ic="1" title="Plant shut down, magnets warm, Solhavn on emergency imports">IC-1 SHUTDOWN</button>
+      <button class="ibtn" data-ic="2" title="Magnets at field, CS charged, vessel pumped. Ready for breakdown">IC-2 READY</button>
+      <button class="ibtn" data-ic="3" title="Burning D-T plasma, generator on line, following grid demand">IC-3 FULL POWER</button>
+    </div>
+    <div class="ibox" role="group" aria-label="Simulation speed">
+      <span class="ilabel">SIM</span>
+      <button class="ibtn" id="freeze" title="Freeze or run the simulation">FREEZE</button>
+      <button class="ibtn spd" data-speed="1">×1</button>
+      <button class="ibtn spd" data-speed="5">×5</button>
+      <button class="ibtn spd" data-speed="20">×20</button>
+      <button class="ibtn spd" data-speed="60">×60</button>
+    </div>
+    <div class="ibox" role="group" aria-label="Malfunctions">
+      <span class="ilabel">MALFUNCTION</span>
+      <select id="malf" aria-label="Malfunction to insert">
+        <option value="">— select —</option>
+        <option value="pumpA">PHTS pump P-1A trip</option>
+        <option value="pumpB">PHTS pump P-1B trip</option>
+        <option value="cryo">Cryoplant compressor trip</option>
+        <option value="vs">Vertical stability power supply fault</option>
+        <option value="fwA">Feedwater pump FW-A trip</option>
+        <option value="cw">Circulating water pumps trip</option>
+        <option value="pellet">Pellet injector jam</option>
+        <option value="rmp">RMP coil power supply fault</option>
+        <option value="nbi">NBI ion source arc-down</option>
+        <option value="isp">Isotope separation column fault</option>
+        <option value="exc">Generator excitation loss</option>
+        <option value="dms">DMS gas valves fail to open</option>
+        <option value="lova">Vessel window crack (air ingress)</option>
+      </select>
+      <button class="ibtn" id="malfIns">INSERT</button>
+      <button class="ibtn" id="malfClr" title="Clear all active malfunctions">CLEAR</button>
+    </div>
+    <div class="ibox" role="group" aria-label="Operator aids">
+      <button class="ibtn" id="explain" aria-pressed="false" title="When on, tapping any control explains it instead of operating it">EXPLAIN</button>
+      <button class="ibtn" id="sound" aria-pressed="false" title="Alarm horn and switch sounds">SOUND OFF</button>
+    </div>
+  </div>
+</header>
+
+<main class="room">
+
+  <!-- ===================== VERTICAL BOARDS ===================== -->
+  <section class="board annun" aria-label="Annunciator panel">
+    <div class="strip"><h2>ANNUNCIATOR PANEL · UA-1</h2>
+      <div class="annbtns">
+        <button class="pbx" id="annSil" title="Silence the horn without acknowledging">HORN<br>SILENCE</button>
+        <button class="pbx" id="annAck" title="Acknowledge flashing windows">ACK</button>
+        <button class="pbx" id="annReset" title="Reset cleared windows (slow flashing)">RESET</button>
+        <button class="pbx" id="annTest" title="Light every window to check the lamps">LAMP<br>TEST</button>
+      </div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <div class="vgrid">
+    <section class="board cam" aria-label="In-vessel camera">
+      <div class="strip"><h2>PLASMA VIEW · CAM-07 · SYNTHETIC CUTAWAY</h2>
+        <button class="pbx sm" id="camField" aria-pressed="true" title="Overlay the helical magnetic field lines">FIELD<br>LINES</button>
+      </div>
+      <div class="camwrap"><canvas id="camera" width="960" height="600" aria-label="Live view of the plasma: a miniature sun held in the magnetic cage"></canvas></div>
+      <div class="keyrow" id="keyrow"></div>
+    </section>
+
+    <section class="board mimic" aria-label="Mimic panel">
+      <div class="strip"><h2>MIMIC PANEL · PLANT FLOW SCHEMATIC</h2><span class="legendnote">RED LAMP = RUNNING / OPEN · GREEN = STOPPED / CLOSED</span></div>
+      <div class="mimicwrap">
+      <svg id="mimicSvg" viewBox="0 0 1120 560" role="img" aria-label="Plant schematic showing reactor, primary coolant loop, steam generator, turbine, condenser, feedwater and grid connection">
+        <defs>
+          <radialGradient id="mmPlasmaGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#fff6d0"/>
+            <stop offset="55%" stop-color="#ffb347"/>
+            <stop offset="100%" stop-color="#d4431a"/>
+          </radialGradient>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#1c2420"/>
+          </marker>
+        </defs>
+
+        <!-- Cryoplant and heating supplies -->
+        <g class="box" id="mm-cryo"><rect x="30" y="28" width="140" height="54" rx="3"/><text x="100" y="50" class="bl">CRYOPLANT</text><text x="100" y="68" class="bs">20 K HELIUM</text><circle class="lamp" cx="160" cy="38" r="5"/></g>
+        <text class="tag" x="100" y="100" id="mt-coil">— K</text>
+        <path class="pipe p-he" data-flow="cryo" d="M100,82 L100,120 L175,120 L175,158"/>
+
+        <g class="box" id="mm-heat"><rect x="215" y="28" width="170" height="54" rx="3"/><text x="300" y="50" class="bl">HEATING &amp; CD</text><text x="300" y="68" class="bs">NBI · ECRH · ICRH</text><circle class="lamp" cx="375" cy="38" r="5"/></g>
+        <text class="tag" x="300" y="100" id="mt-heat">0 MW</text>
+        <path class="pipe p-heat" data-flow="heat" d="M300,82 L300,128 L238,128 L238,160"/>
+
+        <!-- Reactor -->
+        <g id="mm-reactor">
+          <ellipse cx="200" cy="285" rx="112" ry="132" class="cryostat"/>
+          <ellipse cx="200" cy="285" rx="92" ry="112" class="vessel"/>
+          <circle id="mm-plasma" cx="200" cy="285" r="70" fill="url(#mmPlasmaGrad)" opacity="0.15"/>
+          <rect x="192" y="168" width="16" height="234" class="column"/>
+          <text x="200" y="440" class="bl">HELIOS-1 REACTOR</text>
+          <text x="200" y="456" class="bs">BLANKET · DIVERTOR</text>
+          <text class="tag" x="200" y="232" id="mt-pl">NO PLASMA</text>
+          <text class="tag" x="200" y="346" id="mt-fw">FW — °C</text>
+        </g>
+
+        <!-- Fuel / exhaust -->
+        <g class="box" id="mm-fuel"><rect x="20" y="484" width="170" height="56" rx="3"/><text x="105" y="506" class="bl">TRITIUM PLANT</text><text x="105" y="524" class="bs">FUEL STORE · ISOTOPE SEP.</text><circle class="lamp" cx="180" cy="494" r="5"/></g>
+        <path class="pipe p-fuel" data-flow="fuel" d="M80,484 L80,380 L110,380"/>
+        <g class="valve" id="mv-gis" transform="translate(80,440) rotate(90)"><path d="M-10,-7 L10,7 L10,-7 L-10,7 Z"/></g>
+        <text class="vlabel" x="60" y="444" text-anchor="end">GIS</text>
+        <text class="tag" x="80" y="366" id="mt-fuel" text-anchor="middle">0 Pa·m³/s</text>
+        <path class="pipe p-fuel" data-flow="exhaust" d="M284,372 L300,372 L300,488"/>
+        <g class="box" id="mm-pump"><rect x="236" y="488" width="128" height="44" rx="3"/><text x="300" y="507" class="bl">TORUS CRYOPUMPS</text><text x="300" y="523" class="bs" id="mt-vac">— Pa</text><circle class="lamp" cx="355" cy="497" r="5"/></g>
+        <path class="pipe p-fuel" data-flow="exhaust" d="M236,512 L190,512"/>
+
+        <!-- Primary loop -->
+        <path class="pipe p-pri" data-flow="phts" d="M300,235 L440,235"/>
+        <text class="tag" x="345" y="226" id="mt-thot">— °C</text>
+        <g id="mm-prz"><rect x="380" y="130" width="26" height="54" rx="13" class="vessel2"/><path class="pipe p-pri thin" d="M393,184 L393,235"/></g>
+        <text class="tag" x="393" y="122" id="mt-prz">— MPa</text>
+        <text class="vlabel" x="412" y="160">PZR</text>
+
+        <g id="mm-sg"><rect x="440" y="150" width="64" height="250" rx="30" class="vessel2"/><text x="472" y="280" class="bl vert">SG-1</text></g>
+        <text class="tag" x="472" y="418" id="mt-sgl">L —%</text>
+
+        <path class="pipe p-pri" data-flow="phts" d="M472,400 L472,432 L330,432 L330,340 L300,340"/>
+        <path class="pipe p-pri" data-flow="phtsB" d="M440,432 L440,480 L360,480 L360,432"/>
+        <g class="pump" id="mp-1a" transform="translate(395,432)"><circle r="14"/><path d="M-6,-8 L9,0 L-6,8 Z"/></g>
+        <g class="pump" id="mp-1b" transform="translate(400,480)"><circle r="14"/><path d="M-6,-8 L9,0 L-6,8 Z"/></g>
+        <text class="vlabel" x="395" y="424" text-anchor="middle" dy="-12">P-1A</text>
+        <text class="vlabel" x="400" y="509" text-anchor="middle">P-1B</text>
+        <text class="tag" x="338" y="360" id="mt-tcold" text-anchor="start">— °C</text>
+        <text class="tag" x="338" y="378" id="mt-flow" text-anchor="start">— kg/s</text>
+
+        <!-- Steam -->
+        <path class="pipe p-steam" data-flow="steam" d="M472,150 L472,80 L545,80"/>
+        <g class="valve" id="mv-msiv" transform="translate(560,80)"><path d="M-12,-8 L12,8 L12,-8 L-12,8 Z"/></g>
+        <text class="vlabel" x="560" y="64">MSIV</text>
+        <path class="pipe p-steam" data-flow="steamT" d="M572,80 L690,80"/>
+        <path class="pipe p-steam thin" d="M600,80 L600,40"/>
+        <g class="valve" id="mv-srv" transform="translate(600,52) rotate(90)"><path d="M-8,-6 L8,6 L8,-6 L-8,6 Z"/></g>
+        <text class="vlabel" x="612" y="44">SRV → ATM</text>
+        <text class="tag" x="505" y="100" id="mt-sgp">— MPa</text>
+        <g class="valve" id="mv-tv" transform="translate(700,80)"><path d="M-10,-7 L10,7 L10,-7 L-10,7 Z"/></g>
+        <text class="vlabel" x="700" y="64">TV</text>
+        <path class="pipe p-steam" data-flow="steamT" d="M710,80 L728,80"/>
+        <path class="turbine hp" d="M728,62 L760,52 L760,108 L728,98 Z"/>
+        <path class="turbine lp" d="M768,50 L850,34 L850,126 L768,110 Z"/>
+        <text x="744" y="84" class="bs">HP</text><text x="810" y="84" class="bs">LP</text>
+        <path class="shaft" d="M760,80 L768,80 M850,80 L922,80"/>
+        <text class="tag" x="886" y="70" id="mt-rpm">0 rpm</text>
+        <g id="mm-gen"><circle cx="950" cy="80" r="28" class="gen"/><text x="950" y="86" class="bl">G</text></g>
+        <path class="pipe p-elec" d="M978,80 L1010,80"/>
+        <g id="mb-52g" class="breaker"><rect x="1010" y="70" width="20" height="20"/></g>
+        <text class="vlabel" x="1020" y="62">52G</text>
+        <path class="pipe p-elec" d="M1030,80 L1054,80"/>
+        <circle cx="1062" cy="80" r="9" class="xfmr"/><circle cx="1074" cy="80" r="9" class="xfmr"/>
+        <path class="pipe p-elec" d="M1083,80 L1100,80 L1100,24" marker-end="url(#arrow)"/>
+        <text class="bl" x="1060" y="18" text-anchor="end">SOLHAVN 400 kV</text>
+        <text class="tag" x="950" y="128" id="mt-gen">0 MW</text>
+        <path class="pipe p-elec thin" d="M994,80 L994,160 L1010,160"/>
+        <g class="box" id="mm-house"><rect x="1010" y="142" width="96" height="40" rx="3"/><text x="1058" y="159" class="bs">HOUSE LOAD</text><text x="1058" y="174" class="bs" id="mt-house">— MW</text></g>
+
+        <!-- Steam dump -->
+        <path class="pipe p-steam" data-flow="dump" d="M640,80 L640,282 L700,282"/>
+        <g class="valve" id="mv-dump" transform="translate(640,180) rotate(90)"><path d="M-10,-7 L10,7 L10,-7 L-10,7 Z"/></g>
+        <text class="vlabel" x="654" y="176">DUMP</text>
+        <path class="pipe p-steam" data-flow="exhaustLP" d="M810,126 L810,250"/>
+
+        <!-- Condenser -->
+        <g id="mm-cond"><rect x="700" y="250" width="200" height="64" rx="6" class="vessel2"/><text x="800" y="278" class="bl">CONDENSER</text><text x="800" y="296" class="bs" id="mt-pc">— kPa</text></g>
+        <path class="pipe p-cw" data-flow="cw" d="M1090,270 L900,270"/>
+        <path class="pipe p-cw" data-flow="cw" d="M900,296 L1090,296"/>
+        <g class="pump" id="mp-cw" transform="translate(1000,270)"><circle r="12"/><path d="M5,-7 L-8,0 L5,7 Z"/></g>
+        <text class="vlabel" x="1000" y="252" text-anchor="middle">CW PUMPS</text>
+        <text class="vlabel" x="1080" y="322" text-anchor="end">SEA WATER</text>
+
+        <!-- Feedwater -->
+        <path class="pipe p-fw" data-flow="fw" d="M800,314 L800,440 L620,440"/>
+        <path class="pipe p-fw" data-flow="fwB" d="M780,440 L780,500 L680,500 L680,440"/>
+        <g class="pump" id="mp-fwa" transform="translate(730,440)"><circle r="13"/><path d="M5,-7 L-8,0 L5,7 Z"/></g>
+        <g class="pump" id="mp-fwb" transform="translate(730,500)"><circle r="13"/><path d="M5,-7 L-8,0 L5,7 Z"/></g>
+        <text class="vlabel" x="730" y="420" text-anchor="middle">FW-A</text>
+        <text class="vlabel" x="730" y="528" text-anchor="middle">FW-B</text>
+        <g class="valve" id="mv-fw" transform="translate(600,440)"><path d="M-10,-7 L10,7 L10,-7 L-10,7 Z"/></g>
+        <text class="vlabel" x="600" y="464" text-anchor="middle">FRV</text>
+        <path class="pipe p-fw" data-flow="fw" d="M588,440 L540,440 L540,330 L504,330"/>
+        <text class="tag" x="620" y="424" id="mt-fwf">— kg/s</text>
+
+        <!-- Legend -->
+        <g class="legend" transform="translate(470,516)">
+          <path class="pipe p-pri" d="M0,0 L22,0"/><text x="28" y="4">PRIMARY H₂O</text>
+          <path class="pipe p-steam" d="M112,0 L134,0"/><text x="140" y="4">STEAM</text>
+          <path class="pipe p-fw" d="M190,0 L212,0"/><text x="218" y="4">FEEDWATER</text>
+          <path class="pipe p-cw" d="M296,0 L318,0"/><text x="324" y="4">SEA WATER</text>
+          <path class="pipe p-fuel" d="M404,0 L426,0"/><text x="432" y="4">D/T FUEL</text>
+          <path class="pipe p-he" d="M0,22 L22,22"/><text x="28" y="26">HELIUM</text>
+          <path class="pipe p-heat" d="M112,22 L134,22"/><text x="140" y="26">RF / BEAMS</text>
+          <path class="pipe p-elec" d="M190,22 L212,22"/><text x="218" y="26">ELECTRICAL</text>
+        </g>
+      </svg>
+      </div>
+    </section>
+
+    <section class="board meters" aria-label="Plasma meters">
+      <div class="strip"><h2>PLASMA INSTRUMENTATION · EDGEWISE METERS</h2></div>
+      <div class="meterbank" id="meterbank"></div>
+    </section>
+
+    <section class="board scada" aria-label="SCADA display">
+      <div class="strip"><h2>SCADA · OPERATOR WORKSTATION OWS-2</h2></div>
+      <div class="crt">
+        <div class="tabs" role="tablist" id="tabs">
+          <button role="tab" data-tab="proc">PROCEDURE</button>
+          <button role="tab" data-tab="trend">TRENDS</button>
+          <button role="tab" data-tab="plasma">PLASMA</button>
+          <button role="tab" data-tab="prot">PROTECTION</button>
+          <button role="tab" data-tab="fuel">FUEL CYCLE</button>
+          <button role="tab" data-tab="events">EVENTS</button>
+        </div>
+        <div class="pane" id="pane-proc" role="tabpanel"></div>
+        <div class="pane" id="pane-trend" role="tabpanel">
+          <div class="trendbar"><span>WINDOW</span>
+            <button data-win="300">5 MIN</button><button data-win="900">15 MIN</button><button data-win="3600">60 MIN</button>
+          </div>
+          <div class="trendwrap"><canvas id="trends" aria-label="Strip-chart trends"></canvas><div class="tip" id="trendTip" hidden></div></div>
+        </div>
+        <div class="pane" id="pane-plasma" role="tabpanel"></div>
+        <div class="pane" id="pane-prot" role="tabpanel"></div>
+        <div class="pane" id="pane-fuel" role="tabpanel"></div>
+        <div class="pane" id="pane-events" role="tabpanel"><ol class="soe" id="soe"></ol></div>
+      </div>
+    </section>
+
+    <section class="board eq" aria-label="Plasma equilibrium">
+      <div class="strip"><h2>EQUILIBRIUM · POLOIDAL CROSS-SECTION</h2></div>
+      <div class="eqwrap"><canvas id="equil" aria-label="Poloidal cross-section of the plasma with flux surfaces"></canvas></div>
+      <dl class="eqvals" id="eqvals"></dl>
+    </section>
+
+    <section class="board sol" aria-label="Comparison with the real Sun">
+      <div class="strip"><h2>SOL REFERENCE · THE REAL SUN vs. HELIOS-1 PLASMA</h2></div>
+      <div class="solbody">
+        <p class="solhead" id="solHead">—</p>
+        <div class="tablewrap"><table class="soltab"><thead><tr><th>Quantity</th><th>Sun's core</th><th>HELIOS-1 now</th><th>Ratio</th></tr></thead><tbody id="solRows"></tbody></table></div>
+        <p class="solnote" id="solNote"></p>
+      </div>
+    </section>
+
+    <section class="board gridp" aria-label="Solhavn grid">
+      <div class="strip"><h2>SOLHAVN 400 kV GRID · DISPATCH</h2><span class="legendnote" id="dispMsg">No dispatch instructions</span></div>
+      <div class="gridbody">
+        <div class="skywrap"><canvas id="skyline" width="900" height="260" aria-label="Solhavn city districts, lit when supplied"></canvas></div>
+        <div class="gridstats" id="gridstats"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== BENCHBOARD ===================== -->
+  <section class="benchboard" aria-label="Benchboard controls">
+    <div class="benchlip"><span>BENCHBOARD · OPERATOR CONSOLE C-1</span></div>
+    <div class="bench" id="bench"></div>
+  </section>
+
+</main>
+
+<div class="infobar" id="infobar" role="status" aria-live="polite"><span class="ititle" id="infoTitle">OPERATOR AID</span><span id="infoText">Load an initial condition from the instructor station, or follow PROCEDURE OP-101 on the SCADA screen.</span><button class="x" id="infoX" aria-label="Hide operator aid">×</button></div>
+
+</div>
+<!--BODY-END-->
+<script src="js/engine.js"></script>
+<script src="js/render.js"></script>
+<script src="js/mcr.js"></script>
+</body>
+</html>
