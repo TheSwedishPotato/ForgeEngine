@@ -64,14 +64,33 @@ function concreteTexture() {
     g.strokeStyle = 'rgba(40,40,40,0.5)'; g.lineWidth = 1.5;
     for (let x = 0; x <= w; x += 64) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
     for (let y = 0; y <= h; y += 64) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
-    g.fillStyle = 'rgba(30,30,30,0.15)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 20, 8, Math.random() * 3, 0, 7); g.fill(); }
+    for (let i = 0; i < 5; i++) { g.fillStyle = `rgba(30,30,30,${0.03 + Math.random() * 0.05})`; g.beginPath(); g.ellipse(Math.random() * w, Math.random() * h, 6 + Math.random() * 16, 3 + Math.random() * 6, Math.random() * 3, 0, 7); g.fill(); }
+  }, { repeat: true });
+}
+
+// Lit interiors after dark: departure halls glow warm behind the curtain wall, offices are a patchwork.
+function facadeLights(kind = 'glass') {
+  return canvasTex(256, 128, (g, w, h) => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+    if (kind === 'glass') {
+      for (const [y0, y1] of [[0.52, 0.98], [0.04, 0.46]]) {
+        const gr = g.createLinearGradient(0, h * y0, 0, h * y1); gr.addColorStop(0, 'rgba(255,236,200,0.95)'); gr.addColorStop(1, 'rgba(160,140,110,0.45)');
+        g.fillStyle = gr; g.fillRect(0, h * y0, w, h * (y1 - y0));
+      }
+      g.fillStyle = '#000'; for (let x = 0; x < w; x += 16) g.fillRect(x, 0, 2, h);
+      g.fillStyle = 'rgba(0,0,0,0.6)'; for (let i = 0; i < 10; i++) g.fillRect(Math.random() * w, h * 0.55, 6 + Math.random() * 18, h * 0.43); // people, columns, shops
+    } else if (kind === 'office') {
+      for (let y = 6; y < h; y += 16) for (let x = 4; x < w; x += 12) if (Math.random() < 0.42) { g.fillStyle = Math.random() < 0.7 ? '#ffe7b0' : '#d8ecff'; g.fillRect(x, y, 8, 9); }
+    } else if (kind === 'hangar') {
+      g.fillStyle = 'rgba(255,240,210,0.8)'; for (let x = 20; x < w; x += 64) g.fillRect(x, h * 0.1, 8, 4);
+    }
   }, { repeat: true });
 }
 
 function facadeTexture(kind = 'glass') {
   return canvasTex(256, 128, (g, w, h) => {
     if (kind === 'glass') {
-      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#6f8597'); gr.addColorStop(1, '#3d4e5c'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#8b9eae'); gr.addColorStop(1, '#55687a'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
       g.fillStyle = 'rgba(220,230,240,0.35)'; for (let x = 0; x < w; x += 16) g.fillRect(x, 0, 2, h);
       g.fillStyle = 'rgba(30,35,40,0.6)'; g.fillRect(0, h * 0.48, w, 3);
     } else if (kind === 'office') {
@@ -219,11 +238,11 @@ export class Scenery {
     this.traffic = [];
     this.mats = {
       runway: null,
-      taxi: curveMaterial(new THREE.MeshStandardMaterial({ map: taxiTexture(), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })),
-      concrete: curveMaterial(new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.92, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })),
-      glass: curveMaterial(new THREE.MeshStandardMaterial({ map: facadeTexture('glass'), roughness: 0.2, metalness: 0.5 })),
-      office: curveMaterial(new THREE.MeshStandardMaterial({ map: facadeTexture('office'), roughness: 0.7 })),
-      hangar: curveMaterial(new THREE.MeshStandardMaterial({ map: facadeTexture('hangar'), roughness: 0.6 })),
+      taxi: curveMaterial(new THREE.MeshStandardMaterial({ map: taxiTexture(), roughness: 0.9, emissive: '#ffe6c4', emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })),
+      concrete: curveMaterial(new THREE.MeshStandardMaterial({ map: concreteTexture(), roughness: 0.92, emissive: '#ffe6c4', emissiveIntensity: 0, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })),
+      glass: curveMaterial(new THREE.MeshStandardMaterial({ map: facadeTexture('glass'), roughness: 0.12, metalness: 0.35, emissive: '#ffffff', emissiveMap: facadeLights('glass'), emissiveIntensity: 0 })),
+      office: curveMaterial(new THREE.MeshStandardMaterial({ map: facadeTexture('office'), roughness: 0.7, emissive: '#ffffff', emissiveMap: facadeLights('office'), emissiveIntensity: 0 })),
+      hangar: curveMaterial(new THREE.MeshStandardMaterial({ map: facadeTexture('hangar'), roughness: 0.6, emissive: '#ffffff', emissiveMap: facadeLights('hangar'), emissiveIntensity: 0 })),
       roof: curveMaterial(new THREE.MeshStandardMaterial({ color: '#8e9296', roughness: 0.8 })),
       white: curveMaterial(new THREE.MeshStandardMaterial({ color: '#e8e9ea', roughness: 0.55 })),
       bridge: curveMaterial(new THREE.MeshStandardMaterial({ color: '#b8bbbd', roughness: 0.6 })),
@@ -232,6 +251,7 @@ export class Scenery {
       dark: curveMaterial(new THREE.MeshStandardMaterial({ color: '#2d3036', roughness: 0.8 })),
       vehicle: curveMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 })),
     };
+    for (const k of ['concrete', 'taxi']) this.mats[k].emissiveMap = this.mats[k].map; // floodlight keeps the slab joints and markings
     this.sun = new THREE.DirectionalLight('#ffffff', 2); this.sun.position.set(0, 1, 0); this.scene.add(this.sun, this.sun.target);
     this.hemi = new THREE.HemisphereLight('#bfd4ff', '#4d5540', 0.6); this.scene.add(this.hemi);
     this._airportARN();
@@ -781,6 +801,11 @@ export class Scenery {
     this.hemi.groundColor.setRGB(0.18, 0.2, 0.14).multiplyScalar(env.day + 0.05);
     const lm = this.lightPoints.material.uniforms;
     lm.uNightVis.value = lerp(0.035, 1.0, smoothstep(0.1, 0.9, env.nightK + (env.belowOvercast ? 0.25 : 0)));
+    // building interiors show through the glass as daylight fades
+    const lit = smoothstep(0.05, 0.7, env.nightK + (env.belowOvercast ? 0.15 : 0));
+    this.mats.glass.emissiveIntensity = 0.06 + 0.9 * lit;
+    // high-mast apron floodlights (LED, warm white) lift the stands and taxilanes after dark
+    this.mats.concrete.emissiveIntensity = 0.05 * lit; this.mats.taxi.emissiveIntensity = 0.025 * lit; this.mats.office.emissiveIntensity = 0.7 * lit; this.mats.hangar.emissiveIntensity = 0.6 * lit;
     lm.uPx.value = this.pixelRatio || 1;
     // turbine rotors
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();

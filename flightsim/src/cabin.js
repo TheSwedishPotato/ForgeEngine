@@ -694,6 +694,30 @@ export class Cabin {
     this.group.add(this.readingLight); this.group.add(this.readingLight.target);
   }
 
+  // Dust motes: a cloud of tiny additive sprites around a seat, lit only where the sun comes in.
+  buildDust(seat) {
+    const N = 420, pos = new Float32Array(N * 3), seed = new Float32Array(N);
+    for (let i = 0; i < N; i++) { pos[i * 3] = seat.x + (Math.random() - 0.5) * 1.3; pos[i * 3 + 1] = 0.5 + Math.random() * 1.3; pos[i * 3 + 2] = seat.z - 1.2 + Math.random() * 2.4; seed[i] = Math.random(); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uSun: { value: 0 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSide: { value: Math.sign(seat.x) } },
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `attribute float seed; uniform float uTime, uSun, uSide; uniform vec3 uSunDir; varying float vA;
+        void main(){
+          vec3 p = position; float t = uTime * 0.12 + seed * 30.0;
+          p.x += sin(t * 1.3 + seed * 9.0) * 0.06; p.y += sin(t * 0.9 + seed * 5.0) * 0.05 - fract(t * 0.05) * 0.2 + 0.1; p.z += cos(t * 1.1 + seed * 7.0) * 0.06;
+          // only motes on the sunny side of the seat, in the band the sun reaches through the window
+          float sunny = clamp(-uSunDir.x * uSide, 0.0, 1.0) * clamp(uSunDir.y * 3.0, 0.0, 1.0);
+          vA = uSun * sunny * (0.15 + 0.85 * pow(seed, 2.0)) * smoothstep(1.9, 1.2, p.y) * smoothstep(0.35, 0.7, p.y);
+          vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+          gl_PointSize = (1.5 + seed * 2.0) * (300.0 / max(-mv.z, 0.2));
+        }`,
+      fragmentShader: `varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d, d) * 4.0; if (r > 1.0) discard; gl_FragColor = vec4(vec3(1.0, 0.96, 0.9) * (1.0 - r) * vA * 0.35, 1.0); }`,
+    });
+    this.dust = new THREE.Points(g, mat); this.dust.frustumCulled = false; this.group.add(this.dust);
+  }
+  updateDust(t, sunI, sunLocal) { if (!this.dust) return; const u = this.dust.material.uniforms; u.uTime.value = t; u.uSun.value = Math.min(1, sunI / 2.5); u.uSunDir.value.copy(sunLocal); }
+
   setLighting(level, moodColor, daylight = 0, scene = 'warm') {
     this.lightLevel = level;
     this.mood.set(moodColor);

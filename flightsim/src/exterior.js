@@ -116,6 +116,36 @@ function wingTexture() {
   });
 }
 
+// Plan-view silhouette of the airframe, blurred, for the contact shadow on the tarmac.
+// Canvas covers x -19..19 m, z -9..32 m (top = nose).
+const SH_X = 19, SH_Z0 = -9, SH_Z1 = 32;
+function shadowTexture() {
+  return canvasTex(256, 280, (g, w, h) => {
+    const X = (x) => (x + SH_X) / (2 * SH_X) * w, Z = (z) => (z - SH_Z0) / (SH_Z1 - SH_Z0) * h;
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const k = c.getContext('2d');
+    k.fillStyle = '#fff';
+    // fuselage: radome, constant section, tail cone
+    k.beginPath();
+    for (let z = -7.4; z <= 30.4; z += 0.4) { const r = z < -3.2 ? 1.99 * Math.pow(Math.min(1, (z + 7.4) / 4.2), 0.5) : z > 24 ? 1.99 * (1 - 0.8 * ((z - 24) / 6.4) ** 2) : 1.99; k.lineTo(X(r), Z(z)); }
+    for (let z = 30.4; z >= -7.4; z -= 0.4) { const r = z < -3.2 ? 1.99 * Math.pow(Math.min(1, (z + 7.4) / 4.2), 0.5) : z > 24 ? 1.99 * (1 - 0.8 * ((z - 24) / 6.4) ** 2) : 1.99; k.lineTo(X(-r), Z(z)); }
+    k.fill();
+    for (const side of [-1, 1]) {
+      // wing from the real planform
+      k.beginPath(); k.moveTo(X(0), Z(LE(S_ROOT)));
+      for (let s = S_ROOT; s <= S_TIP + 0.01; s += 0.5) k.lineTo(X(side * s), Z(LE(s)));
+      for (let s = S_TIP; s >= S_ROOT - 0.01; s -= 0.5) k.lineTo(X(side * s), Z(TE(s)));
+      k.lineTo(X(0), Z(TE(S_ROOT))); k.fill();
+      // engine nacelle and pylon
+      k.fillRect(X(side * 5.75 - 1.1), Z(2.35), X(2.2) - X(0), Z(6.4) - Z(2.35) + 1);
+      // horizontal stabiliser
+      k.beginPath(); k.moveTo(X(side * 0.9), Z(26.1)); k.lineTo(X(side * 6.2), Z(28.8)); k.lineTo(X(side * 6.2), Z(30.1)); k.lineTo(X(side * 0.9), Z(29.4)); k.fill();
+    }
+    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+    g.filter = 'blur(3px)'; g.drawImage(c, 0, 0);
+    g.filter = 'blur(9px)'; g.globalAlpha = 0.55; g.drawImage(c, 0, 0);
+  }, { srgb: false });
+}
+
 function nacelleTexture() {
   return canvasTex(1024, 512, (g, w, h) => {
     // u around circumference (0 at bottom? lathe: u=0 at +x...), v along length (front at v=0)
@@ -213,6 +243,21 @@ function finTexture() {
   });
 }
 
+// What the logo lights on top of the tailplane paint onto the fin: brightest just above the
+// stabiliser, fading towards the tip and the leading/trailing edges.
+function finGlowTexture(src) {
+  return canvasTex(512, 512, (g, w, h) => {
+    g.drawImage(src.image, 0, 0, w, h);
+    g.globalCompositeOperation = 'multiply';
+    const gy = g.createLinearGradient(0, h, 0, 0); // canvas bottom = fin root
+    gy.addColorStop(0, '#ffffff'); gy.addColorStop(0.5, '#a8a8a8'); gy.addColorStop(1, '#141414');
+    g.fillStyle = gy; g.fillRect(0, 0, w, h);
+    const gx = g.createLinearGradient(0, 0, w, 0);
+    gx.addColorStop(0, '#5a5a5a'); gx.addColorStop(0.45, '#ffffff'); gx.addColorStop(1, '#6a6a6a');
+    g.fillStyle = gx; g.fillRect(0, 0, w, h);
+  });
+}
+
 // Symmetric aerofoil surface: pts along a spanwise axis with chord/lead per station.
 function foilSurface(stations, mirrorUV = false) {
   // stations: [{p: Vector3 leading edge, chordDir: Vector3 (unit), chord, thick, thickDir: Vector3}]
@@ -271,6 +316,7 @@ export class Exterior {
     for (const side of [-1, 1]) this._buildWing(side);
     for (const side of [-1, 1]) this._buildEngine(side);
     this._buildFuselage();
+    this._buildVortices();
     this._buildLights();
     this.group.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
   }
@@ -342,12 +388,18 @@ export class Exterior {
     }
     for (let j = 0; j < nY; j++) for (let i = 0; i < 8; i++) { const a = j * 9 + i, b = a + 1, c = a + 9, d = c + 1; idx.push(a, b, c, b, d, c); }
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); sg.setIndex(idx); sg.computeVertexNormals();
-    const shark = this._add(sg, M.sharklet); shark.material = M.sharklet.clone(); shark.material.side = THREE.DoubleSide;
-    shark.material.onBeforeCompile = M.sharklet.onBeforeCompile;
+    // two single-sided skins so the "SAS" on the sharklet reads correctly from inboard and outboard
+    const pa = new THREE.Vector3().fromArray(pos, idx[0] * 3), pb = new THREE.Vector3().fromArray(pos, idx[1] * 3), pc = new THREE.Vector3().fromArray(pos, idx[2] * 3);
+    const frontOutboard = Math.sign(pb.sub(pa).cross(pc.sub(pa)).x) === side;
+    const sgFlip = sg.clone(); const fu = sgFlip.attributes.uv; for (let i = 0; i < fu.count; i++) fu.setX(i, 1 - fu.getX(i));
+    for (const [geo, face] of [[frontOutboard ? sgFlip : sg, THREE.FrontSide], [frontOutboard ? sg : sgFlip, THREE.BackSide]]) {
+      const shark = this._add(geo, M.sharklet); shark.material = M.sharklet.clone(); shark.material.side = face;
+      shark.material.onBeforeCompile = M.sharklet.onBeforeCompile;
+    }
     this[side < 0 ? 'tipL' : 'tipR'] = new THREE.Vector3(side * S_TIP, tip.y + 0.1, LE(S_TIP) + 0.6);
     // wing-body fairing
     const fair = new THREE.SphereGeometry(1, 24, 14, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55);
-    fair.scale(2.35, 1.35, 6.4); fair.translate(0, -1.45, 9.8);
+    fair.scale(2.3, 1.05, 6.3); fair.translate(0, -0.2, 9.8); // shallow wing-to-body fairing housing the main gear bays
     if (side > 0) this._add(fair, M.fairing);
   }
 
@@ -409,6 +461,7 @@ export class Exterior {
   }
 
   _buildFuselage() {
+    this.doorPlugs = {};
     const holes = [];
     for (const w of windowList()) {
       if (w.side > 0) continue;
@@ -444,12 +497,35 @@ export class Exterior {
       }
       for (let j = 0; j < nz; j++) for (let i = 0; i < na; i++) {
         const a = j * (na + 1) + i, b = a + 1, c = a + na + 1, d = c + 1;
-        if (side > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c);
+        if (side > 0) idx.push(a, b, c, b, d, c); else idx.push(a, c, b, b, c, d); // outward-facing on both sides
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
       const mat = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#ffffff', map: tex.color, alphaMap: tex.alpha, alphaTest: 0.5, roughness: 0.36, metalness: 0.32 }));
       this._add(g, mat);
+      // closed doors: skin plugs over the door cut-outs (the painted outline shows the seams)
+      const plugMat = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#ffffff', map: tex.color, roughness: 0.36, metalness: 0.32 }));
+      for (const d of Object.values(DOORS)) {
+        if (d.side !== side) continue;
+        const a0 = Math.asin((0.0 - CAB.yc) / CAB.Rskin) - 0.01, a1 = Math.asin((DOOR_H + 0.02 - CAB.yc) / CAB.Rskin) + 0.01;
+        const pp = [], pu = [], pi = [], nzp = 4, nap = 8, rP = CAB.Rskin + 0.004;
+        for (let j = 0; j <= nzp; j++) for (let i = 0; i <= nap; i++) {
+          const z = d.z - DOOR_W / 2 - 0.01 + (DOOR_W + 0.02) * j / nzp, a = a0 + (a1 - a0) * i / nap;
+          pp.push(side * rP * Math.cos(a), CAB.yc + rP * Math.sin(a), z); pu.push((z - tex.zA) / (tex.zB - tex.zA), (a / DEG + 90) / 180);
+        }
+        for (let j = 0; j < nzp; j++) for (let i = 0; i < nap; i++) {
+          const a = j * (nap + 1) + i, b = a + 1, c = a + nap + 1, e = c + 1;
+          if (side > 0) pi.push(a, b, c, b, e, c); else pi.push(a, c, b, b, c, e);
+        }
+        const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(pp, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(pu, 2)); pg.setIndex(pi); pg.computeVertexNormals();
+        const plug = this._add(pg, plugMat);
+        this.doorPlugs[(side < 0 ? 'L' : 'R') + (d.z < 10 ? '1' : '4')] = plug;
+      }
     }
+    // what you see through the windows from outside: tinted acrylic over a dim cabin that glows
+    // warm after dark (outward-facing, so it is culled from inside the cabin)
+    this.cabinGlow = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#1b2129', roughness: 0.15, metalness: 0.4, emissive: '#ffdcaa', emissiveIntensity: 0 }));
+    const inner = new THREE.CylinderGeometry(CAB.Rskin - 0.035, CAB.Rskin - 0.035, 28.6, 40, 1, true).rotateX(Math.PI / 2);
+    this._add(inner, this.cabinGlow).position.set(0, CAB.yc, 10.7);
     const M = this.mats;
     // cockpit glazing: a dark band with six panes
     const glass = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#0e141c', roughness: 0.08, metalness: 0.6 }));
@@ -471,7 +547,8 @@ export class Exterior {
     radome.rotation.x = -Math.PI / 2; radome.scale.set(1, 1, 2.1); radome.position.set(0, Yc(-7.3), -6.9);
     // vertical fin: 5.9 m root chord, ~6.3 m high, swept 35°
     this.finTex = finTexture();
-    const finMat = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#ffffff', map: this.finTex, roughness: 0.4, metalness: 0.25 }));
+    const finMat = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#ffffff', map: this.finTex, roughness: 0.4, metalness: 0.25, emissive: '#fff3de', emissiveMap: finGlowTexture(this.finTex), emissiveIntensity: 0 }));
+    this.finMat = finMat;
     const finSt = [];
     for (let i = 0; i <= 8; i++) {
       const t = i / 8, y = 2.6 + 6.4 * t, z = 22.4 + 4.6 * t * 1.05, chord = lerp(6.1, 2.2, t), thick = lerp(0.1, 0.08, t);
@@ -492,8 +569,19 @@ export class Exterior {
     const apu = this._add(new THREE.CylinderGeometry(0.16, 0.22, 0.7, 12).rotateX(Math.PI / 2), M.dark); apu.position.set(0, Yc(30.2) + 0.1, 30.4);
     this._buildGear();
     // soft ground shadow under the aircraft (only shown on the ground)
-    this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(44, 44), new THREE.MeshBasicMaterial({ alphaMap: glowTex(), color: '#000000', transparent: true, opacity: 0.45, depthWrite: false }));
-    this.shadow.rotation.x = -Math.PI / 2; this.shadow.position.set(0, -3.36, 10); this.shadow.scale.set(1, 1.35, 1); this.group.add(this.shadow);
+    this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(2 * SH_X, SH_Z1 - SH_Z0), new THREE.MeshBasicMaterial({ alphaMap: shadowTexture(), color: '#000000', transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+    this.shadow.rotation.x = -Math.PI / 2; this.shadow.position.set(0, -3.36, (SH_Z0 + SH_Z1) / 2); this.shadow.renderOrder = -1; this.group.add(this.shadow);
+  }
+
+  // Condensation streams shed from the flap edges and engine pylons on humid days with flaps out.
+  _buildVortices() {
+    const mat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    this.vortices = [];
+    for (const side of [-1, 1]) for (const s0 of [S_KINK, 13.3, 6.3]) {
+      const p = wingPoint(side, s0, 0.9, true);
+      const g = new THREE.CylinderGeometry(0.09, 0.28, 9, 8, 1, true); g.rotateX(Math.PI / 2); g.translate(0, 0, 4.5);
+      const m = new THREE.Mesh(g, mat.clone()); m.position.set(p.x, p.y + 0.05, p.z + 0.2); this.group.add(m); this.vortices.push(m);
+    }
   }
 
   // Retractable undercarriage: twin-wheel nose leg, two twin-wheel main legs with doors.
@@ -504,23 +592,29 @@ export class Exterior {
     const strut = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#d6d9de', roughness: 0.35, metalness: 0.7 }));
     const wheel = (r, w) => { const g = new THREE.Group(); const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 20).rotateZ(Math.PI / 2), tyre); const h = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, w + 0.02, 14).rotateZ(Math.PI / 2), hub); g.add(t, h); return g; };
     this.gear = { main: [], nose: null, doors: [] };
-    // main gear: pivot at the wing root, leg down 2.4 m, wheels at y=-3.4, z=11.5 (G_LOCAL)
+    // main gear (track 7.59 m): pivot at the top of each leg under the wing; the leg folds inboard
+    // so the twin wheels lie flat in the belly bay. Tyres 46x17R20 (r 0.58), contact at G_LOCAL.y = -3.4.
     for (const side of [-1, 1]) {
-      const pivot = new THREE.Group(); pivot.position.set(side * 1.9, -1.0, 11.5); this.group.add(pivot);
-      const legLen = 2.4;
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, legLen, 10), strut); leg.position.set(side * 1.85, -legLen / 2, 0); pivot.add(leg);
-      const sideStay = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 8), strut); sideStay.position.set(side * 0.9, -1.0, 0.1); sideStay.rotation.z = side * 0.75; pivot.add(sideStay);
-      const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 8).rotateZ(Math.PI / 2), strut); axle.position.set(side * 1.85, -legLen, 0); pivot.add(axle);
-      for (const w of [-0.42, 0.42]) { const wh = wheel(0.58, 0.36); wh.position.set(side * 1.85 + w, -legLen, 0); pivot.add(wh); }
-      const door = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.2, 1.9), M.wingLower); door.position.set(side * 1.15, -0.6, 0); pivot.add(door);
+      const pivot = new THREE.Group(); pivot.position.set(side * 3.8, -0.55, 11.5); this.group.add(pivot); // rear-spar trunnion
+      const legLen = 2.27; // axle 0.58 m above the ground
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, legLen, 10), strut); leg.position.set(0, -legLen / 2, 0); pivot.add(leg);
+      const sideStay = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.53, 8), strut); sideStay.position.set(-side * 0.65, -0.62, 0.1); sideStay.rotation.z = side * 0.9; pivot.add(sideStay);
+      const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 8).rotateZ(Math.PI / 2), strut); axle.position.set(0, -legLen, 0); pivot.add(axle);
+      for (const w of [-0.42, 0.42]) { const wh = wheel(0.58, 0.36); wh.position.set(w, -legLen, 0); pivot.add(wh); }
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.5, 1.0), M.wingLower); door.position.set(side * 0.16, -1.0, 0); pivot.add(door);
       this.gear.main.push({ pivot, side });
     }
-    // nose gear: retracts forward
-    const np = new THREE.Group(); np.position.set(0, -0.9, -2.3); this.group.add(np);
-    const nl = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.1, 10), strut); nl.position.set(0, -1.05, 0); np.add(nl);
-    const drag = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8), strut); drag.position.set(0, -0.9, 0.55); drag.rotation.x = 0.7; np.add(drag);
-    for (const w of [-0.24, 0.24]) { const wh = wheel(0.36, 0.2); wh.position.set(w, -2.1 + 0.36 - 0.36, 0); wh.position.y = -2.15; np.add(wh); }
-    for (const sd of [-1, 1]) { const door = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.0, 1.6), M.wingLower); door.position.set(sd * 0.45, -0.55, 0.1); door.rotation.z = sd * 0.35; np.add(door); }
+    // nose gear: retracts forward into the bay under the flight deck
+    const np = new THREE.Group(); np.position.set(0, -0.6, -2.3); this.group.add(np);
+    const nl = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.45, 10), strut); nl.position.set(0, -1.22, 0); np.add(nl);
+    const drag = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8), strut); drag.position.set(0, -1.0, 0.55); drag.rotation.x = 0.7; np.add(drag); this.gear.drag = drag;
+    for (const w of [-0.24, 0.24]) { const wh = wheel(0.36, 0.2); wh.position.set(w, -2.45, 0); np.add(wh); }
+    // forward bay doors hinge at the bay edges: open while the gear is down, flush with the belly when up
+    for (const sd of [-1, 1]) {
+      const hinge = new THREE.Group(); hinge.position.set(sd * 0.36, -0.93, -3.0); this.group.add(hinge);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.36, 1.5), M.wingLower); door.position.y = -0.18; hinge.add(door);
+      this.gear.doors.push({ hinge, sd });
+    }
     this.gear.nose = np;
     // taxi light on the nose leg
     this.taxiLight = new THREE.SpotLight('#fff3dc', 0, 90, 0.35, 0.5, 1.1); this.taxiLight.position.set(0, -1.6, -2.4); this.taxiLight.target.position.set(0, -3.3, -40); this.group.add(this.taxiLight, this.taxiLight.target);
@@ -566,12 +660,23 @@ export class Exterior {
     this._ail = (this._ail || 0) + (clamp(bankRate * 4, -1, 1) - (this._ail || 0)) * Math.min(1, dt * 4);
     for (const ai of P.ailerons) this._setHinge(ai.pivot, -this._ail * 12 * DEG, 0, 0);
     for (const r of P.reversers) { r.sleeve.position.z = fm.reverse * 0.55; r.cascade.visible = fm.reverse > 0.05; }
+    // vortex condensation: humid air (rain / low cloud), flaps out, enough speed
+    const vk = (env.humidity || 0) * clamp(fm.flap / 20, 0, 1) * (fm.ias > 120 && !fm.onGround ? 1 : 0);
+    for (const v of this.vortices) { v.material.opacity += ((0.22 + 0.1 * Math.sin(t * 9 + v.position.x)) * vk - v.material.opacity) * Math.min(1, dt * 3); v.visible = v.material.opacity > 0.01; }
     // undercarriage: main legs fold inboard, the nose leg forward
     const gk = clamp(fm.gear, 0, 1);
-    for (const g of this.gear.main) g.pivot.rotation.z = g.side * (1 - gk) * 1.55;
-    this.gear.nose.rotation.x = -(1 - gk) * 1.5;
+    for (const g of this.gear.main) g.pivot.rotation.z = -g.side * (1 - gk) * 1.57; // inboard
+    this.gear.nose.rotation.x = (1 - gk) * 1.62; // forward
+    this.gear.drag.visible = gk > 0.35; // the drag brace folds into the bay
+    if (this.doorPlugs.L1) this.doorPlugs.L1.visible = (env.doorL1 ?? 0) < 0.02;
+    for (const d of this.gear.doors) d.hinge.rotation.z = lerp(-d.sd * Math.PI / 2, d.sd * 0.15, clamp(gk * 1.4, 0, 1));
+    // contact shadow: slides away from the sun and sharpens in direct sunlight, a soft blot under overcast
     this.shadow.visible = fm.onGround || fm.h < 60;
-    this.shadow.material.opacity = 0.45 * clamp(1 - fm.h / 60, 0, 1) * (0.4 + 0.6 * (1 - env.nightK));
+    const sl = env.sunLocal, direct = sl && sl.y > 0.08 ? clamp(env.direct ?? 1, 0, 1) : 0;
+    const hgt = 3.1 + Math.max(0, fm.h);
+    this.shadow.position.x = direct ? clamp(-sl.x / sl.y * hgt, -14, 14) * direct : 0;
+    this.shadow.position.z = (SH_Z0 + SH_Z1) / 2 + (direct ? clamp(-sl.z / sl.y * hgt, -14, 14) * direct : 0);
+    this.shadow.material.opacity = (0.34 + 0.26 * direct) * clamp(1 - fm.h / 60, 0, 1) * (0.4 + 0.6 * (1 - env.nightK));
     this.taxiLight.intensity = env.landing && fm.onGround ? 40 : 0;
     for (const f of P.fans) { const n1 = fm.n1[f.side < 0 ? 0 : 1]; f.angle += n1 * 64 * 2 * Math.PI * dt * 0.25; f.fan.rotation.z = f.angle; }
     // wing flex: up in flight with load, down on the ground; turbulence adds bounce
@@ -594,6 +699,10 @@ export class Exterior {
     const bph = (t + 0.4) % 1.1;
     const bOn = env.beacon && bph < 0.12;
     L.beaconB.visible = bOn; this.beaconLight.intensity = bOn ? 8 * (0.15 + nightK) : 0;
+    // NAV & LOGO: logo lights only work with the main gear compressed or the slats out
+    this.cabinGlow.emissiveIntensity = 0.55 * (env.cabinLight ?? 1) * clamp(nightK * 1.3, 0, 1);
+    const logoOn = !env.logoOff && (fm.onGround || fm.slat > 1);
+    this.finMat.emissiveIntensity += ((logoOn ? 0.45 * clamp(nightK * 1.4, 0, 1) : 0) - this.finMat.emissiveIntensity) * Math.min(1, dt * 8);
     const scanOn = env.scan && nightK > 0.3;
     this.scanLight.intensity = this.scanLightR.intensity = scanOn ? 60 : 0;
     L.scan.visible = scanOn;

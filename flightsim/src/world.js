@@ -406,7 +406,7 @@ export class World {
           col = mix(col, a0.rgb, a0.a * (1.0 - aw0)); col = mix(col, a1.rgb, a1.a * (1.0 - aw1));
           float apMask = max(a0.a * (1.0 - aw0), a1.a * (1.0 - aw1));
           water = max(water * (1.0 - apMask), max(aw0, aw1));
-          if (uNight > 0.1) col += col * apMask * uNight * step(0.3, dot(col, vec3(0.33))) * 1.5;
+          if (uNight > 0.1) col += col * apMask * uNight * step(0.3, dot(col, vec3(0.33))) * 1.5 * smoothstep(60.0, 900.0, uCamAlt); // floodlit aprons seen from the air
           if (uWet > 0.5) col *= 0.78;
           // ---- lighting ----
           vec3 n = vec3(0.0, 1.0, 0.0);
@@ -434,8 +434,11 @@ export class World {
           if (uNight > 0.05) {
             float sp = step(0.72, vn(w/28.0)) * isUrban + step(0.93, vn(w/40.0)) * isField * 0.2;
             float rd = clamp(lt.g*2.0, 0.0, 1.0) * step(0.6, vn(w/60.0));
-            vec3 em = vec3(1.0, 0.62, 0.3) * (sp*urban*2.2 + rd*0.6 + isUrban*urban*0.25);
-            lit += em * uNight * (1.0 - water) * (detail*0.7+0.3);
+            vec3 em = vec3(1.0, 0.62, 0.3) * (sp*urban*2.2 + rd*0.6 + isUrban*urban*0.25 * smoothstep(80.0, 1200.0, uCamAlt)); // diffuse city glow only reads from altitude
+            // the noise blobs only read as pinpoint lights from a distance; near the camera (and on the
+            // airfield, which has its own modelled lighting) they would be huge glowing patches
+            float farL = smoothstep(900.0, 3500.0, length(vW - uCamPos)) * (1.0 - apMask);
+            lit += em * uNight * (1.0 - water) * (detail*0.7+0.3) * farL;
           }
           // landing lights pool
           if (uLandingLight > 0.0) {

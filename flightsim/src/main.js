@@ -88,6 +88,9 @@ async function boot(o, audio) {
   const ext = new Exterior({ quality: o.quality }); extScene.add(ext.group);
   const skyEnv = makeSkyEnv(renderer);
   extScene.environment = skyEnv.texture;
+  // world-frame copy so glass facades, jet bridges and parked aircraft reflect the real sky
+  const worldEnv = makeSkyEnv(renderer);
+  world.scene.environment = worldEnv.texture; world.scene.environmentIntensity = 0.55;
   // cabin sunlight (sunbeams through the windows)
   const sun = new THREE.DirectionalLight('#ffffff', 0);
   sun.castShadow = renderer.shadowMap.enabled;
@@ -103,6 +106,7 @@ async function boot(o, audio) {
   const player = new Player(cabin, cabinScene, o.seat, audio, randomAppearance(pr, { female: pr() < 0.5, jacket: true, glasses: false, headphones: null }));
   player.sensitivity = o.sensitivity ?? 1; player.camera.fov = o.fov ?? 68;
   const dialogue = new Dialogue(people, voice, ui, {});
+  if (Q.vol > 0) cabin.buildDust(player.seat);
 
   ui.loading(0.88, 'Preparing the cameras…'); await frame();
   // Window stencil: the outside world and the aircraft exterior are only shaded
@@ -114,7 +118,7 @@ async function boot(o, audio) {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const post = new PostFX(renderer, { width: size.x, height: size.y, quality: o.quality });
   const extCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
-  S = { ui, renderer, route, fm, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
+  S = { ui, renderer, route, fm, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
   const director = new Director(S);
   S.director = director;
 
@@ -272,8 +276,10 @@ function loop() {
   const apron = fm.onGround && env.nightK > 0.4 ? 0.35 : 0;
   ext.amb.color.set('#ffd9a8'); ext.amb.intensity = 0.02 + apron;
   S.skyEnv.t += realDt;
-  if (S.skyEnv.t > 2.5) { S.skyEnv.t = 0; S.skyEnv.update(env, sunLocal); S.extScene.environment = S.skyEnv.texture; }
-  ext.update(dt, fm.t, fm, { nightK: env.nightK, strobes: !fm.onGround || fm.phase === 'takeoff' || fm.phase === 'rollout', beacon: !ext.beaconOff, scan: env.nightK > 0.3 && (fm.onGround || fm.h < 3048), landing: llOn, outside });
+  if (S.skyEnv.t > 2.5) { S.skyEnv.t = 0; S.skyEnv.update(env, sunLocal); S.extScene.environment = S.skyEnv.texture; S.worldEnv.update(env, env.sunDir); S.world.scene.environment = S.worldEnv.texture; const gm = S.scenery.mats.glass; gm.envMap = S.worldEnv.texture; gm.envMapIntensity = 1.8; }
+  const humidity = S.world.weather.rain > 0 ? 1 : S.world.weather.cumulus > 0.5 ? 0.6 : S.world.weather.fog ? 0.7 : 0;
+  ext.update(dt, fm.t, fm, { nightK: env.nightK, strobes: !fm.onGround || fm.phase === 'takeoff' || fm.phase === 'rollout', beacon: !ext.beaconOff, scan: env.nightK > 0.3 && (fm.onGround || fm.h < 3048), landing: llOn, outside, humidity: fm.h < 2500 ? humidity : 0, sunLocal, direct: sunUp ? clamp(sunI * 1.2, 0, 1) : 0, cabinLight: director.lightLevel, doorL1: cabin.doors.L1.open });
+  cabin.updateDust(fm.t, sunI, sunLocal);
   // cabin sun & lights
   const sun = S.sun;
   sun.position.copy(sunLocal).multiplyScalar(40).add(sun.target.position);

@@ -4,6 +4,7 @@ import { DEPARTURES } from './places.js';
 import { WEATHER } from './world.js';
 import { GEO } from '../data/geodata.js';
 import { fmtClock, project, unproject, clamp } from './core.js';
+import { MENU } from './director.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -109,12 +110,10 @@ export class UI {
     });
   }
   menuList() {
-    import('./director.js').then(({ MENU }) => {
-      $('svc-title').textContent = 'Onboard menu · card only';
-      this._choices($('svc-choices'), [...MENU.slice(0, 7).map((m) => ({ id: m.id, text: m.name, price: m.price, item: m })), { id: 'back', text: 'Actually, just a coffee' }], (it) => {
-        if (it.id === 'back') { this.emit('order', 'coffee'); $('service').hidden = true; this.activeChoices = null; return; }
-        this.emit('order', 'buy', it.item); $('service').hidden = true; this.activeChoices = null;
-      });
+    $('svc-title').textContent = 'Onboard menu · card only';
+    this._choices($('svc-choices'), [...MENU.slice(0, 7).map((m) => ({ id: m.id, text: m.name, price: m.price, item: m })), { id: 'back', text: 'Actually, just a coffee' }], (it) => {
+      if (it.id === 'back') { this.emit('order', 'coffee'); $('service').hidden = true; this.activeChoices = null; return; }
+      this.emit('order', 'buy', it.item); $('service').hidden = true; this.activeChoices = null;
     });
   }
   payPrompt(item, done) {
