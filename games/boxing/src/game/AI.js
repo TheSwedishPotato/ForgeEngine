@@ -143,8 +143,9 @@ export class BoxerAI {
       return;
     }
     if (this.comboTimer > 0) return;
-    const rate = (0.45 + d.aggression * 0.9 + (oppHurt ? 0.8 : 0)) * (tired ? 0.45 : 1);
-    this.comboTimer = (0.35 + Math.random() * 1.1) / rate;
+    // Output: roughly 30-45 punches a minute for a fresh pro, fewer when tired.
+    const rate = (0.32 + d.aggression * 0.55 + (oppHurt ? 0.7 : 0)) * (tired ? 0.45 : 1);
+    this.comboTimer = (0.5 + Math.random() * 1.4) / rate;
     if (!staminaOk) return;
     if (dist > RANGES.long + 0.12) return;
     this._startCombo(this._pick(dist, false));

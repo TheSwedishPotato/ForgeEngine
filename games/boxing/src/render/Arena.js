@@ -31,6 +31,43 @@ export class Arena {
     this._buildCrowd();
     this._buildLights();
     this._buildAtmosphere();
+    this._mergeStatic();
+  }
+
+  /**
+   * Bakes every static mesh into one mesh per material: a few hundred props
+   * become a handful of draw calls (and shadow-pass calls).
+   */
+  _mergeStatic() {
+    const keep = new Set([this.crowd, this.dust, ...this.sim.ropes.map((r) => r.mesh), ...this.flashes.map((f) => f.sprite)]);
+    const byMat = new Map();
+    this.group.updateMatrixWorld(true);
+    this.group.traverse((o) => {
+      if (!o.isMesh || o.isInstancedMesh || keep.has(o) || o.parent === null) return;
+      const list = byMat.get(o.material) ?? [];
+      list.push(o);
+      byMat.set(o.material, list);
+    });
+    for (const [mat, list] of byMat) {
+      if (list.length < 2) continue;
+      const geos = [];
+      for (const m of list) {
+        const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+        for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
+        if (!g.attributes.uv) continue;
+        g.applyMatrix4(m.matrixWorld);
+        geos.push(g);
+      }
+      if (geos.length < 2) continue;
+      const merged = mergeGeometries(geos, false);
+      if (!merged) continue;
+      const mesh = new Mesh(merged, mat);
+      mesh.castShadow = list.some((m) => m.castShadow);
+      mesh.receiveShadow = list.some((m) => m.receiveShadow);
+      mesh.renderOrder = list[0].renderOrder;
+      for (const m of list) m.parent.remove(m);
+      this.group.add(mesh);
+    }
   }
 
   _buildRing() {
@@ -223,9 +260,9 @@ export class Arena {
     const rows = this.quality === 'low' ? 10 : 16;
     const inner = R.half + R.apron + 3.6;
     // One fan = torso capsule + head sphere, merged.
-    const body = new CapsuleGeometry(0.2, 0.42, 3, 8);
+    const body = new CapsuleGeometry(0.2, 0.42, 2, 7);
     body.translate(0, 0.45, 0);
-    const head = new SphereGeometry(0.12, 8, 6);
+    const head = new SphereGeometry(0.12, 7, 5);
     head.translate(0, 1.0, 0);
     const colorAttr = (g, c) => {
       const n = g.attributes.position.count;

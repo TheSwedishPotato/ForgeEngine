@@ -302,6 +302,7 @@ function handleInput() {
       continue;
     }
     if (a.type === 'replay' && mode === 'result') { startReplay(); continue; }
+    if (a.type === 'help') { hud.el.hint.hidden = !hud.el.hint.hidden; continue; }
     if (mode !== 'fight') continue;
     if (a.type === 'mash') match.pushGetUp();
     if (!match.fighting || !player.canAct) continue;

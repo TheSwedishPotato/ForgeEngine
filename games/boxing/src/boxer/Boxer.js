@@ -82,7 +82,7 @@ export class Boxer {
       this.reach[side].prevTarget = new Vector3();
     }
     this.pelvisRestY = this.b.pelvis.userData.restPos.y;
-    this.stanceHeight = this.pelvisRestY - 0.055 * this.scale;
+    this.stanceHeight = this.pelvisRestY - 0.075 * this.scale;   // knees bent, athletic
 
     this.feet = {};
     for (const side of ['L', 'R']) this.feet[side] = { side, planted: true, pos: new Vector3(), yaw, swing: null, lastStep: 0 };
@@ -750,7 +750,7 @@ export class Boxer {
     const chin = this.attr.chin;
     const vulnerability = (1.35 - 0.35 * this.health / 100) / chin;
     this.stun += concussion * vulnerability;
-    this.health = Math.max(0, this.health - concussion * 15 / chin - body * 0.3);
+    this.health = Math.max(0, this.health - concussion * 11 / chin - body * 0.3);
     this.bodyDamage = Math.min(100, this.bodyDamage + body * 1.1);
     this.stamina = Math.max(0, this.stamina - body * 1.6 - concussion * 6);
     this.flinch = Math.min(1, this.flinch + concussion * 2 + body * 0.05);
