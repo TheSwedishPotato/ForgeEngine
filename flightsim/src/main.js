@@ -375,21 +375,33 @@ function setView(v) {
   document.getElementById('crosshair').hidden = v === 'outside';
 }
 
+// In the claude.ai viewer the page cannot trigger downloads itself; the `downloads` capability asks the
+// viewer to save the file. Anywhere else (the standalone HTML file) a plain download link is used.
+let downloadsApi = null;
+try { window.claude?.use?.('downloads')?.then((d) => { downloadsApi = d; }, () => {}); } catch (e) { /* not in a viewer */ }
+
 function takePhoto() {
   S.photoPending = false;
   const canvas = S.renderer.domElement;
+  const t = S.opts.startClock + S.director.t / 3600;
+  const filename = `SK1415-${String(Math.floor(t)).padStart(2, '0')}${String(Math.floor((t % 1) * 60)).padStart(2, '0')}.png`;
+  const say = (msg) => S.ui.toast(msg, 3);
   try {
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      const t = S.opts.startClock + S.director.t / 3600;
-      a.download = `SK1415-${String(Math.floor(t)).padStart(2, '0')}${String(Math.floor((t % 1) * 60)).padStart(2, '0')}.png`;
+    canvas.toBlob(async (blob) => {
+      if (!blob) { say('Could not take the photo'); return; }
+      if (downloadsApi) {
+        try { await downloadsApi.save({ filename, data: blob }); say('Photo saved'); }
+        catch (e) { say(e && e.code === 'declined' ? 'Photo not saved' : e && e.code === 'rate_limited' ? 'Finish saving the last photo first' : 'Saving photos is not available here'); }
+        return;
+      }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    }, 'image/png');
-  } catch (e) { /* downloads may be blocked in embedded viewers */ }
+      say('Photo saved (if your browser allows downloads)');
+    }, 'image/png'); // the bitmap is copied now, so the flash below is not in the picture
+  } catch (e) { say('Could not take the photo'); }
+  S.flash = 0.6;
   S.ui.showHUD(true);
-  S.ui.toast('Photo saved (if your browser allows downloads)', 3);
 }
 
 function anyWindowVisible(cam) {
@@ -527,7 +539,7 @@ function setupInput() {
       case 'KeyY': S.audio.pop(); ui.toast('*swallow* — ears cleared', 2); break;
       case 'KeyH': pause(true); break;
       case 'KeyV': setView(S.view === 'outside' ? 'cabin' : 'outside'); break;
-      case 'KeyP': S.ui.showHUD(false); S.photoPending = true; S.flash = 0.6; S.audio.clunk(0.15); break;
+      case 'KeyP': S.ui.showHUD(false); S.photoPending = true; S.audio.clunk(0.15); break; // the flash comes after the capture
       case 'F11': case 'KeyU': toggleFullscreen(); break;
       case 'Space': {
         if (S.view === 'outside') break;
