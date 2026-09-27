@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SAS 80 fan film</title>
+<style>
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1280" height="720"></canvas>
+<script>
+// A 38-second fan film about SAS, drawn frame by frame on a canvas.
+// draw(t) is deterministic, so tools/render.mjs can step through it frame by frame.
+// Open this file in a browser to preview it in real time.
+const W = 1280, H = 720, DURATION = 38;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const BLUE = '#1d3a86', DEEP = '#0b1a45';
+
+// Facts (sources in promo/README.md): founded 1 August 1946 from DDL, DNL and SILA;
+// first intercontinental flight 17 September 1946, Stockholm to New York, DC-4 "Dan Viking",
+// 28 passengers, about 25 hours via Copenhagen, Prestwick and Gander; SkyTeam since
+// 1 September 2024; hubs Copenhagen, Stockholm and Oslo; 80th anniversary in 2026 with an
+// all-blue A330-300.
+const SCENES = [
+  { t0: 0, t1: 5, kind: 'intro' },
+  { t0: 5, t1: 9.5, img: 'night_taxi', zoom: [1.12, 1.0], pan: [[-30, 10], [20, 0]],
+    kicker: '17 September 1946', title: 'Stockholm to New York.', sub: 'DC-4 Dan Viking · 28 passengers · 25 hours' },
+  { t0: 9.5, t1: 13.5, img: 'dawn_taxi', zoom: [1.0, 1.1], pan: [[0, 0], [-40, -10]],
+    kicker: 'Eighty years later', title: 'The journey still starts at dawn.' },
+  { t0: 13.5, t1: 17.5, img: 'climb_belly', zoom: [1.05, 1.18], pan: [[20, 20], [-20, -10]],
+    kicker: 'Three home bases', title: 'Copenhagen · Stockholm · Oslo' },
+  { t0: 17.5, t1: 21.5, img: 'cruise_side', zoom: [1.15, 1.02], pan: [[40, 0], [-30, 0]],
+    kicker: 'From Scandinavia', title: 'To Europe, North America and Asia.' },
+  { t0: 21.5, t1: 25.5, img: 'cruise_high', zoom: [1.0, 1.12], pan: [[0, -10], [30, 20]],
+    kicker: 'Since 1 September 2024', title: 'A member of SkyTeam.' },
+  { t0: 25.5, t1: 29.5, img: 'approach', zoom: [1.08, 1.0], pan: [[-20, 0], [30, 10]],
+    kicker: 'Over the Øresund', title: 'Almost home.' },
+  { t0: 29.5, t1: 33.5, img: 'cph_gate', zoom: [1.0, 1.1], pan: [[0, 0], [-30, 0]],
+    kicker: '1946 – 2026', title: 'Eighty years of Scandinavian flying.' },
+  { t0: 33.5, t1: 38, kind: 'end' },
+];
+
+const imgs = {};
+function loadImages() {
+  const names = SCENES.filter((s) => s.img).map((s) => s.img);
+  return Promise.all(names.map((n) => new Promise((res, rej) => {
+    const im = new Image(); im.onload = () => { imgs[n] = im; res(); }; im.onerror = rej; im.src = `stills/${n}.jpg`;
+  })));
+}
+
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x, 0, 1); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const lerp = (a, b, k) => a + (b - a) * k;
+function hash(n) { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); }
+
+// ---- scene painters ----
+function drawStill(s, t, alpha) {
+  const k = clamp((t - s.t0) / (s.t1 - s.t0 + 0.8), 0, 1);
+  const z = lerp(s.zoom[0], s.zoom[1], k);
+  const px = lerp(s.pan[0][0], s.pan[1][0], k), py = lerp(s.pan[0][1], s.pan[1][1], k);
+  const im = imgs[s.img];
+  g.save(); g.globalAlpha = alpha;
+  g.translate(W / 2 + px, H / 2 + py); g.scale(z, z);
+  g.drawImage(im, -W / 2, -H / 2, W, H);
+  g.restore();
+}
+
+function textBlock(s, t) {
+  const a = t - s.t0, out = s.t1 - t;
+  const inK = ease((a - 0.35) / 0.7), outK = ease(out / 0.5);
+  const k = Math.min(inK, outK);
+  if (k <= 0) return;
+  // soft shade under the text for legibility
+  const grd = g.createLinearGradient(0, H * 0.45, 0, H);
+  grd.addColorStop(0, 'rgba(5,12,35,0)'); grd.addColorStop(1, `rgba(5,12,35,${0.72 * k})`);
+  g.fillStyle = grd; g.fillRect(0, H * 0.45, W, H * 0.55);
+  const x = 88, y = H - 150;
+  g.save(); g.globalAlpha = k;
+  g.fillStyle = '#9fb7ff'; g.font = '600 20px "Liberation Sans", Arial, sans-serif';
+  g.letterSpacing = '4px';
+  g.fillText(s.kicker.toUpperCase(), x, y + (1 - inK) * 18);
+  g.letterSpacing = '0px';
+  g.fillStyle = '#ffffff'; g.font = '700 50px "Liberation Sans", Arial, sans-serif';
+  g.fillText(s.title, x, y + 58 + (1 - inK) * 26);
+  if (s.sub) { g.fillStyle = 'rgba(255,255,255,0.82)'; g.font = '400 24px "Liberation Sans", Arial, sans-serif'; g.fillText(s.sub, x, y + 100 + (1 - inK) * 30); }
+  // accent rule
+  g.fillStyle = '#ffffff'; g.fillRect(x, y - 36, 64 * ease((a - 0.2) / 0.8), 3);
+  g.restore();
+}
+
+function drawIntro(t) {
+  const bg = g.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, W * 0.75);
+  bg.addColorStop(0, '#16307a'); bg.addColorStop(1, '#040a1f');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  // three routes converge into one: Denmark, Norway, Sweden
+  const origins = [[W * 0.18, H * 0.2, 'DDL · Denmark'], [W * 0.5, H * 0.15, 'DNL · Norway'], [W * 0.82, H * 0.2, 'SILA · Sweden']];
+  const cx = W / 2, cy = H * 0.52, k = ease((t - 0.3) / 2.2);
+  g.lineWidth = 3; g.lineCap = 'round';
+  for (const [ox, oy, label] of origins) {
+    g.strokeStyle = 'rgba(255,255,255,0.85)';
+    g.beginPath(); g.moveTo(ox, oy);
+    const mx = lerp(ox, cx, 0.5), my = lerp(oy, cy, 0.5) + 40;
+    // draw the quadratic partially by sampling it
+    for (let i = 1; i <= 40; i++) { const u = (i / 40) * k; const x = (1 - u) * (1 - u) * ox + 2 * (1 - u) * u * mx + u * u * cx, y = (1 - u) * (1 - u) * oy + 2 * (1 - u) * u * my + u * u * cy; g.lineTo(x, y); }
+    g.stroke();
+    g.globalAlpha = ease(t / 0.8); g.fillStyle = '#c9d6ff'; g.font = '600 18px "Liberation Sans", Arial, sans-serif'; g.textAlign = 'center';
+    g.fillText(label, ox, oy - 16); g.globalAlpha = 1;
+    g.beginPath(); g.arc(ox, oy, 5, 0, 7); g.fillStyle = '#fff'; g.fill();
+  }
+  const m = ease((t - 2.3) / 0.6);
+  if (m > 0) { g.beginPath(); g.arc(cx, cy, 8 + 30 * (1 - m), 0, 7); g.fillStyle = `rgba(255,255,255,${m})`; g.fill(); }
+  const tk = ease((t - 2.6) / 0.8);
+  g.globalAlpha = tk; g.textAlign = 'center';
+  g.fillStyle = '#ffffff'; g.font = '700 64px "Liberation Sans", Arial, sans-serif'; g.fillText('1 August 1946', cx, cy + 110);
+  g.fillStyle = 'rgba(255,255,255,0.8)'; g.font = '400 26px "Liberation Sans", Arial, sans-serif'; g.fillText('Three airlines became one.', cx, cy + 156);
+  g.globalAlpha = 1; g.textAlign = 'left';
+  // fade out into the first shot
+  const fo = ease((t - 4.4) / 0.6); if (fo > 0) { g.fillStyle = `rgba(0,0,0,${fo})`; g.fillRect(0, 0, W, H); }
+}
+
+function drawEnd(t) {
+  const a = t - 33.5;
+  const bg = g.createLinearGradient(0, 0, W, H); bg.addColorStop(0, BLUE); bg.addColorStop(1, DEEP);
+  g.globalAlpha = ease(a / 0.7); g.fillStyle = bg; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
+  if (a < 0.7) return;
+  // Scandinavian flag band, a nod to the anniversary livery
+  const bk = ease(a / 1.2);
+  g.fillStyle = '#b8c6ea'; g.fillRect(0, H * 0.72, W * bk, 6);
+  const k = ease((a - 0.3) / 0.9);
+  g.globalAlpha = k; g.textAlign = 'center'; g.fillStyle = '#ffffff';
+  g.font = 'italic 900 150px "Liberation Sans", Arial, sans-serif';
+  g.fillText('SAS', W / 2, H * 0.47 + (1 - k) * 20);
+  g.font = '400 30px "Liberation Sans", Arial, sans-serif'; g.letterSpacing = '6px';
+  g.fillText('SCANDINAVIAN AIRLINES · 80 YEARS', W / 2, H * 0.58);
+  g.letterSpacing = '0px';
+  g.globalAlpha = ease((a - 1.2) / 0.8) * 0.75; g.font = '400 17px "Liberation Sans", Arial, sans-serif';
+  g.fillText('Unofficial fan film · not made or endorsed by SAS · footage from the SK1415 flight simulator', W / 2, H - 50);
+  g.globalAlpha = 1; g.textAlign = 'left';
+  const fo = ease((a - 3.9) / 0.6); if (fo > 0) { g.fillStyle = `rgba(0,0,0,${fo})`; g.fillRect(0, 0, W, H); }
+}
+
+// ---- finishing: letterbox, vignette, grain ----
+function finish(t) {
+  const v = g.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.72);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.42)');
+  g.fillStyle = v; g.fillRect(0, 0, W, H);
+  const f = Math.floor(t * 30);
+  g.fillStyle = 'rgba(255,255,255,0.035)';
+  for (let i = 0; i < 700; i++) g.fillRect(hash(i + f * 13.7) * W, hash(i * 3.1 + f) * H, 1.5, 1.5);
+  g.fillStyle = '#000'; g.fillRect(0, 0, W, 40); g.fillRect(0, H - 40, W, 40);
+}
+
+function draw(t) {
+  g.globalAlpha = 1; g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < SCENES.length; i++) {
+    const s = SCENES[i];
+    if (t < s.t0 - 0.6 || t > s.t1 + 0.6) continue;
+    if (s.kind === 'intro') { if (t < s.t1) drawIntro(t); continue; }
+    if (s.kind === 'end') { if (t >= s.t0) drawEnd(t); continue; }
+    // crossfade: a shot fades in over the 0.6 s before its start
+    const alpha = t < s.t0 ? ease((t - (s.t0 - 0.6)) / 0.6) : 1;
+    drawStill(s, t, alpha);
+    if (t >= s.t0 && t < s.t1) textBlock(s, t);
+  }
+  finish(t);
+}
+
+window.FILM = { W, H, DURATION, draw, ready: loadImages() };
+// live preview when opened directly
+if (!location.search.includes('render')) window.FILM.ready.then(() => {
+  const t0 = performance.now();
+  const tick = () => { const t = ((performance.now() - t0) / 1000) % DURATION; draw(t); requestAnimationFrame(tick); };
+  tick();
+});
+</script>
+</body>
+</html>
