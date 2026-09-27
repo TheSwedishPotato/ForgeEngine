@@ -93,26 +93,56 @@ export class Stage {
     camera.position.set(0, 1.7, -3);
     this.camera = camera;
 
-    this.usePost = quality !== 'low';
-    if (this.usePost) {
-      const size = renderer.getDrawingBufferSize(new Vector2());
-      const rt = new WebGLRenderTarget(size.x, size.y, { type: HalfFloatType, samples: quality === 'high' ? 4 : 2 });
-      const composer = new EffectComposer(renderer, rt);
-      composer.addPass(new RenderPass(scene, camera));
-      this.bloom = new UnrealBloomPass(new Vector2(size.x, size.y), 0.32, 0.5, 0.9);
-      composer.addPass(this.bloom);
-      composer.addPass(new OutputPass());
-      this.lens = new ShaderPass(LensShader);
-      this.lens.uniforms.uResolution.value.copy(size);
-      composer.addPass(this.lens);
-      this.composer = composer;
-    }
+    this._buildPost();
     this.shake = 0;
     this.shakeOffset = new Vector3();
     this.flash = 0;
     this.aberration = 0;
     this.hurt = 0;
     window.addEventListener('resize', () => this.resize());
+  }
+
+  _buildPost() {
+    const { renderer, scene, camera, quality } = this;
+    if (this.composer) {
+      this.composer.renderTarget1.dispose();
+      this.composer.renderTarget2.dispose();
+      this.composer = null;
+    }
+    this.usePost = quality !== 'low';
+    if (!this.usePost) return;
+    const size = renderer.getDrawingBufferSize(new Vector2());
+    const rt = new WebGLRenderTarget(size.x, size.y, { type: HalfFloatType, samples: quality === 'high' ? 4 : 2 });
+    const composer = new EffectComposer(renderer, rt);
+    composer.addPass(new RenderPass(scene, camera));
+    this.bloom = new UnrealBloomPass(new Vector2(size.x, size.y), 0.32, 0.5, 0.9);
+    composer.addPass(this.bloom);
+    composer.addPass(new OutputPass());
+    this.lens = new ShaderPass(LensShader);
+    this.lens.uniforms.uResolution.value.copy(size);
+    composer.addPass(this.lens);
+    this.composer = composer;
+  }
+
+  /** Switch quality in place (pixel ratio, MSAA, post-processing, shadows). */
+  setQuality(quality) {
+    if (quality === this.quality) return;
+    this.quality = quality;
+    const dpr = Math.min(window.devicePixelRatio || 1, quality === 'high' ? 2 : quality === 'medium' ? 1.5 : 1);
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(window.innerWidth, window.innerHeight, false);
+    this._buildPost();
+    const ss = quality === 'high' ? 4096 : quality === 'medium' ? 2048 : 1024;
+    this.scene.traverse((o) => {
+      if (!o.isLight || !o.shadow) return;
+      if (o.userData.keyLight) {
+        o.shadow.mapSize.set(ss, ss);
+      } else if (o.userData.canShadow) {
+        o.castShadow = quality === 'high';
+      }
+      o.shadow.map?.dispose();
+      o.shadow.map = null;
+    });
   }
 
   resize() {

@@ -360,17 +360,41 @@ table.stats th.blue { color: #7f9dff; }
 .dpad .wide { grid-column: span 3; }
 .dpad button.on, .pad button.on { background: rgba(217, 174, 63, 0.55); }
 
+/* Touch devices: telemetry moves up out of the thumbs' way. */
+.touch-ui .telemetry { top: calc(env(safe-area-inset-top, 0px) + 92px); bottom: auto; min-width: 0; padding: 6px 12px 8px; }
+.touch-ui .tel-grid span { font-size: 20px; }
+.touch-ui .hint { display: none; }
+
 @media (max-width: 760px) {
   .plate-name { font-size: 15px; }
+  .corner-tag { display: none; }
   .clock { font-size: 28px; }
-  .clockbox { min-width: 76px; padding: 4px 8px 6px; }
+  .clockbox { min-width: 70px; padding: 4px 6px 6px; }
+  .round { font-size: 11px; letter-spacing: 0.1em; }
+  .bar { gap: 6px; left: 10px; right: 10px; }
+  .plate { padding: 6px 8px 8px; }
   .tel-grid { grid-template-columns: repeat(2, auto); gap: 6px 16px; }
-  .telemetry { min-width: 0; bottom: 190px; }
   .hint { display: none; }
-  .dpad { right: auto; left: calc(env(safe-area-inset-left, 0px) + 164px); grid-template-columns: repeat(3, 52px); }
-  .pad { grid-template-columns: repeat(2, 64px); }
   .cards { grid-template-columns: 1fr; }
   .pause-btn { top: calc(env(safe-area-inset-top, 0px) + 84px); }
+}
+
+/* Landscape phones: short screens. */
+@media (max-height: 500px) {
+  .card { padding: 14px 18px 12px; }
+  .title { font-size: 44px; margin: 2px 0 6px; }
+  .lede, .tape, .fine { display: none; }
+  .form label { font-size: 11px; }
+  select { font-size: 15px; padding: 5px 26px 5px 8px; }
+  .dpad { right: calc(env(safe-area-inset-right, 0px) + 172px); grid-template-columns: repeat(3, 58px); }
+  .dpad button, .pad button { padding: 9px 4px; }
+  .pad button.big { padding: 12px 4px; }
+}
+
+/* Portrait phones: defense pad stacks above the stick. */
+@media (max-width: 560px) and (min-height: 501px) {
+  .dpad { right: auto; left: calc(env(safe-area-inset-left, 0px) + 16px); bottom: calc(env(safe-area-inset-bottom, 0px) + 168px); grid-template-columns: repeat(3, 56px); }
+  .pad { grid-template-columns: repeat(2, 72px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

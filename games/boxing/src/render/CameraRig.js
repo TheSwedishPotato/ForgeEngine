@@ -36,11 +36,13 @@ export class CameraRig {
       if (f.lengthSq() < 1e-6) f.set(0, 0, 1);
       f.normalize();
       const left = _b.set(f.z, 0, -f.x);
-      _pos.copy(player.center).addScaledVector(f, -2.35).addScaledVector(left, -0.62 * player.ss);
-      _pos.y = Math.max(1.7, hp.y + 0.42);
+      // Portrait screens pull back and widen so both fighters fit.
+      const portrait = this.camera.aspect < 1;
+      _pos.copy(player.center).addScaledVector(f, portrait ? -3.1 : -2.35).addScaledVector(left, -0.62 * player.ss);
+      _pos.y = Math.max(portrait ? 1.95 : 1.7, hp.y + 0.42);
       _look.copy(ho).lerp(_mid, 0.25);
-      _look.y = Math.max(1.05, ho.y - 0.12);
-      this.fovTarget = 44;
+      _look.y = Math.max(1.05, ho.y - (portrait ? 0.3 : 0.12));
+      this.fovTarget = portrait ? 58 : 44;
     } else if (mode === 'broadcast') {
       const f = _a.subVectors(opponent.center, player.center).setY(0).normalize();
       const side = _b.set(f.z, 0, -f.x);

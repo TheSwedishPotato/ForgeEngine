@@ -263,12 +263,15 @@ export class HUD {
 
   showHud(v) {
     this.el.hud.hidden = !v;
+    if (this.touchEnabled) this.el.touch.hidden = !v;
   }
 
   enableTouch(input) {
     const t = this.el.touch;
-    t.hidden = false;
+    this.touchEnabled = true;
+    t.hidden = this.el.hud.hidden;
     this.el.hint.hidden = true;
+    document.body.classList.add('touch-ui');
     const stick = this.$('stick'), knob = this.$('knob');
     let id = null, cx = 0, cy = 0;
     const R = 50;

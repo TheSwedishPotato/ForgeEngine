@@ -41,6 +41,18 @@ Forge Engine is an advanced medieval life simulation system that models complex 
 - Camera controls
 - Minimap system
 
+## Games
+
+### Forge Boxing
+A physics-based boxing game built on its own XPBD rigid-body solver: 14-segment
+active-ragdoll fighters with torque-limited muscles, padded-glove contact
+physics, and knockdowns driven by measured head kinematics. Runs in the
+browser. See [games/boxing](games/boxing/README.md).
+
+```bash
+cd games/boxing && npm install && npm run dev
+```
+
 ## Getting Started
 
 ### Prerequisites

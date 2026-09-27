@@ -377,6 +377,7 @@ export class Arena {
     key.shadow.bias = -0.00025;
     key.shadow.normalBias = 0.015;
     key.shadow.radius = 2.5;
+    key.userData.keyLight = true;
     scene.add(key, key.target);
     this.key = key;
 
@@ -388,6 +389,7 @@ export class Arena {
       sp.position.set(sx * 4.3, 6.2, sz * 4.3);
       sp.target.position.set(0, 0.9, 0);
       sp.castShadow = this.quality === 'high' && i < 2;
+      sp.userData.canShadow = i < 2;
       if (sp.castShadow) {
         sp.shadow.mapSize.set(1024, 1024);
         sp.shadow.bias = -0.0006;

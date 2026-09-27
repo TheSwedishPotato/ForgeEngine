@@ -89,11 +89,7 @@ const hud = new HUD(document.getElementById('ui'), {
     audio.start();
     Object.assign(settings, opts);
     saveSettings(settings);
-    if (opts.quality !== stage.quality) {
-      // A different renderer configuration needs a fresh page.
-      location.reload();
-      return;
-    }
+    stage.setQuality(opts.quality);
     rig.mode = settings.camera;
     hud.setCameraLabel(rig.mode);
     newFight(true);
@@ -126,8 +122,20 @@ if (matchMedia('(pointer: coarse)').matches) hud.enableTouch(input);
 // ---------------------------------------------------------------------------
 // World construction
 
+function disposeGroup(group) {
+  group.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of mats) {
+      for (const k of ['map', 'normalMap']) if (m[k] && !m[k].isDataTexture) m[k].dispose();
+      m.dispose();
+    }
+  });
+  group.removeFromParent();
+}
+
 function buildFight({ playerStance = 'orthodox', difficulty = 'pro', attract = false } = {}) {
-  if (meshes.length) for (const m of meshes) stage.scene.remove(m.group);
+  for (const m of meshes) disposeGroup(m.group);
   const opp = OPPONENTS[difficulty] ?? OPPONENTS.pro;
   sim = new FightSim({
     fighters: [
