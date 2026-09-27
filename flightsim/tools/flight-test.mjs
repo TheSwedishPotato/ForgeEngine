@@ -1,6 +1,6 @@
 // Headless flight test: flies the whole route on the physics model in about two seconds.
 // usage: node tools/flight-test.mjs [calm|clear|fair|broken|rain] [maxSeconds] [--trace] [--seed=N]
-//        [--sc=efato|rto|ga|shear|cat|depress|dual|return]  (a failure scenario)
+//        [--sc=efato|rto|ga|shear|cat|depress|dual|return|hyd|eo]  (a failure scenario)
 import { buildRoute, buildReturnRoute } from '../src/flight.js';
 import { FlightModel } from '../src/physics.js';
 import { Atmosphere } from '../src/atmosphere.js';
@@ -33,7 +33,9 @@ while (t < maxT && fm.phase !== 'arrived' && fm.phase !== 'rto-stop' && !(fm.cra
   if (sc === 'ga' && fm.phase === 'approach' && fm.agl < 150 && !fm._scDone) { fm._scDone = 1; fm.goAround('runway'); }
   if (sc === 'shear' && fm.phase === 'approach' && fm.m.touchdown - fm.s < 9000 && !fm._scDone) { fm._scDone = 1; const p = fm.path.sample(fm.m.touchdown - 3500, {}); atmo.addMicroburst(p.x, p.z, { R: 900, u: 14, w: 10 }); }
   if (sc === 'shear' && fm._scDone === 1 && !fm.onGround && fm.phase === 'approach') { const dv = fm.ias - (fm._iasPrev ?? fm.ias); fm._iasPrev = fm.ias; if (fm.vs < -8 || (fm._shearT = (dv < -0.35 ? (fm._shearT || 0) + dt : 0)) > 2) { fm._scDone = 2; fm.goAround('windshear'); } }
-  if (sc === 'cat' && fm.phase === 'cruise' && !fm._scDone) { fm._scDone = 1; atmo.addCAT(4.5, 50, 11); }
+  if (sc === 'cat' && fm.phase === 'cruise' && !fm._scDone) { fm._scDone = 1; atmo.addCAT(5.0, 50, 19, 0.28); }
+  if (sc === 'hyd' && fm.phase === 'cruise' && !fm._scDone) { fm._scDone = 1; fm.hyd.green = false; fm.abMed = true; }
+  if (sc === 'eo' && fm.phase === 'cruise' && !fm._scDone) { fm._scDone = 1; fm.failEngine(1, 1); fm.abMed = true; fm.levelOff = 5800; }
   if (sc === 'depress' && fm.phase === 'cruise' && !fm._scDone) { fm._scDone = 1; fm.depressurise(1); fm.emergencyDescent(3048); }
   if (sc === 'dual' && fm.phase === 'climb' && fm.h > 900 && !fm._scDone) { fm._scDone = 1; fm.failEngine(0, 2); fm.failEngine(1, 2); }
   fm.update(dt); t += dt;

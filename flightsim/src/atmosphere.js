@@ -93,8 +93,9 @@ export class Atmosphere {
         const k = Math.sin(Math.PI * clamp(z.t / z.dur, 0, 1));
         sw += z.sigma * k; su += z.sigma * 0.6 * k; sv += z.sigma * 0.8 * k;
         if (z.jolt && z.t > z.dur * 0.4 && !z.jolted) { z.jolted = true; z.joltV = -z.jolt; z.joltT = 0; }
-        // the big one: a sharp downdraft lasting about a second, then the rebound
-        if (z.joltV) { const w = z.width; z.joltT += dt; hy += z.joltV * Math.exp(-((z.joltT - 1.0) ** 2) / w) - z.joltV * 0.55 * Math.exp(-((z.joltT - 1.0 - 4 * Math.sqrt(w)) ** 2) / (w * 1.2)); if (z.joltT > 5) z.joltV = 0; }
+        // the big one: a downdraft that sets in within about half a second and dies away more slowly;
+        // the aircraft is left sinking through the air, so the load factor overshoots above 1 g after it
+        if (z.joltV) { const w = z.width, t1 = z.joltT - 1.0; z.joltT += dt; hy += z.joltV * Math.exp(-(t1 * t1) / (t1 < 0 ? w : w * 6)); if (z.joltT > 7) z.joltV = 0; }
       } else if (z.kind === 'microburst') { // Oseguera-Bowles-like: radial outflow and a downdraft core
         const dx = pos.x - z.x, dz = pos.z - z.z; const rr = Math.hypot(dx, dz) + 1;
         const R = z.R, k = rr < R ? rr / R : Math.exp(-(((rr - R) / (0.8 * R)) ** 2)) * R / rr;
@@ -142,7 +143,7 @@ export class Atmosphere {
   }
 
   // ---------------- hazards the events system can trigger ----------------
-  // jolt: peak downdraft (m/s); width: how sharp it is (s^2, smaller = more violent)
+  // jolt: peak downdraft (m/s); width: how sharp its onset is (s^2, smaller = more violent)
   addCAT(sigma = 3.5, dur = 70, jolt = 0, width = 0.35) { this.hazards.push({ kind: 'cat', t: 0, sigma, dur, jolt, width }); }
   addMicroburst(x, z, { R = 900, u = 12, w = 9, life = 600 } = {}) { this.hazards.push({ kind: 'microburst', t: 0, x, z, R, u, w, life }); }
   addWake(roll = 0.35, up = 3, dur = 5) { this.hazards.push({ kind: 'wake', t: 0, at: 1.2, roll, up, dur }); }

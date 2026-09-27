@@ -35,7 +35,8 @@ const GEAR = [ // contact points when the strut carries its static load
 const G_LOCAL = [0, -3.4, 11.5];
 // structure that must never touch the ground
 const STRIKE = [
-  { name: 'tail', p: [0, -0.62, 26.0] }, { name: 'tail', p: [0, -0.3, 28.5] },
+  // the tail cone touches at 11.7 degrees of pitch on compressed main gear (Airbus A320 airport planning figure)
+  { name: 'tail', p: [0, -0.40, 26.0] }, { name: 'tail', p: [0, 0.15, 28.5] },
   { name: 'pod-left', p: [-5.75, -2.85, 4.5] }, { name: 'pod-right', p: [5.75, -2.85, 4.5] },
   { name: 'wingtip-left', p: [-17.4, 1.0, 15.5] }, { name: 'wingtip-right', p: [17.4, 1.0, 15.5] },
   { name: 'nose', p: [0, -0.9, -6.2] }, { name: 'belly', p: [0, -1.25, 9.8] }, { name: 'belly', p: [0, -0.97, 18] },
@@ -217,7 +218,10 @@ export class FlightModel {
     const hb = Math.max(0.5, gearH + 3.4) / B;
     const ge = hb < 1 ? (16 * hb) ** 2 / (1 + (16 * hb) ** 2) : 1; // ground effect on induced drag
     let CL = liftCurve(aero, alpha, mach) + (hb < 1 ? 0.08 * (1 - hb) : 0);
-    const sb = this.spoiler, gsp = this.groundSpoiler;
+    // panels 1-5 on each wing are powered green, yellow, blue, yellow, green; speedbrakes use 2-4, ground spoilers all five
+    const H = this.hyd;
+    const sb = this.spoiler * ((H.yellow ? 2 : 0) + (H.blue ? 1 : 0)) / 3;
+    const gsp = this.groundSpoiler * ((H.green ? 2 : 0) + (H.yellow ? 2 : 0) + (H.blue ? 1 : 0)) / 5;
     CL += -0.12 * sb - 0.75 * gsp * clamp(CL, 0, 2);
     CL += 4.5 * qa * CBAR / (2 * Va) + 0.35 * this.de;
     const stalled = alpha > aero.as * DEG * (1 - 0.35 * smoothstep(0.3, 0.8, mach));
@@ -245,7 +249,9 @@ export class FlightModel {
     for (let i = 0; i < 2; i++) {
       let t = this.engFail[i] ? -0.012 * qbar * 2.0 : engineThrust(this.n1[i], sig, mach);
       if (!this.engineRunning[i] && !this.engFail[i]) t = 0;
-      if (this.reverse > 0.05 && !this.engFail[i]) t = t * (1 - this.reverse) - t * this.reverse * 0.38;
+      // reverser 1 is green, reverser 2 yellow: without its hydraulics a reverser stays stowed and the FADEC holds that engine at idle
+      const revOk = i === 0 ? this.hyd.green : this.hyd.yellow;
+      if (this.reverse > 0.05 && !this.engFail[i]) t = revOk ? t * (1 - this.reverse) - t * this.reverse * 0.38 : engineThrust(Math.min(this.n1[i], 0.205), sig, mach);
       this.thrust[i] = t; T += t;
     }
     Fx += T;
@@ -389,9 +395,10 @@ export class FlightModel {
   // ---------------- systems: flaps, gear, spoilers, reversers, engines, pressurisation ----------------
   _systems(dt) {
     const cfgT = CONFIGS[this.cfgTarget];
-    const hydOk = this.hyd.green || this.hyd.yellow;
-    const flapRate = hydOk ? 1.5 : 0.7;
-    this.slat += clamp(cfgT.slat - this.slat, -1.6 * dt, 1.6 * dt);
+    // flaps are driven by green and yellow, slats by green and blue: with one of the pair lost they run at half speed
+    const flapRate = 0.75 * ((this.hyd.green ? 1 : 0) + (this.hyd.yellow ? 1 : 0));
+    const slatRate = 0.8 * ((this.hyd.green ? 1 : 0) + (this.hyd.blue ? 1 : 0));
+    this.slat += clamp(cfgT.slat - this.slat, -slatRate * dt, slatRate * dt);
     if (!this.flapJam) this.flap += clamp(cfgT.flap - this.flap, -flapRate * dt, flapRate * dt);
     this.flapsMoving = Math.abs(cfgT.flap - this.flap) > 0.05 && !this.flapJam || Math.abs(cfgT.slat - this.slat) > 0.05;
     if (!this.flapsMoving) this.cfg = this.cfgTarget;
@@ -642,7 +649,10 @@ export class FlightModel {
       const exitV = 12;
       const need = this._stopAt(m.exit + 40, 80, 1.9);
       vGround = Math.max(exitV, Math.min(need, gs));
-      this.autobrake = tt > 2 ? (this.abMed || this.airport ? 3.0 : 1.7) : 0; // LO normally, MED after an abnormal
+      // autobrake LO (1.7 m/s2, 4 s after the ground spoilers) normally, MED (3 m/s2, after 2 s) after an abnormal;
+      // without green hydraulics there is no autobrake and the pilots brake by hand on the yellow alternate brakes
+      const med = this.abMed || this.airport || !this.hyd.green;
+      this.autobrake = tt > (med ? 2 : 4) ? (med ? 3.0 : 1.7) : 0;
       if (gs <= exitV + 0.3) { this.reverseCmd = 0; }
       // after some emergencies the crew stops straight ahead on the runway for the fire services
       if (this.stopOnRunway && tt > 3) { vGround = 0; this.autobrake = 3.0; if (gs < 0.3) { this.phase = 'runway-stop'; this.parkBrake = true; this.reverseCmd = 0; this.emit('stopped-on-runway'); } }
@@ -740,8 +750,8 @@ export class FlightModel {
     return clamp(Math.max(this._vappBase, gsMini + headNow), this._vappBase, this._vappBase + 15);
   }
 
-  // CONF FULL normally; CONF 3 with an engine out or a flap problem (Airbus abnormal procedures)
-  _landingCfg() { return this.engFail[0] || this.engFail[1] || this.flapJam || !(this.hyd.green || this.hyd.yellow) ? 4 : 5; }
+  // CONF FULL normally and with one engine out; CONF 3 with jammed flaps or no green and yellow hydraulics
+  _landingCfg() { return this.flapJam || !(this.hyd.green || this.hyd.yellow) ? 4 : 5; }
 
   // Divert the rest of the flight onto another route (e.g. back to Arlanda).
   divert(route) {

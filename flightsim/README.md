@@ -147,7 +147,9 @@ go-around, go-arounds for an occupied runway or an unstable approach, bird strik
 a medical emergency, a rejected take-off, an engine failure at take-off or a bird strike that
 takes out an engine (the crew returns to Arlanda for runway 01L), an engine fire, a
 precautionary shutdown, a rapid decompression with an emergency descent and hypoxia if you
-leave your mask off, a hydraulic failure with a gravity gear extension, and in chaos mode a
+leave your mask off, a green hydraulic failure (gravity gear extension, slow flaps, no autobrake,
+no reverser on engine 1, but the aircraft still taxis in on yellow-powered nose-wheel steering),
+and in chaos mode a
 flock of birds taking out both engines (glide, brace, crash-landing, evacuation down the
 slides) or a main gear that will not come down. The captain and purser brief you in Swedish
 and English as it happens. Crashes can be survivable or not, depending on how the aircraft
@@ -181,10 +183,20 @@ quality, time speed and spoken voices.
   seats; *Flavors by SAS* buy-on-board menu.
 * A320 exterior lighting: logo lights on the tailplane, switched with NAV and lit only with
   the main gear compressed or the slats out (FlyByWire A32NX documentation).
-* Turbulence: MIL-F-8785C Dryden model (scale lengths and intensities). Hypoxia: FAA time of
-  useful consciousness table. A320 procedures: CONF 3 for single-engine landing, autobrake LO/MED,
-  oxygen masks deploying at 14,000 ft cabin altitude, ~11.7° tail-strike attitude, 7.59 m
-  main-gear track, VMO 350 kt / MMO 0.82.
+* Turbulence: MIL-F-8785C Dryden model (scale lengths and intensities); strengths set to the
+  ICAO/WMO categories (moderate: 0.5–1.0 g changes, severe: more than 1 g). Chaos-mode severe
+  turbulence follows the SQ321 recorder data (TSIB preliminary report, May 2024: +1.35 g to
+  −1.5 g in 0.6 s). Hypoxia: FAA AC 61-107B time of useful consciousness, halved for a rapid
+  decompression (SKYbrary).
+* A320 procedures and systems: CONF FULL for a one-engine-out landing, autobrake LO 1.7 m/s²
+  after 4 s and MED 3 m/s² after 2 s (FlyByWire A32NX documentation), oxygen masks deploying
+  at 14,000 ft cabin altitude, 11.7° tail-strike attitude on compressed gear, 7.59 m main-gear
+  track, VMO 350 kt / MMO 0.82. Hydraulics: spoilers 1–5 powered green, yellow, blue, yellow,
+  green; reverser 1 green, reverser 2 yellow; flaps green + yellow; slats green + blue; gear
+  and normal brakes green; nose-wheel steering yellow on the A320neo.
+* Accident statistics on the end screen: IATA 2024 Safety Report (7 fatal accidents in
+  40.6 million flights); Airbus A320 Family Facts and Figures (176+ million flights since entry
+  into service).
 * Kastrup ground handling (cph.dk) and the Terminal 3 expansion; Arlanda taxi routes
   (VATSIM Scandinavia ESSA wiki); Airbus cabin chime conventions.
 * Runways: OurAirports `runways.csv` (ESSA 01L/19R, 01R/19L, 08/26; EKCH 04L/22R,

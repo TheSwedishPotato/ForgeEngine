@@ -62,9 +62,9 @@ export const EMERGENCY_PA = {
   rto: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. Vi avbröt starten på grund av en varning från en av motorerna. Det är en procedur vi tränar regelbundet. Bromsarna är varma, så räddningstjänsten kontrollerar dem, sedan kör vi tillbaka till gaten så att teknikerna kan titta på motorn. Jag ber om ursäkt för förseningen.',
     'Ladies and gentlemen, this is the captain. We rejected the take-off because of a warning from one of the engines. It is a procedure we practise regularly. The brakes are hot, so the fire services will check them, and then we will taxi back to the gate for the engineers to look at the engine. I am sorry for the delay.'),
   hardLanding: () => pa(CAPT(), 'Förlåt för den hårda landningen, vinden byade precis när vi satte ner.', 'Sorry for the firm landing, the wind gusted just as we touched down.'),
-  hydraulic: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. Vi har förlorat ett av flygplanets tre hydraulsystem. Vi har två kvar och kan landa säkert, men landningsstället fälls ut med tyngdkraften och vi behöver en längre landningssträcka. Räddningstjänsten möter oss och vi blir bogserade från banan.',
-    'Ladies and gentlemen, this is the captain. We have lost one of the aircraft\'s three hydraulic systems. We still have two and can land safely, but the landing gear will be lowered by gravity and we will need a longer landing roll. The fire services will meet us and we will be towed off the runway.'),
-  emergencyLanding: () => pa(PURS(), 'Mina damer och herrar, vi förbereder oss för en nödlandning. Lyssna noga på kabinpersonalen. Spänn fast bältet hårt, ställ ryggstödet upprätt och lägg undan allt lösa föremål. När ni hör "Brace!" böjer ni er fram med huvudet mot stolen framför och håller kvar tills flygplanet har stannat.',
+  hydraulic: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. Ett av flygplanets tre hydraulsystem har slutat fungera. De två andra fungerar som de ska och vi kan landa säkert som planerat. Landningsstället fälls ut med tyngdkraften, klaffarna rör sig långsammare och vi bromsar för hand, så inflygningen blir lite längre och ni kommer att höra fler ljud än vanligt. Räddningstjänsten står beredd vid banan, vilket är standard. Vi kan ändå köra in till gaten som vanligt.',
+    'Ladies and gentlemen, this is the captain. One of the aircraft\'s three hydraulic systems has stopped working. The other two are working normally and we can land safely as planned. The landing gear will be lowered by gravity, the flaps will move more slowly and we will brake by hand, so the approach will be a little longer and you may hear some unusual noises. As a standard precaution the fire services will be standing by at the runway. We still expect to taxi to the gate as usual.'),
+  emergencyLanding: () => pa(PURS(), 'Mina damer och herrar, vi förbereder oss för en nödlandning. Lyssna noga på kabinpersonalen. Spänn fast bältet hårt, ställ ryggstödet upprätt och lägg undan alla lösa föremål. När ni hör "Brace!" böjer ni er fram med huvudet mot stolen framför och håller kvar tills flygplanet har stannat.',
     'Ladies and gentlemen, we are preparing for an emergency landing. Listen carefully to the cabin crew. Fasten your seatbelt tightly, put your seat upright and stow all loose items. When you hear "Brace", lean forward with your head against the seat in front and stay down until the aircraft has stopped.'),
   brace: () => [{ text: 'Brace! Brace! Heads down! Stay down!', lang: 'en', speaker: PURS(), pa: true }, { text: 'Huvudet ner! Håll kvar!', lang: 'sv', speaker: PURS(), pa: true }],
   evacuate: () => [{ text: 'Evacuate! Evacuate! Release your seatbelts! Leave everything! Come this way!', lang: 'en', speaker: PURS(), pa: true }, { text: 'Lossa bältet! Lämna allt! Kom hit!', lang: 'sv', speaker: PURS(), pa: true }],
@@ -94,6 +94,14 @@ export const SCENARIOS = [
   { id: 'dual-engine', label: 'Bird flock: both engines lost (forced landing)', tier: 3, p: 0, window: (fm) => fm.phase === 'climb' && fm.h > 700 && fm.h < 1100 },
   { id: 'gear-unsafe', label: 'One main gear will not extend', tier: 3, p: 0, window: (fm) => fm.phase === 'approach' && fm.m.touchdown - fm.s < 16000 },
 ];
+
+// time of useful consciousness (s) after a rapid decompression, by cabin altitude (ft)
+const TUC = [[10000, 3600], [15000, 1500], [18000, 720], [22000, 300], [25000, 150], [28000, 80], [30000, 45], [35000, 22], [40000, 9], [45000, 6]];
+function tucAt(ft) {
+  if (ft <= TUC[0][0]) return TUC[0][1];
+  for (let i = 1; i < TUC.length; i++) if (ft < TUC[i][0]) { const [a, ta] = TUC[i - 1], [b, tb] = TUC[i]; return lerp(ta, tb, (ft - a) / (b - a)); }
+  return TUC[TUC.length - 1][1];
+}
 
 export class Incidents {
   constructor(S, mode = 'realistic') {
@@ -157,7 +165,8 @@ export class Incidents {
     const act = (step, data = {}) => { const a = { id, t: 0, step, ...data }; this.active.push(a); return a; };
     switch (id) {
       case 'turb-moderate': {
-        S.atmo.addCAT(2.4 + this.r() * 0.8, 70 + this.r() * 60);
+        // ICAO moderate: accelerometer changes of 0.5 to 1.0 g (this gives about 0.5 to 1.5 g)
+        S.atmo.addCAT(4.2 + this.r() * 1.2, 70 + this.r() * 60);
         act((dt, a) => {
           if (a.t > 4 && !a.sign) { a.sign = true; D.setSeatbelt(true); this.say(EMERGENCY_PA.turbModerate); }
           if (a.t > 150 && !a.off) { a.off = true; if (fm.phase === 'cruise') D.setSeatbelt(false); a.done = true; }
@@ -165,9 +174,10 @@ export class Incidents {
         break;
       }
       case 'turb-severe': {
-        // realistic: a hard jolt (about 0.6 to 1.6 g); eventful: stronger; chaos: a violent negative-g drop
-        const [jolt, width] = this.mode === 'chaos' ? [22 + this.r() * 5, 0.15 + this.r() * 0.05] : this.mode === 'eventful' ? [13 + this.r() * 4, 0.3] : [7 + this.r() * 3, 0.35];
-        S.atmo.addCAT(4.2, 45, jolt, width);
+        // ICAO severe: changes of more than 1 g. Realistic: a drop to about +0.1 to +0.3 g, then about 1.8 g;
+        // eventful: below zero g; chaos: like SQ321 in May 2024, whose recorder showed +1.35 g to -1.5 g in 0.6 s
+        const [jolt, width] = this.mode === 'chaos' ? [44 + this.r() * 6, 0.12] : this.mode === 'eventful' ? [27 + this.r() * 5, 0.18] : [17 + this.r() * 5, 0.28];
+        S.atmo.addCAT(5.0, 45, jolt, width);
         act((dt, a) => {
           if (a.t > 0.5 && !a.s1) { a.s1 = true; D.setSeatbelt(true); }
           if (a.t > 19 && !a.s2) { a.s2 = true; S.audio.scream(1); this.say(EMERGENCY_PA.seatedNow, { priority: 3 }); S.people.crewToJumpSeats(() => {}); }
@@ -208,9 +218,11 @@ export class Incidents {
       case 'engine-shutdown': this._engineFailure(this.r() < 0.5 ? 0 : 1, 'oil', this._nearDeparture()); break;
       case 'depress': this._depressurisation(); break;
       case 'hydraulic': {
+        // green system lost: gear by gravity (and it cannot retract), no autobrake (manual alternate braking on yellow),
+        // no reverser on engine 1, no spoilers 1 and 5, flaps and slats at half speed. Nose-wheel steering is on the
+        // yellow system on the A320neo, so the aircraft can still vacate the runway and taxi in.
         fm.hyd.green = false; fm.abMed = true; A.chime('single');
-        fm.stopOnRunway = true;
-        act((dt, a) => { if (a.t > 50 && !a.p) { a.p = true; this.say(EMERGENCY_PA.hydraulic); } if (fm.phase === 'runway-stop' && !a.tow) { a.tow = true; setTimeout(() => this._end('towed'), 45000); } if (a.tow || a.t > 5000) a.done = true; });
+        act((dt, a) => { if (a.t > 50 && !a.p) { a.p = true; this.say(EMERGENCY_PA.hydraulic); } if (a.p && ['arrived', 'taxi-in'].includes(fm.phase) || a.t > 5000) a.done = true; });
         break;
       }
       case 'dual-engine': {
@@ -328,12 +340,13 @@ export class Incidents {
   }
 
   // ---------------- hypoxia ----------------
-  // Time of useful consciousness shrinks fast with cabin altitude (FAA figures: 25,000 ft 3-5 min,
-  // 30,000 ft 1-2 min, 35,000 ft 30-60 s, 40,000 ft 15-20 s).
+  // Time of useful consciousness shrinks fast with cabin altitude. FAA AC 61-107B gives 25,000 ft 3-5 min,
+  // 30,000 ft 1-2 min, 35,000 ft 30-60 s, 40,000 ft 15-20 s, and a rapid decompression cuts these by up
+  // to half, so this uses the lower, halved values (35,000 ft: about 20 s).
   _hypoxia(dt) {
     const S = this.S, fm = S.fm, P = S.player;
     const ft = fm.cabinAlt / FT;
-    const tuc = ft < 10000 ? Infinity : ft < 15000 ? lerp(2400, 1800, (ft - 10000) / 5000) : ft < 22000 ? lerp(1800, 480, (ft - 15000) / 7000) : ft < 25000 ? lerp(480, 240, (ft - 22000) / 3000) : ft < 30000 ? lerp(240, 90, (ft - 25000) / 5000) : ft < 35000 ? lerp(90, 45, (ft - 30000) / 5000) : lerp(45, 18, clamp((ft - 35000) / 5000, 0, 1));
+    const tuc = ft < 10000 ? Infinity : tucAt(ft);
     const masked = P.maskOn;
     if (!masked && tuc < Infinity) this.hypoxia += dt / tuc;
     else this.hypoxia = Math.max(0, this.hypoxia - dt * (ft < 12000 ? 0.05 : 0.02));
@@ -356,7 +369,6 @@ export class Incidents {
     }
     if (e === 'go-around-unstable') this._goAroundFollowUp('unstable');
     if (e === 'hard-landing') setTimeout(() => this.say(EMERGENCY_PA.hardLanding), 9000);
-    if (e === 'touchdown' && (fm.hyd && !fm.hyd.green)) this._towAtStop = true;
   }
 
   _evacuation(dt) {
@@ -444,7 +456,7 @@ export class Incidents {
     const S = this.S, D = S.director, ev = this.evac;
     const mins = Math.round(D.t / 60);
     const texts = {
-      fatal: { label: 'Accident', title: 'The flight did not arrive', text: `${S.opts.flight} was destroyed in an accident. In reality this is extraordinarily rare: commercial aviation averages well under one fatal accident per million flights, and Airbus A320-family aircraft fly over 10 million flights a year.`, items: [['Time', `${mins} min`], ['Impact speed', `${Math.round((S.fm.crashSpeed || 0) / KT)} kt`], ['Events', this.log.map((l) => l.text).join(', ') || '—']] },
+      fatal: { label: 'Accident', title: 'The flight did not arrive', text: `${S.opts.flight} was destroyed in an accident. In reality this is extraordinarily rare: in 2024 there were 7 fatal accidents in 40.6 million flights worldwide (IATA), and the Airbus A320 family has flown more than 176 million flights since 1988.`, items: [['Time', `${mins} min`], ['Impact speed', `${Math.round((S.fm.crashSpeed || 0) / KT)} kt`], ['Events', this.log.map((l) => l.text).join(', ') || '—']] },
       evacuated: { label: 'Emergency evacuation', title: 'You got out', text: `You left the aircraft ${Math.round(ev?.t || 0)} seconds after the evacuation order. Aircraft are certified so that everyone can get out in 90 seconds with half the exits blocked. ${S.fm.crashed ? 'The aircraft is damaged beyond repair, but it held together — the cabin crew\'s commands and your brace position are what make crashes like this survivable.' : ''}`, items: [['Time on board', `${mins} min`], ['Your evacuation time', `${Math.round(ev?.t || 0)} s`], ['Passengers out before you', String(ev?.out ?? 0)], ['Events', this.log.map((l) => l.text).join(', ') || '—']] },
       towed: { label: S.fm.airport === 'ARN' ? 'Stockholm Arlanda' : 'Copenhagen Kastrup', title: 'Safely on the ground', text: `The aircraft stopped on the runway, the fire services checked it over, and a tug towed you to a stand. ${this.log.length ? 'Your flight had: ' + this.log.map((l) => l.text).join(', ') + '.' : ''} Emergencies like this are trained for in the simulator every six months, and almost always end exactly like this.`, items: [['Time on board', `${mins} min`], ['Landed at', S.fm.airport === 'ARN' ? 'Stockholm Arlanda (returned)' : 'Copenhagen Kastrup']] },
       rto: { label: 'Stockholm Arlanda · runway 19R', title: 'Take-off rejected', text: 'The crew stopped the aircraft on the runway. After the brakes had cooled, you taxied back to the gate and SAS rebooked everyone onto a later flight to Copenhagen.', items: [['Time on board', `${mins} min`], ['Top speed', `${Math.round(S.fm._rtoV || 110)} kt`]] },
