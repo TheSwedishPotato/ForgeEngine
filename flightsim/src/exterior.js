@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { canvasTex, glowTex, rr } from './textures.js';
 import { windowList, CAB, DOORS, DOOR_W, DOOR_H } from './cabin.js';
-import { DEG, clamp, lerp } from './core.js';
+import { DEG, clamp, lerp, exposeMaterial, sharedUniforms } from './core.js';
 
 // ---- planform (s = spanwise distance from centreline, m) ----
 const S_ROOT = 1.9, S_KINK = 6.3, S_TIP = 17.05;
@@ -149,23 +149,91 @@ function sharkletTexture() {
   });
 }
 
-function skinTexture(holes) {
-  // u along z (-7..31), v around (angle). Livery: silver-grey, blue belly, window holes via alpha.
+function skinTexture(holes, side) {
+  // u along z (-7.5..31.5), v around the side (-90° bottom .. +90° top).
+  // 2019 SAS livery: fresh grey fuselage, blue belly extending from the tail, tone-on-tone
+  // silver-grey "SAS" up front, "Scandinavian" on the underside, SkyTeam logo by door L1.
   const zA = -7.5, zB = 31.5;
-  const color = canvasTex(2048, 512, (g, w, h) => {
-    g.fillStyle = '#cfd2d7'; g.fillRect(0, 0, w, h);
-    // v: 0 = bottom (-90°), 1 = top (+90°) on this side; belly blue below ~ -40°
+  const X = (z) => (z - zA) / (zB - zA);
+  const color = canvasTex(4096, 1024, (g, w, h) => {
     const vOf = (deg) => (deg + 90) / 180;
-    g.fillStyle = '#1d3a86'; g.fillRect(0, h - vOf(-38) * h, w, vOf(-38) * h);
-    g.strokeStyle = 'rgba(60,65,75,0.35)'; g.lineWidth = 1;
-    for (let z = zA; z < zB; z += 0.5334) { const x = (z - zA) / (zB - zA) * w; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); }
-    for (let a = -80; a < 90; a += 12) { g.beginPath(); g.moveTo(0, h - vOf(a) * h); g.lineTo(w, h - vOf(a) * h); g.stroke(); }
+    const Y = (deg) => h - vOf(deg) * h;
+    const U = (z) => X(z) * w;
+    g.fillStyle = '#cdd0d5'; g.fillRect(0, 0, w, h);
+    // belly: blue sweeps up towards the tail (the tail is all blue)
+    g.fillStyle = '#1d3a86'; g.beginPath();
+    g.moveTo(0, Y(-40)); g.lineTo(U(18), Y(-40)); g.quadraticCurveTo(U(24), Y(-30), U(26), Y(10)); g.lineTo(U(31.5), Y(90)); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
+    // subtle panel lines & rivet rows
+    g.strokeStyle = 'rgba(60,65,75,0.22)'; g.lineWidth = 1.2;
+    for (let z = zA + 0.5334 * 2; z < zB; z += 0.5334 * 3) { g.beginPath(); g.moveTo(U(z), 0); g.lineTo(U(z), h); g.stroke(); }
+    for (let a2 = -80; a2 < 90; a2 += 14) { g.beginPath(); g.moveTo(0, Y(a2)); g.lineTo(w, Y(a2)); g.stroke(); }
+    // text helpers: on the right side the texture is viewed mirrored, so flip glyphs
+    const text = (str, z, deg, px, fill, opts = {}) => {
+      g.save(); g.translate(U(z), Y(deg)); if (side > 0) g.scale(-1, 1); if (opts.rot) g.rotate(opts.rot);
+      g.fillStyle = fill; g.font = `${opts.weight || 'bold'} ${px}px ${opts.font || 'Arial, Helvetica, sans-serif'}`; g.textAlign = opts.align || 'center'; g.textBaseline = 'middle';
+      g.fillText(str, 0, 0); g.restore();
+    };
+    text('SAS', -1.6, 32, 150, '#b9bcc2', { weight: '900' });                 // big tone-on-tone titles up front
+    text('SE-ROX', 27.3, 4, 30, '#2b3140');                                    // registration
+    text('Scandinavian', 9, -78, 92, '#dfe4ee', { weight: '600' });              // belly titles
+    text('roar viking', 2.0, 22, 18, '#5b6270', { weight: 'normal', font: 'Georgia, serif' });
+    // SkyTeam logo (stylised ribbon) beside door L1 and a Swedish flag
+    g.save(); g.translate(U(-3.55), Y(26)); if (side > 0) g.scale(-1, 1);
+    g.fillStyle = '#1d3a86'; g.beginPath(); g.ellipse(0, 0, 22, 22, 0, 0, 7); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.arc(0, 0, 13, 0.3, 4.6); g.stroke(); g.beginPath(); g.arc(4, -3, 8, 2.8, 6.4); g.stroke();
+    g.fillStyle = '#fff'; g.font = 'bold 13px Arial'; g.textAlign = 'left'; g.fillText('SkyTeam', 28, 5); g.restore();
+    g.save(); g.translate(U(-4.4), Y(38)); if (side > 0) g.scale(-1, 1);
+    g.fillStyle = '#0a5aa8'; g.fillRect(-16, -10, 32, 20); g.fillStyle = '#fecb00'; g.fillRect(-16, -2, 32, 4); g.fillRect(-6, -10, 4, 20); g.restore();
+    // door outlines (L1/L4 or R1/R4), cargo doors on the right, over-wing hatches
+    const doorOutline = (z, deg0, deg1, wz) => { g.strokeStyle = 'rgba(40,45,55,0.55)'; g.lineWidth = 2.2; rr(g, U(z - wz / 2), Y(deg1), U(z + wz / 2) - U(z - wz / 2), Y(deg0) - Y(deg1), 10); g.stroke(); };
+    doorOutline(-2.3, -28, 26, 0.86); doorOutline(24.2, -28, 26, 0.86);
+    doorOutline(10.1, -19, 12, 0.52); doorOutline(11.0, -19, 12, 0.52);
+    if (side > 0) { doorOutline(-0.4, -75, -40, 1.8); doorOutline(20.0, -75, -40, 1.8); doorOutline(28.0, -70, -48, 0.9); }
+    // static discharge/dirt streaks aft of the windows, grime along the belly
+    g.fillStyle = 'rgba(60,60,70,0.07)'; for (let z = 0; z < 26; z += 1.6) g.fillRect(U(z), Y(6), 60, 16);
+    g.fillStyle = 'rgba(0,0,0,0.08)'; g.fillRect(0, Y(-60), w, Y(-88) - Y(-60));
   });
   const alpha = canvasTex(4096, 512, (g, w, h) => {
     g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.fillStyle = '#000';
-    for (const o of holes) { rr(g, (o.z0 - zA) / (zB - zA) * w, h - o.v1 * h, (o.z1 - o.z0) / (zB - zA) * w, (o.v1 - o.v0) * h, 5); g.fill(); }
+    for (const o of holes) { rr(g, X(o.z0) * w, h - o.v1 * h, (X(o.z1) - X(o.z0)) * w, (o.v1 - o.v0) * h, 5); g.fill(); }
   }, { srgb: false });
   return { color, alpha, zA, zB };
+}
+
+function finTexture() {
+  return canvasTex(1024, 1024, (g, w, h) => {
+    // u = chord (0 leading edge), v = span (0 root)
+    g.fillStyle = '#1d3a86'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(255,255,255,0.08)'; g.lineWidth = 2;
+    for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(0, h * i / 8); g.lineTo(w, h * i / 8); g.stroke(); }
+    g.fillStyle = '#ffffff'; g.font = '900 250px Arial, Helvetica, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.save(); g.translate(w * 0.5, h * 0.42); g.rotate(-0.06); g.fillText('SAS', 0, 0); g.restore();
+    // rudder hinge line
+    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 3; g.beginPath(); g.moveTo(w * 0.68, 0); g.lineTo(w * 0.68, h); g.stroke();
+  });
+}
+
+// Symmetric aerofoil surface: pts along a spanwise axis with chord/lead per station.
+function foilSurface(stations, mirrorUV = false) {
+  // stations: [{p: Vector3 leading edge, chordDir: Vector3 (unit), chord, thick, thickDir: Vector3}]
+  const nx = 12, pos = [], uv = [], idx = [];
+  for (let j = 0; j < stations.length; j++) {
+    const st = stations[j];
+    for (let k = 0; k < 2; k++) for (let i = 0; i <= nx; i++) {
+      const x = i / nx;
+      const yt = st.thick * (1.4845 * Math.sqrt(x) - 0.63 * x - 1.758 * x * x + 1.4215 * x ** 3 - 0.5075 * x ** 4) * st.chord;
+      const sgn = k ? -1 : 1;
+      const P = st.p.clone().addScaledVector(st.chordDir, x * st.chord).addScaledVector(st.thickDir, sgn * yt);
+      pos.push(P.x, P.y, P.z); uv.push(mirrorUV && k ? 1 - x : x, j / (stations.length - 1));
+    }
+  }
+  const row = (nx + 1) * 2;
+  for (let j = 0; j < stations.length - 1; j++) for (let k = 0; k < 2; k++) for (let i = 0; i < nx; i++) {
+    const a = j * row + k * (nx + 1) + i, b = a + 1, c = a + row, d = c + 1;
+    if (k === 0) idx.push(a, b, c, b, d, c); else idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return g;
 }
 
 export class Exterior {
@@ -183,21 +251,22 @@ export class Exterior {
             float sp = clamp((abs(position.x) - 1.9) / 15.15, 0.0, 1.2);
             transformed.y += uFlex * sp * sp;`);
       };
-      return m;
+      return exposeMaterial(m);
     };
+    const ex = (m) => exposeMaterial(m);
     this.mats = {
       wing: mk({ color: '#ffffff', map: wingTex, roughness: 0.42, metalness: 0.35 }),
       wingLower: mk({ color: '#b8bcc3', roughness: 0.55, metalness: 0.3 }),
       metal: mk({ color: '#d7dbe1', roughness: 0.28, metalness: 0.8 }),
       flap: mk({ color: '#c3c7cd', roughness: 0.45, metalness: 0.35 }),
       dark: mk({ color: '#2d3139', roughness: 0.6, metalness: 0.3 }),
-      nacelle: new THREE.MeshStandardMaterial({ color: '#ffffff', map: nacelleTexture(), roughness: 0.35, metalness: 0.45 }),
-      lip: new THREE.MeshStandardMaterial({ color: '#e8ebef', roughness: 0.15, metalness: 0.95 }),
-      core: new THREE.MeshStandardMaterial({ color: '#5a5f68', roughness: 0.5, metalness: 0.6 }),
-      fan: new THREE.MeshStandardMaterial({ color: '#23262d', roughness: 0.4, metalness: 0.7 }),
+      nacelle: ex(new THREE.MeshStandardMaterial({ color: '#ffffff', map: nacelleTexture(), roughness: 0.35, metalness: 0.45 })),
+      lip: ex(new THREE.MeshStandardMaterial({ color: '#e8ebef', roughness: 0.15, metalness: 0.95 })),
+      core: ex(new THREE.MeshStandardMaterial({ color: '#5a5f68', roughness: 0.5, metalness: 0.6 })),
+      fan: ex(new THREE.MeshStandardMaterial({ color: '#23262d', roughness: 0.4, metalness: 0.7 })),
       sharklet: mk({ color: '#ffffff', map: sharkletTexture(), roughness: 0.35, metalness: 0.25 }),
-      pylon: new THREE.MeshStandardMaterial({ color: '#c5c9cf', roughness: 0.45, metalness: 0.35 }),
-      fairing: new THREE.MeshStandardMaterial({ color: '#c8ccd2', roughness: 0.5, metalness: 0.25 }),
+      pylon: ex(new THREE.MeshStandardMaterial({ color: '#c5c9cf', roughness: 0.45, metalness: 0.35 })),
+      fairing: ex(new THREE.MeshStandardMaterial({ color: '#c8ccd2', roughness: 0.5, metalness: 0.25 })),
     };
     for (const side of [-1, 1]) this._buildWing(side);
     for (const side of [-1, 1]) this._buildEngine(side);
@@ -277,8 +346,8 @@ export class Exterior {
     shark.material.onBeforeCompile = M.sharklet.onBeforeCompile;
     this[side < 0 ? 'tipL' : 'tipR'] = new THREE.Vector3(side * S_TIP, tip.y + 0.1, LE(S_TIP) + 0.6);
     // wing-body fairing
-    const fair = new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, Math.PI * 0.5, Math.PI * 0.5);
-    fair.scale(2.25, 1.0, 5.5); fair.translate(0, -0.55, 9.3);
+    const fair = new THREE.SphereGeometry(1, 24, 14, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55);
+    fair.scale(2.35, 1.35, 6.4); fair.translate(0, -1.45, 9.8);
     if (side > 0) this._add(fair, M.fairing);
   }
 
@@ -341,7 +410,6 @@ export class Exterior {
 
   _buildFuselage() {
     const holes = [];
-    const zOf = (z) => z;
     for (const w of windowList()) {
       if (w.side > 0) continue;
       const th = Math.asin((CAB.winY - CAB.yc) / CAB.Rw);
@@ -354,19 +422,19 @@ export class Exterior {
       const a0 = Math.asin((0.0 - CAB.yc) / CAB.Rskin) / DEG, a1 = Math.asin((DOOR_H + 0.02 - CAB.yc) / CAB.Rskin) / DEG;
       holes.push({ z0: d.z - DOOR_W / 2 + 0.02, z1: d.z + DOOR_W / 2 - 0.02, v0: (a0 + 90) / 180, v1: (a1 + 90) / 180 });
     }
-    const tex = skinTexture(holes);
-    // radius profile along z (nose & tail cones)
+    // radius profile along z: radome, constant section, tail cone rising to the APU
     const R = (z) => {
-      if (z < -3.2) { const t = clamp((z + 7.3) / 4.1, 0, 1); return 1.99 * Math.sqrt(1 - (1 - t) ** 2.2); }
-      if (z > 26.5) { const t = clamp((z - 26.5) / 5.0, 0, 1); return 1.99 * (1 - 0.72 * t * t); }
+      if (z < -3.2) { const t = clamp((z + 7.4) / 4.2, 0, 1); return 1.99 * Math.pow(1 - Math.pow(1 - t, 2.4), 0.55); }
+      if (z > 24.0) { const t = clamp((z - 24.0) / 6.2, 0, 1); return 1.99 * (1 - 0.86 * t * t) + 0.06 * t; }
       return 1.99;
     };
-    const Yc = (z) => CAB.yc + (z > 26.5 ? ((z - 26.5) / 5.0) ** 2 * 1.1 : 0) - (z < -3.2 ? ((-3.2 - z) / 4.1) ** 2 * 0.35 : 0);
+    const Yc = (z) => CAB.yc + (z > 24.0 ? Math.pow((z - 24.0) / 6.2, 1.8) * 1.45 : 0) - (z < -3.2 ? ((-3.2 - z) / 4.2) ** 2 * 0.42 : 0);
     for (const side of [-1, 1]) {
+      const tex = skinTexture(holes, side);
       const pos = [], uv = [], idx = [];
-      const nz = 80, na = 24;
+      const nz = 120, na = 28;
       for (let j = 0; j <= nz; j++) {
-        const z = lerp(tex.zA + 0.2, tex.zB - 0.6, j / nz);
+        const z = lerp(tex.zA + 0.12, tex.zB - 1.3, j / nz);
         const r = R(z), yc = Yc(z);
         for (let i = 0; i <= na; i++) {
           const a = -Math.PI / 2 + Math.PI * i / na;
@@ -379,9 +447,83 @@ export class Exterior {
         if (side > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c);
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
-      const mat = new THREE.MeshStandardMaterial({ color: '#ffffff', map: tex.color, alphaMap: tex.alpha, alphaTest: 0.5, roughness: 0.38, metalness: 0.3 });
+      const mat = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#ffffff', map: tex.color, alphaMap: tex.alpha, alphaTest: 0.5, roughness: 0.36, metalness: 0.32 }));
       this._add(g, mat);
     }
+    const M = this.mats;
+    // cockpit glazing: a dark band with six panes
+    const glass = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#0e141c', roughness: 0.08, metalness: 0.6 }));
+    for (const side of [-1, 1]) {
+      for (const [z0, z1, a0, a1] of [[-5.55, -4.75, 12, 30], [-4.7, -4.05, 12, 30], [-4.0, -3.4, 12, 28]]) {
+        const pos = [], idx = [];
+        const N = 6;
+        for (let j = 0; j <= 1; j++) for (let i = 0; i <= N; i++) {
+          const z = lerp(z0, z1, i / N), a = lerp(a0, a1, j) * DEG; const r = R(z) + 0.012, yc = Yc(z);
+          pos.push(side * r * Math.cos(a), yc + r * Math.sin(a), z);
+        }
+        for (let i = 0; i < N; i++) { const a = i, b = a + 1, c = a + N + 1, d = c + 1; if (side > 0) idx.push(a, c, b, b, c, d); else idx.push(a, b, c, b, d, c); }
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+        this._add(g, glass);
+      }
+    }
+    // radome tip (slightly different grey) and the nose gear bay
+    const radome = this._add(new THREE.SphereGeometry(0.62, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), M.fairing);
+    radome.rotation.x = -Math.PI / 2; radome.scale.set(1, 1, 2.1); radome.position.set(0, Yc(-7.3), -6.9);
+    // vertical fin: 5.9 m root chord, ~6.3 m high, swept 35°
+    this.finTex = finTexture();
+    const finMat = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#ffffff', map: this.finTex, roughness: 0.4, metalness: 0.25 }));
+    const finSt = [];
+    for (let i = 0; i <= 8; i++) {
+      const t = i / 8, y = 2.6 + 6.4 * t, z = 22.4 + 4.6 * t * 1.05, chord = lerp(6.1, 2.2, t), thick = lerp(0.1, 0.08, t);
+      finSt.push({ p: new THREE.Vector3(0, y, z), chordDir: new THREE.Vector3(0, 0.09, 1).normalize(), chord, thick, thickDir: new THREE.Vector3(1, 0, 0) });
+    }
+    this._add(foilSurface(finSt, true), finMat);
+    const finRoot = this._add(new THREE.BoxGeometry(0.6, 0.5, 7.0), M.fairing); finRoot.position.set(0, 2.55, 25.4);
+    // horizontal stabilisers, 12.45 m span, 6° dihedral
+    for (const side of [-1, 1]) {
+      const st = [];
+      for (let i = 0; i <= 6; i++) {
+        const t = i / 6, x = side * (0.9 + 5.3 * t), y = 2.05 + 0.6 * t, z = 26.1 + 2.7 * t, chord = lerp(3.3, 1.3, t);
+        st.push({ p: new THREE.Vector3(x, y, z), chordDir: new THREE.Vector3(0, 0, 1), chord, thick: 0.1, thickDir: new THREE.Vector3(0, 1, 0) });
+      }
+      this._add(foilSurface(st), M.wingLower);
+    }
+    // APU exhaust
+    const apu = this._add(new THREE.CylinderGeometry(0.16, 0.22, 0.7, 12).rotateX(Math.PI / 2), M.dark); apu.position.set(0, Yc(30.2) + 0.1, 30.4);
+    this._buildGear();
+    // soft ground shadow under the aircraft (only shown on the ground)
+    this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(44, 44), new THREE.MeshBasicMaterial({ alphaMap: glowTex(), color: '#000000', transparent: true, opacity: 0.45, depthWrite: false }));
+    this.shadow.rotation.x = -Math.PI / 2; this.shadow.position.set(0, -3.36, 10); this.shadow.scale.set(1, 1.35, 1); this.group.add(this.shadow);
+  }
+
+  // Retractable undercarriage: twin-wheel nose leg, two twin-wheel main legs with doors.
+  _buildGear() {
+    const M = this.mats;
+    const tyre = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#17181a', roughness: 0.9 }));
+    const hub = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#c9ccd1', roughness: 0.4, metalness: 0.6 }));
+    const strut = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#d6d9de', roughness: 0.35, metalness: 0.7 }));
+    const wheel = (r, w) => { const g = new THREE.Group(); const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 20).rotateZ(Math.PI / 2), tyre); const h = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.55, w + 0.02, 14).rotateZ(Math.PI / 2), hub); g.add(t, h); return g; };
+    this.gear = { main: [], nose: null, doors: [] };
+    // main gear: pivot at the wing root, leg down 2.4 m, wheels at y=-3.4, z=11.5 (G_LOCAL)
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group(); pivot.position.set(side * 1.9, -1.0, 11.5); this.group.add(pivot);
+      const legLen = 2.4;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, legLen, 10), strut); leg.position.set(side * 1.85, -legLen / 2, 0); pivot.add(leg);
+      const sideStay = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 8), strut); sideStay.position.set(side * 0.9, -1.0, 0.1); sideStay.rotation.z = side * 0.75; pivot.add(sideStay);
+      const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 8).rotateZ(Math.PI / 2), strut); axle.position.set(side * 1.85, -legLen, 0); pivot.add(axle);
+      for (const w of [-0.42, 0.42]) { const wh = wheel(0.58, 0.36); wh.position.set(side * 1.85 + w, -legLen, 0); pivot.add(wh); }
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.2, 1.9), M.wingLower); door.position.set(side * 1.15, -0.6, 0); pivot.add(door);
+      this.gear.main.push({ pivot, side });
+    }
+    // nose gear: retracts forward
+    const np = new THREE.Group(); np.position.set(0, -0.9, -2.3); this.group.add(np);
+    const nl = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.1, 10), strut); nl.position.set(0, -1.05, 0); np.add(nl);
+    const drag = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8), strut); drag.position.set(0, -0.9, 0.55); drag.rotation.x = 0.7; np.add(drag);
+    for (const w of [-0.24, 0.24]) { const wh = wheel(0.36, 0.2); wh.position.set(w, -2.1 + 0.36 - 0.36, 0); wh.position.y = -2.15; np.add(wh); }
+    for (const sd of [-1, 1]) { const door = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.0, 1.6), M.wingLower); door.position.set(sd * 0.45, -0.55, 0.1); door.rotation.z = sd * 0.35; np.add(door); }
+    this.gear.nose = np;
+    // taxi light on the nose leg
+    this.taxiLight = new THREE.SpotLight('#fff3dc', 0, 90, 0.35, 0.5, 1.1); this.taxiLight.position.set(0, -1.6, -2.4); this.taxiLight.target.position.set(0, -3.3, -40); this.group.add(this.taxiLight, this.taxiLight.target);
   }
 
   _buildLights() {
@@ -424,12 +566,20 @@ export class Exterior {
     this._ail = (this._ail || 0) + (clamp(bankRate * 4, -1, 1) - (this._ail || 0)) * Math.min(1, dt * 4);
     for (const ai of P.ailerons) this._setHinge(ai.pivot, -this._ail * 12 * DEG, 0, 0);
     for (const r of P.reversers) { r.sleeve.position.z = fm.reverse * 0.55; r.cascade.visible = fm.reverse > 0.05; }
+    // undercarriage: main legs fold inboard, the nose leg forward
+    const gk = clamp(fm.gear, 0, 1);
+    for (const g of this.gear.main) g.pivot.rotation.z = g.side * (1 - gk) * 1.55;
+    this.gear.nose.rotation.x = -(1 - gk) * 1.5;
+    this.shadow.visible = fm.onGround || fm.h < 60;
+    this.shadow.material.opacity = 0.45 * clamp(1 - fm.h / 60, 0, 1) * (0.4 + 0.6 * (1 - env.nightK));
+    this.taxiLight.intensity = env.landing && fm.onGround ? 40 : 0;
     for (const f of P.fans) { const n1 = fm.n1[f.side < 0 ? 0 : 1]; f.angle += n1 * 64 * 2 * Math.PI * dt * 0.25; f.fan.rotation.z = f.angle; }
     // wing flex: up in flight with load, down on the ground; turbulence adds bounce
     const flexTarget = fm.onGround ? -0.12 : 0.35 + fm.bump * 0.35 + (fm.accel ? fm.accel.y * 0.03 : 0);
     this.flexU.value += (flexTarget - this.flexU.value) * Math.min(1, dt * 3);
     // lights
-    const L = this.lights, nightK = env.nightK;
+    const L = this.lights, nightK = env.nightK, pe = sharedUniforms.uPreExp.value;
+    for (const [k, c] of [['navL', '#ff2a1a'], ['navR', '#22ff66'], ['strobeL', '#ffffff'], ['strobeR', '#ffffff'], ['beaconB', '#ff2020'], ['scan', '#fff4e0']]) L[k].material.color.set(c).multiplyScalar(pe * 1.6);
     const navOn = true;
     L.navL.visible = L.navR.visible = navOn;
     L.navL.material.opacity = L.navR.material.opacity = 0.35 + 0.65 * nightK;

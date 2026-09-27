@@ -9,8 +9,8 @@ const $ = (id) => document.getElementById(id);
 
 export class UI {
   constructor() {
-    this.opts = { depIndex: 0, weather: 'fair', seat: '22A', load: 0.85, lang: 'sv+en', quality: 'medium', speed: 1, voice: true };
-    try { const saved = JSON.parse(localStorage.getItem('sk1415-opts-v1') || 'null'); if (saved) Object.assign(this.opts, saved); } catch (e) { /* storage unavailable */ }
+    this.opts = { depIndex: 0, weather: 'fair', seat: '22A', load: 0.85, lang: 'sv+en', quality: 'high', speed: 1, voice: true, sensitivity: 1, fov: 68 };
+    try { const saved = JSON.parse(localStorage.getItem('sk1415-opts-v2') || 'null'); if (saved) Object.assign(this.opts, saved); } catch (e) { /* storage unavailable */ }
     this.handlers = {};
     this._buildStart();
     this.toastsEl = $('toasts'); this.capEl = $('captions');
@@ -52,10 +52,10 @@ export class UI {
     $('opt-quality').onchange = (e) => { o.quality = e.target.value; };
     $('opt-speed').onchange = (e) => { o.speed = +e.target.value; };
     $('opt-voice').onchange = (e) => { o.voice = e.target.checked; };
-    $('go').onclick = () => { try { localStorage.setItem('sk1415-opts-v1', JSON.stringify(o)); } catch (e) { /* ignore */ } this.emit('start', { ...o }); };
+    $('go').onclick = () => { try { localStorage.setItem('sk1415-opts-v2', JSON.stringify(o)); } catch (e) { /* ignore */ } this.emit('start', { ...o }); };
     this._refreshFacts();
     // keys list for the pause screen
-    const keys = [['Mouse / drag', 'Look around'], ['Click / E', 'Use what you look at'], ['B', 'Fasten / unfasten seatbelt'], ['F', 'Tray table'], ['R', 'Recline seat'], ['T', 'Talk to your neighbour'], ['1–5', 'Pick a reply'], ['Space', 'Stand up / sit down'], ['W A S D', 'Walk (standing) / lean (seated)'], ['M', 'Phone: flight map'], ['Y', 'Swallow (clear your ears)'], ['+ / −', 'Change time speed'], ['Esc', 'Pause']];
+    const keys = [['Mouse', 'Look around (click the view first)'], ['Click / E', 'Use what you look at'], ['B', 'Fasten / unfasten seatbelt'], ['F', 'Tray table'], ['R', 'Recline seat'], ['T', 'Talk to your neighbour'], ['1–5', 'Pick a reply'], ['Space', 'Stand up / sit down'], ['W A S D', 'Walk (standing) / lean (seated)'], ['M', 'Phone: flight map'], ['V', 'Outside camera (drag to orbit, scroll to zoom)'], ['P', 'Take a photo'], ['Y', 'Swallow (clear your ears)'], ['+ / −', 'Change time speed'], ['U', 'Fullscreen'], ['Esc', 'Pause']];
     $('keys').innerHTML = keys.map(([k, v]) => `<div><kbd>${k}</kbd> ${v}</div>`).join('');
   }
   _refreshFacts() { const d = DEPARTURES[this.opts.depIndex]; $('f-flight').textContent = d.flight; $('f-dep').textContent = fmtClock(d.time); $('f-seat').textContent = this.opts.seat; }
@@ -172,6 +172,13 @@ export class UI {
     g.restore();
   }
 
+  // ---------- menu card (seat pocket) ----------
+  toggleMenuCard(v) {
+    const el = $('menucard'); const show = v === undefined ? el.hidden : v; el.hidden = !show;
+    if (show && !el.innerHTML) el.innerHTML = menuCardHTML();
+    return show;
+  }
+
   // ---------- safety card ----------
   toggleCard(v) {
     const el = $('card'); const show = v === undefined ? el.hidden : v; el.hidden = !show;
@@ -192,6 +199,19 @@ export class UI {
     $('end-stats').innerHTML = stats.items.map(([k, v]) => `<div><span class="label">${k}</span><span class="v">${v}</span></div>`).join('');
   }
   hideEnd() { $('endscreen').hidden = true; }
+}
+
+function menuCardHTML() {
+  const sec = (t) => `<div class="sec">${t}</div>`;
+  const it = (n, d, p) => `<div class="item"><div>${n}${d ? `<small>${d}</small>` : ''}</div><div class="p">${p}</div></div>`;
+  return `<div class="mh"><b>Flavors by SAS</b><span>Onboard café · SAS Go · card payment only · prices in SEK (DKK / NOK / EUR accepted)</span></div>
+  ${sec('Always included')}
+  ${it('Coffee', 'Freshly brewed, organic', 'free')}${it('Tea', 'Black or green', 'free')}${it('Still water', '', 'free')}
+  ${sec('Something to eat')}
+  ${it('Chicken &amp; pesto focaccia', 'Grilled chicken, basil pesto, rocket', '95')}${it('Cheese &amp; tomato sandwich', 'Vegetarian · Danish rye', '79')}${it('Kanelbulle', 'Swedish cinnamon bun', '39')}${it('Chocolate bar', 'Marabou mjölkchoklad', '35')}${it('Crisps', 'Sea salt', '35')}
+  ${sec('Drinks')}
+  ${it('Soft drinks', 'Coca-Cola, Coca-Cola Zero, Fanta', '39')}${it('Orange juice', '', '39')}${it('Sparkling water', 'Loka', '35')}${it('Mikkeller Celebration IPA', '33 cl', '76')}${it('Wine', 'Red or white · 18.7 cl', '89')}
+  <div class="foot">Coffee and tea are complimentary on all SAS flights. Snacks and drinks are for sale on European flights in SAS Go. Items shown are representative of the spring 2026 menu; the crew will tell you what is on board today. Press Esc to put the card back.</div>`;
 }
 
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

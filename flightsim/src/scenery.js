@@ -7,6 +7,7 @@ import { GEO } from '../data/geodata.js';
 import { canvasTex, glowTex, rr } from './textures.js';
 import { colorize } from './geom.js';
 import { REGION } from './world.js';
+import { Human, randomAppearance, POSES, composePose } from './humans.js';
 
 const V2 = (x, y) => new THREE.Vector2(x, y);
 const lp = (lat, lon) => { const p = project(lat, lon); return V2(p.x, p.z); };
@@ -93,6 +94,8 @@ export const LIVERIES = {
   airfrance: { body: '#f7f7f7', belly: '#f7f7f7', tail: '#f7f7f7', engine: '#f7f7f7', nose: null, title: '#0b2a6b', tailStripes: ['#0b2a6b', '#e1262d'] },
   ryanair: { body: '#f5f5f5', belly: '#073590', tail: '#073590', engine: '#073590', nose: null, title: '#073590' },
   braathens: { body: '#f7f7f7', belly: '#f7f7f7', tail: '#d6d6d6', engine: '#f7f7f7', nose: null, title: '#e7bd4a' },
+  // LN-RKR, the all-blue 80th-anniversary A330 with the Scandinavian flag band (2026)
+  anniversary: { body: '#1d3a86', belly: '#1d3a86', tail: '#1d3a86', engine: '#1d3a86', nose: null, title: '#ffffff', band: true },
 };
 
 export function makeAirliner(liv, { len = 37.6, span = 35.8, seed = 1, curved = true } = {}) {
@@ -135,6 +138,10 @@ export function makeAirliner(liv, { len = 37.6, span = 35.8, seed = 1, curved = 
   if (liv.tailStripes) { const st = new THREE.BoxGeometry(0.34, 3.5, 0.5); st.rotateX(-0.7); st.translate(0, 5.0, L / 2 - 3.2); add(st, liv.tailStripes[0]); const st2 = st.clone(); st2.translate(0, 0, 0.6); add(st2, liv.tailStripes[1]); }
   // titles
   const tl = new THREE.BoxGeometry(4.03, 0.5, 7); tl.translate(0, 0.95, -L / 2 + 11); add(tl, liv.title);
+  if (liv.band) { // red / white / blue flag band around the centre fuselage
+    for (const [dz, col] of [[-0.9, '#e8323c'], [0, '#ffffff'], [0.9, '#2a4fb5']]) { const ring = new THREE.CylinderGeometry(R + 0.02, R + 0.02, 0.8, 24, 1, true); ring.rotateX(Math.PI / 2); ring.translate(0, 0, L * 0.05 + dz); add(ring, col); }
+    const eighty = new THREE.BoxGeometry(0.34, 2.2, 2.6); eighty.rotateX(-0.7); eighty.translate(0, 4.6, L / 2 - 4.2); add(eighty, '#ffffff');
+  }
   // gear
   for (const s of [-1, 1]) { const g = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 10); g.rotateZ(Math.PI / 2); g.translate(s * 3.8, -3.2, 2.5); add(g, '#1c1c1c'); }
   const ng = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 10); ng.rotateZ(Math.PI / 2); ng.translate(0, -3.3, -L / 2 + 5.5); add(ng, '#1c1c1c');
@@ -162,7 +169,7 @@ class LightField {
     g.setAttribute('size', new THREE.Float32BufferAttribute(this.size, 1));
     g.setAttribute('kind', new THREE.Float32BufferAttribute(this.kind, 1));
     const mat = new THREE.ShaderMaterial({
-      uniforms: Object.assign({ uTex: { value: glowTex() }, uNightVis: { value: 1 }, uTime: u.uTime, uPx: { value: 1 }, uCamPos: u.uCamPos, uFog: u.uInCloud }, { uViewUp: sharedUniforms.uViewUp }),
+      uniforms: Object.assign({ uTex: { value: glowTex() }, uNightVis: { value: 1 }, uTime: u.uTime, uPx: { value: 1 }, uCamPos: u.uCamPos, uFog: u.uInCloud }, { uViewUp: sharedUniforms.uViewUp, uPreExp: sharedUniforms.uPreExp }),
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       vertexShader: `
         #include <common>
@@ -189,11 +196,11 @@ class LightField {
           gl_Position = projectionMatrix * mv;
           #include <logdepthbuf_vertex>
         }`,
-      fragmentShader: `uniform sampler2D uTex; varying vec3 vCol; varying float vA;
+      fragmentShader: `uniform sampler2D uTex; uniform float uPreExp; varying vec3 vCol; varying float vA;
         #include <logdepthbuf_pars_fragment>
         void main(){
           #include <logdepthbuf_fragment>
-          vec4 t = texture2D(uTex, gl_PointCoord); gl_FragColor = vec4(vCol * t.r * vA * 2.5, 1.0); }`,
+          vec4 t = texture2D(uTex, gl_PointCoord); gl_FragColor = vec4(vCol * t.r * vA * 2.5 * uPreExp, 1.0); }`,
     });
     const p = new THREE.Points(g, mat); p.frustumCulled = false; p.renderOrder = 3;
     return p;
@@ -232,6 +239,51 @@ export class Scenery {
     this._landmarks();
     this._traffic();
     this.lightPoints = this.lights.build(this.u); this.scene.add(this.lightPoints);
+  }
+
+  // A ground-crew figure in a hi-vis vest, baked static, optionally with ear defenders.
+  _worker(p, heading, { pose = 'stand', female = false, wands = false } = {}) {
+    const app = randomAppearance(this.r, { female, age: this.r.int(22, 55), top: '#f3d90a', bottom: '#2a2f3a', jacket: false, glasses: false, headphones: '#2b2f37', cap: null, earbuds: false });
+    const h = new Human(app, { detail: 0.4 });
+    const poses = {
+      stand: composePose(POSES.stand, { lShoulder: [0.05, 0, -0.1], rShoulder: [0.05, 0, 0.1] }),
+      wands: composePose(POSES.stand, { lShoulder: [-2.4, 0, -0.5], rShoulder: [-2.4, 0, 0.5], lElbow: [-0.3, 0, 0], rElbow: [-0.3, 0, 0] }),
+      lift: composePose(POSES.stand, { spine: [0.35, 0, 0], lShoulder: [-1.1, 0, -0.2], rShoulder: [-1.1, 0, 0.2], lElbow: [-0.6, 0, 0], rElbow: [-0.6, 0, 0] }),
+    };
+    h.setPose(poses[pose] || poses.stand);
+    const b = h.bakeStatic();
+    const g = new THREE.Group(); g.add(b.body, b.head);
+    for (const m of [b.body, b.head]) m.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); curveMaterial(o.material); } });
+    if (wands) for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 6), this.mats.vehicle); colorize(w.geometry, '#ff9a1a'); w.position.set(sx * 0.35, 1.95, 0.1); g.add(w); }
+    g.position.set(p.x, 0, p.y); g.rotation.y = -heading * DEG; this.scene.add(g);
+    return g;
+  }
+
+  // Apron vehicles from coloured boxes: tug, baggage tractor + carts, belt loader, catering truck, fuel bowser, GPU.
+  _vehicle(kind) {
+    const parts = [];
+    const B = (w, h, d, x, y, z, c) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); colorize(g, c); parts.push(g.toNonIndexed()); };
+    const wheel = (x, z, r = 0.45) => { const g = new THREE.CylinderGeometry(r, r, 0.3, 10); g.rotateZ(Math.PI / 2); g.translate(x, r, z); colorize(g, '#1b1b1d'); parts.push(g.toNonIndexed()); };
+    if (kind === 'tractor') { B(1.6, 0.9, 2.6, 0, 0.9, 0, '#e8eaea'); B(1.4, 0.9, 1.2, 0, 1.7, 0.4, '#e8eaea'); B(1.2, 0.5, 1.0, 0, 1.95, 0.4, '#233047'); wheel(-0.8, 0.9); wheel(0.8, 0.9); wheel(-0.8, -0.9); wheel(0.8, -0.9); }
+    else if (kind === 'cart') { B(1.5, 0.15, 3.0, 0, 0.6, 0, '#7a8089'); B(1.5, 1.6, 0.06, 0, 1.4, -1.47, '#7a8089'); B(0.06, 1.6, 3.0, -0.72, 1.4, 0, '#7a8089'); B(1.5, 0.06, 3.0, 0, 2.2, 0, '#7a8089'); for (let i = 0; i < 5; i++) B(0.55, 0.35, 0.7, -0.3 + (i % 2) * 0.6, 0.95 + Math.floor(i / 2) * 0.4, -0.9 + (i % 3) * 0.9, ['#2d3a5a', '#7a2d2d', '#1a1a1a', '#5a4a3a', '#33455a'][i]); wheel(-0.6, 0.9, 0.3); wheel(0.6, 0.9, 0.3); wheel(-0.6, -0.9, 0.3); wheel(0.6, -0.9, 0.3); }
+    else if (kind === 'belt') { B(1.7, 0.9, 3.4, 0, 0.9, 0, '#e8eaea'); B(1.3, 0.9, 1.1, 0, 1.75, -1.0, '#e8eaea'); const belt = new THREE.BoxGeometry(0.9, 0.2, 6.5); belt.rotateX(-0.42); belt.translate(0, 2.4, 2.2); colorize(belt, '#2b2f37'); parts.push(belt.toNonIndexed()); wheel(-0.85, 1.0); wheel(0.85, 1.0); wheel(-0.85, -1.0); wheel(0.85, -1.0); }
+    else if (kind === 'catering') { B(2.4, 2.6, 6.5, 0, 2.3, 0.5, '#f2f2f0'); B(2.2, 1.6, 1.6, 0, 1.4, -3.4, '#f2f2f0'); B(2.0, 0.6, 1.4, 0, 2.2, -3.3, '#233047'); wheel(-1.1, -2.6, 0.5); wheel(1.1, -2.6, 0.5); wheel(-1.1, 1.8, 0.5); wheel(1.1, 1.8, 0.5); }
+    else if (kind === 'fuel') { const t = new THREE.CylinderGeometry(1.1, 1.1, 7, 16); t.rotateX(Math.PI / 2); t.translate(0, 1.9, 0.8); colorize(t, '#d9dde2'); parts.push(t.toNonIndexed()); B(2.3, 1.6, 1.8, 0, 1.5, -4.0, '#e0392d'); wheel(-1.1, -3.2, 0.5); wheel(1.1, -3.2, 0.5); wheel(-1.1, 1.5, 0.5); wheel(1.1, 1.5, 0.5); wheel(-1.1, 2.7, 0.5); wheel(1.1, 2.7, 0.5); }
+    else if (kind === 'gpu') { B(1.3, 1.2, 2.4, 0, 0.9, 0, '#f3d90a'); B(1.1, 0.3, 0.6, 0, 1.6, 0.6, '#2b2f37'); wheel(-0.6, 0.7, 0.3); wheel(0.6, 0.7, 0.3); wheel(-0.6, -0.7, 0.3); wheel(0.6, -0.7, 0.3); }
+    else if (kind === 'tug') { B(2.6, 1.2, 6.0, 0, 0.9, 0, '#e9e9e4'); B(2.2, 1.0, 1.6, 0, 1.9, 1.8, '#e9e9e4'); B(2.0, 0.5, 1.4, 0, 2.15, 1.8, '#233047'); B(2.4, 0.5, 1.0, 0, 0.5, -3.2, '#4a4f58'); wheel(-1.2, 2.0, 0.55); wheel(1.2, 2.0, 0.55); wheel(-1.2, -2.0, 0.55); wheel(1.2, -2.0, 0.55); }
+    else if (kind === 'crane') { B(1.8, 46, 1.8, 0, 23, 0, '#f2c230'); B(1.6, 1.6, 34, 0, 46, 14, '#f2c230'); B(1.4, 1.4, 9, 0, 46, -6, '#f2c230'); B(2.2, 2.2, 2.4, 0, 45.8, -9.5, '#5a5f68'); B(1.8, 2.0, 2.0, 0, 44, 1.5, '#2b2f37'); const cab = new THREE.CylinderGeometry(0.03, 0.03, 30, 4); cab.rotateX(Math.PI / 2 - 0.9); cab.translate(0, 55, 8); colorize(cab, '#333'); parts.push(cab.toNonIndexed()); }
+    const m = new THREE.Mesh(mergeGeometries(parts), this.mats.vehicle);
+    this.scene.add(m);
+    return m;
+  }
+  // place a vehicle at a runway-frame position with a heading
+  _place(m, frame, u, v, hdg) { const p = frame.to(u, v); m.position.set(p.x, 0, p.y); m.rotation.y = -hdg * DEG; return m; }
+  // straight-line drive between two frame points, looping or one-shot
+  _drive(m, frame, from, to, hdg, speed, { loop = true, start = 0, dwell = 8 } = {}) {
+    const a = frame.to(from[0], from[1]), b = frame.to(to[0], to[1]); const len = a.distanceTo(b);
+    m.rotation.y = -hdg * DEG;
+    this.animated.push({ m, a, b, len, speed, loop, start, dwell, hdg });
+    m.position.set(a.x, 0, a.y);
   }
 
   // Airport ground texture: painted in a runway-aligned box. draw(g, M) where M maps (u,v) runway frame -> px.
@@ -489,6 +541,18 @@ export class Scenery {
     const tug = new THREE.Mesh(colorize(new THREE.BoxGeometry(2.6, 1.6, 5.5), '#e9e9e4'), this.mats.vehicle);
     const tp2 = f.to(1580, L.startStandV - 28); tug.position.set(tp2.x, 0.8, tp2.y); tug.rotation.y = -f.heading * DEG; this.scene.add(tug);
     this.tug = { mesh: tug, start: tp2.clone(), dir: f.u.clone().negate() };
+    // ground crew walking back to the pier after pushback, headset man waving us off
+    const w1 = this._worker(f.to(1560, L.startStandV - 20), f.heading + 90, { pose: 'stand' });
+    this._drive(w1, f, [1560, L.startStandV - 20], [1640, L.startStandV - 20], f.heading + 90, 1.2, { loop: false, start: 15 });
+    const w2 = this._worker(f.to(1548, L.startStandV - 26), f.heading + 100, { pose: 'wands' });
+    this._drive(w2, f, [1548, L.startStandV - 26], [1640, L.startStandV - 30], f.heading + 90, 1.1, { loop: false, start: 40 });
+    // a baggage train and a catering truck working the neighbouring stands, a fuel bowser at the pier
+    const bt = this._vehicle('tractor'); const carts = [this._vehicle('cart'), this._vehicle('cart'), this._vehicle('cart')];
+    this._drive(bt, f, [1700, -420], [1700, -940], f.heading + 90, 5.5, { loop: true, dwell: 20 });
+    carts.forEach((c, i) => this._drive(c, f, [1700 - 4.2 * (i + 1), -420], [1700 - 4.2 * (i + 1), -940], f.heading + 90, 5.5, { loop: true, dwell: 20 }));
+    this._place(this._vehicle('catering'), f, pf.u0 + 22, L.startStandV - 62, f.heading + 180);
+    this._place(this._vehicle('fuel'), f, pf.u0 - 48, L.startStandV - 128, f.heading + 90);
+    this._place(this._vehicle('gpu'), f, pf.u0 - 20, L.startStandV - 4, f.heading);
     // forest around the airfield
     const n = this.quality === 'low' ? 6000 : this.quality === 'high' ? 26000 : 15000;
     const inAerodrome = (u, v) => (u > -950 && u < 4350 && v < 450 && v > -2350) || (u > -650 && u < 3250 && v < -1250 && v > -3250);
@@ -570,7 +634,7 @@ export class Scenery {
       for (let v = L.terminalV - 70; v > L.terminalV - p.len + 20; v -= 55) {
         for (const side of [-1, 1]) {
           const u = p.u + side * (11 + 26);
-          if (Math.abs(u - (L.standU + 4)) < 30 && Math.abs(v - L.standV) < 30) continue; // our stand
+          if (Math.abs(u - (L.standU + 4)) < 30 && Math.abs(v - L.standV) < 70) continue; // our stand and its neighbours
           const hdg = side < 0 ? f.heading : (f.heading + 180) % 360;
           this._parked(f, u, v, hdg, livs[k++ % livs.length]);
           this._jetway(f, p.u + side * 11, v - 8 * side, u + side * -12, v - 2.5 * side, side);
@@ -578,6 +642,22 @@ export class Scenery {
       }
     }
     // jet bridge waiting at our stand
+    // the 80th-anniversary A330 (LN-RKR) on the long-haul pier C, nose to the pier, plus a Terminal 3
+    // construction site with tower cranes (the DKK 5 bn T3 expansion runs until 2027)
+    const pc = L.piers.find((p) => p.name === 'C');
+    const a330 = makeAirliner(LIVERIES.anniversary, { len: 63.7, span: 60.3 });
+    const ap = f.to(pc.u + 11 + 32, L.terminalV - 250); a330.position.set(ap.x, 0, ap.y); a330.rotation.y = -((f.heading + 180) % 360) * DEG; a330.scale.set(1.35, 1.3, 1); this.scene.add(a330);
+    for (const [u, v] of [[-120, L.terminalV + 260], [-40, L.terminalV + 330], [60, L.terminalV + 300]]) this._place(this._vehicle('crane'), f, u, v, this.r() * 360);
+    // ground handling for our arrival: marshaller ahead of the stand, then a belt loader, baggage train and GPU
+    this.cphCrew = {
+      marshaller: this._worker(f.to(L.standU + 32, L.standV), (f.heading + 180) % 360, { pose: 'wands', wands: true }),
+      loader1: this._worker(f.to(L.standU + 60, L.standV + 40), f.heading, { pose: 'lift' }),
+      loader2: this._worker(f.to(L.standU + 62, L.standV + 44), f.heading + 40, { pose: 'stand' }),
+      belt: this._vehicle('belt'), tractor: this._vehicle('tractor'), carts: [this._vehicle('cart'), this._vehicle('cart')], gpu: this._vehicle('gpu'),
+    };
+    this._place(this.cphCrew.belt, f, L.standU + 60, L.standV + 40, f.heading + 180); this._place(this.cphCrew.gpu, f, L.standU + 22, L.standV + 12, f.heading);
+    this._place(this.cphCrew.tractor, f, L.standU + 70, L.standV + 48, f.heading + 90); this.cphCrew.carts.forEach((c, i) => this._place(c, f, L.standU + 70 - 4.2 * (i + 1), L.standV + 48, f.heading + 90));
+    for (const o of [this.cphCrew.belt, this.cphCrew.tractor, ...this.cphCrew.carts, this.cphCrew.loader1, this.cphCrew.loader2]) o.visible = false;
     // jet bridge docked at our L1 door (door is 2.3 m ahead of the cabin origin, on the left side)
     const pierB = L.piers.find((p) => p.name === 'B');
     // the route ends at the main-gear point, 11.5 m behind the cabin origin: door L1 is 13.8 m ahead of it
@@ -719,6 +799,25 @@ export class Scenery {
       this.tug.mesh.position.set(p.x, 0.8, p.y);
     }
     for (const tr of this.traffic) this._updateTraffic(tr, simT, fm, director);
+    // apron vehicles and walking ground crew
+    for (const a of this.animated) {
+      const T = simT - a.start; if (T < 0) continue;
+      const cycle = a.len / a.speed + a.dwell;
+      let t = a.loop ? T % (2 * cycle) : Math.min(T, a.len / a.speed);
+      let k, back = false;
+      if (a.loop) { if (t < cycle) k = clamp(t / (a.len / a.speed), 0, 1); else { k = 1 - clamp((t - cycle) / (a.len / a.speed), 0, 1); back = true; } } else k = clamp(t / (a.len / a.speed), 0, 1);
+      a.m.position.set(a.a.x + (a.b.x - a.a.x) * k, 0, a.a.y + (a.b.y - a.a.y) * k);
+      a.m.rotation.y = -(a.hdg + (back ? 180 : 0)) * DEG;
+    }
+    // Kastrup: the marshaller guides us in, then the loaders arrive at the forward hold
+    if (this.cphCrew) {
+      const parkedT = director?.times?.parked;
+      const c = this.cphCrew;
+      c.marshaller.visible = fm.phase === 'taxi-in' || (parkedT != null && simT - parkedT < 25);
+      const show = parkedT != null && simT - parkedT > 30;
+      for (const o of [c.belt, c.tractor, ...c.carts, c.loader1, c.loader2]) o.visible = show;
+      if (show) { const k = clamp((simT - parkedT - 30) / 45, 0, 1); const f = CPH.frame; const p = f.to(CPH_LAYOUT.standU + 60 - 40 * (1 - k), CPH_LAYOUT.standV + 40 + 60 * (1 - k)); c.belt.position.set(p.x, 0, p.y); }
+    }
   }
 
   _updateTraffic(tr, simT, fm, director) {

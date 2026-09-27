@@ -16,11 +16,20 @@ import { Director } from './director.js';
 import { DEPARTURES } from './places.js';
 import { randomAppearance } from './humans.js';
 import { setMaxAniso } from './textures.js';
+import { PostFX } from './post.js';
+import { VolumetricClouds } from './clouds.js';
 import { sharedUniforms, clamp, lerp, damp, rng, KT, FT, DEG, isa, vnoise1, smoothstep } from './core.js';
 
 const ui = new UI();
 const PHASE_NAMES = { parked: 'Pushback complete', 'taxi-out': 'Taxiing', hold: 'Holding short 19R', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', cruise: 'Cruise FL360', descent: 'Descending', approach: 'Approach 22L', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
 const G_LOCAL = new THREE.Vector3(0, -3.4, 11.5); // main-gear contact point in aircraft coordinates
+// graphics presets
+const QUALITY = {
+  low: { dpr: 1.0, shadows: 0, bloom: false, smaa: false, vol: 0, aniso: 4, people: 0.6 },
+  medium: { dpr: 1.0, shadows: 2048, bloom: true, smaa: true, vol: 0, aniso: 8, people: 1 },
+  high: { dpr: 1.5, shadows: 4096, bloom: true, smaa: true, vol: 48, aniso: 16, people: 1 },
+  ultra: { dpr: 2.0, shadows: 4096, bloom: true, smaa: true, vol: 80, aniso: 16, people: 1 },
+};
 let S = null;
 
 ui.on('start', (o) => {
@@ -41,16 +50,19 @@ async function boot(o, audio) {
   ui.showStart(false); ui.loading(0.05, 'Starting the engines…'); await frame();
   const dep = DEPARTURES[o.depIndex];
   const W = WEATHER[o.weather];
+  const Q = QUALITY[o.quality] || QUALITY.high;
   const opts = { ...o, depTime: dep.time, flight: dep.flight, startClock: dep.time + 4 / 60, temps: W.temp };
   const canvas = document.getElementById('view');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: o.quality !== 'low', logarithmicDepthBuffer: true, stencil: true, powerPreference: 'high-performance' });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, logarithmicDepthBuffer: true, stencil: true, powerPreference: 'high-performance' });
+  // render scale: the preset's ratio, capped so the frame buffer stays within a sane pixel budget
   const dpr = window.devicePixelRatio || 1;
-  renderer.setPixelRatio(o.quality === 'low' ? Math.min(dpr, 1) * 0.8 : o.quality === 'high' ? Math.min(dpr, 2) : Math.min(dpr, 1.5));
+  const budget = { low: 2.1e6, medium: 3.7e6, high: 5.6e6, ultra: 9.0e6 }[o.quality] || 5.6e6;
+  renderer.setPixelRatio(Math.min(dpr, Q.dpr, Math.sqrt(budget / (innerWidth * innerHeight))));
   renderer.setSize(innerWidth, innerHeight);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NoToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.autoClear = false;
-  renderer.shadowMap.enabled = o.quality !== 'low'; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  setMaxAniso(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+  renderer.shadowMap.enabled = Q.shadows > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  setMaxAniso(Math.min(Q.aniso, renderer.capabilities.getMaxAnisotropy()));
 
   ui.loading(0.12, 'Planning the route ARN → CPH…'); await frame();
   const route = buildRoute();
@@ -58,10 +70,12 @@ async function boot(o, audio) {
   const fm = new FlightModel(route, { turbulence: W.turb, cloudBase: st ? st.base : W.cumulus > 0 ? W.cuBase : 1e9, cloudTop: st ? st.top : W.cumulus > 0.5 ? W.cuTop : -1 });
 
   ui.loading(0.2, 'Drawing Sweden and Denmark from map data…'); await frame();
-  const world = new World(renderer, { weather: o.weather, quality: o.quality, localTime: opts.startClock });
+  const world = new World(renderer, { weather: o.weather, quality: o.quality, localTime: opts.startClock, volumetric: Q.vol > 0 && W.cumulus > 0 });
   ui.loading(0.45, 'Building Arlanda, Kastrup and the Øresund Bridge…'); await frame();
   const scenery = new Scenery(world, route, { quality: o.quality });
   scenery.pixelRatio = renderer.getPixelRatio();
+  const vol = Q.vol > 0 && W.cumulus > 0 ? new VolumetricClouds(world, { steps: Q.vol }) : null;
+  world.u.uVol.value = vol ? 1 : 0;
 
   ui.loading(0.62, 'Fitting 180 seats…'); await frame();
   const cabinScene = new THREE.Scene();
@@ -71,13 +85,13 @@ async function boot(o, audio) {
   const cabin = new Cabin({ quality: o.quality });
   cabinScene.add(cabin.group);
   const extScene = new THREE.Scene();
-  const ext = new Exterior(); extScene.add(ext.group);
+  const ext = new Exterior({ quality: o.quality }); extScene.add(ext.group);
   const skyEnv = makeSkyEnv(renderer);
   extScene.environment = skyEnv.texture;
   // cabin sunlight (sunbeams through the windows)
   const sun = new THREE.DirectionalLight('#ffffff', 0);
   sun.castShadow = renderer.shadowMap.enabled;
-  sun.shadow.mapSize.set(o.quality === 'high' ? 4096 : 2048, o.quality === 'high' ? 4096 : 2048);
+  sun.shadow.mapSize.set(Q.shadows || 1024, Q.shadows || 1024);
   Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 70 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
   sun.target.position.set(0, 1, 11); cabinScene.add(sun, sun.target);
@@ -87,20 +101,24 @@ async function boot(o, audio) {
   const people = new People(cabin, cabinScene, { load: o.load, seed: 1000 + o.depIndex * 7 + o.seat.length, playerSeat: o.seat, audio, quality: o.quality });
   const pr = rng(4242);
   const player = new Player(cabin, cabinScene, o.seat, audio, randomAppearance(pr, { female: pr() < 0.5, jacket: true, glasses: false, headphones: null }));
+  player.sensitivity = o.sensitivity ?? 1; player.camera.fov = o.fov ?? 68;
   const dialogue = new Dialogue(people, voice, ui, {});
 
+  ui.loading(0.88, 'Preparing the cameras…'); await frame();
   // Window stencil: the outside world and the aircraft exterior are only shaded
   // inside the window panes, door windows and (on arrival) the open door.
   const maskScene = buildWindowMask(cabin);
+  const maskAll = buildFullMask();
   stencilTest(world.scene); stencilTest(extScene);
   renderer.shadowMap.autoUpdate = false;
-  S = { ui, renderer, route, fm, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, sun, audio, voice, people, player, dialogue, opts, speed: o.speed, paused: false, fast: false, env: null, maskScene, frameNo: 0 };
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const post = new PostFX(renderer, { width: size.x, height: size.y, quality: o.quality });
+  const extCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
+  S = { ui, renderer, route, fm, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
   const director = new Director(S);
   S.director = director;
 
-  ui.loading(0.92, 'Closing the doors…'); await frame();
-  // compile shaders up-front to avoid hitches
-  const cam0 = player.camera;
+  ui.loading(0.95, 'Closing the doors…'); await frame();
   resize();
   ui.loading(1); ui.showHUD(true);
   setupInput();
@@ -109,13 +127,12 @@ async function boot(o, audio) {
   S.lastMap = 0;
   renderer.setAnimationLoop(loop);
   ui.toast('Click the view to look around · B fastens your seatbelt · Esc for help', 7);
-  if (!('ontouchstart' in window)) setTimeout(() => ui.toast('Tip: press M for the flight map on your phone, T to talk to your neighbour', 6), 8000);
+  setTimeout(() => ui.toast('Tip: M for the flight map on your phone · T talks to your neighbour · V looks at the aircraft from outside', 7), 8000);
 }
 
 function buildWindowMask(cabin) {
   const scene = new THREE.Scene();
-  const mat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
-    stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp, stencilFail: THREE.ReplaceStencilOp });
+  const mat = maskMaterial();
   cabin.group.updateMatrixWorld(true);
   const add = (src, scale = 1.06) => { const m = new THREE.Mesh(src.geometry, mat); src.matrixWorld.decompose(m.position, m.quaternion, m.scale); m.scale.multiplyScalar(scale); scene.add(m); return m; };
   for (const w of cabin.windows) add(w.pane);
@@ -125,6 +142,18 @@ function buildWindowMask(cabin) {
   // open L1 door (shown when the door opens at the gate)
   const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.95), mat); hole.position.set(-1.8, 0.98, -2.3); hole.rotation.y = Math.PI / 2; hole.visible = false; scene.add(hole);
   scene.userData.doorHole = hole;
+  return scene;
+}
+function maskMaterial() {
+  return new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
+    stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp, stencilFail: THREE.ReplaceStencilOp });
+}
+// A full-screen stencil write for the outside camera.
+function buildFullMask() {
+  const scene = new THREE.Scene();
+  const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), maskMaterial());
+  q.frustumCulled = false; scene.add(q);
+  scene.userData.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   return scene;
 }
 
@@ -164,7 +193,9 @@ function resize() {
   if (!S) return;
   const w = innerWidth, h = innerHeight;
   S.renderer.setSize(w, h);
-  for (const c of [S.player.camera, S.world.camera]) { c.aspect = w / h; c.updateProjectionMatrix(); }
+  for (const c of [S.player.camera, S.world.camera, S.extCam]) { c.aspect = w / h; c.updateProjectionMatrix(); }
+  const size = S.renderer.getDrawingBufferSize(new THREE.Vector2());
+  S.post.setSize(size.x, size.y);
 }
 window.addEventListener('resize', resize);
 
@@ -200,7 +231,7 @@ const tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
 let shake = new THREE.Vector3(), thumpY = 0;
 function loop() {
   const realDt = Math.min(S.clock.getDelta(), 0.1);
-  const { fm, world, cabin, ext, player, audio, people, director, ui } = S;
+  const { fm, world, cabin, ext, player, audio, people, director, ui, post } = S;
   const dt = S.paused ? 0 : realDt * S.speed;
   if (dt > 0) simStep(dt);
   // ---- camera & head motion ----
@@ -212,8 +243,9 @@ function loop() {
   const ax = clamp(fm.accel.z, -3, 3);
   shake.set((vnoise1(tt * 7 + 11) - 0.5) * 0.004 * (fm.turbLevel || 0), vib + turb - thumpY, clamp(ax * 0.009, -0.03, 0.03));
   player.update(realDt, { headOffset: shake, headRoll: (vnoise1(tt * 5 + 50) - 0.5) * 0.004 * (fm.turbLevel || 0), blocked: (x, z) => people.crew.concat(people.walkers).some((c) => c.root.visible && !c.seated && Math.abs(c.x - x) < 0.35 && Math.abs(c.z - z) < 0.45), bump: fm.bump });
-  const cam = player.camera;
-  // world camera = aircraft pose * cabin camera
+  const outside = S.view === 'outside';
+  const cam = outside ? updateOrbitCamera(realDt) : player.camera;
+  // world camera = aircraft pose * aircraft-local camera
   const wc = world.camera;
   wc.fov = cam.fov;
   tmpV.copy(cam.position).sub(G_LOCAL).applyQuaternion(fm.quat).add(fm.pos);
@@ -241,24 +273,24 @@ function loop() {
   ext.amb.color.set('#ffd9a8'); ext.amb.intensity = 0.02 + apron;
   S.skyEnv.t += realDt;
   if (S.skyEnv.t > 2.5) { S.skyEnv.t = 0; S.skyEnv.update(env, sunLocal); S.extScene.environment = S.skyEnv.texture; }
-  ext.update(dt, fm.t, fm, { nightK: env.nightK, strobes: !fm.onGround || fm.phase === 'takeoff' || fm.phase === 'rollout', beacon: !ext.beaconOff, scan: env.nightK > 0.3 && (fm.onGround || fm.h < 3048) });
+  ext.update(dt, fm.t, fm, { nightK: env.nightK, strobes: !fm.onGround || fm.phase === 'takeoff' || fm.phase === 'rollout', beacon: !ext.beaconOff, scan: env.nightK > 0.3 && (fm.onGround || fm.h < 3048), landing: llOn, outside });
   // cabin sun & lights
   const sun = S.sun;
   sun.position.copy(sunLocal).multiplyScalar(40).add(sun.target.position);
   sun.color.copy(env.sunCol).multiplyScalar(1 / Math.max(0.001, sunI || 1));
-  sun.intensity = sunI * 1.6;
+  sun.intensity = sunI * 1.05;
   const daylight = clamp(env.day * (env.belowOvercast ? 0.45 : 1), 0, 1);
   let L = director.lightLevel; if (director.flicker > 0) L *= (Math.sin(director.flicker * 40) > 0 ? 1 : 0.05);
-  cabin.setLighting(L, director.mood, daylight);
+  cabin.setLighting(L, director.mood, daylight, director.scene);
   S.cabinScene.environmentIntensity = 0.1 + 0.55 * L + 0.25 * daylight;
   // window pane effects: frost at cruise, rain streaks at low level, condensation in cloud
-  const pm = cabin.paneMat.uniforms;
-  pm.uTime.value = fm.t; pm.uSpeed.value = fm.v; pm.uRain.value = (S.world.weather.rain > 0 && fm.h < (S.world.weather.stratus?.base ?? 800) + 300) ? S.world.weather.rain : 0;
-  pm.uFrost.value = damp(pm.uFrost.value, fm.h > 9000 ? 0.85 : 0, 0.03, dt || 0.0001);
-  pm.uFog.value = damp(pm.uFog.value, env.inCloud > 0.4 ? 0.5 : 0, 0.5, dt || 0.0001);
-  pm.uLight.value = clamp(0.25 + daylight * 0.9 + L * 0.2, 0.05, 1.2);
+  const pmu = cabin.paneMat.uniforms;
+  pmu.uTime.value = fm.t; pmu.uSpeed.value = fm.v; pmu.uRain.value = (S.world.weather.rain > 0 && fm.h < (S.world.weather.stratus?.base ?? 800) + 300) ? S.world.weather.rain : 0;
+  pmu.uFrost.value = damp(pmu.uFrost.value, fm.h > 9000 ? 0.85 : 0, 0.03, dt || 0.0001);
+  pmu.uFog.value = damp(pmu.uFog.value, env.inCloud > 0.4 ? 0.5 : 0, 0.5, dt || 0.0001);
+  pmu.uLight.value = clamp(0.25 + daylight * 0.9 + L * 0.2, 0.05, 1.2);
   // ---- audio ----
-  audio.update(realDt, { n1: fm.n1, ias: fm.ias, onGround: fm.onGround, v: fm.v, agl: fm.h, gear: fm.gear, gearMoving: fm.gearMoving, flapsMoving: fm.flapsMoving, spoiler: fm.spoiler, reverse: fm.reverse, rollRumble: fm.rollRumble, bump: fm.bump, rain: pm.uRain.value * (fm.onGround || fm.h < 1500 ? 1 : 0), packs: true, gasper: player.gasper, doorOpen: cabin.doors.L1.open > 0.5 });
+  audio.update(realDt, { n1: fm.n1, ias: fm.ias, onGround: fm.onGround, v: fm.v, agl: fm.h, gear: fm.gear, gearMoving: fm.gearMoving, flapsMoving: fm.flapsMoving, spoiler: fm.spoiler, reverse: fm.reverse, rollRumble: fm.rollRumble, bump: fm.bump, rain: pmu.uRain.value * (fm.onGround || fm.h < 1500 ? 1 : 0), packs: true, gasper: player.gasper, doorOpen: cabin.doors.L1.open > 0.5, outside });
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion), up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
   audio.setListener(cam.position, fwd, up);
   audio.babble = fm.phase === 'takeoff' || fm.phase === 'flare' ? 0.05 : fm.phase === 'arrived' ? 0.7 : 0.28;
@@ -267,30 +299,91 @@ function loop() {
   // ---- exposure & render ----
   const nk = env.nightK;
   const expOut = lerp(0.62, 2.6, nk) * (env.belowOvercast ? 1.35 : 1) * (env.inCloud > 0.5 ? 0.85 : 1);
-  const expIn = lerp(0.82, 1.1, 1 - L) * lerp(1, 0.9, daylight);
+  const expIn = outside ? expOut : lerp(0.66, 0.95, 1 - L) * lerp(1, 0.82, daylight);
+  const preExp = expOut / expIn;
+  sharedUniforms.uPreExp.value = preExp;
   const r = S.renderer;
-  r.setRenderTarget(null); r.clear(true, true, true);
-  const mask = S.maskScene;
-  for (const dp of mask.userData.doorPanes) { dp.src.updateMatrixWorld(); dp.src.matrixWorld.decompose(dp.m.position, dp.m.quaternion, dp.m.scale); }
-  mask.userData.doorHole.visible = cabin.doors.L1.open > 0.05;
-  if (anyWindowVisible(cam)) {
-    r.render(mask, cam);
-    r.toneMappingExposure = expOut;
-    world.render(r, wc);
-    r.clearDepth();
-    r.render(S.extScene, cam);
-  }
-  r.toneMappingExposure = expIn;
   S.frameNo++;
-  if (r.shadowMap.enabled && S.frameNo % 2 === 0) r.shadowMap.needsUpdate = true;
-  r.render(S.cabinScene, cam);
+  if (outside) renderOutside(r, cam, wc, preExp); else renderCabin(r, cam, wc, preExp, L);
+  S.flash = Math.max(0, S.flash - realDt * 3);
+  post.finish({ exposure: expIn, time: fm.t, night: nk, earFade: audio.muffle * 0.5, flash: S.flash, bloom: S.Q.bloom, smaa: S.Q.smaa });
   // ---- UI ----
-  hover();
+  if (!outside) hover(); else { S.hovered = null; ui.prompt(null); }
   ui.hud({ flight: S.opts.flight, clock: localH, phase: PHASE_NAMES[fm.phase] || fm.phase, belt: director.seatbelt, speed: S.speed });
   S.lastMap -= realDt;
   if (S.lastMap <= 0 && ui.phoneOpen()) { S.lastMap = 0.5; ui.updatePhone(phoneState(localH)); }
   // end condition: walk out of the front door
   if (cabin.doors.L1.open > 0.9 && player.state === 'standing' && player.pos.z < -1.7 && player.pos.x < -0.7 && !S.ended) endFlight();
+  if (S.photoPending) takePhoto();
+}
+
+// Cabin view: outside world only where windows are (stencil), then aircraft exterior, then the cabin.
+function renderCabin(r, cam, wc, preExp, L) {
+  const { post, world, cabin, maskScene: mask, vol } = S;
+  r.setRenderTarget(post.rtMain); r.clear(true, true, true);
+  for (const dp of mask.userData.doorPanes) { dp.src.updateMatrixWorld(); dp.src.matrixWorld.decompose(dp.m.position, dp.m.quaternion, dp.m.scale); }
+  mask.userData.doorHole.visible = cabin.doors.L1.open > 0.05;
+  if (anyWindowVisible(cam)) {
+    r.render(mask, cam);
+    r.setRenderTarget(post.rtWorld); r.clear(true, true, true);
+    r.render(mask, cam);
+    world.render(r, wc);
+    r.setRenderTarget(post.rtMain);
+    if (vol) vol.render(r, wc, post.rtWorld, preExp, S.fm.t); else post.blitWorld();
+    r.clearDepth();
+    r.render(S.extScene, cam);
+  }
+  if (r.shadowMap.enabled && S.frameNo % 2 === 0) r.shadowMap.needsUpdate = true;
+  r.render(S.cabinScene, cam);
+}
+
+// Outside view: the whole frame is world + aircraft exterior.
+function renderOutside(r, cam, wc, preExp) {
+  const { post, world, maskAll, vol } = S;
+  r.setRenderTarget(post.rtWorld); r.clear(true, true, true);
+  r.render(maskAll, maskAll.userData.cam);
+  world.render(r, wc);
+  r.setRenderTarget(post.rtMain); r.clear(true, true, true);
+  r.render(maskAll, maskAll.userData.cam);
+  if (vol) vol.render(r, wc, post.rtWorld, preExp, S.fm.t); else post.blitWorld();
+  r.clearDepth();
+  r.render(S.extScene, cam);
+}
+
+function updateOrbitCamera(dt) {
+  const o = S.orbit, c = S.extCam;
+  const target = new THREE.Vector3(0, 0.2, 9.5);
+  const ground = -3.3 + 0.3; // keep the camera above the tarmac in aircraft coordinates
+  const minPitch = S.fm.onGround ? Math.asin(clamp((ground - target.y) / o.dist, -1, 1)) + 0.02 : -1.2;
+  o.pitch = clamp(o.pitch, Math.max(-1.4, minPitch), 1.45);
+  const cp = Math.cos(o.pitch);
+  c.position.set(target.x + Math.sin(o.yaw) * cp * o.dist, target.y + Math.sin(o.pitch) * o.dist, target.z + Math.cos(o.yaw) * cp * o.dist);
+  c.lookAt(target);
+  c.updateMatrixWorld();
+  return c;
+}
+
+function setView(v) {
+  S.view = v;
+  S.ui.toast(v === 'outside' ? 'Outside view · drag to orbit, scroll to zoom · V to return' : 'Back in your seat', 3);
+  document.getElementById('crosshair').hidden = v === 'outside';
+}
+
+function takePhoto() {
+  S.photoPending = false;
+  const canvas = S.renderer.domElement;
+  try {
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      const t = S.opts.startClock + S.director.t / 3600;
+      a.download = `SK1415-${String(Math.floor(t)).padStart(2, '0')}${String(Math.floor((t % 1) * 60)).padStart(2, '0')}.png`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, 'image/png');
+  } catch (e) { /* downloads may be blocked in embedded viewers */ }
+  S.ui.showHUD(true);
+  S.ui.toast('Photo saved (if your browser allows downloads)', 3);
 }
 
 function anyWindowVisible(cam) {
@@ -328,6 +421,7 @@ function interactables() {
 }
 
 function hover() {
+  if (S.frameNo % 2) return; // picking every other frame is plenty
   const p = S.player.pick(interactables());
   S.hovered = p;
   const locked = document.pointerLockElement === S.renderer.domElement;
@@ -345,6 +439,7 @@ function use(p) {
     case 'belt': player.setBelt(!player.belt); break;
     case 'tray': player.setTray(!player.tray); break;
     case 'card': ui.toggleCard(); break;
+    case 'menu': ui.toggleMenuCard(); break;
     case 'light': player.setReadingLight(!player.readingLight); break;
     case 'call': player.setCall(!player.callOn); break;
     case 'gasper': player.gasper = !player.gasper; audio.clunk(0.08); break;
@@ -391,25 +486,33 @@ function setupInput() {
   const canvas = S.renderer.domElement;
   const { player, ui } = S;
   canvas.addEventListener('click', () => {
-    if (document.pointerLockElement !== canvas && canvas.requestPointerLock && !matchMedia('(pointer: coarse)').matches) { try { const pr = canvas.requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) { /* not available */ } return; }
-    use(S.hovered);
+    if (document.pointerLockElement !== canvas && canvas.requestPointerLock) { try { const pr = canvas.requestPointerLock(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) { /* not available */ } return; }
+    if (S.view === 'cabin') use(S.hovered);
   });
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement !== canvas && !S.ended && !S._noPauseOnUnlock) { pause(true); S._unlockT = performance.now(); }
     S._noPauseOnUnlock = false;
   });
-  document.addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) player.look(e.movementX, e.movementY); });
-  // touch / drag to look
+  document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement !== canvas) return;
+    if (S.view === 'outside') { S.orbit.yaw -= e.movementX * 0.004; S.orbit.pitch += e.movementY * 0.004; }
+    else player.look(e.movementX, e.movementY);
+  });
+  canvas.addEventListener('wheel', (e) => { if (S.view === 'outside') { S.orbit.dist = clamp(S.orbit.dist * (1 + Math.sign(e.deltaY) * 0.1), 14, 160); e.preventDefault(); } }, { passive: false });
+  // drag to look when the pointer isn't locked (e.g. inside an embedded viewer)
   let drag = null;
-  canvas.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') { drag = { x: e.clientX, y: e.clientY, moved: 0 }; } else if (document.pointerLockElement !== canvas) { drag = { x: e.clientX, y: e.clientY, moved: 0 }; } });
-  window.addEventListener('pointermove', (e) => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy); player.look(-dx * 1.6, -dy * 1.6); });
-  window.addEventListener('pointerup', (e) => { if (drag && drag.moved < 6 && e.pointerType !== 'mouse') use(S.hovered); drag = null; });
+  canvas.addEventListener('pointerdown', (e) => { if (document.pointerLockElement !== canvas) drag = { x: e.clientX, y: e.clientY, moved: 0 }; });
+  window.addEventListener('pointermove', (e) => {
+    if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
+    if (S.view === 'outside') { S.orbit.yaw += dx * 0.006; S.orbit.pitch -= dy * 0.006; } else player.look(-dx * 1.6, -dy * 1.6);
+  });
+  window.addEventListener('pointerup', () => { drag = null; });
   const keyDown = (code) => {
     if (S.ui.pauseOpen() && code !== 'Escape') return;
     const P = S.player, D = S.director;
     if (/^Digit[1-5]$/.test(code)) { if (ui.pickNumber(+code.slice(5))) return; }
     switch (code) {
-      case 'KeyE': use(S.hovered); break;
+      case 'KeyE': if (S.view === 'cabin') use(S.hovered); break;
       case 'KeyB': if (P.state === 'seated') { P.setBelt(!P.belt); ui.toast(P.belt ? 'Seatbelt fastened' : 'Seatbelt unfastened', 2); } break;
       case 'KeyF': P.setTray(!P.tray); break;
       case 'KeyR': if (P.state === 'seated') { if (!P.recline && D.seatbelt) { ui.toast('Seat backs must stay upright while the seatbelt sign is on'); break; } P.setRecline(!P.recline); } break;
@@ -417,7 +520,11 @@ function setupInput() {
       case 'KeyM': ui.togglePhone(); S.lastMap = 0; break;
       case 'KeyY': S.audio.pop(); ui.toast('*swallow* — ears cleared', 2); break;
       case 'KeyH': pause(true); break;
+      case 'KeyV': setView(S.view === 'outside' ? 'cabin' : 'outside'); break;
+      case 'KeyP': S.ui.showHUD(false); S.photoPending = true; S.flash = 0.6; S.audio.clunk(0.15); break;
+      case 'F11': case 'KeyU': toggleFullscreen(); break;
       case 'Space': {
+        if (S.view === 'outside') break;
         if (P.state === 'seated') { const r = P.standUp(); if (r === 'belt') ui.toast('Unfasten your seatbelt first (B)'); else if (r === 'tray') ui.toast('Fold the tray table first (F)'); else if (r === true) { ui.toast('Walk with W A S D · Space to sit when you are back at your row', 4); if (D.seatbelt && S.fm.phase !== 'arrived') ui.toast('The seatbelt sign is on!', 3); } }
         else if (!P.sitDown()) ui.toast('Walk back to your row to sit down');
         break;
@@ -427,6 +534,7 @@ function setupInput() {
       case 'Escape':
         if (performance.now() - (S._unlockT || 0) < 400) break; // the same Esc already released the pointer lock and paused
         if (!document.getElementById('card').hidden) { ui.toggleCard(false); break; }
+        if (!document.getElementById('menucard').hidden) { ui.toggleMenuCard(false); break; }
         if (S.ui.pauseOpen()) pause(false); else pause(true);
         break;
       default: break;
@@ -434,22 +542,22 @@ function setupInput() {
   };
   window.addEventListener('keydown', (e) => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
-    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    if (e.code === 'Space' || e.code.startsWith('Arrow') || e.code === 'F11') e.preventDefault();
     S.player.keys[e.code] = true;
     if (!e.repeat) keyDown(e.code);
   });
   window.addEventListener('keyup', (e) => { S.player.keys[e.code] = false; });
-  for (const b of document.querySelectorAll('#touch button')) {
-    const k = b.dataset.k;
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); S.player.keys[k] = true; keyDown(k); });
-    b.addEventListener('pointerup', () => { S.player.keys[k] = false; });
-    b.addEventListener('pointerleave', () => { S.player.keys[k] = false; });
-  }
   ui.on('order', (id, item) => S.director.playerOrder(id, item));
   ui.on('call', (id) => S.director.callAnswer(id));
   document.getElementById('card').addEventListener('click', () => ui.toggleCard(false));
+  document.getElementById('menucard').addEventListener('click', () => ui.toggleMenuCard(false));
   S.player.addItem = (id) => addTrayItem(id);
   S.player.onChange = (k, v) => { if (k === 'belt' && v) S.director.stats.belt++; };
+}
+
+function toggleFullscreen() {
+  const el = document.documentElement;
+  try { if (!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.(); } catch (e) { /* not allowed here */ }
 }
 
 function addTrayItem(id) {
@@ -499,8 +607,11 @@ function setupPause() {
   });
   document.getElementById('resume').onclick = () => pause(false);
   document.getElementById('vol').oninput = (e) => S.audio.setVolume(+e.target.value);
+  document.getElementById('sens').value = String(S.player.sensitivity); document.getElementById('sens').oninput = (e) => { S.player.sensitivity = +e.target.value; };
+  document.getElementById('fov').value = String(S.player.camera.fov); document.getElementById('fov').oninput = (e) => { S.player.camera.fov = +e.target.value; S.player.camera.updateProjectionMatrix(); };
   document.getElementById('pause-voice').checked = S.voice.enabled;
   document.getElementById('pause-voice').onchange = (e) => { S.voice.enabled = e.target.checked; if (!e.target.checked && window.speechSynthesis) speechSynthesis.cancel(); };
+  document.getElementById('fullscreen').onclick = () => toggleFullscreen();
   document.getElementById('again').onclick = () => location.reload();
   document.getElementById('stay').onclick = () => { ui.hideEnd(); S.ended = false; S._endShown = true; };
 }
@@ -523,3 +634,4 @@ window.__boot = (o) => { const a = new AudioEngine(); return boot({ ...ui.opts, 
 window.__ff = (cond) => fastForward(cond);
 window.__freeze = (v) => { if (!S) return; S.renderer.setAnimationLoop(v ? null : loop); };
 window.__renderOnce = () => { if (S) loop(); };
+window.__setView = (v) => setView(v);

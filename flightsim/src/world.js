@@ -41,7 +41,7 @@ vec3 skyCol(vec3 d){
   vec3 col = mix(uZenith, hor, k);
   if (e < 0.0) col = mix(hor, uGroundHaze, smoothstep(0.0, -0.08, e));
   float mu = dot(d, uSunDir);
-  col += uSunCol * (0.06*pow(max(mu,0.0), 6.0) + 0.35*pow(max(mu,0.0), 48.0) + 1.3*pow(max(mu,0.0), 900.0)) * (1.0 - uOvercastBelow);
+  col += uSunCol * (0.05*pow(max(mu,0.0), 6.0) + 0.22*pow(max(mu,0.0), 48.0) + 1.0*pow(max(mu,0.0), 900.0)) * (1.0 - uOvercastBelow);
   return col;
 }
 // aerial perspective between camera and point p (world), returns vec4(fogColor, amount)
@@ -194,6 +194,7 @@ export class World {
       uWet: { value: this.weather.rain > 0 ? 1 : 0 },
       uLandingLight: { value: 0 }, uLLPos: { value: new THREE.Vector3() }, uLLDir: { value: new THREE.Vector3() },
       uGFog: sharedUniforms.uGFog, uGFogTop: sharedUniforms.uGFogTop, uGFogCol: sharedUniforms.uGFogCol,
+      uPreExp: sharedUniforms.uPreExp, uVol: { value: 0 },
     };
     if (this.weather.fog) {
       const c = project(59.6519, 17.9186);
@@ -240,7 +241,7 @@ export class World {
       depthWrite: false, depthTest: false,
       vertexShader: `varying vec2 vNdc; void main(){ vNdc = position.xy; gl_Position = vec4(position.xy, 1.0, 1.0); }`,
       fragmentShader: `
-        varying vec2 vNdc; uniform mat4 uInvProj; uniform mat4 uCamRot; uniform float uMoon; uniform vec3 uMoonDir; uniform float uTime;
+        varying vec2 vNdc; uniform mat4 uInvProj; uniform mat4 uCamRot; uniform float uMoon; uniform vec3 uMoonDir; uniform float uTime; uniform float uPreExp;
         ${ATMOS_GLSL}
         float h3(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
         void main(){
@@ -257,7 +258,7 @@ export class World {
           col += vec3(0.9,0.92,1.0) * uMoon * (smoothstep(0.99992, 0.99996, mm) * 3.0 + pow(max(mm,0.0), 400.0)*0.15);
           col = mix(col, uCloudFog, clamp(uInCloud, 0.0, 1.0));
           if (uGFog.w > 0.0) { float inF = gfogWeight(uCamPos.xz) * (1.0 - smoothstep(uGFogTop * 0.6, uGFogTop * 1.6, uCamAlt)); col = mix(col, uGFogCol, inF * (1.0 - smoothstep(0.02, 0.45, d.y))); }
-          gl_FragColor = vec4(col, 1.0);
+          gl_FragColor = vec4(col * uPreExp, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
@@ -324,7 +325,7 @@ export class World {
         uniform sampler2D uAp0; uniform vec4 uAp0Box; uniform vec4 uAp0Rot;
         uniform sampler2D uAp1; uniform vec4 uAp1Box; uniform vec4 uAp1Rot;
         uniform vec3 uAmbient; uniform float uTime; uniform float uCloudCov; uniform float uCloudAlt; uniform float uWet;
-        uniform float uLandingLight; uniform vec3 uLLPos; uniform vec3 uLLDir;
+        uniform float uLandingLight; uniform vec3 uLLPos; uniform vec3 uLLDir; uniform float uPreExp; uniform float uVol;
         varying vec3 vW; varying float vDist;
         ${NOISE_GLSL}
         ${ATMOS_GLSL}
@@ -425,7 +426,7 @@ export class World {
           vec3 R = reflect(-V, N);
           vec3 sky = skyCol(vec3(R.x, max(R.y, 0.0), R.z));
           vec3 H = normalize(V + uSunDir);
-          float spec = pow(max(dot(N, H), 0.0), mix(60.0, 380.0, wk2)) * mix(4.0, 60.0, wk2) * shadow;
+          float spec = min(pow(max(dot(N, H), 0.0), mix(60.0, 380.0, wk2)) * mix(2.5, 22.0, wk2), 2.5) * shadow;
           vec3 deep = mix(vec3(0.012, 0.03, 0.045), vec3(0.02, 0.045, 0.05), smallLake);
           vec3 wat = deep * (uAmbient + uSunCol*0.5) + sky * fres + uSunCol * spec;
           lit = mix(lit, wat, water);
@@ -442,8 +443,8 @@ export class World {
             float cone = smoothstep(0.93, 0.99, dot(lv/ld, uLLDir));
             lit += col * vec3(1.0,0.95,0.85) * cone * uLandingLight * 900.0 / (ld*ld + 400.0);
           }
-          // distant flat cumulus seen from above
-          if (uCloudCov > 0.0 && uCamAlt > uCloudAlt + 300.0) {
+          // distant flat cumulus seen from above (sprite mode only; the volumetric pass draws its own)
+          if (uVol < 0.5 && uCloudCov > 0.0 && uCamAlt > uCloudAlt + 300.0) {
             vec3 dv = vW - uCamPos; float tt = (uCloudAlt - uCamPos.y) / dv.y;
             if (tt > 0.0 && tt < 1.0) {
               vec3 cpos = uCamPos + dv * tt; float cc = cloudCov(cpos.xz);
@@ -454,7 +455,7 @@ export class World {
           }
           vec4 ap = aerial(vW);
           vec3 outc = mix(lit, ap.rgb, ap.a);
-          gl_FragColor = vec4(outc, 1.0);
+          gl_FragColor = vec4(outc * uPreExp, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
@@ -510,7 +511,7 @@ export class World {
           #include <logdepthbuf_vertex>
         }`,
       fragmentShader: `
-        uniform sampler2D uTex; uniform vec3 uAmbient; varying vec2 vUv; varying float vShade; varying float vAlpha; varying vec3 vW; varying float vTile; varying float vSunward;
+        uniform sampler2D uTex; uniform vec3 uAmbient; uniform float uPreExp; varying vec2 vUv; varying float vShade; varying float vAlpha; varying vec3 vW; varying float vTile; varying float vSunward;
         ${ATMOS_GLSL}
         #include <logdepthbuf_pars_fragment>
         void main(){
@@ -523,7 +524,7 @@ export class World {
           vec3 c = uSunCol * lightK * (0.9 + 0.5*pow(max(vSunward,0.0), 6.0)) + uAmbient * mix(1.1, 1.6, vShade);
           vec4 ap = aerial(vW);
           c = mix(c, ap.rgb, ap.a*0.9);
-          gl_FragColor = vec4(c, a);
+          gl_FragColor = vec4(c * uPreExp, a);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }`,
@@ -598,7 +599,7 @@ export class World {
             vW = vec3(w.x, uAlt + bump, w.y); vec4 mv = curveView(viewMatrix * vec4(vW, 1.0)); gl_Position = projectionMatrix * mv;
             #include <logdepthbuf_vertex>
           }`,
-        fragmentShader: `uniform float uTop; uniform vec3 uAmbient; uniform float uTime; varying vec3 vW;
+        fragmentShader: `uniform float uTop; uniform vec3 uAmbient; uniform float uTime; uniform float uPreExp; varying vec3 vW;
           ${NOISE_GLSL}
           ${ATMOS_GLSL}
           #include <logdepthbuf_pars_fragment>
@@ -616,7 +617,7 @@ export class World {
             }
             vec4 ap = aerial(vW);
             col = mix(col, ap.rgb, ap.a);
-            gl_FragColor = vec4(col, 1.0);
+            gl_FragColor = vec4(col * uPreExp, 1.0);
             #include <tonemapping_fragment>
             #include <colorspace_fragment>
           }`,

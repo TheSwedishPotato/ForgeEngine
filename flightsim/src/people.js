@@ -71,8 +71,9 @@ export class Actor {
     this.headYaw = 0; this.headPitch = 0; this.headTarget = null;
     this.props = { l: null, r: null };
     this.seated = false; this.seatY = 0;
-    this.say = null; this.sayT = 0;
+    this.say = null; this.sayT = 0; this.talking = false;
     this.vest = null;
+    this.blinkT = 2 + Math.random() * 4; this.blinkOn = 0; this.mouthT = 0; this.mouthOpen = false; this.breath = Math.random() * 6;
     this.h.setPose(POSES.stand);
   }
   place(x, z, heading) { this.x = x; this.z = z; if (heading !== undefined) this.heading = this.targetHeading = heading; this._apply(); }
@@ -174,6 +175,16 @@ export class Actor {
     this.root.position.set(this.x, this.seated ? this.seatY : 0, this.z);
     this.root.rotation.y = this.heading + turnOff;
     if (this.sayT > 0) { this.sayT -= dt; if (this.sayT <= 0) this.say = null; }
+    // eyes, mouth and breathing
+    this.blinkT -= dt;
+    if (this.blinkT <= 0) { this.blinkOn = 0.13; this.blinkT = 2.5 + Math.random() * 4.5; }
+    if (this.blinkOn > 0) this.blinkOn -= dt;
+    const talking = this.talking || this.sayT > 0;
+    if (talking) { this.mouthT -= dt; if (this.mouthT <= 0) { this.mouthOpen = !this.mouthOpen; this.mouthT = 0.07 + Math.random() * 0.12; } } else this.mouthOpen = false;
+    this.h.setExpression(this.blinkOn > 0, this.mouthOpen);
+    this.breath += dt;
+    const br = 1 + Math.sin(this.breath * 1.6) * 0.012;
+    this.h.j.chest.scale.set(1, br, br);
   }
 }
 

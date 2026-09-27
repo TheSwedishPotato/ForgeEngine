@@ -81,13 +81,16 @@ export class Cabin {
     this.mat = {
       wall: this._std({ color: '#e4e3df', roughness: 0.62, metalness: 0 }),
       plastic: this._std({ color: '#eeeeeb', roughness: 0.55, map: TX.plasticTex() }),
-      ceiling: this._std({ color: '#ecebe8', roughness: 0.7, map: TX.ceilingTex() }),
-      carpet: this._std({ color: '#ffffff', roughness: 0.95, map: TX.carpetTex() }),
+      ceiling: this._std({ color: '#ecebe8', roughness: 0.7, map: TX.ceilingTex(), emissive: '#ffffff', emissiveIntensity: 0.0 }),
+      carpet: this._std({ color: '#ffffff', roughness: 0.95, map: TX.carpetTex(), normalMap: TX.carpetNormalTex(), normalScale: new THREE.Vector2(0.5, 0.5) }),
       bin: this._std({ color: '#efeeeb', roughness: 0.5, map: TX.binTex() }),
       binInside: this._std({ color: '#4a4f58', roughness: 0.9 }),
-      seatFabric: this._std({ vertexColors: true, roughness: 0.92, map: TX.fabricTex() }),
+      seatFabric: this._std({ vertexColors: true, roughness: 0.9, map: TX.fabricTex(), normalMap: TX.fabricNormalTex(), normalScale: new THREE.Vector2(0.7, 0.7) }),
+      seatLeather: this._std({ vertexColors: true, roughness: 0.55, map: TX.fabricTex(), normalMap: TX.leatherNormalTex(), normalScale: new THREE.Vector2(0.5, 0.5) }),
       seatHard: this._std({ vertexColors: true, roughness: 0.5, metalness: 0.05 }),
-      seatBack: this._std({ color: '#b9bec6', roughness: 0.45, map: TX.seatBackTex() }),
+      seatBack: this._std({ color: '#c3c7cd', roughness: 0.42, map: TX.seatBackTex(), emissive: '#ffffff', emissiveMap: TX.seatBackEmissive(), emissiveIntensity: 1.2 }),
+      wood: this._std({ color: '#ffffff', roughness: 0.35, map: TX.woodTex() }),
+      bulkhead: this._std({ color: '#ffffff', roughness: 0.35, map: TX.bulkheadTex() }),
       metal: this._std({ color: '#c7cbd1', roughness: 0.35, metalness: 0.7, map: TX.metalTex() }),
       galley: this._std({ color: '#ffffff', roughness: 0.35, metalness: 0.55, map: TX.galleyTex() }),
       dark: this._std({ color: '#2a2e36', roughness: 0.8 }),
@@ -97,6 +100,7 @@ export class Cabin {
       floorStrip: this._std({ color: '#cfd8c8', roughness: 0.5, emissive: '#9fb89a', emissiveIntensity: 0.25 }),
     };
     for (const m of Object.values(this.mat)) m.envMapIntensity = 0.6;
+    this.mat.seatFabric.normalMap.repeat.set(3, 3); this.mat.seatLeather.normalMap.repeat.set(2, 2);
   }
 
   // --------------- shell: floor, sidewalls, ceiling ---------------
@@ -289,14 +293,18 @@ export class Cabin {
       // bin body back (between bin top and wall) - hidden mostly, darker
       const back = sweepProfile([[xw, yb], [xw - 0.05, 2.1], [0.84, 2.13]], z0, z1, { flipX: side < 0, invert: true });
       const bm = new THREE.Mesh(back, this.mat.binInside); g.add(bm);
-      // cove light strip (between bin top and ceiling)
-      const cove = new THREE.Mesh(new THREE.PlaneGeometry(0.06, L), this._coveMat());
-      cove.rotation.x = -Math.PI / 2; cove.rotation.y = side * 0.5; cove.position.set(side * 0.865, 2.115, (z0 + z1) / 2);
-      g.add(cove);
-      // wash light under bin lip, lighting the window band
-      const wash = new THREE.Mesh(new THREE.PlaneGeometry(0.03, L), this._coveMat(0.6));
-      wash.rotation.x = Math.PI / 2; wash.position.set(side * 0.99, yb + 0.04, (z0 + z1) / 2);
-      g.add(wash);
+      // cove light strip (between bin top and ceiling), in segments for the mood scenes
+      const NSEG = 24;
+      for (let k = 0; k < NSEG; k++) {
+        const za = z0 + L * k / NSEG, zb = z0 + L * (k + 1) / NSEG;
+        const cove = new THREE.Mesh(new THREE.PlaneGeometry(0.09, zb - za), this._coveMat(1, (k + 0.5) / NSEG, side));
+        cove.rotation.x = -Math.PI / 2; cove.rotation.y = side * 0.5; cove.position.set(side * 0.855, 2.105, (za + zb) / 2);
+        g.add(cove);
+        // wash light under the bin lip, lighting the window band
+        const wash = new THREE.Mesh(new THREE.PlaneGeometry(0.05, zb - za), this._coveMat(0.6, (k + 0.5) / NSEG, side));
+        wash.rotation.x = Math.PI / 2; wash.position.set(side * 1.0, yb + 0.028, (za + zb) / 2);
+        g.add(wash);
+      }
     }
     // end caps closing the bin run at both ends
     const capShape = (side) => {
@@ -329,15 +337,33 @@ export class Cabin {
     }
   }
 
-  _coveMat(k = 1) {
-    const m = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: true });
-    m.userData.k = k; this.coveMats = this.coveMats || []; this.coveMats.push(m); return m;
+  _coveMat(k = 1, u = 0.5, side = 1) {
+    const m = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: true, side: THREE.DoubleSide });
+    m.userData.k = k; m.userData.u = u; m.userData.side = side; m.userData.cur = new THREE.Color('#fff4e6');
+    this.coveMats = this.coveMats || []; this.coveMats.push(m); return m;
+  }
+
+  // Mood-lighting scenes (Airbus LED cabin lighting as used by SAS): returns the colour of
+  // a strip at position u (0 front .. 1 aft) for a named scene.
+  sceneColor(scene, u, side, out) {
+    switch (scene) {
+      case 'sweden': { // blue field with the yellow cross: crossbar a third of the way back
+        const bar = Math.abs(u - 0.36) < 0.05; out.set(bar ? '#ffd23f' : '#2f7fe0'); break; }
+      case 'denmark': { const bar = Math.abs(u - 0.36) < 0.05; out.set(bar ? '#ffffff' : '#e8323c'); break; }
+      case 'norway': { const bar = Math.abs(u - 0.36) < 0.06; out.set(bar ? (Math.abs(u - 0.36) < 0.03 ? '#2a4fb5' : '#ffffff') : '#e03a3e'); break; }
+      case 'sunset': { const c1 = new THREE.Color('#ff9a3c'), c2 = new THREE.Color('#7b4bb8'); out.copy(c1).lerp(c2, side > 0 ? u : 1 - u); break; }
+      case 'boarding': out.set('#dfe9ff'); break;
+      case 'night': out.set('#5b78c8'); break;
+      case 'dim': out.set('#ffd9b0'); break;
+      default: out.copy(this.mood); break;
+    }
+    return out;
   }
 
   // --------------- seats (instanced) ---------------
   _buildSeats() {
     const FLAT = TX.FLAT_UV;
-    const fabric = '#40444c', headCover = '#1f2c4a', shell = '#c9ccd1', frame = '#8e939b';
+    const fabric = '#5b5f68', headCover = '#33373f', shell = '#c9ccd1', frame = '#8e939b';
     // base: cushion + pan + legs + one armrest (left)
     const cushion = new RoundedBoxGeometry(0.43, 0.11, 0.46, 3, 0.035);
     const basePartsFab = [{ geo: cushion, color: fabric, matrix: trs(0, 0.40, -0.03) }];
@@ -357,14 +383,17 @@ export class Cabin {
     // back (pivot at bottom rear of cushion), in back-local frame: y up the backrest
     const backFab = mergeColored([
       { geo: new RoundedBoxGeometry(0.43, 0.48, 0.075, 3, 0.03), color: fabric, matrix: trs(0, 0.25, 0) },
+    ]);
+    const headGeo = mergeColored([
       { geo: new RoundedBoxGeometry(0.40, 0.2, 0.09, 3, 0.035), color: headCover, matrix: trs(0, 0.58, -0.006) },
+      { geo: new THREE.BoxGeometry(0.40, 0.012, 0.094), color: '#2f6bd6', matrix: trs(0, 0.482, -0.006), flatUV: FLAT }, // blue piping
     ]);
     const backShell = new THREE.BoxGeometry(0.43, 0.62, 0.02);
     backShell.translate(0, 0.33, 0.05);
     // map the seat back texture onto the +z (rear) face only; other faces flat
     const uvs = backShell.attributes.uv, nrm = backShell.attributes.normal;
     for (let i = 0; i < uvs.count; i++) if (nrm.getZ(i) < 0.9) uvs.setXY(i, 0.5, 0.95);
-    this.seatGeo = { baseGeoF, baseGeoH, backFab, backShell };
+    this.seatGeo = { baseGeoF, baseGeoH, backFab, backShell, headGeo };
 
     // build seat records
     const seats = [];
@@ -379,6 +408,7 @@ export class Cabin {
     this.iBaseH = mk(baseGeoH, this.mat.seatHard);
     this.iBackF = mk(backFab, this.mat.seatFabric);
     this.iBackS = mk(backShell, this.mat.seatBack);
+    this.iHead = mk(headGeo, this.mat.seatLeather);
     // extra right armrests for C and F, and aisle armrests on D (left of D is aisle side)
     const armGeo = mergeColored([{ geo: new RoundedBoxGeometry(0.05, 0.05, 0.38, 2, 0.02), color: '#4b505a', matrix: trs(0, 0.635, 0.02), flatUV: FLAT }, { geo: new THREE.BoxGeometry(0.02, 0.2, 0.04), color: '#6c717a', matrix: trs(0, 0.52, 0.14), flatUV: FLAT }]);
     const extra = seats.filter((s) => s.letter === 'C' || s.letter === 'F');
@@ -414,9 +444,9 @@ export class Cabin {
     const base = trs(s.x, 0, s.z);
     this.iBaseF.setMatrixAt(i, base); this.iBaseH.setMatrixAt(i, base);
     const bm = this.seatBackMatrix(s);
-    this.iBackF.setMatrixAt(i, bm); this.iBackS.setMatrixAt(i, bm);
+    this.iBackF.setMatrixAt(i, bm); this.iBackS.setMatrixAt(i, bm); this.iHead.setMatrixAt(i, bm);
     this.iBaseF.instanceMatrix.needsUpdate = this.iBaseH.instanceMatrix.needsUpdate = true;
-    this.iBackF.instanceMatrix.needsUpdate = this.iBackS.instanceMatrix.needsUpdate = true;
+    this.iBackF.instanceMatrix.needsUpdate = this.iBackS.instanceMatrix.needsUpdate = this.iHead.instanceMatrix.needsUpdate = true;
   }
 
   refreshEmptyBelts(except = null) {
@@ -488,6 +518,12 @@ export class Cabin {
     const agFace = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.0), M.galley); agFace.position.set(0, 1.02, 25.29); agFace.rotation.y = Math.PI; g.add(agFace);
     agFace.userData.interact = { kind: 'galley', prompt: () => 'Galley' };
     this.aftGalley = { z: 25.2 };
+    // row-1 bulkhead: Scandinavian wood-effect panels with the airline logo, either side of the aisle
+    for (const side of [-1, 1]) {
+      const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.32, 2.1), side < 0 ? M.bulkhead : M.wood);
+      panel.position.set(side * 1.1, 1.06, -3.0); panel.rotation.y = 0; panel.receiveShadow = true; g.add(panel);
+      const trim = box(1.36, 0.04, 0.03, side * 1.1, 2.12, -3.0, M.metal);
+    }
     // cockpit door
     const cd = box(0.86, 1.98, 0.06, 0, 0.99, -4.56, this._std({ color: '#d5d7da', roughness: 0.4 }));
     const peep = new THREE.Mesh(new THREE.CircleGeometry(0.018, 12), M.dark); peep.position.set(0, 1.55, -4.525); g.add(peep);
@@ -658,15 +694,28 @@ export class Cabin {
     this.group.add(this.readingLight); this.group.add(this.readingLight.target);
   }
 
-  setLighting(level, moodColor, daylight = 0) {
+  setLighting(level, moodColor, daylight = 0, scene = 'warm') {
     this.lightLevel = level;
     this.mood.set(moodColor);
+    this.scene = scene;
     const L = level;
     this.hemi.color.copy(this.mood); this.hemi.intensity = 0.45 * L + 0.2 * daylight + 0.02;
     this.hemi.groundColor.set('#3a4458').multiplyScalar(0.6 + daylight * 0.4);
     this.amb.intensity = 0.12 * L + 0.18 * daylight + 0.015;
     for (const l of this.pl) { l.color.copy(this.mood); l.intensity = 1.7 * L; }
-    for (const m of this.coveMats || []) m.color.copy(this.mood).multiplyScalar((0.35 + 1.4 * L) * m.userData.k);
+    const tmp = this._tmpC || (this._tmpC = new THREE.Color());
+    const flag = scene === 'sweden' || scene === 'denmark' || scene === 'norway';
+    for (const m of this.coveMats || []) {
+      this.sceneColor(scene, m.userData.u, m.userData.side, tmp);
+      m.userData.cur.lerp(tmp, 0.03);
+      m.color.copy(m.userData.cur).multiplyScalar((flag ? 0.9 : 0.35 + 1.4 * L) * m.userData.k);
+    }
+    // the point lights and the ceiling glow follow the scene tint so the whole cabin takes on the colour
+    const tint = this._tint || (this._tint = new THREE.Color());
+    this.sceneColor(scene, 0.5, 1, tint);
+    const soft = this._soft || (this._soft = new THREE.Color('#ffffff')); soft.lerp(tint, 0.05);
+    for (const l of this.pl) l.color.copy(this.mood).multiply(soft.clone().lerp(new THREE.Color('#ffffff'), 0.5));
+    this.mat.ceiling.emissive.copy(soft); this.mat.ceiling.emissiveIntensity = (flag ? 0.35 : 0.12) * L;
     this.exitMat.color.setScalar(L < 0.3 ? 1.4 : 1.1);
     for (const m of this.psuMats || []) { m.emissive.copy(this.mood); m.emissiveIntensity = 0.05 + 0.2 * L; }
   }

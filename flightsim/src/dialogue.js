@@ -24,9 +24,10 @@ export class Dialogue {
   speaker() { return { name: this.name, gender: this.P.app.female ? 'f' : 'm', pitch: this.P.app.female ? 1.08 : 0.92, rate: 1.03 }; }
   say(text, lang = 'en', then) {
     if (!this.n) return;
-    this.n.actor.headTarget = this.playerPos ? { x: this.playerPos.x, y: 1.2, z: this.playerPos.z } : null;
-    this.n.actor.playGesture(Math.random() < 0.5 ? 'offer' : 'present');
-    this.voice.say([{ text, lang, speaker: this.speaker(), volume: 0.9, gap: 250 }], { priority: 1, channel: 'chat', onDone: () => { this.n.actor.headTarget = null; if (then) then(); } });
+    const a = this.n.actor;
+    a.headTarget = this.playerPos ? { x: this.playerPos.x, y: 1.2, z: this.playerPos.z } : null;
+    a.playGesture(Math.random() < 0.5 ? 'offer' : 'present');
+    this.voice.say([{ text, lang, speaker: this.speaker(), volume: 0.9, gap: 250, onStart: () => { a.talking = true; } }], { priority: 1, channel: 'chat', onDone: () => { a.headTarget = null; a.talking = false; if (then) then(); } });
   }
 
   where(fm) {

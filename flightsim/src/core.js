@@ -183,12 +183,29 @@ export const sharedUniforms = {
   uViewUp: { value: new THREE.Vector3(0, 1, 0) },
   uGFog: { value: new THREE.Vector4(0, 0, 1, 0) }, uGFogTop: { value: 60 }, uGFogCol: { value: new THREE.Color(0.8, 0.82, 0.85) },
   uCamPosW: { value: new THREE.Vector3() },
+  uPreExp: { value: 1 }, // outside-world exposure relative to the cabin (applied before tone mapping)
 };
+
+// Multiply a built-in material's output by the shared pre-exposure (outside scenes only).
+export function exposeMaterial(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (shader, r) => {
+    if (prev) prev(shader, r);
+    shader.uniforms.uPreExp = sharedUniforms.uPreExp;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uPreExp;')
+      .replace('#include <fog_fragment>', '#include <fog_fragment>\n gl_FragColor.rgb *= uPreExp;');
+  };
+  // programs are cached by source: keep the wrapped hook's identity in the key
+  const prevSrc = prev ? prev.toString() : '';
+  mat.customProgramCacheKey = () => prevSrc + '-exp';
+  return mat;
+}
 
 // Patch a built-in material so it follows earth curvature.
 export function curveMaterial(mat) {
   mat.onBeforeCompile = (shader) => {
-    for (const k of ['uViewUp', 'uGFog', 'uGFogTop', 'uGFogCol', 'uCamPosW']) shader.uniforms[k] = sharedUniforms[k];
+    for (const k of ['uViewUp', 'uGFog', 'uGFogTop', 'uGFogCol', 'uCamPosW', 'uPreExp']) shader.uniforms[k] = sharedUniforms[k];
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\n' + CURVE_GLSL + `
         uniform vec4 uGFog; uniform float uGFogTop; uniform vec3 uCamPosW; varying float vGF;`)
@@ -210,8 +227,8 @@ export function curveMaterial(mat) {
           vGF = 1.0 - exp(-uGFog.w * od * wgt);
         }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uGFogCol; varying float vGF;')
-      .replace('#include <fog_fragment>', '#include <fog_fragment>\n gl_FragColor.rgb = mix(gl_FragColor.rgb, uGFogCol, vGF);');
+      .replace('#include <common>', '#include <common>\nuniform vec3 uGFogCol; uniform float uPreExp; varying float vGF;')
+      .replace('#include <fog_fragment>', '#include <fog_fragment>\n gl_FragColor.rgb = mix(gl_FragColor.rgb, uGFogCol, vGF);\n gl_FragColor.rgb *= uPreExp;');
   };
   mat.customProgramCacheKey = () => 'curved';
   return mat;

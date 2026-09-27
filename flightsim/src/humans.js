@@ -165,7 +165,9 @@ export class Human {
       { y: S(0.238), rx: S(0.028), rz: S(0.036), z: -S(0.01) },
     ];
     const headGeo = loft(headRings, 16);
-    this.faceTex = faceTexture(skin, { female: f, age: app.age, eye: app.eye, seed: app.seed, beard: app.beard, lipstick: app.lipstick, freckles: app.freckles, hi: detail >= 2 });
+    const fopts = { female: f, age: app.age, eye: app.eye, seed: app.seed, beard: app.beard, lipstick: app.lipstick, freckles: app.freckles, hi: detail >= 2 };
+    this.faceTex = faceTexture(skin, fopts);
+    if (detail >= 1) { this.faceBlink = faceTexture(skin, { ...fopts, blink: true }); this.faceTalk = faceTexture(skin, { ...fopts, talk: true }); this.faceTalkBlink = faceTexture(skin, { ...fopts, talk: true, blink: true }); }
     this.headGeo = headGeo;
     // nose & ears
     const nose = new THREE.ConeGeometry(S(0.014), S(0.045), 4); nose.rotateX(-Math.PI / 2 - 0.35); nose.translate(0, S(0.09), S(0.098)); add(j.head, nose, skin, 'head');
@@ -267,6 +269,13 @@ export class Human {
     // holdable items attach to the right hand
     this.rHandItem = new THREE.Group(); this.rHandItem.position.set(0, -0.08 * this.s, 0.03); this.j.rWrist.add(this.rHandItem);
     this.lHandItem = new THREE.Group(); this.lHandItem.position.set(0, -0.08 * this.s, 0.03); this.j.lWrist.add(this.lHandItem);
+  }
+
+  // Swap the face texture for blinking / talking (actors only).
+  setExpression(blink, talk) {
+    if (!this.faceBlink) return;
+    const t = blink ? (talk ? this.faceTalkBlink : this.faceBlink) : (talk ? this.faceTalk : this.faceTex);
+    if (this.headMesh.material.map !== t) this.headMesh.material = faceMat(t);
   }
 
   setPose(p) {

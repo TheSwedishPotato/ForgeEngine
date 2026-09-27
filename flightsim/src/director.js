@@ -24,7 +24,7 @@ export class Director {
     this.sim = sim; // { fm, people, cabin, voice, audio, ui, player, dialogue, scenery, opts }
     this.t = 0; this.times = {}; this.flags = {};
     this.r = rng(99);
-    this.seatbelt = true; this.lightLevel = 1; this.mood = '#fff4e6';
+    this.seatbelt = true; this.lightLevel = 1; this.mood = '#fff4e6'; this.scene = 'sweden';
     this.crewSeated = false; this.demoDone = false; this.checkDone = false;
     this.nextLav = 400;
     this.playerOrders = [];
@@ -81,7 +81,7 @@ export class Director {
   setSeatbelt(on, chime = true) {
     if (this.seatbelt === on) return;
     this.seatbelt = on; this.sim.cabin.setSigns(on);
-    if (chime && !this.sim.fast) this.sim.audio.chime('single');
+    if (chime && !this.sim.fast) this.sim.audio.chime('low'); // Airbus: a single low tone for the signs
     this.sim.ui.toast(on ? 'Fasten seatbelt sign ON' : 'Fasten seatbelt sign OFF');
     if (!on) this.sim.dialogue?.event('seatbelt-off', {});
   }
@@ -137,7 +137,7 @@ export class Director {
     const d = Math.hypot(actor.x - S.player.eye.x, actor.z - S.player.eye.z);
     if (d > 5 || S.fast) return;
     const sp = actor.app.female ? SPEAKERS.crewF : SPEAKERS.crewM;
-    S.voice.say([{ text, lang: /[åäö]/i.test(text) ? 'sv' : 'en', speaker: { ...sp, name: actor.name }, volume: 0.85, gap: 150 }], { priority: 1, channel: 'crew' });
+    S.voice.say([{ text, lang: /[åäö]/i.test(text) ? 'sv' : 'en', speaker: { ...sp, name: actor.name }, volume: 0.85, gap: 150, onStart: () => { actor.talking = true; } }], { priority: 1, channel: 'crew', onDone: () => { actor.talking = false; } });
   }
 
   // ---------------- service ----------------
@@ -233,7 +233,7 @@ export class Director {
     if (t > 4 && this.flag('welcome')) this.say(SCRIPTS.welcome, { onDone: () => this.mark('welcomeDone') });
     if (t > 12 && this.flag('taxi')) { fm.clearTaxi = true; }
     if (t > 26 && this.flag('flaps')) { fm.setConfig(2); }
-    if (this.after('welcomeDone', 1) && this.flag('demoPos')) { people.safetyDemoPositions(); this.mark('demoPos'); }
+    if (this.after('welcomeDone', 1) && this.flag('demoPos')) { people.safetyDemoPositions(); this.mark('demoPos'); this.scene = 'warm'; }
     if (this.after('demoPos', 7) && this.flag('demo')) this._runDemo();
     if (this.demoDone && this.flag('check')) { this.phaseTag = 'to'; people.cabinCheck((a, row) => this.checkRow(a, row), () => { this.checkDone = true; this.mark('checkDone'); }); }
     // captain: seats for take-off when the cabin is secure and we approach the runway
@@ -248,7 +248,7 @@ export class Director {
     if (this.after('passing10k', 25) && this.seatbelt && this.flag('beltOff') && !(S.env?.inCloud > 0.3)) {
       this.setSeatbelt(false); this.mark('beltOff'); people.crewStand(); this.setLights(this.nightish() ? 0.55 : 1.0, this.nightish() ? '#ffe7cc' : '#fff4e6');
     }
-    if (this.after('beltOff', 20) && this.flag('capPA')) this.say(SCRIPTS.captainClimb, { onDone: () => this.mark('capDone') });
+    if (this.after('beltOff', 20) && this.flag('capPA')) { this.say(SCRIPTS.captainClimb, { onDone: () => this.mark('capDone') }); if (this.eveningish()) this.scene = 'sunset'; }
     if (this.after('capDone', 8) && this.flag('svcPA')) this.say(SCRIPTS.service, { onDone: () => this.mark('svcPA') });
     if (this.after('svcPA', 25) && this.flag('service')) {
       S.cabin.setCurtain(true);
@@ -294,7 +294,7 @@ export class Director {
     }
     // --- after landing ---
     if (this.after('vacated', 6) && this.flag('arrPA')) {
-      this.say(SCRIPTS.arrival);
+      this.say(SCRIPTS.arrival); this.scene = 'denmark';
       this.setLights(this.nightish() ? 0.6 : 1.0, '#fff4e6');
       if (!S.fast) setTimeout(() => S.audio.clicks(14, 25), 3000); // impatient passengers unbuckling early
     }
@@ -305,6 +305,7 @@ export class Director {
       this.say(SCRIPTS.disarm, { chime: 'hilo' });
       this.flickerLights();
     }
+    if (this.after('parked', 40) && this.flag('dayScene')) this.scene = 'warm';
     if (this.after('parked', 55) && this.flag('doorOpen')) {
       S.cabin.doors.L1.target = 1; S.audio.doorThud();
       const pur = people.crewNamed('purser'); pur.clear(); pur.queue({ type: 'walk', x: 0, z: -1.2 }, { type: 'walk', x: -1.05, z: -1.2 }, { type: 'face', h: Math.PI * 0.85 }, { type: 'gesture', name: 'wave' });
@@ -335,6 +336,7 @@ export class Director {
   playerReady() { return !this.playerIssues().length || this.sim.fast; }
 
   nightish() { return this.sim.env ? this.sim.env.nightK > 0.35 : false; }
+  eveningish() { const h = this.clockH % 24; return h >= 18.5 || h < 5.5; }
 
   _runDemo() {
     const S = this.sim, people = S.people;

@@ -70,10 +70,15 @@ export class Player {
     // items that can sit on the tray
     this.trayItems = new THREE.Group(); tray.add(this.trayItems);
     // seat pocket (safety card)
-    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.05), new THREE.MeshBasicMaterial({ visible: false }));
-    pocket.position.set(s.x, 0.45, s.z - 0.52); this.scene.add(pocket);
+    // seat pocket (Recaro SL3510: at the top of the seat back): safety card on the left, menu card on the right
+    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.14, 0.05), new THREE.MeshBasicMaterial({ visible: false }));
+    pocket.position.set(s.x - 0.09, 0.98, s.z - 0.52); this.scene.add(pocket);
     pocket.userData.interact = { kind: 'card', prompt: () => 'Read the safety card' };
     this.pocket = pocket;
+    const menu = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.14, 0.05), new THREE.MeshBasicMaterial({ visible: false }));
+    menu.position.set(s.x + 0.09, 0.98, s.z - 0.52); this.scene.add(menu);
+    menu.userData.interact = { kind: 'menu', prompt: () => 'Read the onboard menu' };
+    this.menuCard = menu;
   }
 
   _buildPsuHotspots() {
@@ -96,7 +101,7 @@ export class Player {
   }
 
   interactables() {
-    const list = [this.trayMesh, this.pocket, this.lightSpot, this.callSpot, this.gasperSpot];
+    const list = [this.trayMesh, this.pocket, this.menuCard, this.lightSpot, this.callSpot, this.gasperSpot];
     if (this.state === 'seated') list.push(this.belt ? this.beltClosed : this.beltOpen);
     return list;
   }
@@ -216,7 +221,7 @@ export class Player {
   }
 
   look(dx, dy) {
-    const s = 0.0022;
+    const s = 0.0022 * (this.sensitivity || 1);
     this.yaw -= dx * s; this.pitch -= dy * s;
     this.pitch = clamp(this.pitch, -1.35, 1.2);
     if (this.state === 'seated') this.yaw = clamp(this.yaw, -2.7, 2.7);

@@ -43,7 +43,7 @@
       <p class="blurb">You are already in your seat. The aircraft has just been pushed back from the gate and the engines are running. Buckle up, look out of the window, talk to the person next to you, get a coffee from the trolley, and ride the whole flight in real time: taxi, safety demonstration, take-off, cruise over Sweden, the approach over the Øresund and taxi to the gate in Copenhagen.</p>
       <div class="cta">
         <button class="btn primary" id="go">Take your seat</button>
-        <span class="fine">Headphones recommended. Mouse + keyboard; touch works too.</span>
+        <span class="fine">Desktop PC · mouse + keyboard · headphones recommended</span>
       </div>
     </div>
     <div class="options">
@@ -66,7 +66,7 @@
         <div class="opt"><label class="label" for="opt-lang">Announcements</label>
           <select id="opt-lang"><option value="sv+en" selected>Swedish + English</option><option value="en">English only</option></select></div>
         <div class="opt"><label class="label" for="opt-quality">Graphics</label>
-          <select id="opt-quality"><option value="low">Low (laptops)</option><option value="medium" selected>Medium</option><option value="high">High</option></select></div>
+          <select id="opt-quality"><option value="low">Low — integrated graphics</option><option value="medium">Medium — bloom, shadows</option><option value="high" selected>High — volumetric clouds, 1.5× render scale</option><option value="ultra">Ultra — 2× render scale, 80-step clouds</option></select></div>
         <div class="opt"><label class="label" for="opt-speed">Time</label>
           <select id="opt-speed"><option value="1" selected>Real time (about 62 min)</option><option value="2">2× faster</option><option value="4">4× faster</option></select></div>
       </div>
@@ -110,6 +110,7 @@
 </div>
 
 <div id="card" class="panel" hidden role="dialog" aria-label="Safety card"></div>
+<div id="menucard" class="panel" hidden role="dialog" aria-label="Onboard menu"></div>
 
 <div id="pause" class="overlay" hidden>
   <div class="dialog">
@@ -117,9 +118,13 @@
     <div class="keys" id="keys"></div>
     <div class="opt"><span class="label">Time</span><div class="seg" id="pause-speed"></div></div>
     <div class="opt"><span class="label">Jump ahead</span><div class="skip" id="skip"></div></div>
-    <div class="opt"><label class="label" for="vol">Volume</label><input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></div>
-    <div class="opt"><label class="label"><input type="checkbox" id="pause-voice" checked> Spoken voices</label></div>
-    <div class="cta"><button class="btn primary" id="resume">Back to the flight</button></div>
+    <div class="row2">
+      <div class="opt"><label class="label" for="vol">Volume</label><input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></div>
+      <div class="opt"><label class="label" for="sens">Mouse sensitivity</label><input type="range" id="sens" min="0.3" max="2.5" step="0.1" value="1"></div>
+      <div class="opt"><label class="label" for="fov">Field of view</label><input type="range" id="fov" min="50" max="95" step="1" value="68"></div>
+      <div class="opt"><label class="label"><input type="checkbox" id="pause-voice" checked> Spoken voices</label></div>
+    </div>
+    <div class="cta"><button class="btn primary" id="resume">Back to the flight</button><button class="btn" id="fullscreen">Fullscreen</button></div>
   </div>
 </div>
 
@@ -133,11 +138,6 @@
   </div>
 </div>
 
-<div id="touch" aria-label="Touch controls">
-  <button data-k="KeyB">Belt</button><button data-k="KeyE">Use</button><button data-k="KeyF">Tray</button>
-  <button data-k="KeyT">Talk</button><button data-k="KeyM">Phone</button><button data-k="Space">Stand/Sit</button>
-  <button data-k="KeyW">Walk ▲</button><button data-k="KeyS">Walk ▼</button><button data-k="Escape">Menu</button>
-</div>
 <!--/APP-->
 <script type="module" src="src/main.js"></script>
 </body>

@@ -1,6 +1,6 @@
 // Procedural canvas textures: upholstery, carpet, panels, placards, faces, clouds.
 import * as THREE from 'three';
-import { rng } from './core.js';
+import { rng, hash2 } from './core.js';
 
 export let MAX_ANISO = 4;
 export function setMaxAniso(a) { MAX_ANISO = a; }
@@ -55,7 +55,7 @@ const once = (k, f) => cache[k] || (cache[k] = f());
 
 // Woven upholstery: white-ish weave; tinted by vertex colours. Top-right 16px is flat white.
 export const fabricTex = () => once('fabric', () => canvasTex(256, 256, (g, w, h) => {
-  noiseFill(g, w, h, [226, 226, 226], 40, 3);
+  noiseFill(g, w, h, [226, 226, 226], 34, 3);
   g.globalAlpha = 0.18;
   for (let y = 0; y < h; y += 2) { g.fillStyle = y % 4 ? '#fff' : '#9a9a9a'; g.fillRect(0, y, w, 1); }
   for (let x = 0; x < w; x += 3) { g.fillStyle = x % 6 ? '#fff' : '#a0a0a0'; g.fillRect(x, 0, 1, h); }
@@ -179,20 +179,93 @@ export function placardTexture(lines, { bg = '#f4f1e8', fg = '#16233f', w = 256,
   });
 }
 
-export const seatBackTex = () => once('seatback', () => canvasTex(256, 512, (g, w, h) => {
-  noiseFill(g, w, h, [205, 208, 212], 8, 61);
-  // tray table outline
-  g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 3; rr(g, 26, 150, w - 52, 190, 18); g.stroke();
-  g.fillStyle = '#8f949c'; rr(g, w / 2 - 22, 136, 44, 14, 5); g.fill(); // latch
-  // literature pocket
-  g.fillStyle = 'rgba(40,45,55,0.55)'; rr(g, 30, 372, w - 60, 90, 10); g.fill();
-  g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(40, 380, w - 80, 4);
-  // USB-C with blue ring
-  g.fillStyle = '#23262b'; rr(g, w - 56, 100, 26, 12, 5); g.fill();
-  g.strokeStyle = '#3a8cff'; g.lineWidth = 2; rr(g, w - 58, 98, 30, 16, 6); g.stroke();
-  // placard
-  g.fillStyle = '#2b3140'; g.font = 'bold 13px Arial'; g.textAlign = 'center';
-  g.fillText('FASTEN SEAT BELT WHILE SEATED', w / 2, 300);
+// Recaro SL3510-style seat back: literature pocket with tablet lip at the top,
+// tray table below it, coat hook and cup holder, blue-lit USB port.
+export const seatBackTex = () => once('seatback', () => canvasTex(512, 1024, (g, w, h) => {
+  noiseFill(g, w, h, [196, 199, 204], 7, 61);
+  // slim shell edge highlight
+  g.strokeStyle = 'rgba(255,255,255,0.25)'; g.lineWidth = 4; rr(g, 8, 8, w - 16, h - 16, 40); g.stroke();
+  // literature pocket (top) with the tablet-holder lip
+  g.fillStyle = 'rgba(44,50,62,0.9)'; rr(g, 46, 60, w - 92, 175, 16); g.fill();
+  const gr = g.createLinearGradient(0, 60, 0, 235); gr.addColorStop(0, 'rgba(0,0,0,0.35)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; rr(g, 46, 60, w - 92, 175, 16); g.fill();
+  g.fillStyle = '#9ba1ab'; rr(g, 46, 226, w - 92, 14, 6); g.fill(); // lip
+  g.fillStyle = '#dfe2e6'; g.font = 'bold 20px Arial'; g.textAlign = 'center'; g.fillText('SAS', w / 2, 150); g.font = '13px Arial'; g.fillText('safety card · menu', w / 2, 172);
+  // coat hook (top left) and USB-C port (top right)
+  g.fillStyle = '#8a9099'; rr(g, 56, 24, 34, 18, 6); g.fill(); g.fillStyle = '#5f6670'; rr(g, 66, 30, 14, 10, 4); g.fill();
+  g.fillStyle = '#1d2026'; rr(g, w - 112, 26, 44, 18, 7); g.fill();
+  g.strokeStyle = '#3f8fff'; g.lineWidth = 3; rr(g, w - 115, 23, 50, 24, 9); g.stroke();
+  g.fillStyle = '#8b9199'; g.font = '11px Arial'; g.textAlign = 'right'; g.fillText('USB', w - 118, 40);
+  // tray table (latched) with the cup holder cut-out
+  g.strokeStyle = 'rgba(0,0,0,0.32)'; g.lineWidth = 4; rr(g, 40, 300, w - 80, 380, 24); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,0.18)'; rr(g, 46, 306, w - 92, 368, 22); g.fill();
+  g.fillStyle = '#8f949c'; rr(g, w / 2 - 44, 282, 88, 24, 8); g.fill(); g.fillStyle = '#6a6f78'; rr(g, w / 2 - 30, 288, 60, 12, 5); g.fill();
+  g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 3; g.beginPath(); g.arc(w / 2 + 120, 400, 42, 0, 7); g.stroke();
+  // placards
+  g.fillStyle = '#2b3140'; g.font = 'bold 15px Arial'; g.textAlign = 'center';
+  g.fillText('FASTEN SEAT BELT WHILE SEATED', w / 2, 730);
+  g.fillText('LIFE VEST UNDER YOUR SEAT', w / 2, 754);
+  g.fillStyle = '#c0392b'; g.font = 'bold 13px Arial'; g.fillText('NO SMOKING · E-CIGARETTES', w / 2, 778);
+  // seat-number tag on the lower shell
+  g.fillStyle = '#e9eaec'; rr(g, w / 2 - 24, 900, 48, 30, 6); g.fill();
+}));
+
+// Emissive mask for the seat back: only the blue USB ring glows.
+export const seatBackEmissive = () => once('seatback-em', () => canvasTex(512, 1024, (g, w, h) => {
+  g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#4c9dff'; g.lineWidth = 3; rr(g, w - 115, 23, 50, 24, 9); g.stroke();
+}));
+
+// Tangent-space normal map from a height function (finite differences), tileable.
+function normalFromHeight(w, h, height, strength = 2) {
+  return canvasTex(w, h, (g) => {
+    const img = g.createImageData(w, h); const d = img.data;
+    const H = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) H[y * w + x] = height(x, y);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const l = H[y * w + (x + w - 1) % w], r = H[y * w + (x + 1) % w], u = H[((y + h - 1) % h) * w + x], dn = H[((y + 1) % h) * w + x];
+      let nx = (l - r) * strength, ny = (u - dn) * strength, nz = 1;
+      const len = Math.hypot(nx, ny, nz); nx /= len; ny /= len; nz /= len;
+      const i = (y * w + x) * 4; d[i] = (nx * 0.5 + 0.5) * 255; d[i + 1] = (ny * 0.5 + 0.5) * 255; d[i + 2] = (nz * 0.5 + 0.5) * 255; d[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }, { repeat: true, srgb: false });
+}
+// woven fabric: two crossing thread directions
+export const fabricNormalTex = () => once('fabric-n', () => normalFromHeight(256, 256, (x, y) => {
+  const a = Math.sin(x * Math.PI / 4) * 0.5 + 0.5, b = Math.sin(y * Math.PI / 4 + 1.3) * 0.5 + 0.5;
+  const weave = ((x >> 2) + (y >> 2)) % 2 ? a : b;
+  return weave * 0.8 + hash2(x, y) * 0.2;
+}, 1.6));
+// carpet loops
+export const carpetNormalTex = () => once('carpet-n', () => normalFromHeight(256, 256, (x, y) => 0.6 * hash2(x >> 1, y >> 1) + 0.4 * hash2(x >> 2, y >> 2), 1.2));
+// leather grain for the headrest cover and armrest caps
+export const leatherNormalTex = () => once('leather-n', () => normalFromHeight(256, 256, (x, y) => {
+  const cell = 6; const cx = Math.floor(x / cell), cy = Math.floor(y / cell);
+  const j = hash2(cx, cy) * cell * 0.6, jx = (x % cell) - cell / 2 + j, jy = (y % cell) - cell / 2 - j;
+  return Math.max(0, 1 - Math.hypot(jx, jy) / (cell * 0.7)) * 0.7 + hash2(x, y) * 0.3;
+}, 1.4));
+
+// Scandinavian light oak veneer for the row-1 bulkhead
+export const woodTex = () => once('wood', () => canvasTex(1024, 512, (g, w, h) => {
+  g.fillStyle = '#d9c39a'; g.fillRect(0, 0, w, h);
+  const r = rng(303);
+  for (let i = 0; i < 90; i++) {
+    const y0 = r() * h, amp = 6 + r() * 14, k = 0.004 + r() * 0.01;
+    g.strokeStyle = `rgba(${150 + r() * 40 | 0},${115 + r() * 30 | 0},${70 + r() * 20 | 0},${0.12 + r() * 0.25})`; g.lineWidth = 1 + r() * 2.5;
+    g.beginPath(); for (let x = 0; x <= w; x += 6) g.lineTo(x, y0 + Math.sin(x * k + i) * amp + Math.sin(x * 0.05 + i * 3) * 2); g.stroke();
+  }
+  g.globalAlpha = 0.08; for (let i = 0; i < 6000; i++) { g.fillStyle = r() < 0.5 ? '#000' : '#fff'; g.fillRect(r() * w, r() * h, 2, 1); } g.globalAlpha = 1;
+}, { repeat: true }));
+
+// Bulkhead panel with the SAS wordmark and SkyTeam logo (drawn over the wood)
+export const bulkheadTex = () => once('bulkhead', () => canvasTex(1024, 1024, (g, w, h) => {
+  g.drawImage(woodTex().image, 0, 0, w, h);
+  g.fillStyle = '#1d3a86'; g.font = '900 250px Arial, Helvetica, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('SAS', w / 2, h * 0.42);
+  g.font = '500 44px Arial, sans-serif'; g.fillStyle = '#2f3a52'; g.fillText('Scandinavian Airlines', w / 2, h * 0.6);
+  g.fillStyle = '#1d3a86'; g.beginPath(); g.ellipse(w / 2 - 110, h * 0.76, 34, 34, 0, 0, 7); g.fill();
+  g.strokeStyle = '#fff'; g.lineWidth = 6; g.beginPath(); g.arc(w / 2 - 110, h * 0.76, 20, 0.3, 4.6); g.stroke();
+  g.fillStyle = '#1d3a86'; g.font = 'bold 40px Arial'; g.textAlign = 'left'; g.fillText('SkyTeam', w / 2 - 60, h * 0.76 + 4);
 }));
 
 export const trayTex = () => once('tray', () => canvasTex(256, 160, (g, w, h) => {
@@ -247,8 +320,8 @@ export const hatchTex = () => once('hatch', () => canvasTex(256, 512, (g, w, h) 
 }));
 
 // ---------------- faces ----------------
-export function faceTexture(skin, { female = false, age = 35, eye = '#3b5a7a', seed = 1, beard = null, lipstick = false, freckles = false, hi = false } = {}) {
-  const key = `face-${skin}-${female}-${age > 55 ? 'o' : 'y'}-${eye}-${beard}-${lipstick}-${freckles}-${seed % 3}-${hi}`;
+export function faceTexture(skin, { female = false, age = 35, eye = '#3b5a7a', seed = 1, beard = null, lipstick = false, freckles = false, hi = false, blink = false, talk = false } = {}) {
+  const key = `face-${skin}-${female}-${age > 55 ? 'o' : 'y'}-${eye}-${beard}-${lipstick}-${freckles}-${seed % 3}-${hi}-${blink ? 'b' : ''}${talk ? 't' : ''}`;
   const k = hi ? 3 : 1;
   return once(key, () => canvasTex(256 * k, 128 * k, (g, W, H) => {
     g.scale(k, k); const w = 256, h = 128;
@@ -270,11 +343,15 @@ export function faceTexture(skin, { female = false, age = 35, eye = '#3b5a7a', s
     g.beginPath(); g.ellipse(cx + 13, ey, 9, 6, 0, 0, 7); g.fill();
     for (const s of [-1, 1]) {
       const ex = cx + s * 13;
-      g.fillStyle = '#f4f1ec'; g.beginPath(); g.ellipse(ex, ey, 6, 3.2, 0, 0, 7); g.fill();
-      g.fillStyle = eye; g.beginPath(); g.arc(ex, ey, 2.8, 0, 7); g.fill();
-      g.fillStyle = '#111'; g.beginPath(); g.arc(ex, ey, 1.3, 0, 7); g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(ex + 0.6, ey - 1.6, 1, 1);
-      g.strokeStyle = 'rgba(30,20,15,0.8)'; g.lineWidth = female ? 1.6 : 1.1; g.beginPath(); g.ellipse(ex, ey, 6, 3.2, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+      if (blink) { // closed lids: a lash line over skin
+        g.strokeStyle = 'rgba(40,25,20,0.85)'; g.lineWidth = female ? 1.8 : 1.3; g.beginPath(); g.ellipse(ex, ey + 1, 6, 2.2, 0, 0.1, Math.PI - 0.1); g.stroke();
+      } else {
+        g.fillStyle = '#f4f1ec'; g.beginPath(); g.ellipse(ex, ey, 6, 3.2, 0, 0, 7); g.fill();
+        g.fillStyle = eye; g.beginPath(); g.arc(ex, ey, 2.8, 0, 7); g.fill();
+        g.fillStyle = '#111'; g.beginPath(); g.arc(ex, ey, 1.3, 0, 7); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(ex + 0.6, ey - 1.6, 1, 1);
+        g.strokeStyle = 'rgba(30,20,15,0.8)'; g.lineWidth = female ? 1.6 : 1.1; g.beginPath(); g.ellipse(ex, ey, 6, 3.2, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+      }
       // brows
       g.strokeStyle = beard || (female ? 'rgba(70,45,30,0.75)' : 'rgba(60,40,28,0.9)'); g.lineWidth = female ? 1.6 : 2.4;
       g.beginPath(); g.moveTo(ex - 7, ey - 7); g.quadraticCurveTo(ex, ey - 10, ex + 7, ey - 7 + s * 0.5); g.stroke();
@@ -284,9 +361,10 @@ export function faceTexture(skin, { female = false, age = 35, eye = '#3b5a7a', s
     g.strokeStyle = 'rgba(90,50,40,0.25)'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(cx - 2, ey + 4); g.quadraticCurveTo(cx - 5, h * 0.62, cx - 4, h * 0.64); g.stroke();
     g.fillStyle = 'rgba(80,40,30,0.3)'; g.beginPath(); g.ellipse(cx - 3, h * 0.655, 1.8, 1, 0, 0, 7); g.fill(); g.beginPath(); g.ellipse(cx + 3, h * 0.655, 1.8, 1, 0, 0, 7); g.fill();
-    // mouth
+    // mouth (open while talking)
     g.fillStyle = lipstick ? '#b23a48' : 'rgba(160,80,75,0.85)';
-    g.beginPath(); g.ellipse(cx, h * 0.76, 7.5, 2.2, 0, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(cx, h * 0.76, 7.5, talk ? 4.2 : 2.2, 0, 0, 7); g.fill();
+    if (talk) { g.fillStyle = '#4a1c1c'; g.beginPath(); g.ellipse(cx, h * 0.765, 5, 2.6, 0, 0, 7); g.fill(); g.fillStyle = '#f2ede6'; g.fillRect(cx - 4, h * 0.74, 8, 1.6); }
     g.strokeStyle = 'rgba(70,25,25,0.7)'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx - 7.5, h * 0.76); g.quadraticCurveTo(cx, h * 0.77, cx + 7.5, h * 0.76); g.stroke();
     if (freckles) { g.fillStyle = 'rgba(140,80,50,0.35)'; for (let i = 0; i < 30; i++) g.fillRect(cx - 25 + r() * 50, h * 0.5 + r() * 14, 1, 1); }
     if (beard) {
