@@ -1,0 +1,21 @@
+{
+  "name": "forge-boxing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Physics-based boxing game: active-ragdoll fighters on a custom XPBD rigid-body solver, rendered with three.js.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
