@@ -317,6 +317,8 @@ export class Exterior {
     for (const side of [-1, 1]) this._buildEngine(side);
     this._buildFuselage();
     this._buildVortices();
+    this._buildEngineFx();
+    this._buildSlides();
     this._buildLights();
     this.group.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
   }
@@ -644,7 +646,84 @@ export class Exterior {
     this.amb = new THREE.AmbientLight('#ffffff', 0.05); this.group.add(this.amb);
   }
 
+  // Fire and smoke streaming from an engine (index 0 = left), and compressor-stall flames.
+  _buildEngineFx() {
+    const N = 260;
+    this.fx = [];
+    const tex = glowTex();
+    for (const side of [-1, 1]) {
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(N * 3), col = new Float32Array(N * 3), size = new Float32Array(N);
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      const mat = new THREE.PointsMaterial({ size: 2.4, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+      const smokeMat = new THREE.PointsMaterial({ size: 5.5, map: tex, color: '#3a3a3c', transparent: true, opacity: 0.4, depthWrite: false, sizeAttenuation: true });
+      const fire = new THREE.Points(geo, mat), smokeGeo = geo.clone(), smoke = new THREE.Points(smokeGeo, smokeMat);
+      fire.frustumCulled = smoke.frustumCulled = false; fire.visible = smoke.visible = false;
+      this.group.add(fire, smoke);
+      const parts = []; for (let i = 0; i < N; i++) parts.push({ life: -1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
+      const sparts = []; for (let i = 0; i < N; i++) sparts.push({ life: -1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
+      this.fx.push({ side, fire, smoke, parts, sparts, fireK: 0, smokeK: 0, stall: 0, cx: side * 5.75, cy: -1.72, cz: 2.35 + 3.62 });
+    }
+  }
+  setEngineFx(i, { fire, smoke, stall } = {}) { const f = this.fx[i]; if (fire != null) f.fireK = fire; if (smoke != null) f.smokeK = smoke; if (stall) f.stall = Math.max(f.stall, stall); }
+  _updateEngineFx(dt, fm) {
+    const pe = sharedUniforms.uPreExp.value;
+    const air = Math.max(20, Math.min(fm.tas || 0, 120));
+    for (const f of this.fx) {
+      const fireOn = f.fireK > 0.01 || f.stall > 0;
+      f.fire.visible = fireOn; f.smoke.visible = f.smokeK > 0.01 || fireOn;
+      f.stall = Math.max(0, f.stall - dt);
+      const emitF = (f.fireK + f.stall * 3) * 420 * dt, emitS = (f.smokeK + f.fireK * 0.8) * 110 * dt;
+      let ef = emitF, es = emitS;
+      const pos = f.fire.geometry.attributes.position.array, col = f.fire.geometry.attributes.color.array;
+      f.parts.forEach((p, i) => {
+        if (p.life <= 0 && ef > Math.random()) { ef -= 1; p.life = 0.2 + Math.random() * 0.35; p.max = p.life; p.x = f.cx + (Math.random() - 0.5) * 0.8; p.y = f.cy - 0.2 + (Math.random() - 0.5) * 0.8; p.z = f.cz - 0.6 + Math.random() * 0.8; p.vx = (Math.random() - 0.5) * 1.5; p.vy = (Math.random() - 0.2) * 1.5; p.vz = 8 + air * (0.08 + Math.random() * 0.1); }
+        if (p.life > 0) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; }
+        const k = p.life > 0 ? p.life / p.max : 0;
+        pos[i * 3] = p.x; pos[i * 3 + 1] = p.life > 0 ? p.y : -999; pos[i * 3 + 2] = p.z;
+        col[i * 3] = 2.6 * k * pe; col[i * 3 + 1] = (0.45 + 1.1 * k * k) * k * pe; col[i * 3 + 2] = 0.12 * k * k * pe; // white-yellow core, orange tips
+      });
+      f.fire.geometry.attributes.position.needsUpdate = true; f.fire.geometry.attributes.color.needsUpdate = true;
+      const sp = f.smoke.geometry.attributes.position.array;
+      f.sparts.forEach((p, i) => {
+        if (p.life <= 0 && es > Math.random()) { es -= 1; p.life = 2 + Math.random() * 2; p.x = f.cx + (Math.random() - 0.5) * 0.8; p.y = f.cy + (Math.random() - 0.5) * 0.8; p.z = f.cz + 1.5; p.vx = (Math.random() - 0.5) * 3; p.vy = Math.random() * 1.5; p.vz = 10 + air * (0.2 + Math.random() * 0.15); }
+        if (p.life > 0) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; }
+        sp[i * 3] = p.x; sp[i * 3 + 1] = p.life > 0 ? p.y : -999; sp[i * 3 + 2] = p.z;
+      });
+      f.smoke.geometry.attributes.position.needsUpdate = true;
+      f.smoke.material.color.setRGB(0.23 * pe, 0.23 * pe, 0.24 * pe);
+    }
+  }
+
+  // Evacuation slides: yellow inflated chutes from the four doors down to the ground.
+  _buildSlides() {
+    const mat = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#f5c518', roughness: 0.6 }));
+    this.slides = {};
+    const doors = { L1: [-1, -2.3], R1: [1, -2.3], L4: [-1, 24.2], R4: [1, 24.2] };
+    for (const [name, [side, z]] of Object.entries(doors)) {
+      const g = new THREE.Group();
+      const len = 7.2, drop = 3.4;
+      const bed = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, len), mat);
+      const angle = Math.atan2(drop, len);
+      bed.rotation.x = 0; bed.position.set(0, 0, 0);
+      const pivot = new THREE.Group(); pivot.rotation.z = side * -angle * 0; pivot.add(bed);
+      for (const sx of [-0.8, 0.8]) { const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, len, 10).rotateX(Math.PI / 2), mat); rail.position.set(sx, 0.15, 0); pivot.add(rail); }
+      // lay the chute outward (x) and down to the ground
+      pivot.rotation.y = side * Math.PI / 2; pivot.rotation.x = 0;
+      g.add(pivot);
+      g.position.set(side * (1.95 + len / 2 * Math.cos(angle)), -drop / 2, z);
+      g.rotation.z = side * -angle;
+      g.scale.set(1, 1, 1); g.visible = false;
+      this.group.add(g);
+      this.slides[name] = { g, k: 0, on: false };
+    }
+  }
+  deploySlide(name) { const s = this.slides[name]; if (s && !s.on) { s.on = true; s.k = 0; s.g.visible = true; } }
+  _updateSlides(dt) { for (const s of Object.values(this.slides)) if (s.on && s.k < 1) { s.k = Math.min(1, s.k + dt / 5); const k = 1 - Math.pow(1 - s.k, 3); s.g.scale.set(Math.max(0.05, k), Math.max(0.05, k), Math.max(0.05, k)); } }
+
   update(dt, t, fm, env) {
+    this._updateEngineFx(dt, fm);
+    this._updateSlides(dt);
     const P = this.parts;
     // flaps: Fowler motion (aft + down + rotation)
     const fk = fm.flap / 35, sk = fm.slat / 27;
@@ -653,19 +732,24 @@ export class Exterior {
     // slats: leading edge droops and extends forward
     for (const sl of P.slats) this._setHinge(sl.pivot, -sl.side * fm.slat * 0.85 * DEG, -0.3 * sk, 0.1 * sk);
     // spoilers / speedbrakes: panels rise up to ~48 degrees
-    for (const sp of P.spoilers) this._setHinge(sp.pivot, -sp.side * fm.spoiler * 48 * DEG, 0, 0);
-    // ailerons follow roll rate (+ small turbulence corrections)
-    const bankRate = dt > 0 ? (fm.bank + (fm.turbBank || 0) - (this._pb ?? fm.bank)) / dt : 0;
-    this._pb = fm.bank + (fm.turbBank || 0);
-    this._ail = (this._ail || 0) + (clamp(bankRate * 4, -1, 1) - (this._ail || 0)) * Math.min(1, dt * 4);
-    for (const ai of P.ailerons) this._setHinge(ai.pivot, -this._ail * 12 * DEG, 0, 0);
+    // spoilers: speedbrake, ground spoilers, and roll spoilers on the down-going wing (from the flight controls)
+    const ail = fm.ctrl ? fm.ctrl.ail : 0;
+    for (const sp of P.spoilers) {
+      const roll = clamp(sp.side * ail * 1.6 - 0.25, 0, 1) * 0.7;
+      const k = Math.max(fm.spoiler || 0, fm.groundSpoiler || 0, roll);
+      sp.k = (sp.k ?? 0) + (k - (sp.k ?? 0)) * Math.min(1, dt * 6);
+      this._setHinge(sp.pivot, -sp.side * sp.k * 48 * DEG, 0, 0);
+    }
+    // ailerons: the real deflection from the fly-by-wire roll law (right wing's aileron up for a right roll)
+    this._ail = (this._ail || 0) + (ail - (this._ail || 0)) * Math.min(1, dt * 10);
+    for (const ai of P.ailerons) this._setHinge(ai.pivot, -this._ail * 25 * DEG, 0, 0);
     for (const r of P.reversers) { r.sleeve.position.z = fm.reverse * 0.55; r.cascade.visible = fm.reverse > 0.05; }
     // vortex condensation: humid air (rain / low cloud), flaps out, enough speed
     const vk = (env.humidity || 0) * clamp(fm.flap / 20, 0, 1) * (fm.ias > 120 && !fm.onGround ? 1 : 0);
     for (const v of this.vortices) { v.material.opacity += ((0.22 + 0.1 * Math.sin(t * 9 + v.position.x)) * vk - v.material.opacity) * Math.min(1, dt * 3); v.visible = v.material.opacity > 0.01; }
     // undercarriage: main legs fold inboard, the nose leg forward
     const gk = clamp(fm.gear, 0, 1);
-    for (const g of this.gear.main) g.pivot.rotation.z = -g.side * (1 - gk) * 1.57; // inboard
+    for (const g of this.gear.main) { const failed = fm.gearCollapsed && fm.gearCollapsed[g.side < 0 ? 1 : 2]; g.pivot.rotation.z = -g.side * (failed ? 1 : 1 - gk) * 1.57; } // inboard
     this.gear.nose.rotation.x = (1 - gk) * 1.62; // forward
     this.gear.drag.visible = gk > 0.35; // the drag brace folds into the bay
     if (this.doorPlugs.L1) this.doorPlugs.L1.visible = (env.doorL1 ?? 0) < 0.02;

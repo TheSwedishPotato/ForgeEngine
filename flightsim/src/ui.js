@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 
 export class UI {
   constructor() {
-    this.opts = { depIndex: 0, weather: 'fair', seat: '22A', load: 0.85, lang: 'sv+en', quality: 'high', speed: 1, voice: true, sensitivity: 1, fov: 68 };
+    this.opts = { depIndex: 0, weather: 'fair', seat: '22A', load: 0.85, lang: 'sv+en', quality: 'high', speed: 1, voice: true, sensitivity: 1, fov: 68, events: 'realistic' };
     try { const saved = JSON.parse(localStorage.getItem('sk1415-opts-v2') || 'null'); if (saved) Object.assign(this.opts, saved); } catch (e) { /* storage unavailable */ }
     this.handlers = {};
     this._buildStart();
@@ -53,6 +53,7 @@ export class UI {
     $('opt-quality').onchange = (e) => { o.quality = e.target.value; };
     $('opt-speed').onchange = (e) => { o.speed = +e.target.value; };
     $('opt-voice').onchange = (e) => { o.voice = e.target.checked; };
+    if ($('opt-events')) { $('opt-events').value = o.events || 'realistic'; $('opt-events').onchange = (e) => { o.events = e.target.value; }; }
     $('go').onclick = () => { try { localStorage.setItem('sk1415-opts-v2', JSON.stringify(o)); } catch (e) { /* ignore */ } this.emit('start', { ...o }); };
     this._refreshFacts();
     // keys list for the pause screen
@@ -194,10 +195,20 @@ export class UI {
   }
   showEnd(stats) {
     $('endscreen').hidden = false;
+    if (stats.label) $('end-label').textContent = stats.label;
+    if (stats.title) $('end-title').textContent = stats.title;
     $('end-text').textContent = stats.text;
     $('end-stats').innerHTML = stats.items.map(([k, v]) => `<div><span class="label">${k}</span><span class="v">${v}</span></div>`).join('');
   }
   hideEnd() { $('endscreen').hidden = true; }
+  // the passenger oxygen mask over your face
+  maskOverlay(on) { const el = $('maskoverlay'); if (el) el.hidden = !on; }
+  // pause menu: list of events that can be made to happen
+  setEvents(list, onPick) {
+    const sel = $('pause-event'); if (!sel) return;
+    sel.innerHTML = '<option value="">Choose an event…</option>' + list.map((e) => `<option value="${e.id}">${escapeHtml(e.label)}</option>`).join('');
+    $('pause-event-go').onclick = () => { if (sel.value) { onPick(sel.value); sel.value = ''; } };
+  }
 }
 
 function menuCardHTML() {

@@ -2,7 +2,11 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { UI } from './ui.js';
-import { buildRoute, FlightModel } from './flight.js';
+import { buildRoute } from './flight.js';
+import { FlightModel } from './physics.js';
+import { Atmosphere } from './atmosphere.js';
+import { CabinDynamics } from './cabinphysics.js';
+import { Incidents, SCENARIOS } from './events.js';
 import { World, WEATHER } from './world.js';
 import { Scenery } from './scenery.js';
 import { Cabin, rowZ } from './cabin.js';
@@ -21,7 +25,7 @@ import { VolumetricClouds } from './clouds.js';
 import { sharedUniforms, clamp, lerp, damp, rng, KT, FT, DEG, isa, vnoise1, smoothstep } from './core.js';
 
 const ui = new UI();
-const PHASE_NAMES = { parked: 'Pushback complete', 'taxi-out': 'Taxiing', hold: 'Holding short 19R', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', cruise: 'Cruise FL360', descent: 'Descending', approach: 'Approach 22L', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
+const PHASE_NAMES = { 'go-around': 'Go-around', emergency: 'Emergency descent', forced: 'Forced landing', 'rto-stop': 'Rejected take-off', parked: 'Pushback complete', 'taxi-out': 'Taxiing', hold: 'Holding short 19R', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', cruise: 'Cruise FL360', descent: 'Descending', approach: 'Approach 22L', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
 const G_LOCAL = new THREE.Vector3(0, -3.4, 11.5); // main-gear contact point in aircraft coordinates
 // graphics presets
 const QUALITY = {
@@ -67,7 +71,9 @@ async function boot(o, audio) {
   ui.loading(0.12, 'Planning the route ARN → CPH…'); await frame();
   const route = buildRoute();
   const st = W.stratus;
-  const fm = new FlightModel(route, { turbulence: W.turb, cloudBase: st ? st.base : W.cumulus > 0 ? W.cuBase : 1e9, cloudTop: st ? st.top : W.cumulus > 0.5 ? W.cuTop : -1 });
+  // the air and the aircraft: a rigid-body flight model flown through a turbulent atmosphere
+  const atmo = new Atmosphere(W, { seed: Math.floor(Math.random() * 1e6) });
+  const fm = new FlightModel(route, { atmosphere: atmo, wet: W.rain > 0 });
 
   ui.loading(0.2, 'Drawing Sweden and Denmark from map data…'); await frame();
   const world = new World(renderer, { weather: o.weather, quality: o.quality, localTime: opts.startClock, volumetric: Q.vol > 0 && W.cumulus > 0 });
@@ -79,6 +85,7 @@ async function boot(o, audio) {
 
   ui.loading(0.62, 'Fitting 180 seats…'); await frame();
   const cabinScene = new THREE.Scene();
+  cabinScene.fog = new THREE.FogExp2('#dfe4ea', 0); // condensation mist after a decompression
   const pm = new THREE.PMREMGenerator(renderer);
   const roomEnv = pm.fromScene(new RoomEnvironment(), 0.04).texture;
   cabinScene.environment = roomEnv;
@@ -118,9 +125,12 @@ async function boot(o, audio) {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const post = new PostFX(renderer, { width: size.x, height: size.y, quality: o.quality });
   const extCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
-  S = { ui, renderer, route, fm, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
+  S = { ui, renderer, route, fm, atmo, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
   const director = new Director(S);
   S.director = director;
+  S.cabinDyn = new CabinDynamics(S);
+  fm.onSubstep = (h) => S.cabinDyn.substep(h);
+  S.incidents = new Incidents(S, o.events || 'realistic');
 
   ui.loading(0.95, 'Closing the doors…'); await frame();
   resize();
@@ -207,11 +217,13 @@ window.addEventListener('resize', resize);
 function simStep(dt, render = true) {
   const { fm, director, people, cabin, player, world } = S;
   director.update(dt);
+  S.incidents.update(dt);
   fm.update(dt);
   const pp = player.pos;
   people.playerBlock = player.state === 'standing' ? { x: pp.x, z: pp.z } : null;
   people.update(dt, { player: { x: player.eye.x, z: player.eye.z }, phase: fm.phase, bump: fm.bump, force: !render, crewNear: (seat) => people.crew.some((c) => Math.abs(c.z - seat.z) < 1.2 && !c.seated) });
   cabin.update(dt);
+  S.cabinDyn.update(dt);
   S.dialogue.playerPos = player.eye;
 }
 
@@ -241,12 +253,12 @@ function loop() {
   // ---- camera & head motion ----
   const rr = fm.rollRumble;
   const tt = fm.t;
-  const vib = (vnoise1(tt * 31) - 0.5) * 0.006 * rr + (vnoise1(tt * 13 + 5) - 0.5) * 0.004 * rr;
+  // runway and taxiway texture through the seat, plus the head moved by the real accelerations
+  const vib = ((vnoise1(tt * 31) - 0.5) * 0.006 + (vnoise1(tt * 13 + 5) - 0.5) * 0.004) * rr + (vnoise1(tt * 47 + 9) - 0.5) * 0.004 * (fm.buffet || 0);
   thumpY = Math.max(0, thumpY - realDt * 6); if (fm.thump > 0.5 && !S._thumped) { thumpY = 0.035 * fm.thump; S._thumped = true; } if (fm.thump < 0.1) S._thumped = false;
-  const turb = fm.bump * 0.022 + (vnoise1(tt * 9 + 3) - 0.5) * 0.004 * (fm.turbLevel || 0);
-  const ax = clamp(fm.accel.z, -3, 3);
-  shake.set((vnoise1(tt * 7 + 11) - 0.5) * 0.004 * (fm.turbLevel || 0), vib + turb - thumpY, clamp(ax * 0.009, -0.03, 0.03));
-  player.update(realDt, { headOffset: shake, headRoll: (vnoise1(tt * 5 + 50) - 0.5) * 0.004 * (fm.turbLevel || 0), blocked: (x, z) => people.crew.concat(people.walkers).some((c) => c.root.visible && !c.seated && Math.abs(c.x - x) < 0.35 && Math.abs(c.z - z) < 0.45), bump: fm.bump });
+  S.cabinDyn.headOffset(shake); shake.y += vib - thumpY;
+  const sf = S.cabinDyn.sfCabin;
+  player.update(realDt, { headOffset: shake, headRoll: clamp(-sf.x / 9.81 * 0.05, -0.08, 0.08) + (vnoise1(tt * 5 + 50) - 0.5) * 0.003 * (fm.turbLevel || 0), blocked: (x, z) => people.crew.concat(people.walkers).some((c) => c.root.visible && !c.seated && Math.abs(c.x - x) < 0.35 && Math.abs(c.z - z) < 0.45) });
   const outside = S.view === 'outside';
   const cam = outside ? updateOrbitCamera(realDt) : player.camera;
   // world camera = aircraft pose * aircraft-local camera
@@ -259,6 +271,8 @@ function loop() {
   sharedUniforms.uViewUp.value.set(0, 1, 0).transformDirection(wc.matrixWorldInverse);
   const localH = S.opts.startClock + director.t / 3600;
   const env = S.env = world.update(dt, fm.t, fm, wc.position, wc.quaternion, localH);
+  // sunshine heats the ground and drives thermals (weak under overcast, none at night)
+  S.atmo.sunHeat = smoothstep(4, 45, world.sunEl ?? 0) * (world.weather.stratus ? 0.25 : 1);
   S.scenery.update(dt, fm.t, fm, env, director);
   // landing lights on the terrain
   const llOn = (!fm.onGround && fm.h < 3048) || fm.phase === 'takeoff' || fm.phase === 'lineup' || fm.phase === 'rollout';
@@ -312,10 +326,13 @@ function loop() {
   S.frameNo++;
   if (outside) renderOutside(r, cam, wc, preExp); else renderCabin(r, cam, wc, preExp, L);
   S.flash = Math.max(0, S.flash - realDt * 3);
-  post.finish({ exposure: expIn, time: fm.t, night: nk, earFade: audio.muffle * 0.5, flash: S.flash, bloom: S.Q.bloom, smaa: S.Q.smaa });
+  S.flashRed = Math.max(0, (S.flashRed || 0) - realDt * 0.8);
+  post.finish({ exposure: expIn, time: fm.t, night: nk, earFade: audio.muffle * 0.5 + (S.hypoxia || 0) * 0.9, flash: S.flash, red: S.flashRed, dark: S.blackout || 0, bloom: S.Q.bloom, smaa: S.Q.smaa });
+  S.ui.maskOverlay(!!player.maskOn && S.view === 'cabin');
   // ---- UI ----
   if (!outside) hover(); else { S.hovered = null; ui.prompt(null); }
-  ui.hud({ flight: S.opts.flight, clock: localH, phase: PHASE_NAMES[fm.phase] || fm.phase, belt: director.seatbelt, speed: S.speed });
+  const phaseName = fm.crashed ? 'Emergency' : fm.airport === 'ARN' && fm.phase === 'approach' ? 'Approach 01L, Arlanda' : fm.airport === 'ARN' && fm.phase === 'taxi-in' ? 'Taxiing to the stand' : fm.airport === 'ARN' && fm.phase === 'arrived' ? 'Back at Arlanda' : (fm.phase === 'cruise' ? `Cruise FL${String(Math.round(fm.h / FT / 1000) * 10).padStart(3, '0')}` : PHASE_NAMES[fm.phase] || fm.phase);
+  ui.hud({ flight: S.opts.flight, clock: localH, phase: phaseName, belt: director.seatbelt, speed: S.speed });
   S.lastMap -= realDt;
   if (S.lastMap <= 0 && ui.phoneOpen()) { S.lastMap = 0.5; ui.updatePhone(phoneState(localH)); }
   // end condition: walk out of the front door
@@ -539,10 +556,12 @@ function setupInput() {
       case 'KeyY': S.audio.pop(); ui.toast('*swallow* — ears cleared', 2); break;
       case 'KeyH': pause(true); break;
       case 'KeyV': setView(S.view === 'outside' ? 'cabin' : 'outside'); break;
+      case 'KeyO': toggleMask(); break;
       case 'KeyP': S.ui.showHUD(false); S.photoPending = true; S.audio.clunk(0.15); break; // the flash comes after the capture
       case 'F11': case 'KeyU': toggleFullscreen(); break;
       case 'Space': {
         if (S.view === 'outside') break;
+        if (P.fallen) { if (P.getUp()) ui.toast('You get back on your feet.', 2); break; }
         if (P.state === 'seated') { const r = P.standUp(); if (r === 'belt') ui.toast('Unfasten your seatbelt first (B)'); else if (r === 'tray') ui.toast('Fold the tray table first (F)'); else if (r === true) { ui.toast('Walk with W A S D · Space to sit when you are back at your row', 4); if (D.seatbelt && S.fm.phase !== 'arrived') ui.toast('The seatbelt sign is on!', 3); } }
         else if (!P.sitDown()) ui.toast('Walk back to your row to sit down');
         break;
@@ -578,6 +597,16 @@ function toggleFullscreen() {
   try { if (!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.(); } catch (e) { /* not allowed here */ }
 }
 
+// Your oxygen mask: only once the masks have dropped, and only from your seat (or standing in the aisle
+// holding one of the spare masks in the galley would be a stretch, so seated only).
+function toggleMask() {
+  const P = S.player;
+  if (!S.cabin.masksDown) { S.ui.toast('The oxygen masks are stowed above you. They drop automatically if the cabin loses pressure.', 4); return; }
+  if (P.state !== 'seated' && !P.maskOn) { S.ui.toast('Sit down to reach a mask.', 3); return; }
+  P.maskOn = !P.maskOn; S.audio.clunk(0.15);
+  S.ui.toast(P.maskOn ? 'You pull the mask down (that starts the oxygen), put it over your nose and mouth and tighten the strap.' : 'You take the mask off.', 5);
+}
+
 function addTrayItem(id) {
   const P = S.player;
   const colors = { coffee: '#f4f4f2', tea: '#f4f4f2', water: '#e9f2f7', focaccia: '#d9b16a', sandwich: '#e6cf98', bun: '#b77a3c', chocolate: '#6b3f25', crisps: '#d9453a', soda: '#c8202a', juice: '#f0a020', sparkling: '#8fd0ff', beer: '#e0b030', wine: '#7a1f32' };
@@ -590,7 +619,7 @@ function addTrayItem(id) {
   const n = P.trayItems.children.length;
   geo.computeBoundingBox(); const h = geo.boundingBox.max.y - geo.boundingBox.min.y;
   m.position.set(-0.12 + (n % 3) * 0.12, 0.01 + h / 2, 0.05 + Math.floor(n / 3) * 0.08);
-  m.castShadow = true; P.trayItems.add(m);
+  m.castShadow = true; m.userData.item = id; P.trayItems.add(m);
   if (id === 'coffee' || id === 'tea') { const liquid = new THREE.Mesh(new THREE.CircleGeometry(0.031, 12), new THREE.MeshStandardMaterial({ color: id === 'coffee' ? '#3b2314' : '#8a4a1c', roughness: 0.2 })); liquid.rotation.x = -Math.PI / 2; liquid.position.y = h / 2 - 0.01; m.add(liquid); }
   S.ui.toast({ coffee: 'Coffee on your tray (free)', tea: 'Tea on your tray (free)', water: 'Water on your tray' }[id] || 'Added to your tray', 2.5);
 }
@@ -609,6 +638,7 @@ function pause(v) {
 
 function setupPause() {
   const { ui } = S;
+  ui.setEvents(SCENARIOS, (id) => { S.incidents.trigger(id); });
   const skips = [
     { id: 'takeoff', label: 'Take-off', cond: () => S.fm.phase === 'lineup' || S.fm.phase === 'takeoff' || !S.fm.onGround },
     { id: 'cruise', label: 'Cruise', cond: () => S.fm.phase === 'cruise' || S.fm.phase === 'descent' },

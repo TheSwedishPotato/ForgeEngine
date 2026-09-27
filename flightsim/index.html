@@ -67,6 +67,8 @@
           <select id="opt-lang"><option value="sv+en" selected>Swedish + English</option><option value="en">English only</option></select></div>
         <div class="opt"><label class="label" for="opt-quality">Graphics</label>
           <select id="opt-quality"><option value="low">Low — integrated graphics</option><option value="medium">Medium — bloom, shadows</option><option value="high" selected>High — volumetric clouds, 1.5× render scale</option><option value="ultra">Ultra — 2× render scale, 80-step clouds</option></select></div>
+        <div class="opt"><label class="label" for="opt-events">Real-world events</label>
+          <select id="opt-events"><option value="off">Off: a perfectly normal flight</option><option value="realistic" selected>Realistic: as rare as in real life</option><option value="eventful">Eventful: something will happen</option><option value="chaos">Chaos: anything, including accidents</option></select></div>
         <div class="opt"><label class="label" for="opt-speed">Time</label>
           <select id="opt-speed"><option value="1" selected>Real time (about 62 min)</option><option value="2">2× faster</option><option value="4">4× faster</option></select></div>
       </div>
@@ -124,14 +126,17 @@
       <div class="opt"><label class="label" for="fov">Field of view</label><input type="range" id="fov" min="50" max="95" step="1" value="68"></div>
       <div class="opt"><label class="label"><input type="checkbox" id="pause-voice" checked> Spoken voices</label></div>
     </div>
+    <div class="opt"><label class="label" for="pause-event">Make something happen</label>
+      <div class="evrow"><select id="pause-event"></select><button class="btn small" id="pause-event-go" type="button">Go</button></div></div>
     <div class="cta"><button class="btn primary" id="resume">Back to the flight</button><button class="btn" id="fullscreen">Fullscreen</button></div>
   </div>
 </div>
 
+<div id="maskoverlay" hidden></div>
 <div id="endscreen" class="overlay" hidden>
   <div class="dialog">
-    <span class="label">Copenhagen Kastrup · Terminal 3</span>
-    <div class="big">Velkommen til København</div>
+    <span class="label" id="end-label">Copenhagen Kastrup · Terminal 3</span>
+    <div class="big" id="end-title">Velkommen til København</div>
     <p id="end-text" style="margin:0;color:var(--muted)"></p>
     <div class="stats" id="end-stats"></div>
     <div class="cta"><button class="btn primary" id="again">Fly again</button><button class="btn" id="stay">Stay on board</button></div>

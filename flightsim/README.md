@@ -36,13 +36,14 @@ system voice; captions are always shown).
 | **F** | Tray table |
 | **R** | Recline (only when the seatbelt sign is off) |
 | **T** | Talk to the passenger next to you (then **1–5** to answer) |
-| **Space** | Stand up / sit down |
+| **Space** | Stand up / sit down; get back up if turbulence throws you to the floor |
 | **W A S D** | Walk when standing, lean when seated (lean towards the window to look down) |
 | **M** | Your phone: live flight map with altitude, speed and ETA |
 | **V** | Outside camera: orbit the aircraft with the mouse, zoom with the wheel |
 | **P** | Take a photo (saved as a PNG, with a camera flash) |
 | **U** / **F11** | Fullscreen |
 | **Y** | Swallow — clears blocked ears during the descent |
+| **O** | Put on / take off your oxygen mask (once the masks have dropped) |
 | **+ / −** | Time speed 1× … 16× |
 | **Esc** | Pause, help, jump ahead to a phase, volume |
 
@@ -114,7 +115,45 @@ thump-thump of centreline lights, gear and flap motors, speed-brake and gear rum
 Airbus cabin chimes, seatbelt clicks, trolley, coffee pouring, the vacuum toilet flush,
 rain, cabin murmur and blocked ears on the descent.
 
-**Flight.** A kinematic A320neo model on a filleted ground track: taxi speeds limited by
+**Physics.** The aircraft is a rigid body with six degrees of freedom, integrated at 120 Hz.
+Lift, drag and side force come from angle of attack and sideslip with a real lift curve and
+stall for each flap setting, spoilers, gear drag and ground effect. The LEAP-1A26 engines
+lose thrust with density and Mach, spool up and down, burn fuel and can fail. Three oleo
+struts with tyre friction, brakes and nose-wheel steering carry it on the ground. The pilots
+are modelled as Airbus-style fly-by-wire control laws: pitch-rate command with automatic
+stabiliser trim and turn compensation, roll-rate command with bank protection, a yaw damper
+and turn coordination, alpha and pitch protections, and alpha floor. An autopilot and
+autothrust fly the route (pitch controls the flight path, thrust controls the energy), with
+gust-aware approach speeds, a flare law and autobrake. Nothing moves the aircraft except
+these forces, so a hard landing, a bounce, a tail strike or a crash is something that
+happens, not something that is played.
+
+**Turbulence and wind.** Dryden turbulence (MIL-F-8785C) with intensity from the weather, the
+height, the time of day (thermals under fair-weather cumulus) and the surface wind, plus a wind
+that strengthens and veers towards the westerly jet stream. Discrete hazards: clear-air
+turbulence patches, microburst windshear on final, wake vortices. The cabin feels the
+specific force at each seat, including the rotational terms, so the back of the aircraft
+moves more than the rows over the wing.
+
+**The cabin reacts.** Your head sways with the accelerations. Unbelted, you lift off the seat
+in negative g and can hit the overhead panel; standing, your feet hold about a quarter of a
+g before you stagger and fall. Crew and walking passengers are thrown about the same way,
+trolleys roll when their brakes can no longer hold them, drinks tip over, overhead bins burst
+open and the oxygen masks drop at a cabin altitude of 14,000 ft.
+
+**Anything can happen** (option *Real-world events*: off, realistic, eventful, chaos; or pick
+one from the pause menu). Moderate and severe turbulence, wake turbulence, windshear with a
+go-around, go-arounds for an occupied runway or an unstable approach, bird strikes, lightning,
+a medical emergency, a rejected take-off, an engine failure at take-off or a bird strike that
+takes out an engine (the crew returns to Arlanda for runway 01L), an engine fire, a
+precautionary shutdown, a rapid decompression with an emergency descent and hypoxia if you
+leave your mask off, a hydraulic failure with a gravity gear extension, and in chaos mode a
+flock of birds taking out both engines (glide, brace, crash-landing, evacuation down the
+slides) or a main gear that will not come down. The captain and purser brief you in Swedish
+and English as it happens. Crashes can be survivable or not, depending on how the aircraft
+meets the ground.
+
+**Flight path.** The route follows the filleted ground track: taxi speeds limited by
 curvature, 50 % N1 stabilisation then FLEX thrust, rotation at 144 kt, gear up, thrust
 reduction at 1,500 ft, flap retraction, 250 kt below FL100, Mach 0.78 at FL360, idle
 descent on a 3° profile with a deceleration segment at FL100, configuration changes and
@@ -142,6 +181,10 @@ quality, time speed and spoken voices.
   seats; *Flavors by SAS* buy-on-board menu.
 * A320 exterior lighting: logo lights on the tailplane, switched with NAV and lit only with
   the main gear compressed or the slats out (FlyByWire A32NX documentation).
+* Turbulence: MIL-F-8785C Dryden model (scale lengths and intensities). Hypoxia: FAA time of
+  useful consciousness table. A320 procedures: CONF 3 for single-engine landing, autobrake LO/MED,
+  oxygen masks deploying at 14,000 ft cabin altitude, ~11.7° tail-strike attitude, 7.59 m
+  main-gear track, VMO 350 kt / MMO 0.82.
 * Kastrup ground handling (cph.dk) and the Terminal 3 expansion; Arlanda taxi routes
   (VATSIM Scandinavia ESSA wiki); Airbus cabin chime conventions.
 * Runways: OurAirports `runways.csv` (ESSA 01L/19R, 01R/19L, 08/26; EKCH 04L/22R,
@@ -159,7 +202,11 @@ or Copenhagen Airports.
 | `src/main.js` | Boot, main loop, render passes (world → clouds → own aircraft → cabin), input, outside camera, photos |
 | `src/post.js` | HDR buffers, bloom, tone mapping and grade, SMAA |
 | `src/clouds.js` | Ray-marched volumetric cumulus |
-| `src/flight.js` | Route with filleted turns and the flight model |
+| `src/flight.js` | Route with filleted turns, the return-to-Arlanda route, a fast reference model for the ETA |
+| `src/physics.js` | Rigid-body flight dynamics, engines, gear, fly-by-wire, autopilot and autothrust |
+| `src/atmosphere.js` | Wind profile, Dryden turbulence, clear-air turbulence, microbursts, wake vortices |
+| `src/cabinphysics.js` | What the accelerations do to people and things in the cabin |
+| `src/events.js` | Abnormal and emergency events, crew procedures and PAs, evacuation, endings |
 | `src/places.js` | Runways, airport layouts, landmarks, route waypoints, departures |
 | `src/world.js` | Sky, atmosphere, curved-Earth terrain, water, clouds, weather |
 | `src/scenery.js` | Airports, runway lights, parked aircraft, bridge, wind farms, traffic |
@@ -174,6 +221,12 @@ or Copenhagen Airports.
 | `src/audio.js` | Procedural sound |
 | `src/player.js` | First-person controls and your seat |
 | `src/ui.js` | Start screen, HUD, captions, menus, phone map, safety card |
+
+Fly the whole route headlessly on the physics model (about two seconds), optionally with a failure:
+
+```bash
+node tools/flight-test.mjs broken 5400 --sc=shear
+```
 
 Rebuild `dist/SK1415.html` after changing the source:
 

@@ -7,7 +7,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 const FINAL_GLSL = /* glsl */`
 uniform sampler2D tScene; uniform float uExposure; uniform float uTime; uniform vec2 uRes;
 uniform float uVignette; uniform float uGrain; uniform float uCA; uniform float uSat; uniform float uContrast;
-uniform vec3 uTint; uniform float uFlash; uniform float uEarFade;
+uniform vec3 uTint; uniform float uFlash; uniform float uEarFade; uniform float uRed; uniform float uDark;
 varying vec2 vUv;
 vec3 aces(vec3 x){ const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14; return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0); }
 vec3 toSRGB(vec3 c){ return mix(12.92*c, 1.055*pow(c, vec3(1.0/2.4)) - 0.055, step(0.0031308, c)); }
@@ -38,6 +38,9 @@ void main(){
   // ear-pressure darkening at the edges, camera flash
   col *= 1.0 - uEarFade * smoothstep(0.1, 0.9, r2 * 2.5);
   col = mix(col, vec3(1.0), uFlash);
+  // injury: a red pulse from the edges; blackout (hypoxia, impact): fade to black
+  col = mix(col, col * vec3(1.0, 0.25, 0.2) + vec3(0.18, 0.0, 0.0), uRed * smoothstep(0.05, 0.7, r2 * 2.5 + 0.3));
+  col *= 1.0 - uDark;
   gl_FragColor = vec4(toSRGB(clamp(col, 0.0, 1.0)), 1.0);
 }`;
 
@@ -62,7 +65,7 @@ export class PostFX {
       uniforms: {
         tScene: { value: null }, uExposure: { value: 1 }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(width, height) },
         uVignette: { value: 0.38 }, uGrain: { value: 0.018 }, uCA: { value: 0.006 }, uSat: { value: 1.04 }, uContrast: { value: 1.03 },
-        uTint: { value: new THREE.Color(1, 1, 1) }, uFlash: { value: 0 }, uEarFade: { value: 0 },
+        uTint: { value: new THREE.Color(1, 1, 1) }, uFlash: { value: 0 }, uEarFade: { value: 0 }, uRed: { value: 0 }, uDark: { value: 0 },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: FINAL_GLSL, depthTest: false, depthWrite: false,
@@ -93,13 +96,13 @@ export class PostFX {
   }
 
   // Bloom + grade + anti-aliasing from rtMain to the screen.
-  finish({ exposure, time, night = 0, earFade = 0, flash = 0, tint = null, bloom = true, smaa = true }) {
+  finish({ exposure, time, night = 0, earFade = 0, flash = 0, red = 0, dark = 0, tint = null, bloom = true, smaa = true }) {
     const r = this.renderer;
     const prev = r.autoClear; r.autoClear = false;
     if (bloom) this.bloom.render(r, null, this.rtMain, 0, false);
     const u = this.finalMat.uniforms;
     u.tScene.value = this.rtMain.texture; u.uExposure.value = exposure; u.uTime.value = time;
-    u.uGrain.value = 0.006 + 0.016 * night; u.uEarFade.value = earFade; u.uFlash.value = flash;
+    u.uGrain.value = 0.006 + 0.016 * night; u.uEarFade.value = Math.min(1, earFade); u.uFlash.value = flash; u.uRed.value = Math.min(1, red); u.uDark.value = Math.min(1, dark);
     if (tint) u.uTint.value.copy(tint); else u.uTint.value.setScalar(1);
     if (smaa) {
       r.setRenderTarget(this.rtLDR); this.quad.render(r);

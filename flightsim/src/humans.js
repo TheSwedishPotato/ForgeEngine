@@ -335,6 +335,14 @@ export const POSES = {
   sitArmsCrossed: { lShoulder: [-30 * D, 0, 0.1], rShoulder: [-30 * D, 0, -0.1], lElbow: [-100 * D, 0.9, 0], rElbow: [-100 * D, -0.9, 0] },
   sitLaptop: { lShoulder: [-35 * D, 0, -0.08], rShoulder: [-35 * D, 0, 0.08], lElbow: [-70 * D, 0.3, 0], rElbow: [-70 * D, -0.3, 0], neck: [20 * D, 0, 0], head: [8 * D, 0, 0] },
   // crew seated on a jump seat, hands under thighs (brace-ready)
+  // thrown to the floor: sitting on the aisle carpet, hands behind for support
+  floorSit: { pelvis: [0, 0, 0], spine: [-4 * D, 0, 0], chest: [-6 * D, 0, 0], neck: [10 * D, 0, 0], head: [6 * D, 0, 0],
+    lShoulder: [35 * D, 0, -0.3], rShoulder: [35 * D, 0, 0.3], lElbow: [-10 * D, 0, 0], rElbow: [-10 * D, 0, 0],
+    lHip: [-80 * D, 0, -0.18], rHip: [-72 * D, 0, 0.14], lKnee: [70 * D, 0, 0], rKnee: [40 * D, 0, 0], lAnkle: [0, 0, 0], rAnkle: [0, 0, 0] },
+  // holding on to the seat backs in turbulence, knees soft
+  hold: { lShoulder: [-55 * D, 0, -0.45], rShoulder: [-55 * D, 0, 0.45], lElbow: [-35 * D, 0, 0], rElbow: [-35 * D, 0, 0], spine: [-10 * D, 0, 0], lKnee: [0.25, 0, 0], rKnee: [0.25, 0, 0], lHip: [-0.2, 0, 0], rHip: [-0.2, 0, 0] },
+  // brace for impact, seated: head down against the seat in front
+  brace: { spine: [-38 * D, 0, 0], chest: [-18 * D, 0, 0], neck: [-20 * D, 0, 0], head: [-10 * D, 0, 0], lShoulder: [-120 * D, 0, -0.2], rShoulder: [-120 * D, 0, 0.2], lElbow: [-60 * D, 0, 0], rElbow: [-60 * D, 0, 0] },
   jump: { lShoulder: [-8 * D, 0, -0.12], rShoulder: [-8 * D, 0, 0.12], lElbow: [-40 * D, 0, 0], rElbow: [-40 * D, 0, 0], spine: [-2 * D, 0, 0], neck: [0, 0, 0] },
 };
 

@@ -161,7 +161,11 @@ export class Actor {
       }
       if (this.gT > this.gesture[this.gesture.length - 1][0] && this.gName !== 'handset') { this.gesture = null; this.turnOffset = 0; }
     }
-    this.h.blendPose(pose, Math.min(1, dt * 9));
+    // cabin physics: holding on, thrown to the floor, bracing for impact
+    if (this.fallen) pose = composePose(POSES.stand, POSES.floorSit);
+    else if (this.bracing && !this.seated) pose = composePose(pose, POSES.hold);
+    else if (this.braceSeat && this.seated) pose = composePose(pose, POSES.brace);
+    this.h.blendPose(pose, Math.min(1, dt * (this.fallen ? 14 : 9)));
     // head look
     if (this.headTarget) {
       const hp = this.headTarget;
@@ -172,7 +176,7 @@ export class Actor {
     } else { this.headYaw = damp(this.headYaw, 0, 4, dt); this.headPitch = damp(this.headPitch, 0, 4, dt); }
     this.h.j.neck.rotation.y += this.headYaw * 0.4; this.h.j.head.rotation.y = this.headYaw * 0.6; this.h.j.head.rotation.x += this.headPitch;
     const turnOff = this.turnOffset || 0;
-    this.root.position.set(this.x, this.seated ? this.seatY : 0, this.z);
+    this.root.position.set(this.x, (this.seated ? this.seatY : 0) + (this.lift || 0) + (this.fallen ? 0.1 - 0.84 * this.h.s : 0), this.z);
     this.root.rotation.y = this.heading + turnOff;
     if (this.sayT > 0) { this.sayT -= dt; if (this.sayT <= 0) this.say = null; }
     // eyes, mouth and breathing
@@ -401,7 +405,8 @@ export class People {
     // cart sits in front of the crew member (towards the direction of travel)
     cart.position.x = 0;
     const cz = c.z + run.dir * 0.75;
-    cart.position.z = damp(cart.position.z, cz, 10, dt);
+    cart.position.z = damp(cart.position.z, cz + (run.rollZ || 0), run.rollZ ? 40 : 10, dt);
+    cart.position.y = run.lift || 0;
     if (run.helper) { const h = run.helper; if (!h.task && Math.abs(h.z - (cart.position.z + run.dir * 0.75)) > 0.1) h.queue({ type: 'walk', x: 0, z: cart.position.z + run.dir * 0.75, speed: 0.8 }); h.targetHeading = run.dir > 0 ? Math.PI : 0; }
     if (c.busy()) return;
     if (run.i >= run.rows.length) {
@@ -495,6 +500,15 @@ export class People {
       { type: 'call', fn: () => { this.scene.remove(act.root); p.group.visible = true; p.away = false; this.walkers.splice(this.walkers.indexOf(act), 1); this.refreshTrays(); } });
     this.walkers.push(act);
     return true;
+  }
+
+  // A seated passenger gets up (evacuation): swap the baked figure for an animated actor.
+  spawnWalker(p) {
+    const act = new Actor(p.app, this.scene, {});
+    act.place(Math.sign(p.seat.x) * Math.min(Math.abs(p.seat.x), 0.5), p.seat.z - 0.2, Math.PI);
+    p.group.visible = false; p.away = true; this.refreshTrays();
+    this.walkers.push(act);
+    return act;
   }
 
   // Deplaning: aisle passengers stand, then shuffle out through L1

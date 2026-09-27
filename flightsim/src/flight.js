@@ -1,5 +1,6 @@
-// Route geometry and a kinematic A320neo flight model: taxi, take-off, climb,
-// cruise, descent, approach, landing and taxi-in along one continuous path.
+// Route geometry, plus a fast kinematic reference model of the same flight. The aircraft
+// itself is flown by the rigid-body physics in physics.js; this reference only gives the
+// director a quick time-to-go table for the ETA.
 import * as THREE from 'three';
 import { DEG, KT, FT, G, clamp, lerp, damp, smoothstep, isa, vnoise1, project } from './core.js';
 import { ARN, CPH, ARN_LAYOUT, CPH_LAYOUT, ROUTE_AIR } from './places.js';
@@ -119,6 +120,35 @@ export function buildRoute() {
   return { path, m };
 }
 
+// Air return to Arlanda after a problem on departure: straight ahead, a right-hand teardrop
+// onto the runway 01L final from the south, land northbound, vacate onto the parallel taxiway
+// and stop at a stand by pier F. p: the aircraft's main-gear point {x, z}; dir: track {x, z}.
+export function buildReturnRoute(p, dir) {
+  const fa = ARN.frame, L = ARN.rwy.len;
+  const cur = new THREE.Vector2(p.x, p.z);
+  const rel = cur.clone().sub(fa.o);
+  const uCur = rel.dot(fa.u), vCur = rel.dot(fa.v);
+  const base = Math.max(uCur + 14000, L + 30000); // time for the checklists on the way out
+  const pts = [], rad = [];
+  const add = (q, r = 0) => { pts.push(q); rad.push(r); };
+  add(cur);
+  add(cur.clone().add(new THREE.Vector2(dir.x, dir.z).normalize().multiplyScalar(2500)), 0);
+  add(fa.to(base, vCur), 3200);
+  add(fa.to(base, 7500), 3200);
+  add(fa.to(L + 20000, 7500), 3200);
+  add(fa.to(L + 20000, 0), 3000);
+  add(fa.to(L - 60, 0));          // runway 01L threshold (south end), landing northbound
+  add(fa.to(1250, 0), 60);        // end of the landing roll
+  add(fa.to(1080, -190), 45);     // exit onto the parallel taxiway, then back south along it
+  add(fa.to(1580, -190), 40);
+  add(fa.to(1580, -480));         // stand by pier F
+  const path = new Path(pts, rad);
+  const m = { hold: 0, lineup: 0, arnRwyEnd: 0 };
+  m.thr = path.locate(fa.to(L, 0)); m.touchdown = m.thr + 300;
+  m.exit = path.locate(fa.to(1250, 0)); m.crossing = m.exit; m.stand = path.length;
+  return { path, m, airport: 'ARN' };
+}
+
 // A320neo configuration table: slat/flap degrees, CL0 increment, max speed (kt)
 export const CONFIGS = [
   { name: '0', slat: 0, flap: 0, cl0: 0.22 },
@@ -135,7 +165,7 @@ const WING_AREA = 122.6;
 
 function iasToTas(ias, h) { return ias / Math.sqrt(isa(h).sigma); }
 
-export class FlightModel {
+export class ReferenceFlight {
   constructor(route, opts = {}) {
     this.path = route.path; this.m = route.m;
     this.turbulence = opts.turbulence ?? 0.3;

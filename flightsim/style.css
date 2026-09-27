@@ -164,3 +164,10 @@ select { width: 100%; background: var(--ink-2); color: var(--text); border: 1px 
   .keys { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* passenger oxygen mask over the face: the yellow cup's rim at the bottom of the view */
+#maskoverlay { position: fixed; inset: 0; pointer-events: none; z-index: 4;
+  background: radial-gradient(ellipse 46% 34% at 50% 104%, rgba(242,194,0,0.0) 60%, rgba(242,194,0,0.92) 62%, rgba(214,168,0,0.95) 72%, rgba(0,0,0,0) 73%),
+              radial-gradient(ellipse 80% 70% at 50% 60%, rgba(0,0,0,0) 70%, rgba(0,0,0,0.35) 100%); }
+.evrow { display: flex; gap: 8px; }
+.evrow select { flex: 1; }

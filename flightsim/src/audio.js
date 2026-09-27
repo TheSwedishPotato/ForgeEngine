@@ -242,6 +242,44 @@ export class AudioEngine {
   pop() { this._ping(180, 0.05, 0.05); this.muffle = 0; }
   doorThud() { this.thump(0.7, 70); this._burst('brown', [['lowpass', 300, 0.7]], 0.4, 0.01, 0.8); }
   spoolDown() { /* engines spool naturally via n1 */ }
+
+  // ---------------- abnormal and emergency sounds ----------------
+  // A compressor stall or engine failure: a sharp report through the hull, then a deep boom.
+  bang(k = 1, when = 0) {
+    this._burst('white', [['bandpass', 700, 0.8]], 0.5 * k, 0.001, 0.12, this.master, when);
+    this._burst('brown', [['lowpass', 180, 0.8]], 0.9 * k, 0.003, 0.9, this.master, when);
+    const o = this._ping(55, 0.6 * k, 0.6, 'sine', when); if (o) o.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + when + 0.5);
+  }
+  surge(n = 4) { for (let i = 0; i < n; i++) this.bang(0.55 + Math.random() * 0.35, i * (0.35 + Math.random() * 0.5)); }
+  // Rapid decompression: a boom, a rush of air out of the cabin, fog, then a wind roar that
+  // stays until the descent is well under way.
+  decompression() {
+    this.bang(1.2);
+    this._burst('white', [['highpass', 400, 0.5]], 0.9, 0.02, 2.5);
+    this._burst('pink', [['lowpass', 1200, 0.5]], 0.7, 0.05, 4.0);
+    this.roar(0.7);
+  }
+  roar(level) {
+    if (!this.ready) return;
+    if (!this._roar) this._roar = this._noiseChain('pink', [['bandpass', 420, 0.5], ['lowpass', 2500, 0.5]], this.master, 0);
+    this._roar.g.gain.setTargetAtTime(level * 0.35, this.ctx.currentTime, 0.8);
+  }
+  // Metal on concrete or earth while the aircraft slides after a crash-landing.
+  scrape(level) {
+    if (!this.ready) return;
+    if (!this._scrape) { this._scrape = this._noiseChain('white', [['bandpass', 1300, 2.5]], this.master, 0); this._scrapeLo = this._noiseChain('brown', [['lowpass', 220, 0.8]], this.master, 0); }
+    this._scrape.g.gain.setTargetAtTime(level * 0.28, this.ctx.currentTime, 0.1);
+    this._scrapeLo.g.gain.setTargetAtTime(level * 0.8, this.ctx.currentTime, 0.1);
+  }
+  impact(k = 1) { this.bang(1.3 * k); this._burst('brown', [['lowpass', 400, 0.6]], 1.0 * k, 0.005, 1.8); this._burst('white', [['bandpass', 2400, 1]], 0.3 * k, 0.002, 0.6); }
+  // a cabin full of people drawing breath at once
+  gasp(k = 1) { for (let i = 0; i < 6; i++) this._burst('pink', [['bandpass', 700 + Math.random() * 900, 3]], 0.05 * k, 0.05 + Math.random() * 0.1, 0.5, this.master, Math.random() * 0.25); }
+  scream(k = 1) { for (let i = 0; i < 4; i++) { const o = this._ping(700 + Math.random() * 500, 0.02 * k, 1.1, 'sawtooth', Math.random() * 0.3); if (o) o.frequency.linearRampToValueAtTime(900 + Math.random() * 600, this.ctx.currentTime + 1); } this.gasp(k); }
+  // the mask compartments pop open and the tubes rattle as the masks drop
+  masks() { for (let i = 0; i < 30; i++) this._burst('white', [['bandpass', 1800 + Math.random() * 1500, 3]], 0.03, 0.001, 0.05, this.master, Math.random() * 0.6); this._burst('white', [['highpass', 3000, 0.7]], 0.05, 0.3, 3); }
+  // evacuation slides inflating (loud hiss) and the lightning crack
+  slide() { this._burst('white', [['highpass', 900, 0.6]], 0.6, 0.02, 4.5, this.hull); this.thump(0.8, 60); }
+  lightning() { this._burst('white', [['bandpass', 3000, 0.7]], 0.6, 0.001, 0.2); this.bang(0.6, 0.02); }
 }
 
 function smoothN(x, a, b) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }

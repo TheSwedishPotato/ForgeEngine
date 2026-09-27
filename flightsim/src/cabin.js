@@ -73,6 +73,7 @@ export class Cabin {
     this._buildDoors();
     this._buildSigns();
     this._buildLights();
+    this._buildMasks();
   }
 
   _std(opts) { const m = new THREE.MeshStandardMaterial(opts); return m; }
@@ -694,6 +695,22 @@ export class Cabin {
     this.group.add(this.readingLight); this.group.add(this.readingLight.target);
   }
 
+  // Emergency lighting: the normal lights go out; the floor path marking glows along both sides of
+  // the aisle and the EXIT signs light up, so you can find the exits in darkness or smoke.
+  setEmergency(on) {
+    if (!this.pathStrips) {
+      const mat = new THREE.MeshBasicMaterial({ color: '#c8ff9e' });
+      this.pathStrips = new THREE.Group();
+      for (const x of [-0.27, 0.27]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.004, 26.5), mat); m.position.set(x, 0.006, 11.4); this.pathStrips.add(m); }
+      this.group.add(this.pathStrips);
+    }
+    // the normal ceiling lights double as the (dim, battery-powered) emergency lights, so no new
+    // lights are added mid-flight (that would force every cabin material to recompile)
+    this.pathStrips.visible = on;
+    if (this.exitMat) this.exitMat.color.setScalar(on ? 2.2 : 1);
+    this.emergency = on;
+  }
+
   // Dust motes: a cloud of tiny additive sprites around a seat, lit only where the sun comes in.
   buildDust(seat) {
     const N = 420, pos = new Float32Array(N * 3), seed = new Float32Array(N);
@@ -726,7 +743,7 @@ export class Cabin {
     this.hemi.color.copy(this.mood); this.hemi.intensity = 0.45 * L + 0.2 * daylight + 0.02;
     this.hemi.groundColor.set('#3a4458').multiplyScalar(0.6 + daylight * 0.4);
     this.amb.intensity = 0.12 * L + 0.18 * daylight + 0.015;
-    for (const l of this.pl) { l.color.copy(this.mood); l.intensity = 1.7 * L; }
+    for (const l of this.pl) { l.color.copy(this.mood); l.intensity = this.emergency ? 0.3 : 1.7 * L; }
     const tmp = this._tmpC || (this._tmpC = new THREE.Color());
     const flag = scene === 'sweden' || scene === 'denmark' || scene === 'norway';
     for (const m of this.coveMats || []) {
@@ -744,7 +761,47 @@ export class Cabin {
     for (const m of this.psuMats || []) { m.emissive.copy(this.mood); m.emissiveIntensity = 0.05 + 0.2 * L; }
   }
 
+  // Passenger oxygen masks: stowed in the PSUs, four per three-seat group (one spare), dropped
+  // automatically when the cabin altitude passes 14,000 ft. Yellow cups on clear tubes.
+  _buildMasks() {
+    const spots = [];
+    for (const r of ROWS) for (const side of [-1, 1]) {
+      const xs = side < 0 ? [-1.62, -1.26, -0.9, -0.55] : [0.55, 0.9, 1.26, 1.62];
+      for (const x of xs) spots.push({ x, z: rowZ(r) - 0.16 + (Math.random() - 0.5) * 0.06, ph: Math.random() * 6.28, len: 0.5 + Math.random() * 0.12 });
+    }
+    this.maskSpots = spots;
+    const cupGeo = new THREE.CylinderGeometry(0.055, 0.034, 0.075, 12, 1, true).translate(0, -0.0375, 0);
+    const bagGeo = new THREE.SphereGeometry(0.03, 8, 6).scale(1, 1.6, 0.6).translate(0, -0.12, 0); // the reservoir bag hangs below the cup
+    const tubeGeo = new THREE.CylinderGeometry(0.004, 0.004, 1, 5).translate(0, -0.5, 0);
+    const n = spots.length;
+    this.maskCups = new THREE.InstancedMesh(cupGeo, new THREE.MeshStandardMaterial({ color: '#f2c200', roughness: 0.55, side: THREE.DoubleSide }), n);
+    this.maskBags = new THREE.InstancedMesh(bagGeo, new THREE.MeshStandardMaterial({ color: '#dfe8ee', roughness: 0.25, transparent: true, opacity: 0.3, depthWrite: false }), n);
+    this.maskTubes = new THREE.InstancedMesh(tubeGeo, new THREE.MeshStandardMaterial({ color: '#dfe6ea', roughness: 0.2, transparent: true, opacity: 0.7 }), n);
+    for (const m of [this.maskCups, this.maskBags, this.maskTubes]) { m.visible = false; m.frustumCulled = false; this.group.add(m); }
+    this.maskK = 0; this.masksDown = false;
+  }
+  dropMasks() { if (this.masksDown) return; this.masksDown = true; this.maskK = 0; for (const m of [this.maskCups, this.maskBags, this.maskTubes]) m.visible = true; }
+  _updateMasks(dt, t) {
+    if (!this.masksDown) return;
+    this.maskK = Math.min(1, this.maskK + dt * 1.8);
+    const k = this.maskK, drop = k < 1 ? 1 - Math.pow(1 - k, 3) + Math.sin(k * Math.PI * 3) * 0.08 * (1 - k) : 1;
+    const yb = CAB.binBottomY, M = this._mm || (this._mm = new THREE.Matrix4()), q = this._mq || (this._mq = new THREE.Quaternion()), e = this._me || (this._me = new THREE.Euler());
+    const one = this._m1 || (this._m1 = new THREE.Vector3(1, 1, 1)), pos = this._mp || (this._mp = new THREE.Vector3()), sc = this._ms || (this._ms = new THREE.Vector3());
+    this.maskSpots.forEach((s, i) => {
+      const len = s.len * drop;
+      const sw = Math.sin(t * 1.7 + s.ph) * 0.05 + (this.maskSway || 0) * 0.3;
+      e.set(sw, 0, Math.cos(t * 1.3 + s.ph) * 0.04); q.setFromEuler(e);
+      pos.set(s.x, yb, s.z); sc.set(1, Math.max(0.001, len), 1);
+      M.compose(pos, q, sc); this.maskTubes.setMatrixAt(i, M);
+      pos.set(s.x + Math.sin(e.z) * len * -1, yb - len * Math.cos(sw), s.z + Math.sin(sw) * len);
+      M.compose(pos, q, one); this.maskCups.setMatrixAt(i, M); this.maskBags.setMatrixAt(i, M);
+    });
+    for (const m of [this.maskCups, this.maskBags, this.maskTubes]) m.instanceMatrix.needsUpdate = true;
+  }
+
   update(dt) {
+    this._maskT = (this._maskT || 0) + dt;
+    this._updateMasks(dt, this._maskT);
     for (const w of this.windows) {
       if (Math.abs(w.shade - w.shadeTarget) > 1e-3) { w.shade += Math.sign(w.shadeTarget - w.shade) * Math.min(Math.abs(w.shadeTarget - w.shade), dt * 1.6); this.setShade(w, w.shadeTarget, false); this.setShadeInternal(w); }
     }
@@ -758,7 +815,7 @@ export class Cabin {
       l.indicator.material.color.set(l.occupied ? '#e74c3c' : '#2ecc71');
     }
     for (const d of Object.values(this.doors)) {
-      if (Math.abs(d.open - d.target) > 1e-3) d.open += Math.sign(d.target - d.open) * Math.min(Math.abs(d.target - d.open), dt * 0.35);
+      if (Math.abs(d.open - d.target) > 1e-3) d.open += Math.sign(d.target - d.open) * Math.min(Math.abs(d.target - d.open), dt * (d.fast ? 0.8 : 0.35)); // emergency: the door's power assist throws it open
       // A320 doors lift slightly, push outboard, then swing forward against the fuselage
       const o = d.open, k1 = Math.min(o * 3, 1), k2 = Math.max(0, (o - 0.33) / 0.67);
       d.pivot.position.set(d.hx + d.side * k1 * 0.12, k1 * 0.04, d.hz);

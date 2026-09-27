@@ -176,6 +176,10 @@ export class Player {
       e.x = clamp(e.x, -maxX, maxX);
       this.eye.copy(e);
       this.pos.set(this.seat.x, 0, this.seat.z);
+    } else if (this.fallen) {
+      // thrown to the floor: sitting in the aisle until Space
+      this.fallT = (this.fallT || 0) + dt;
+      this.eye.set(this.pos.x, 0.62, this.pos.z);
     } else {
       // walking
       const sp = 1.15 * (k.ShiftLeft ? 1.4 : 1);
@@ -195,8 +199,6 @@ export class Player {
           else if (this._walkable(this.pos.x, nz)) { this.pos.z = nz; moving = true; }
         }
       }
-      // turbulence sway
-      if (ctx.bump) this.pos.x += ctx.bump * 0.02 * dt;
       this.bob += moving ? dt * 8 : 0;
       if (moving) { this.stepAcc += dt * sp; if (this.stepAcc > 0.62) { this.stepAcc = 0; this.audio.footstep(); } }
       const bobY = moving ? Math.sin(this.bob) * 0.025 : 0;
@@ -218,6 +220,25 @@ export class Player {
     c.position.copy(this.eye).add(ctx.headOffset || new THREE.Vector3());
     c.rotation.set(this.pitch + (ctx.headPitch || 0), this.yaw, ctx.headRoll || 0, 'YXZ');
     c.updateMatrixWorld();
+  }
+
+  getUp() { if (this.fallen && (this.fallT || 0) > 1.2) { this.fallen = false; this.audio.thump(0.2, 120); return true; } return false; }
+  // turbulence knocks the drinks over: cups end up on their side in a puddle
+  spill() {
+    let any = false;
+    for (const c of this.trayItems.children) {
+      if (!['coffee', 'tea', 'water', 'soda', 'beer', 'juice', 'sparkling', 'wine'].includes(c.userData.item) || c.userData.spilled) continue;
+      c.userData.spilled = true; any = true;
+      for (const ch of [...c.children]) c.remove(ch);
+      c.rotation.z = Math.PI / 2 * (Math.random() < 0.5 ? 1 : -1); c.position.y = 0.04;
+      const col = c.userData.item === 'coffee' ? '#3b2314' : c.userData.item === 'tea' ? '#8a4a1c' : c.userData.item === 'wine' ? '#5a0f1f' : '#cfe3ee';
+      const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.07 + Math.random() * 0.04, 16), new THREE.MeshStandardMaterial({ color: col, roughness: 0.05, transparent: true, opacity: 0.85 }));
+      puddle.rotation.x = -Math.PI / 2; puddle.position.set(c.position.x + 0.03, 0.0125, c.position.z + 0.02); puddle.scale.set(1.3, 1, 1);
+      this.trayItems.add(puddle);
+    }
+    this.cup = false;
+    if (any) this.audio.thump(0.2, 200);
+    return any;
   }
 
   look(dx, dy) {

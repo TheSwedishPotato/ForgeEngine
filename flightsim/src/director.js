@@ -4,7 +4,8 @@ import { SCRIPTS, SPEAKERS, context } from './speech.js';
 import { rowZ, ROWS, BUSINESS_ROWS } from './cabin.js';
 import { clamp, fmtClock, rng, KT, project } from './core.js';
 import { LANDMARKS } from './places.js';
-import { FlightModel } from './flight.js';
+import { ReferenceFlight } from './flight.js';
+import { EMERGENCY_PA } from './events.js';
 
 export const MENU = [
   { id: 'focaccia', name: 'Chicken & pesto focaccia', price: 95 },
@@ -61,8 +62,9 @@ export class Director {
   // model gives the time-to-go for every point of the route.
   eta() {
     const fm = this.sim.fm;
+    if (fm.airport) return this.clockH + ((fm.m.touchdown - fm.s) / Math.max(fm.gs, 70) + 300) / 3600;
     if (!this._ref) {
-      const ref = new FlightModel({ path: fm.path, m: fm.m }, {});
+      const ref = new ReferenceFlight({ path: fm.path, m: fm.m }, {});
       ref.clearTaxi = true; const tab = []; let t = 0;
       while (ref.phase !== 'arrived' && t < 7200) {
         ref.update(0.5); t += 0.5; ref.events.length = 0;
@@ -250,6 +252,7 @@ export class Director {
     }
     if (this.after('beltOff', 20) && this.flag('capPA')) { this.say(SCRIPTS.captainClimb, { onDone: () => this.mark('capDone') }); if (this.eveningish()) this.scene = 'sunset'; }
     if (this.after('capDone', 8) && this.flag('svcPA')) this.say(SCRIPTS.service, { onDone: () => this.mark('svcPA') });
+    if (this.after('svcPA', 25) && (fm.engFail.some(Boolean) || fm.airport || fm.phase === 'emergency') && !this.flags.service) this.flags.service = true;
     if (this.after('svcPA', 25) && this.flag('service')) {
       S.cabin.setCurtain(true);
       people.startService((a, s, run, business) => this.serve(a, s, run, business), () => { this.mark('serviceDone'); S.cabin.setCurtain(false); });
@@ -294,7 +297,7 @@ export class Director {
     }
     // --- after landing ---
     if (this.after('vacated', 6) && this.flag('arrPA')) {
-      this.say(SCRIPTS.arrival); this.scene = 'denmark';
+      if (fm.airport === 'ARN') { this.say(EMERGENCY_PA.arrivalReturn); this.scene = 'sweden'; } else { this.say(SCRIPTS.arrival); this.scene = 'denmark'; }
       this.setLights(this.nightish() ? 0.6 : 1.0, '#fff4e6');
       if (!S.fast) setTimeout(() => S.audio.clicks(14, 25), 3000); // impatient passengers unbuckling early
     }
@@ -354,6 +357,7 @@ export class Director {
   onFlightEvent(e) {
     const S = this.sim, fm = S.fm;
     this.mark(e.replace(/-/g, ''));
+    S.incidents?.onFlightEvent(e);
     switch (e) {
       case 'taxi-start': S.ui.toast('Taxiing to runway 19R'); break;
       case 'holding-point': S.ui.toast('Holding short of runway 19R'); break;
@@ -363,9 +367,9 @@ export class Director {
       case 'gear-up': if (!S.fast) { setTimeout(() => S.audio.clunk(0.7), 300); setTimeout(() => S.audio.clunk(0.9), 8500); } S.dialogue?.event('gear-up', {}); break;
       case 'passing-10000-climb': this.mark('passing10k'); if (!S.fast) S.audio.chime('single'); break;
       case 'top-of-climb': this.mark('topOfClimb'); break;
-      case 'top-of-descent': this.mark('topOfDescent'); this.say(SCRIPTS.descent); S.dialogue?.event('descent', {}); break;
+      case 'top-of-descent': this.mark('topOfDescent'); if (!fm.airport && !fm.engFail.some(Boolean)) this.say(SCRIPTS.descent); S.dialogue?.event('descent', {}); break;
       case 'gear-down': if (!S.fast) { S.audio.clunk(0.8); setTimeout(() => S.audio.clunk(1.0), 7000); } break;
-      case 'touchdown': if (!S.fast) S.audio.touchdown(fm.thump); S.dialogue?.event('touchdown', {}); S.ui.toast('Touchdown, runway 22L, Copenhagen Kastrup'); break;
+      case 'touchdown': if (!S.fast) S.audio.touchdown(fm.thump); S.dialogue?.event('touchdown', {}); S.ui.toast(fm.airport === 'ARN' ? 'Touchdown, runway 01L, Stockholm Arlanda' : 'Touchdown, runway 22L, Copenhagen Kastrup'); break;
       case 'vacated': this.mark('vacated'); break;
       case 'parked': this.mark('parked'); S.dialogue?.event('parked', {}); S.ui.toast('Arrived at the gate'); break;
       default: break;
