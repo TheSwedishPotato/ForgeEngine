@@ -56,6 +56,7 @@ export class Director {
     const land = this.eta() - 390 / 3600; c.etaEn = fmtClock(land); c.etaSv = fmtClock(land).replace(':', '.');
     c.mins = Math.max(8, Math.round((fm.m.touchdown - fm.s) / Math.max(fm.v, 120) / 60 / 5) * 5 + 5);
     Object.assign(c, describeWeather(this.sim.wx), runwayWords(fm.route.arrRwy || this.sim.atc?.arrRwy));
+    c.destSv = fm.airport === 'ARN' ? 'Stockholm Arlanda' : 'Köpenhamn'; c.destEn = fm.airport === 'ARN' ? 'Stockholm Arlanda' : 'Copenhagen';
     return c;
   }
   // Estimated arrival at the gate (local hours), from the distance still to fly: taxi at about
@@ -267,10 +268,10 @@ export class Director {
       if (this.nightish()) this.setLights(0.18, '#c8d4ff');
     }
     if (this.times.seatslanding != null && this.flag('seatsLdg')) this.say(SCRIPTS.seatsLanding, { priority: 3 });
-    // the bridge remark
-    if (!fm.onGround && fm.h < 1500 && fm.phase === 'approach') {
+    // the bridge remark, when there is a bridge to see
+    if (!fm.onGround && fm.h < 1500 && fm.phase === 'approach' && !S.atmo.inCloud) {
       const b = project(...LANDMARKS.oresundBridgeW); const d = Math.hypot(b.x - fm.pos.x, b.z - fm.pos.z);
-      if (d < 16000) S.dialogue?.event('bridge', {});
+      if (d < 16000 && d < S.atmo.visM * 1.1 && S.world.weather.fog?.airport !== 'CPH') S.dialogue?.event('bridge', {});
     }
     // --- after landing ---
     if (this.after('vacated', 6) && this.flag('arrPA')) {

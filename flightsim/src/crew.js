@@ -469,7 +469,10 @@ export class Crew {
     const sig = fm.atmo.sigma;
     // what they feel: the load factor with the slow manoeuvring part taken out (a 3 s high-pass), as an rms over ~8 s
     // (and the steady load of a turn taken out too), as an rms over ~8 s, and it has to last a few seconds
-    const nzMan = Math.cos(fm.gamma || 0) / Math.max(0.5, Math.cos(fm.bank));
+    // (a pull-up or push-over changes the flight path angle: V * d(gamma)/dt / g is manoeuvre, not turbulence)
+    const gam = fm.gamma || 0, gd = (gam - (this._gamP ?? gam)) / Math.max(dt, 1e-3); this._gamP = gam;
+    this._gd = lerp(this._gd ?? 0, gd, 1 - Math.exp(-dt / 1.5));
+    const nzMan = Math.cos(gam) / Math.max(0.5, Math.cos(fm.bank)) + fm.tas * this._gd / G;
     this._nzLP = lerp(this._nzLP ?? 0, fm.nz - nzMan, 1 - Math.exp(-dt / 2));
     const hp = fm.nz - nzMan - this._nzLP;
     this._nzMS = lerp(this._nzMS ?? 0, hp * hp, 1 - Math.exp(-dt / 8));
@@ -480,7 +483,7 @@ export class Crew {
     st.smoothT = rough ? 0 : (st.smoothT ?? 0) + dt;
     // seatbelt sign: on for turbulence; off only above 10,000 ft after a smooth spell, not near storms
     if (rough && !this.belt && fm.phase !== 'parked') { this._belt(true); fm.emit(bad ? 'turbulence-severe' : 'turbulence'); }
-    if (bad && !st.seatedCall && !fm.onGround) { st.seatedCall = true; fm.emit('crew-seated'); this.later(120, () => { st.seatedCall = false; }); }
+    if (bad && !st.seatedCall && !fm.onGround && fm.agl > 1000 * FT) { st.seatedCall = true; fm.emit('crew-seated'); this.later(120, () => { st.seatedCall = false; }); }
     const quiet = st.smoothT > 90 && this.t - (st.beltT ?? -999) > 240 && this.t - (st.stormSeenT ?? -999) > 300 && fm.altInd > 10000 * FT && (fm.phase === 'climb' || fm.phase === 'cruise') && !fm.atmo.inCloud && !this._stormAhead && !fm.engFail.some(Boolean) && fm.phase !== 'emergency' && !this.diverting;
     if (this.belt && quiet && st.p10k && !st.descentBelt) this._belt(false);
     // a patch of moderate or worse turbulence that does not stop: ask for another level

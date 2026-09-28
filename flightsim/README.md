@@ -3,9 +3,17 @@
 A first-person passenger simulator that runs in the browser. You sit in a seat of an
 SAS Airbus A320neo on Sunday 10 May 2026 and ride the whole flight in real time:
 pushback is done, the engines are running, and from there you get taxi, the safety
-demonstration, take-off from runway 19R, the climb over Stockholm, cruise at FL360
-over Östergötland and Småland, the trolley service, descent over Skåne, the approach
-to runway 22L over the Øresund, landing, taxi-in and deplaning at Terminal 3.
+demonstration, take-off, the climb over Stockholm, cruise at FL360 over Östergötland
+and Småland, the trolley service, descent over Skåne, the approach over the Øresund,
+landing, taxi-in and deplaning at Terminal 3.
+
+**Nothing is scripted.** Two simulated pilots fly the aircraft through its cockpit controls
+(sidestick, rudder pedals, tiller, thrust levers, flap and gear levers, speed brake,
+autopilot panel) with human reaction times; ATC picks the runways from the wind you set and
+clears you when the traffic allows; the weather you set becomes wind, gusts, turbulence,
+storms, lightning and microbursts in the physics. Everything you see and feel comes out of
+that: the take-off run, the bumps, the go-around when the runway is still occupied, the
+diversion when an engine fails.
 
 ## Play
 
@@ -40,6 +48,7 @@ system voice; captions are always shown).
 | **W A S D** | Walk when standing, lean when seated (lean towards the window to look down) |
 | **M** | Your phone: live flight map with altitude, speed and ETA |
 | **V** | Outside camera: orbit the aircraft with the mouse, zoom with the wheel |
+| **C** | Flight deck panel: autopilot modes (FMA), speed, altitude, engines, wind, and everything the pilots and ATC say |
 | **P** | Take a photo (saved as a PNG, with a camera flash) |
 | **U** / **F11** | Fullscreen |
 | **Y** | Swallow — clears blocked ears during the descent |
@@ -80,13 +89,13 @@ after dark, and the aircraft casts a soft contact shadow that follows the sun. F
 vortices condense on humid approaches.
 
 **Outside.** The wing moves: slats, Fowler flaps, spoilers (speed brakes in the descent,
-full ground spoilers on touchdown), ailerons, wing flex in turbulence, the CFM LEAP-1A
+full ground spoilers on touchdown), ailerons, the wing bending up under load and flapping in gusts, the CFM LEAP-1A
 with a spinning fan and thrust reversers that open on landing, the SAS sharklets, nav
 lights, double-flash strobes, the red beacon and wing scan lights at night. The ground
 is built from real data — Natural Earth 1:10m coastlines, lakes (Mälaren, Vättern,
 Hjälmaren, …), urban areas and motorways — projected onto a curved Earth with haze
 and cloud shadows. May colours: fresh green fields and yellow rapeseed in Skåne. Arlanda
-and Kastrup use the real runway coordinates (19R out, 22L in) with runway markings,
+and Kastrup use the real runway coordinates (19R or 01L out, 22L or 04L in) with runway markings,
 edge/centreline/approach lights and PAPIs, terminals with glass that reflects the sky
 and interiors that light up at dusk, floodlit aprons, piers and parked aircraft. Ground
 crew walk back from the pushback at Arlanda, with a baggage train, catering truck, fuel
@@ -115,25 +124,61 @@ thump-thump of centreline lights, gear and flap motors, speed-brake and gear rum
 Airbus cabin chimes, seatbelt clicks, trolley, coffee pouring, the vacuum toilet flush,
 rain, cabin murmur and blocked ears on the descent.
 
+**The pilots.** Captain and first officer are separate agents with their own reaction times
+(about 0.16–0.26 s), neuromuscular lag, a limit on how fast they move the stick, and a little
+hand tremor, following the McRuer human-operator model. They fly the Airbus SOPs: after-start and
+taxi flows, "clear left, clear right", FLEX or TOGA take-off (TOGA on a wet runway, in strong gusts
+or with storms near the field), the standard calls (100 knots, V1, rotate, positive climb, gear up),
+autopilot on, flap retraction at F and S speeds, the transition altitude, top of descent, the
+approach briefing with the minima chosen from the weather (CAT I, II or III and autoland in fog), a
+speed- and distance-based flap and gear schedule, speed brakes when high, the stabilised-approach
+gate at 1,000 ft, the flare from about 30–40 ft with the de-crab on the rudder, reversers and
+autobrake, the 70-knot call, vacating and single-engine taxi-in, engines off and the seatbelt sign
+off at the stand. They decide: they switch the seatbelt sign on and off from the turbulence they feel,
+ask ATC for another level in turbulence, deviate 20 NM around storm cells on the weather radar,
+go around when not stabilised, when the runway is not in sight at the minima, after a bounce or when
+the windshear system calls, and after two go-arounds for weather they divert. With a failure they
+run the drill (ECAM actions, engine fire drill with the extinguishers, emergency descent, gear
+gravity extension) and choose the nearest suitable airport.
+
+**ATC and traffic.** Arlanda Ground and Tower, Stockholm Control, Copenhagen Approach and Kastrup
+Tower on their real frequencies. The controllers pick the runways with the most headwind (19R or 01L at
+Arlanda, 22L or 04L at Kastrup), clear you to taxi, hold you for a departing Norwegian 737, clear you
+to line up and take off, climb you to FL100 and FL360, descend you, vector you onto the ILS, and give
+the landing clearance once the Lufthansa ahead has vacated — or send you around if it has not. A
+landing runway change comes if the wind changes while you are still far out.
+
 **Physics.** The aircraft is a rigid body with six degrees of freedom, integrated at 120 Hz.
 Lift, drag and side force come from angle of attack and sideslip with a real lift curve and
 stall for each flap setting, spoilers, gear drag and ground effect. The LEAP-1A26 engines
 lose thrust with density and Mach, spool up and down, burn fuel and can fail. Three oleo
-struts with tyre friction, brakes and nose-wheel steering carry it on the ground. The pilots
-are modelled as Airbus-style fly-by-wire control laws: pitch-rate command with automatic
-stabiliser trim and turn compensation, roll-rate command with bank protection, a yaw damper
-and turn coordination, alpha and pitch protections, and alpha floor. An autopilot and
-autothrust fly the route (pitch controls the flight path, thrust controls the energy), with
-gust-aware approach speeds, a flare law and autobrake. Nothing moves the aircraft except
-these forces, so a hard landing, a bounce, a tail strike or a crash is something that
-happens, not something that is played.
+struts with tyre friction, brakes and nose-wheel steering carry it on the ground. Between the
+pilots' hands and the control surfaces sit the Airbus fly-by-wire laws: a ground law, then the
+normal law (load-factor demand with automatic trim, roll-rate command to 15°/s with bank hold to
+33° and protection at 67°, a yaw damper), alpha, pitch-attitude, load-factor and high-speed
+protections, alpha floor and the flare law. The autoflight system has the real modes (SRS, CLB,
+OP CLB, ALT*, ALT CRZ, DES, V/S, G/S, LOC, FLARE, ROLL OUT, NAV, HDG, GA TRK), managed speeds
+(green dot, S, F, VLS) and autothrust, and ILS receivers built from the runway geometry. The wings
+bend: the first bending mode (about 2 Hz) lifts the tips by roughly 0.85 m in 1 g flight and makes
+them flap in gusts, and the fuselage has its own bending mode, so the back of the cabin bumps more.
+Nothing moves the aircraft except these forces, so a hard landing, a bounce, a tail strike or a
+crash is something that happens, not something that is played.
 
-**Turbulence and wind.** Dryden turbulence (MIL-F-8785C) with intensity from the weather, the
-height, the time of day (thermals under fair-weather cumulus) and the surface wind, plus a wind
-that strengthens and veers towards the westerly jet stream. Discrete hazards: clear-air
-turbulence patches, microburst windshear on final, wake vortices. The cabin feels the
-specific force at each seat, including the rotational terms, so the back of the aircraft
-moves more than the rows over the wing.
+**Weather you set, physics you feel.** Pick a preset or open the weather editor (on the start
+screen, or *Weather…* in the pause menu to change it live): wind, gusts, visibility, temperature,
+dew point, QNH and rain at each airport; up to three cloud layers; the jet stream; clear-air
+turbulence; and thunderstorms (isolated, scattered, numerous or a squall line, where, and how
+tall). The pilots read the METARs it makes, ATC picks the runways from it, and the atmosphere turns
+it into physics: a logarithmic surface-layer wind profile with the Ekman veer, rising to the jet
+stream; Dryden turbulence (MIL-F-8785C at low level with σw = 0.1·W20, MIL-HDBK-1797 above) with
+gusts from the gust factor you set, thermals under cumulus, stronger turbulence in cloud; clear-air
+turbulence patches; and thunderstorm cells with a life cycle (towering cumulus, mature, dissipating
+over 30–70 minutes), updrafts, downdrafts, the gust front, rain and hail, lightning at a rate that
+follows the updraft (and occasionally the aircraft itself, near the freezing level), and
+microbursts under 4 km across that last 5–15 minutes. The storms drift with the mid-level wind.
+You see them as towering cumulonimbus with anvils and rain shafts, flashes light the clouds from
+inside, and the thunder arrives at the speed of sound. The cabin feels the specific force at each
+seat, including the rotational terms and the fuselage bending.
 
 **The cabin reacts.** Your head sways with the accelerations. Unbelted, you lift off the seat
 in negative g and can hit the overhead panel; standing, your feet hold about a quarter of a
@@ -142,32 +187,34 @@ trolleys roll when their brakes can no longer hold them, drinks tip over, overhe
 open and the oxygen masks drop at a cabin altitude of 14,000 ft.
 
 **Anything can happen** (option *Real-world events*: off, realistic, eventful, chaos; or pick
-one from the pause menu). Moderate and severe turbulence, wake turbulence, windshear with a
-go-around, go-arounds for an occupied runway or an unstable approach, bird strikes, lightning,
-a medical emergency, a rejected take-off, an engine failure at take-off or a bird strike that
-takes out an engine (the crew returns to Arlanda for runway 01L), an engine fire, a
-precautionary shutdown, a rapid decompression with an emergency descent and hypoxia if you
-leave your mask off, a green hydraulic failure (gravity gear extension, slow flaps, no autobrake,
-no reverser on engine 1, but the aircraft still taxis in on yellow-powered nose-wheel steering),
-and in chaos mode a
-flock of birds taking out both engines (glide, brace, crash-landing, evacuation down the
-slides) or a main gear that will not come down. The captain and purser brief you in Swedish
-and English as it happens. Crashes can be survivable or not, depending on how the aircraft
-meets the ground.
+one from the pause menu). The events only break something or put something in the air; what
+follows is up to the pilots and the physics. Moderate and severe clear-air turbulence, wake
+turbulence, a microburst on final (the predictive windshear system or the reactive one, which
+averages the F-factor over 1 km against the 0.105 threshold, calls the go-around), a runway that is
+still occupied (ATC sends you around), bird strikes, lightning, a passenger taken ill (the captain
+asks for priority or diverts), an engine failure before V1 (the crew rejects the take-off) or after
+it (they fly on, clean up at 400 ft, run the drill and fly a circuit back to Arlanda), an engine
+fire, a loss of oil pressure, a rapid decompression (emergency descent, the masks drop at 14,000 ft
+cabin altitude, hypoxia if you leave yours off), a green hydraulic failure, and in chaos mode both
+engines lost to birds (a glide to a forced landing, brace, evacuation down the slides) or a main gear
+leg that will not lock down (go-around, checklists, spoilers and autobrake not armed, the wing held
+up with aileron as long as it will go, then the nacelle on the runway and an evacuation). The captain
+and purser brief you in Swedish and English as it happens. Crashes can be survivable or not,
+depending on how the aircraft meets the ground.
 
-**Flight path.** The route follows the filleted ground track: taxi speeds limited by
-curvature, 50 % N1 stabilisation then FLEX thrust, rotation at 144 kt, gear up, thrust
-reduction at 1,500 ft, flap retraction, 250 kt below FL100, Mach 0.78 at FL360, idle
-descent on a 3° profile with a deceleration segment at FL100, configuration changes and
-gear on the approach, a 3° glide path with flare, reversers and autobrake, and a
-single-engine taxi-in.
+**Flight path.** The route follows the filleted ground track for the runways in use (a
+northerly takes you out on 01L and in on 04L): taxi speeds limited by curvature, thrust set in
+two steps, V-speeds from the take-off weight, thrust reduction at 1,500 ft and acceleration at
+3,000 ft, 250 kt below FL100, Mach 0.78 at FL360, a managed idle descent on a 3° profile with a
+deceleration at FL100, and a 3° ILS glide path.
 
 ## Options
 
 Departure time (06:00 is SK1415's real slot; later departures use representative flight
-numbers), weather (clear, fair-weather cumulus, broken clouds, overcast with rain, morning
-fog), your seat (clickable seat map), passenger load, announcement languages, graphics
-quality, time speed and spoken voices.
+numbers), weather (nine presets — clear, fair-weather cumulus, broken and breezy, overcast with
+rain, fog at Arlanda, CAT III fog at Kastrup, thunderstorms, a westerly gale, a cold northerly —
+and the full editor), your seat (clickable seat map), passenger load, announcement languages,
+graphics quality, time speed and spoken voices.
 
 ## Sources
 
@@ -199,6 +246,20 @@ quality, time speed and spoken voices.
   into service).
 * Kastrup ground handling (cph.dk) and the Terminal 3 expansion; Arlanda taxi routes
   (VATSIM Scandinavia ESSA wiki); Airbus cabin chime conventions.
+* Weather physics: MIL-F-8785C / MIL-HDBK-1797 Dryden turbulence (as implemented in MathWorks'
+  Aerospace Blockset); FAA AC 00-24C *Thunderstorms* (20 NM avoidance, hazards); FAA and NAV CANADA
+  microburst definitions (under 4 km, 5–15 minutes); ETSO-C117a / TSO-C117a reactive windshear
+  (F-factor averaged over 1 km, alert at about 0.105); lightning strikes about once per aircraft per
+  year (IATA, FAA, Airbus figures in the aviation press); thunder heard up to about 10 miles (US
+  National Weather Service); METAR format per ICAO Annex 3.
+* In-flight medical emergencies: 1 in 604 flights (Peterson et al., *NEJM* 2013).
+* Abnormal gear landing: ground spoilers, anti-skid and autobrake not used with the A320 LDG WITH
+  ABNORMAL L/G procedure (Airbus *Safety First* magazine, August 2010).
+* ATC: Arlanda Tower 118.500 and Ground 121.700 (OurAirports), Kastrup Tower 118.100 and Copenhagen
+  Approach 119.800; ICAO phraseology. Pilot model: McRuer crossover / human-operator model. Airbus
+  normal law, protections and FMA modes: FlyByWire A32NX documentation.
+* Wing and fuselage bending: Airbus publishes no A320 figures, so the mode frequencies (about 2 Hz and
+  3.2 Hz) and the tip deflection (about 0.85 m per g) are engineering estimates.
 * Runways: OurAirports `runways.csv` (ESSA 01L/19R, 01R/19L, 08/26; EKCH 04L/22R,
   04R/22L, 12/30). Terrain: Natural Earth 1:10m (public domain), rebuilt with
   `tools/build_geodata.py`.
@@ -214,11 +275,15 @@ or Copenhagen Airports.
 | `src/main.js` | Boot, main loop, render passes (world → clouds → own aircraft → cabin), input, outside camera, photos |
 | `src/post.js` | HDR buffers, bloom, tone mapping and grade, SMAA |
 | `src/clouds.js` | Ray-marched volumetric cumulus |
-| `src/flight.js` | Route with filleted turns, the return-to-Arlanda route, a fast reference model for the ETA |
-| `src/physics.js` | Rigid-body flight dynamics, engines, gear, fly-by-wire, autopilot and autothrust |
-| `src/atmosphere.js` | Wind profile, Dryden turbulence, clear-air turbulence, microbursts, wake vortices |
+| `src/flight.js` | Routes for each runway pair with filleted turns, the return-to-Arlanda pattern, runway geometry |
+| `src/physics.js` | Rigid-body flight dynamics, engines, gear, fly-by-wire laws, wing and fuselage bending |
+| `src/autoflight.js` | FMGC/FCU: autopilot, flight director and autothrust modes, managed speeds, ILS |
+| `src/crew.js` | The two pilots: human operator model, SOPs, callouts, decisions, abnormal drills |
+| `src/atc.js` | Controllers, runway selection from the wind, clearances, the other traffic |
+| `src/weather.js` | The weather you set: stations, cloud layers, storms with life cycles, lightning, METARs |
+| `src/atmosphere.js` | Wind profile, Dryden turbulence, clear-air turbulence, storm flows, microbursts, wake vortices |
 | `src/cabinphysics.js` | What the accelerations do to people and things in the cabin |
-| `src/events.js` | Abnormal and emergency events, crew procedures and PAs, evacuation, endings |
+| `src/events.js` | Physical failures and hazards, what the cabin does about them, evacuation, endings |
 | `src/places.js` | Runways, airport layouts, landmarks, route waypoints, departures |
 | `src/world.js` | Sky, atmosphere, curved-Earth terrain, water, clouds, weather |
 | `src/scenery.js` | Airports, runway lights, parked aircraft, bridge, wind farms, traffic |
@@ -227,18 +292,22 @@ or Copenhagen Airports.
 | `src/cabin.js` | Cabin interior, seats, windows, bins, galleys, lavatories, doors, signs |
 | `src/humans.js` | Procedural people, clothing, faces, poses |
 | `src/people.js` | Passengers and crew behaviour, safety demo gestures, trolleys |
-| `src/director.js` | The flight timeline: signs, lights, PAs, service, arrival |
+| `src/director.js` | The cabin's side of the flight: signs, lights, PAs, service, arrival — reacting to the crew |
 | `src/speech.js` | PA scripts (Swedish/English) and text-to-speech with captions |
 | `src/dialogue.js` | Your neighbour |
 | `src/audio.js` | Procedural sound |
 | `src/player.js` | First-person controls and your seat |
 | `src/ui.js` | Start screen, HUD, captions, menus, phone map, safety card |
 
-Fly the whole route headlessly on the physics model (about two seconds), optionally with a failure:
+Fly the whole route headlessly (crew, ATC, weather and physics, about four seconds), optionally
+with a failure, a seed, your own wind and the radio transcript:
 
 ```bash
-node tools/flight-test.mjs broken 5400 --sc=shear
+node tools/flight-test.mjs storms 6000 --seed=2 --radio
+node tools/flight-test.mjs gale 6000 --wind=270/30/45 --sc=efato
 ```
+
+Scenarios: `efato rto engcruise fire fire2 depress dual hyd cat shear shearto gear medical medical2 ga`.
 
 Rebuild `dist/SK1415.html` after changing the source:
 

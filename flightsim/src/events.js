@@ -293,7 +293,8 @@ export class Incidents {
     const crew = people.crew.filter((c) => !c.seated);
     const helpers = crew.length ? crew.slice(0, 2) : people.crew.slice(0, 2);
     // a doctor's view after a few minutes: most in-flight medical events are fainting spells and settle
-    // (NEJM 2013: 1 in 604 flights, 7.3% diverted); the captain decides with the purser and the doctor
+    // (Peterson et al., NEJM 2013: 1 in 604 flights, few end in a diversion); the captain decides with
+    // the purser and the doctor
     const serious = this.r() < (this.mode === 'realistic' ? 0.1 : 0.4);
     this.active.push({ id: 'medical', t: 0, step: (dt, a) => {
       if (a.t > 8 && !a.go) {

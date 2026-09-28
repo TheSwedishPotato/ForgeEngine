@@ -59,8 +59,9 @@ const AERO = [
 ];
 const CLA = 5.6, K_IND = 0.039, CD0 = 0.0215;
 const VR = 141, V2 = 146, VAPP = 137;
-// Flexible modes. Wing first bending about 2 Hz (large transports 1-2 Hz; an A320 wing is short and
-// stiff); tip about 0.85 m up per g of lift, 0.18 m of droop under its own, fuel and engine weight.
+// Flexible modes. Airbus publishes no A320 figures, so these are engineering estimates: wing first bending
+// about 2 Hz (large transports 1-2 Hz; an A320 wing is short and stiff); tip about 0.85 m up per g of
+// lift (about 5 % of the semi-span), 0.18 m of droop under its own, fuel and engine weight.
 // Fuselage first vertical bending about 3.2 Hz. Structural damping 3 %, plus aerodynamic damping.
 const WING_F = 2.0, WING_D1G = 0.85, WING_DROOP = 0.18;
 const FUSE_F = 3.2;
