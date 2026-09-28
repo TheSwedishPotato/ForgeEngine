@@ -280,6 +280,23 @@ export class AudioEngine {
   // evacuation slides inflating (loud hiss) and the lightning crack
   slide() { this._burst('white', [['highpass', 900, 0.6]], 0.6, 0.02, 4.5, this.hull); this.thump(0.8, 60); }
   lightning() { this._burst('white', [['bandpass', 3000, 0.7]], 0.6, 0.001, 0.2); this.bang(0.6, 0.02); }
+  // Thunder from a flash `d` metres away: it arrives d/343 s later, a sharp crack only when close,
+  // then a rumble that is longer and deeper the further away the flash was (the high frequencies
+  // are absorbed first), and seldom heard beyond about 16 km (the US National Weather Service's
+  // "if you can hear thunder, you are within 10 miles"). `k` scales it for the cabin walls.
+  thunder(d, k = 1) {
+    if (!this.ready || d > 20000 || k <= 0) return;
+    const when = d / 343;
+    if (when > 90) return;
+    const a = k * 0.9 / (1 + d / 1200);
+    const cut = 90 + 900 / (1 + d / 1500);
+    if (d < 1500) this._burst('white', [['bandpass', 2600, 0.6]], a * 0.8, 0.002, 0.25, this.master, when);
+    const len = 1.2 + Math.min(6, d / 2500);
+    for (let i = 0; i < 4; i++) {
+      const w = when + i * len * (0.12 + 0.18 * Math.random());
+      this._burst('brown', [['lowpass', cut * (0.8 + 0.4 * Math.random()), 0.7]], a * (1 - i * 0.18), 0.03 + 0.1 * i, len * (0.5 + 0.3 * Math.random()), this.master, w, 0.7);
+    }
+  }
 }
 
 function smoothN(x, a, b) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }

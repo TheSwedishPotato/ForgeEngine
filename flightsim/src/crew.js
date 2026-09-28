@@ -173,6 +173,8 @@ export class Crew {
         // on the runway the stick stays near neutral: a little into-wind aileron at speed, no wing-levelling
         const xw = this.mode === 'takeoff' ? this._xwind(fm.route.dep) : this._xwind(this.approachRwy);
         out.sx = clamp(-xw / 40, -0.2, 0.2) * clamp(gsKt / 100, 0, 1);
+        // a main leg missing: full aileron to hold that wing up for as long as the ailerons can
+        if (this.st.gearUnsafe && this.mode === 'rollout') { const up = fm.gearFailLeg === 2 ? -1 : 1; out.sx = clamp(up * 0.7 - fm.bank * 12 - fm.p * 2, -1, 1); }
         if (this.mode === 'takeoff') {
           if (!this.st.rotate) out.sy = gsKt < 80 ? -0.5 : lerp(-0.5, 0, clamp((fm.ias - 80) / 20, 0, 1));
           else {
@@ -191,6 +193,8 @@ export class Crew {
           // rollout: the back pressure is relaxed over a few seconds so the nose wheel comes down gently
           const since = this.t - (this.st.tdT ?? this.t);
           out.sy = fm.wow[0] ? 0 : Math.max(0, (this._flareEndSy ?? 0.2) - 0.12 * since);
+          // a gear leg missing: hold the attitude (and the lift) while the ailerons still work
+          if (this.st.gearUnsafe && gsKt > 75) out.sy = Math.max(0.35, this._flareEndSy ?? 0.35);
           if (gsKt < 30) { out.til = clamp(-lat * 0.04 + hdgErr * 2, -0.5, 0.5); }
         }
         break;
@@ -239,6 +243,8 @@ export class Crew {
       out.sy = clamp((thWant - thRef) / (20 * DEG), -0.1, 0.9);
       // wings level (a touch into the wind)
       out.sx = clamp((-fm.bank * 2.5 - fm.p * 0.4) + clamp(-afs.locDevM * 0.002, -0.05, 0.05), -0.5, 0.5);
+      // a main leg missing: touch down on the good leg with the wing on the bad side held a little high
+      if (this.st.gearUnsafe) { const up = fm.gearFailLeg === 2 ? -1 : 1; out.sx = clamp((up * 2 * DEG - fm.bank) * 2.5 - fm.p * 0.4, -0.6, 0.6); }
     }
     // de-crab: from about 40 ft the rudder lines the nose up with the runway
     if (agl < 45 * FT) {
@@ -312,7 +318,8 @@ export class Crew {
       }
       case 'hold': {
         this.brk = 1;
-        if (!st.ready && this.t - (st.holdT ?? (st.holdT = this.t)) > 4) { st.ready = true; atc.call('ready', this); }
+        // "ready for departure" only once the cabin crew report the cabin secure
+        if (!st.ready && this.t - (st.holdT ?? (st.holdT = this.t)) > 4 && this.hooks.cabinReady()) { st.ready = true; atc.call('ready', this); }
         if (atc.cl.lineup && !st.lineupGo) {
           st.lineupGo = true;
           this.later(this.capt.react + 1.5, () => { this.brk = 0; this.st.stopS = fm.m.lineup; this.st.taxiMax = 6; this.mode = 'taxi'; fm.phase = 'lineup'; fm.emit('lineup-start'); this.say('pf', 'Lining up. Before take-off checklist below the line.'); });
@@ -342,7 +349,17 @@ export class Crew {
         if (fm.s >= fm.m.stand - 0.8 && fm.gs < 0.15) { fm.phase = 'arrived'; fm.ctl.parkBrake = true; this.mode = 'none'; this.lev = [0, 0]; fm.emit('parked'); this.say('capt', 'Parking brake set.'); }
         break;
       }
-      case 'arrived': this.mode = 'none'; this.lev = [0, 0]; fm.ctl.parkBrake = true; if (fm._flags.shutdown) fm.ctl.engMaster = [false, false]; break;
+      case 'arrived': {
+        this.mode = 'none'; this.lev = [0, 0]; fm.ctl.parkBrake = true;
+        // at the stand: engines off once the ground crew have the chocks in, then the seatbelt sign off
+        if (!st.engOff) {
+          st.engOff = true;
+          this.later(12, () => { fm.ctl.engMaster = [false, false]; this.say('capt', 'Engines off. Beacon off when they have spooled down.'); fm.emit('engines-off'); });
+          this.later(22, () => { this._belt(false); this.say('pm', 'Seatbelt sign off.'); });
+        }
+        if (fm._flags.shutdown) fm.ctl.engMaster = [false, false];
+        break;
+      }
       default: break;
     }
   }
@@ -413,7 +430,7 @@ export class Crew {
     }
     if (phase === 'go-around') this._goAroundThink();
     // --- cruise: weather, turbulence, top of descent ---
-    if (phase === 'climb' || phase === 'cruise' || phase === 'descent') this._weatherAvoid(dt);
+    if ((phase === 'climb' || phase === 'cruise' || phase === 'descent') && !this.diverting) this._weatherAvoid(dt);
     if (phase === 'cruise' || (phase === 'climb' && altFt > 20000)) {
       const d2td = fm.m.touchdown - fm.s;
       const prof = fm.descentProfile(Math.max(0, d2td - fm.gs * 90));
@@ -474,7 +491,8 @@ export class Crew {
     // windshear: the reactive warning, then the escape manoeuvre
     this._windshearWatch(dt);
     // failures the crew has not handled yet
-    for (let i = 0; i < 2; i++) if (fm.engFail[i] && !st[`eng${i}`]) { st[`eng${i}`] = true; this._engineFailure(i); }
+    for (let i = 0; i < 2; i++) if ((fm.engFail[i] || fm.engFire[i]) && !st[`eng${i}`]) { st[`eng${i}`] = true; this._engineFailure(i); }
+    this._gearWatch();
     if (!fm.pressurised && !st.depress) { st.depress = true; this._depressurised(); }
     if (!fm.hyd.green && !st.hydG) { st.hydG = true; this.later(this.pm.react + 2, () => { this.say('pm', 'ECAM: hydraulic green system low pressure.'); this.hooks.emergency('hydraulic', {}); this._planApproach(); }); }
   }
@@ -546,7 +564,9 @@ export class Crew {
       const fast = ias > afs.spdTarget + 10;
       if (!st.gearDn && ((d2td < 13500 || fm.agl < 2100 * FT) && lev >= 2 || fast && d2td < 19000) && ias < 250) {
         st.gearDn = true; this.say('pf', 'Gear down.');
-        this.later(0.8, () => { fm.ctl.gearLever = 1; fm.ctl.spoilersArmed = true; fm.ctl.autobrake = this.abSetting; fm.emit('gear-down'); this.say('pm', `Gear down. Spoilers armed. Autobrake ${this.abSetting}.`); });
+        // with a gear leg unsafe (Airbus LDG WITH ABNORMAL L/G): ground spoilers and autobrake not armed,
+        // so the wing keeps its lift and can be held up with aileron after touchdown
+        this.later(0.8, () => { const abn = !!st.gearUnsafe; fm.ctl.gearLever = 1; fm.ctl.spoilersArmed = !abn; fm.ctl.autobrake = abn ? 'OFF' : this.abSetting; fm.emit('gear-down'); this.say('pm', abn ? 'Gear down. Spoilers not armed. Autobrake off.' : `Gear down. Spoilers armed. Autobrake ${this.abSetting}.`); });
         this.later(8, () => { fm.emit('seats-landing'); });
       }
       if (lev === 2 && st.gearDn && fm.gear > 0.9 && ias < 181 && d2td < 12500 && !st.a3) { st.a3 = true; this._flaps(3, 'Flaps three.'); }
@@ -629,7 +649,8 @@ export class Crew {
       if (fm.phase === 'forced') { fm.phase = 'rollout'; this.mode = 'rollout'; this.lev = [0, 0]; this.brk = 1; st.tdT = this.t; this.stopOnRunway = true; this.st.forcedStop = true; return; }
       fm.phase = 'rollout'; this._flareEndSy = fm.ctl.stickY; this.mode = 'rollout'; st.tdT = this.t;
       this.lev = [0, 0];
-      this.later(0.4 + this.pf.react * 0.5, () => { const r = this.revMax ? DETENT.REV_MAX : DETENT.REV_IDLE; this.lev = [r, r]; });
+      if (!st.gearUnsafe) this.later(0.4 + this.pf.react * 0.5, () => { const r = this.revMax ? DETENT.REV_MAX : DETENT.REV_IDLE; this.lev = [r, r]; });
+      else { this.brk = 0.3; this.later(4, () => { fm.ctl.engMaster = [false, false]; this.say('pf', 'Engine masters off.'); }); }
       this.later(1.5, () => this.say('pm', `Spoilers. Reverse green.${fm.abActive ? ' Decel.' : ''}`));
       if (this.afs.ap && !this.appr.autoland) this.afs.disconnectAP('pilot');
     }
@@ -650,7 +671,7 @@ export class Crew {
       else if (kt < 30 && this.lev[0] < 0) this.lev = [0, 0];
       return;
     }
-    if (kt < 72 && !st.c70) { st.c70 = true; this.say('pm', 'Seventy knots.'); this.later(this.pf.react, () => { this.lev = [DETENT.REV_IDLE, DETENT.REV_IDLE]; }); }
+    if (kt < 72 && !st.c70) { st.c70 = true; this.say('pm', 'Seventy knots.'); if (!st.gearUnsafe) this.later(this.pf.react, () => { this.lev = [DETENT.REV_IDLE, DETENT.REV_IDLE]; }); }
     if (kt < 30 && this.lev[0] < 0) { this.lev = [0, 0]; }
     // stop straight ahead for the fire services after an engine fire or an evacuation-type event
     if (this.stopOnRunway || fm.stopOnRunway) {
@@ -736,13 +757,13 @@ export class Crew {
   _windshearWatch(dt) {
     const fm = this.fm, st = this.st;
     if (fm.onGround || fm.agl > 1300 * FT || !['climb', 'approach', 'go-around', 'flare'].includes(fm.phase)) { this._fF = 0; return; }
-    // F-factor = (rate of tailwind increase)/g - (vertical wind)/airspeed; the FAA alert threshold is 0.103,
-    // averaged here over about 5 s so that ordinary gusts do not trip it
-    const w = fm.atmo.out;
+    // F-factor = (rate of tailwind increase)/g - (vertical wind)/airspeed; the FAA alert threshold is 0.103
+    const w = fm.wind;
     const tail = w.wx * Math.sin(fm.track) - w.wz * Math.cos(fm.track);
     const dWx = (tail - (this._tailP ?? tail)) / Math.max(dt, 1e-3); this._tailP = tail;
     const F = dWx / G - w.wy / Math.max(fm.tas, 50);
-    this._fF = lerp(this._fF ?? 0, clamp(F, -1, 1), 1 - Math.exp(-dt / 5));
+    // averaged over 1 km of flight path, as TSO-C117a / ETSO-C117a specify for the alert (about 14 s on the approach)
+    this._fF = lerp(this._fF ?? 0, clamp(F, -1, 1), 1 - Math.exp(-dt * Math.max(fm.tas, 50) / 1000));
     if (this._fF > 0.103 && !st.wsWarn && fm.agl > 50 * FT) { st.wsWarn = true; this.hooks.log({ kind: 'auto', who: 'Aircraft', text: 'WINDSHEAR, WINDSHEAR, WINDSHEAR' }); fm.emit('windshear'); this.later(60, () => { st.wsWarn = false; }); }
     // predictive windshear: a microburst ahead on the final approach below 1500 ft
     if (fm.phase === 'approach' && fm.agl < 1500 * FT && !st.pws) {
@@ -780,6 +801,7 @@ export class Crew {
       this.say('pf', 'I have control, ECAM actions.');
       this.say('pm', `Thrust lever ${i + 1}, idle. Engine master ${i + 1}, off.${fire ? ` Engine ${i + 1} fire pushbutton, push. Agent one, discharge.` : ''}`);
       this.lev[i] = 0; fm.ctl.engMaster[i] = false;
+      if (!fm.engFail[i]) fm.engFail[i] = 1; // shut down: from here on it is an engine-out
       this.hooks.emergency('engine-drill', { i, fire });
     });
     this.later(15, () => {
@@ -790,6 +812,31 @@ export class Crew {
       this._decideDiversion(fire ? 'engine fire' : 'engine failure', fire);
     });
   }
+  // A passenger taken ill (the purser calls the flight deck): priority, or the nearest airport if serious
+  medical(serious) {
+    this.later(2, () => this.say('capt', serious ? 'Purser says the passenger is in a bad way, the doctor wants a hospital. We divert to the nearest airport.' : 'Passenger is stable, a doctor on board is looking after them. We continue and ask for priority.'));
+    if (serious) this.later(8, () => this._decideDiversion('medical emergency', false));
+    else this.later(8, () => { this.atc.call('pan', this, { what: 'medical emergency on board', intent: 'continuing to Copenhagen, request priority and an ambulance on arrival' }); this.hooks.emergency('decision', { what: 'medical emergency', back: false, urgent: false }); });
+  }
+  // A main gear leg that has not locked down: ECAM, gravity extension, then a planned emergency landing
+  _gearWatch() {
+    const fm = this.fm, st = this.st;
+    if (fm.gearFailLeg && fm.ctl.gearLever === 1 && fm.gear > 0.95 && !fm.onGround && !st.gearUnsafe) {
+      st.gearUnsafe = true;
+      const side = fm.gearFailLeg === 1 ? 'left' : 'right';
+      this.later(this.pm.react + 2, () => this.say('pm', `ECAM: landing gear not down-locked, ${side} main.`));
+      // on the approach they go around to get time for the checklists and to prepare the cabin
+      if ((fm.phase === 'approach' || fm.phase === 'flare') && fm.agl > 100 * FT) this.later(this.pf.react + 1.5, () => { if (fm.phase === 'approach') this.goAround('gear'); });
+      this.later(12, () => this.say('pf', 'Landing gear gravity extension.'));
+      this.later(40, () => {
+        this.say('capt', `Still not locked. We'll land on the good legs, keep the wing up as long as we can, stop on the runway and evacuate if needed.`);
+        this.atc.call('mayday', this, { what: `${side} main landing gear not locked down`, intent: 'request a long final and the emergency services' });
+        this.hooks.emergency('gear-unsafe', { side });
+        this.stopOnRunway = true; st.forcedStop = true; st.braceGear = true;
+      });
+    }
+    if (st.braceGear && !fm.onGround && fm.agl < 500 * FT && (fm.phase === 'approach' || fm.phase === 'flare') && !st.brace) { st.brace = true; this.hooks.emergency('brace', {}); }
+  }
   _decideDiversion(what, urgent) {
     const fm = this.fm;
     // land at the nearest suitable airport: compare Arlanda with the remaining way to Copenhagen
@@ -799,18 +846,19 @@ export class Crew {
     this.hooks.emergency('decision', { what, back, urgent });
     this.atc.call(urgent ? 'mayday' : 'pan', this, { what, intent: back ? 'request immediate return to Arlanda' : 'continuing to Copenhagen, request priority' });
     if (back) this._divertArlanda(what, urgent);
-    else { this.stopOnRunway = urgent; this._planApproach(); }
+    else { this.stopOnRunway = this.stopOnRunway || urgent; this._planApproach(); }
   }
   _divertArlanda(why, urgent = false) {
     const fm = this.fm, afs = this.afs;
     const s = this.atc.wx.s.arn;
     const rwy = (Math.cos((s.wdir - 8.2) * DEG) * s.wspd) > (Math.cos((s.wdir - 188.2) * DEG) * s.wspd) ? '01L' : '19R';
     this.diverting = { apt: 'ARN', rwy, why };
+    afs.offset = 0; this.st.devPending = false; // ATC vectors us from here, the offset for weather no longer applies
     this.atc.divert('ARN', rwy);
     const route = buildReturnRoute({ x: fm.gearPoint.x, z: fm.gearPoint.z }, { x: fm.V.x, z: fm.V.z }, rwy);
     fm.divert(route);
     this._planApproach();
-    this.stopOnRunway = urgent && fm.engFire.some(Boolean);
+    this.stopOnRunway = this.stopOnRunway || urgent;
     const alt = Math.min(afs.fcu.alt, fm.altInd / FT > 12000 ? 10000 : 4000);
     afs.setAlt(alt);
     if (fm.phase === 'cruise' || fm.phase === 'climb') { fm.phase = 'descent'; afs.phase = 'DESCENT'; }

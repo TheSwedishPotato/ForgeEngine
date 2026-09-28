@@ -1,7 +1,7 @@
 // Headless flight test: the whole flight flown by the crew agents through the physics, with ATC
 // and the weather, in a few seconds.
 // usage: node tools/flight-test.mjs [preset] [maxSeconds] [--trace] [--radio] [--seed=N] [--wind=DDD/SS[/GG]]
-//        [--sc=efato|rto|engcruise|fire|depress|dual|hyd|cat|shear|ga]
+//        [--sc=efato|rto|engcruise|fire|fire2|depress|dual|hyd|cat|shear|ga|gear|medical|medical2|shearto]
 import { buildRoute } from '../src/flight.js';
 import { FlightModel } from '../src/physics.js';
 import { Atmosphere } from '../src/atmosphere.js';
@@ -44,6 +44,14 @@ while (t < maxT && fm.phase !== 'arrived' && fm.phase !== 'rto-stop' && fm.phase
   if (sc === 'dual' && fm.phase === 'climb' && fm.agl > 900 && !fm._sc) { fm._sc = 1; fm.failEngine(0, 2); fm.failEngine(1, 2); }
   if (sc === 'hyd' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; fm.hyd.green = false; }
   if (sc === 'cat' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; atmo.addCAT(5.0, 50, 19, 0.28); }
+  if (sc === 'fire2' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; fm.engFire[1] = true; }
+  if (sc === 'gear' && fm.phase === 'descent' && !fm._sc) { fm._sc = 1; fm.gearFailLeg = 2; }
+  if (sc === 'medical' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; crew.medical(true); }
+  if (sc === 'medical2' && fm.phase === 'climb' && fm.altInd > 12000 * FT && !fm._sc) { fm._sc = 1; crew.medical(true); }
+  if (sc === 'ga' && fm.phase === 'approach' && fm.m.touchdown - fm.s < 15000 && !fm._sc) { fm._sc = 1; atc.blockRunway((fm.m.touchdown - fm.s) / Math.max(fm.gs, 60) + 30); }
+  if (sc === 'fire2' && fm.engFire[1] && fm.ctl.engMaster[1] === false && !fm._fx) { fm._fx = 1; setTimeout(() => {}, 0); fm._fxT = fm.t + 12; }
+  if (fm._fxT && fm.t > fm._fxT) { fm.engFire[1] = false; fm._fxT = null; }
+  if (sc === 'shearto' && fm.phase === 'climb' && fm.agl > 60 && !fm._sc) { fm._sc = 1; const p = fm.path.sample(fm.s + 700, {}); atmo.addMicroburst(p.x, p.z, { R: 1000, u: 16, w: 12 }); }
   if (sc === 'shear' && fm.phase === 'approach' && fm.m.touchdown - fm.s < 9000 && !fm._sc) { fm._sc = 1; const p = fm.path.sample(fm.m.touchdown - 3500, {}); atmo.addMicroburst(p.x, p.z, { R: 900, u: 14, w: 10 }); }
   fm.update(dt); t += dt;
   while (fm.events.length) { const e = fm.events.shift(); if (!['flaps', 'alt-star', 'alt-captured', 'ap-off'].includes(e) || flag('trace')) console.log(row('EV ' + e)); if (e === 'touchdown') tdSink = fm.touchdownSink; }

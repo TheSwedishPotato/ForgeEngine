@@ -285,16 +285,22 @@ export class Exterior {
   constructor() {
     this.group = new THREE.Group();
     this.parts = { flaps: [], slats: [], spoilers: [], ailerons: [], reversers: [], fans: [] };
-    this.flexU = { value: 0 };
+    this.flexU = { value: 0 }; this.flexAU = { value: 0 };
     const wingTex = wingTexture();
     const mk = (opts) => {
       const m = new THREE.MeshStandardMaterial(opts);
       m.onBeforeCompile = (sh) => {
-        sh.uniforms.uFlex = this.flexU;
-        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uFlex;')
-          .replace('#include <begin_vertex>', `#include <begin_vertex>
-            float sp = clamp((abs(position.x) - 1.9) / 15.15, 0.0, 1.2);
-            transformed.y += uFlex * sp * sp;`);
+        sh.uniforms.uFlex = this.flexU; sh.uniforms.uFlexA = this.flexAU;
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uFlex; uniform float uFlexA;')
+          .replace('#include <project_vertex>', `
+            // first bending mode of the wing (tip deflection uFlex, metres, from the shape drawn here),
+            // plus the antisymmetric mode (one wing up, the other down). Applied in the aircraft frame
+            // after the flaps, slats and spoilers have moved, so they bend with the wing.
+            vec4 wpF = modelMatrix * vec4(transformed, 1.0);
+            float spF = clamp((abs(wpF.x) - 1.9) / 15.15, 0.0, 1.2);
+            wpF.y += (uFlex + sign(wpF.x) * uFlexA) * spF * spF * (1.0 + 0.25 * spF) / 1.25;
+            vec4 mvPosition = viewMatrix * wpF;
+            gl_Position = projectionMatrix * mvPosition;`);
       };
       return exposeMaterial(m);
     };
@@ -763,9 +769,11 @@ export class Exterior {
     this.shadow.material.opacity = (0.34 + 0.26 * direct) * clamp(1 - fm.h / 60, 0, 1) * (0.4 + 0.6 * (1 - env.nightK));
     this.taxiLight.intensity = env.landing && fm.onGround ? 40 : 0;
     for (const f of P.fans) { const n1 = fm.n1[f.side < 0 ? 0 : 1]; f.angle += n1 * 64 * 2 * Math.PI * dt * 0.25; f.fan.rotation.z = f.angle; }
-    // wing flex: up in flight with load, down on the ground; turbulence adds bounce
-    const flexTarget = fm.onGround ? -0.12 : 0.35 + fm.bump * 0.35 + (fm.accel ? fm.accel.y * 0.03 : 0);
-    this.flexU.value += (flexTarget - this.flexU.value) * Math.min(1, dt * 3);
+    // wing bending from the flight model's structural modes: lift bends the wings up (about 0.85 m
+    // at the tips per g), their weight and the engines droop them on the ground, gusts set them flapping
+    // at their natural frequency
+    this.flexU.value = (fm.wingFlex ?? 0) + 0.18;
+    this.flexAU.value = fm.wingTwist ?? 0;
     // lights
     const L = this.lights, nightK = env.nightK, pe = sharedUniforms.uPreExp.value;
     for (const [k, c] of [['navL', '#ff2a1a'], ['navR', '#22ff66'], ['strobeL', '#ffffff'], ['strobeR', '#ffffff'], ['beaconB', '#ff2020'], ['scan', '#fff4e0']]) L[k].material.color.set(c).multiplyScalar(pe * 1.6);

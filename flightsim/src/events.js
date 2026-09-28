@@ -1,15 +1,17 @@
-// "Anything can happen": abnormal and emergency events, with crew procedures and PAs.
+// "Anything can happen": physical failures and hazards, and how the cabin lives through them.
 //
-// Everything that follows an event is played out by the physics: a clear-air turbulence patch
-// is a gust field the aircraft flies through, an engine failure is thrust going away (and the
-// yaw that comes with it), a windshear is a microburst the autopilot has to escape from. The
-// events decide *what* goes wrong and *what the crew does about it*; the aircraft decides the rest.
+// Nothing here flies the aircraft or makes a decision for the pilots. A failure goes into the
+// physics (an engine that stops making thrust or catches fire, a hydraulic system that loses
+// pressure, a hole in the pressure hull, a main gear leg that will not lock down) or into the air
+// (a clear-air turbulence patch, a microburst, wake from the traffic ahead, a lightning strike).
+// The two pilots in crew.js notice it the way real pilots do (ECAM, the feel of the aircraft, the
+// radar) and fly the drill; ATC and the traffic do their part; the cabin crew and passengers here
+// react to what the flight deck and the aircraft actually do.
 //
 // Modes: off, realistic (about as rare as real life, slightly boosted so a few flights in a
 // hundred see something), eventful (one or two things will happen), chaos (several, including
-// serious failures and accidents).
+// serious failures).
 import { SPEAKERS } from './speech.js';
-import { buildReturnRoute } from './flight.js';
 import { clamp, lerp, rng, FT, KT, G } from './core.js';
 
 const pa = (speaker, sv, en) => [sv && { text: sv, lang: 'sv', speaker, pa: true }, en && { text: en, lang: 'en', speaker, pa: true }].filter(Boolean);
@@ -30,7 +32,10 @@ export const EMERGENCY_PA = {
       runway: ['Det fanns fortfarande ett flygplan på banan när vi närmade oss.', 'There was still an aircraft on the runway as we came in.'],
       unstable: ['Vi var inte helt stabiliserade för landningen, så vi valde att göra ett nytt försök.', 'We were not fully stabilised for the landing, so we chose to try again.'],
       windshear: ['Vi fick en varning om vindskjuvning, en plötslig ändring av vinden nära banan, och steg som vi är tränade att göra.', 'We had a windshear warning, a sudden change in the wind close to the runway, and we climbed away exactly as we are trained to do.'],
-    }[reason] || ['', ''];
+      minima: ['Vi kunde inte se banan tillräckligt tidigt i dimman.', 'We could not see the runway early enough in the low cloud and fog.'],
+      bounce: ['Vi studsade vid sättningen, så vi valde att starta igen och göra ett nytt försök.', 'We bounced on touchdown, so we chose to take off again and make another approach.'],
+      gear: ['Ett av huvudlandningsställen visar inte att det är låst nere, och vi behöver tid att undersöka det.', 'One of the main landing gear legs is not showing locked down, and we need some time to look at it.'],
+    }[reason === 'atc' ? 'runway' : reason] || ['', ''];
     return pa(CAPT(), `Mina damer och herrar, det här är kaptenen. Som ni märkte avbröt vi inflygningen. ${r[0]} Det är en helt normal procedur. Vi flyger ett varv och landar om ungefär tio minuter.`,
       `Ladies and gentlemen, this is the captain. As you may have noticed, we discontinued our approach. ${r[1]} This is a completely normal procedure. We will fly a short circuit and land in about ten minutes.`);
   },
@@ -57,6 +62,10 @@ export const EMERGENCY_PA = {
   doctor: () => pa(PURS(), 'Mina damer och herrar, finns det en läkare eller sjuksköterska ombord, vänligen tryck på anropsknappen.', 'Ladies and gentlemen, if there is a doctor or a nurse on board, please make yourself known to the cabin crew by pressing your call button.'),
   medicalCapt: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. En passagerare har blivit sjuk. Vi har begärt prioriterad landning i Köpenhamn och ambulanspersonal möter flygplanet. Sitt kvar när vi kommit fram så att de kan gå ombord först. Tack.',
     'Ladies and gentlemen, this is the captain. A passenger has been taken ill. We have asked for a priority landing in Copenhagen and paramedics will meet the aircraft. When we arrive, please stay seated until they have boarded. Thank you.'),
+  medicalReturn: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. En passagerare behöver snabbt komma till sjukhus, så vi vänder tillbaka till Stockholm Arlanda. Ambulans möter flygplanet. Sitt kvar när vi kommit fram så att de kan gå ombord först. Tack för er förståelse.',
+    'Ladies and gentlemen, this is the captain. One of our passengers needs to get to a hospital quickly, so we are returning to Stockholm Arlanda. An ambulance will meet the aircraft. When we arrive, please stay seated so the paramedics can board first. Thank you for your understanding.'),
+  gearUnsafe: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. Ett av huvudlandningsställen har inte låst sig i nedfällt läge. Vi har gått igenom checklistorna och förbereder oss nu för att landa ändå. Kabinpersonalen går igenom nödlandningsproceduren med er. Räddningstjänsten står beredd vid banan. Lyssna noga på besättningen.',
+    'Ladies and gentlemen, this is the captain. One of our main landing gear legs has not locked in the down position. We have been through our checklists and we are now preparing to land with it as it is. The cabin crew will go through the emergency landing procedure with you. The fire services are standing by at the runway. Please listen carefully to the crew.'),
   lightning: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. Som några av er märkte blev vi träffade av blixten. Det är inte ovanligt och flygplanet är byggt för det. Allt fungerar normalt och teknikerna tittar på flygplanet efter landningen.',
     'Ladies and gentlemen, this is the captain. As some of you noticed, we were struck by lightning. That is not unusual and the aircraft is built for it. Everything is working normally and the engineers will have a look after we land.'),
   rto: () => pa(CAPT(), 'Mina damer och herrar, det här är kaptenen. Vi avbröt starten på grund av en varning från en av motorerna. Det är en procedur vi tränar regelbundet. Bromsarna är varma, så räddningstjänsten kontrollerar dem, sedan kör vi tillbaka till gaten så att teknikerna kan titta på motorn. Jag ber om ursäkt för förseningen.',
@@ -73,26 +82,27 @@ export const EMERGENCY_PA = {
     'Ladies and gentlemen, we are back at Stockholm Arlanda. Please remain seated until the seatbelt sign has been switched off. SAS staff will meet you at the gate and help you with rebooking. Thank you for your patience.'),
 };
 
-// ---------------- scenarios ----------------
-// p: per-flight probability in "realistic"; tier: 1 = mild, 2 = serious, 3 = accident-level (chaos only)
+// ---------------- what can go wrong ----------------
+// p: per-flight probability in "realistic"; tier: 1 = mild, 2 = serious, 3 = accident-level (chaos only).
+// `window` is when it can physically happen; `inject` puts it into the physics or the air.
 export const SCENARIOS = [
-  { id: 'turb-moderate', label: 'Moderate turbulence', tier: 1, p: 0.18, window: (fm) => ['cruise', 'climb', 'descent'].includes(fm.phase) && fm.h > 5500 },
+  { id: 'turb-moderate', label: 'Moderate clear-air turbulence', tier: 1, p: 0.18, window: (fm) => ['cruise', 'climb', 'descent'].includes(fm.phase) && fm.h > 5500 },
   { id: 'turb-severe', label: 'Severe clear-air turbulence', tier: 2, p: 0.015, window: (fm) => fm.phase === 'cruise' || (fm.phase === 'descent' && fm.h > 7000) },
   { id: 'wake', label: 'Wake turbulence on approach', tier: 1, p: 0.03, window: (fm) => fm.phase === 'approach' && fm.h > 600 && fm.h < 1800 },
-  { id: 'windshear', label: 'Windshear on final', tier: 2, p: 0.01, window: (fm) => fm.phase === 'approach' && fm.m.touchdown - fm.s < 11000 && fm.m.touchdown - fm.s > 7000 },
-  { id: 'go-around', label: 'Go-around (runway occupied)', tier: 1, p: 0.02, window: (fm) => fm.phase === 'approach' && fm.agl < 200 && fm.agl > 60 },
+  { id: 'windshear', label: 'Microburst on final', tier: 2, p: 0.01, window: (fm) => fm.phase === 'approach' && fm.m.touchdown - fm.s < 14000 && fm.m.touchdown - fm.s > 9000 },
+  { id: 'go-around', label: 'Runway still occupied (go-around)', tier: 1, p: 0.02, window: (fm) => fm.phase === 'approach' && fm.m.touchdown - fm.s < 20000 && !fm.airport },
   { id: 'bird-minor', label: 'Bird strike (no damage)', tier: 1, p: 0.01, window: (fm) => (fm.phase === 'climb' && fm.h > 150 && fm.h < 900) || (fm.phase === 'approach' && fm.h < 900 && fm.h > 150) },
-  { id: 'lightning', label: 'Lightning strike', tier: 1, p: 0.01, window: (fm, S) => ['descent', 'approach', 'climb'].includes(fm.phase) && fm.h > 700 && fm.h < 4500 && (S.world.weather.rain > 0 || S.world.weather.cumulus > 0.5 || S.incidents.mode !== 'realistic') },
-  { id: 'medical', label: 'Medical emergency', tier: 1, p: 0.012, window: (fm) => fm.phase === 'cruise' || (fm.phase === 'climb' && fm.h > 4000) },
-  { id: 'rto', label: 'Rejected take-off', tier: 2, p: 0.003, window: (fm) => fm.phase === 'takeoff' && fm.ias > 70 && fm.ias < 125 },
-  { id: 'bird-engine', label: 'Bird strike, engine failure, return to Arlanda', tier: 2, p: 0.002, window: (fm) => fm.phase === 'climb' && fm.h > 120 && fm.h < 700 },
-  { id: 'efato', label: 'Engine failure at take-off, return to Arlanda', tier: 2, p: 0.001, window: (fm) => fm.phase === 'takeoff' && fm.rotating },
+  { id: 'lightning', label: 'Lightning strike', tier: 1, p: 0.01, window: (fm, S) => ['descent', 'approach', 'climb'].includes(fm.phase) && fm.h > 700 && fm.h < 4500 && (S.atmo.inCloud || S.atmo.rain > 0.5 || S.incidents.mode !== 'realistic') },
+  { id: 'medical', label: 'Passenger taken ill', tier: 1, p: 1 / 604, window: (fm) => fm.phase === 'cruise' || (fm.phase === 'climb' && fm.h > 4000) },
+  { id: 'rto', label: 'Engine failure before V1', tier: 2, p: 0.003, window: (fm) => fm.phase === 'takeoff' && fm.ias > 70 && fm.ias < (fm.afs.v1 || 140) - 12 },
+  { id: 'efato', label: 'Engine failure after V1', tier: 2, p: 0.001, window: (fm) => fm.phase === 'takeoff' && fm.ias > (fm.afs.v1 || 140) + 2 },
+  { id: 'bird-engine', label: 'Bird ingested, engine failure in the climb', tier: 2, p: 0.002, window: (fm) => fm.phase === 'climb' && fm.agl > 120 && fm.agl < 900 },
   { id: 'engine-fire', label: 'Engine fire', tier: 2, p: 0.001, window: (fm) => (fm.phase === 'climb' && fm.h > 1500) || fm.phase === 'cruise' },
-  { id: 'engine-shutdown', label: 'Precautionary engine shutdown in cruise', tier: 2, p: 0.002, window: (fm) => fm.phase === 'cruise' },
+  { id: 'engine-shutdown', label: 'Engine oil pressure loss (shutdown)', tier: 2, p: 0.002, window: (fm) => fm.phase === 'cruise' },
   { id: 'depress', label: 'Rapid decompression', tier: 2, p: 0.001, window: (fm) => fm.phase === 'cruise' && fm.h > 9000 },
   { id: 'hydraulic', label: 'Hydraulic failure (green system)', tier: 2, p: 0.002, window: (fm) => fm.phase === 'cruise' || (fm.phase === 'descent' && fm.h > 5000) },
-  { id: 'dual-engine', label: 'Bird flock: both engines lost (forced landing)', tier: 3, p: 0, window: (fm) => fm.phase === 'climb' && fm.h > 700 && fm.h < 1100 },
-  { id: 'gear-unsafe', label: 'One main gear will not extend', tier: 3, p: 0, window: (fm) => fm.phase === 'approach' && fm.m.touchdown - fm.s < 16000 },
+  { id: 'dual-engine', label: 'Bird flock: both engines lost', tier: 3, p: 0, window: (fm) => fm.phase === 'climb' && fm.agl > 700 && fm.agl < 1100 },
+  { id: 'gear-unsafe', label: 'A main gear leg will not lock down', tier: 3, p: 0, window: (fm) => ['cruise', 'descent', 'approach'].includes(fm.phase) },
 ];
 
 // time of useful consciousness (s) after a rapid decompression, by cabin altitude (ft)
@@ -108,6 +118,7 @@ export class Incidents {
     this.S = S; this.mode = mode; this.r = rng(Math.floor(Math.random() * 1e9));
     this.plan = []; this.active = []; this.log = []; this.t = 0;
     this.hypoxia = 0; this.unconscious = false;
+    this.times = {};
     this._planFlight();
   }
 
@@ -124,33 +135,35 @@ export class Incidents {
       if (mode === 'chaos') order.sort((a, b) => (b.tier >= 2 ? 1 : 0) - (a.tier >= 2 ? 1 : 0) || r() - 0.5);
       for (const s of order) { if (pick.length >= n) break; if (this._compatible(pick, s)) pick.push(s); }
     }
-    // each planned event fires at a random moment inside its window
+    // each planned event happens at a random moment inside its window
     this.plan = pick.map((s) => ({ s, delay: 5 + r() * 90, armed: 0, done: false }));
   }
   _compatible(list, s) {
-    const exclusive = ['rto', 'efato', 'bird-engine', 'dual-engine'];
+    const exclusive = ['rto', 'efato', 'bird-engine', 'dual-engine', 'engine-fire', 'engine-shutdown'];
     if (exclusive.includes(s.id) && list.some((x) => exclusive.includes(x.id))) return false;
     if (s.id === 'depress' && list.some((x) => x.id === 'engine-fire')) return false;
     return !list.some((x) => x.id === s.id);
   }
 
-  // Trigger now (the pause menu's "Make something happen"): arm it so it fires as soon as its window opens.
+  // The pause menu's "Make something happen": it happens as soon as its window opens.
   trigger(id) {
     const s = SCENARIOS.find((x) => x.id === id); if (!s) return false;
     this.plan.push({ s, delay: 0, armed: 0, done: false, manual: true });
-    this.S.ui.toast(s.window(this.S.fm, this.S) ? `${s.label}…` : `${s.label}: will happen at the right moment of the flight`, 3);
+    this.S.ui.toast(s.window(this.S.fm, this.S) ? `${s.label}…` : `${s.label}: will happen when the flight gets there`, 3);
     return true;
   }
 
   say(script, opts) { this.S.director.say(script, opts); }
   note(id) { const sc = SCENARIOS.find((x) => x.id === id); this.log.push({ t: this.S.director.t, id, text: sc ? sc.label : id }); }
+  later(sec, fn) { this.active.push({ id: 'later', t: 0, step: (dt, a) => { if (a.t >= sec) { a.done = true; fn(); } } }); }
+  once(key, gap = 1e9) { const t = this.times[key]; if (t != null && this.t - t < gap) return false; this.times[key] = this.t; return true; }
 
   update(dt) {
     const S = this.S, fm = S.fm;
     this.t += dt;
     for (const p of this.plan) {
       if (p.done) continue;
-      if (p.s.window(fm, S)) { p.armed += dt; if (p.armed >= p.delay) { p.done = true; this._start(p.s.id, p.manual); } }
+      if (p.s.window(fm, S)) { p.armed += dt; if (p.armed >= p.delay) { p.done = true; this._inject(p.s.id); } }
     }
     for (const a of [...this.active]) { a.t += dt; if (a.step) a.step(dt, a); if (a.done) this.active.splice(this.active.indexOf(a), 1); }
     this._hypoxia(dt);
@@ -158,157 +171,117 @@ export class Incidents {
     this._evacuation(dt);
   }
 
-  // ---------------- starting an event ----------------
-  _start(id, manual) {
-    const S = this.S, fm = S.fm, D = S.director, A = S.audio;
+  // ---------------- putting a failure or hazard into the world ----------------
+  _inject(id) {
+    const S = this.S, fm = S.fm, A = S.audio, r = this.r;
     this.note(id);
-    const act = (step, data = {}) => { const a = { id, t: 0, step, ...data }; this.active.push(a); return a; };
+    const side = r() < 0.5 ? 0 : 1;
     switch (id) {
-      case 'turb-moderate': {
-        // ICAO moderate: accelerometer changes of 0.5 to 1.0 g (this gives about 0.5 to 1.5 g)
-        S.atmo.addCAT(4.2 + this.r() * 1.2, 70 + this.r() * 60);
-        act((dt, a) => {
-          if (a.t > 4 && !a.sign) { a.sign = true; D.setSeatbelt(true); this.say(EMERGENCY_PA.turbModerate); }
-          if (a.t > 150 && !a.off) { a.off = true; if (fm.phase === 'cruise') D.setSeatbelt(false); a.done = true; }
-        });
-        break;
-      }
+      // ICAO moderate: accelerometer changes of 0.5 to 1.0 g at the CG
+      case 'turb-moderate': S.atmo.addCAT(4.2 + r() * 1.2, 70 + r() * 60); break;
+      // ICAO severe: changes of more than 1 g. Realistic: a drop to about +0.1 to +0.3 g, then about 1.8 g;
+      // eventful: below zero g; chaos: like SQ321 in May 2024 (+1.35 g to -1.5 g in 0.6 s)
       case 'turb-severe': {
-        // ICAO severe: changes of more than 1 g. Realistic: a drop to about +0.1 to +0.3 g, then about 1.8 g;
-        // eventful: below zero g; chaos: like SQ321 in May 2024, whose recorder showed +1.35 g to -1.5 g in 0.6 s
-        const [jolt, width] = this.mode === 'chaos' ? [44 + this.r() * 6, 0.12] : this.mode === 'eventful' ? [27 + this.r() * 5, 0.18] : [17 + this.r() * 5, 0.28];
-        S.atmo.addCAT(5.0, 45, jolt, width);
-        act((dt, a) => {
-          if (a.t > 0.5 && !a.s1) { a.s1 = true; D.setSeatbelt(true); }
-          if (a.t > 19 && !a.s2) { a.s2 = true; S.audio.scream(1); this.say(EMERGENCY_PA.seatedNow, { priority: 3 }); S.people.crewToJumpSeats(() => {}); }
-          if (a.t > 70 && !a.s3) { a.s3 = true; this.say(EMERGENCY_PA.turbApology); fm.levelOff = (fm.levelOff ?? 10973) - 610; }
-          if (a.t > 140) a.done = true;
-        });
+        const [jolt, width] = this.mode === 'chaos' ? [44 + r() * 6, 0.12] : this.mode === 'eventful' ? [27 + r() * 5, 0.18] : [17 + r() * 5, 0.28];
+        S.atmo.addCAT(5.0, 45, jolt, width); this.times.severeCAT = this.t;
         break;
       }
-      case 'wake': S.atmo.addWake(0.3 + this.r() * 0.2, 2.5, 5); act((dt, a) => { if (a.t > 0.8 && !a.g) { a.g = true; A.gasp(0.7); } if (a.t > 3) a.done = true; }); break;
-      case 'windshear': {
-        const p = fm.path.sample(fm.m.touchdown - 3200, {});
-        S.atmo.addMicroburst(p.x, p.z, { R: 900 + this.r() * 300, u: 12 + this.r() * 4, w: 9 + this.r() * 3 });
-        // reactive windshear detection: a rapid loss of airspeed or a strong downdraft below 1000 ft
-        act((dt, a) => {
-          const dv = fm.ias - (a.prev ?? fm.ias); a.prev = fm.ias;
-          a.loss = dv / Math.max(dt, 1e-3) < -1.2 ? (a.loss || 0) + dt : 0;
-          if (!a.ga && fm.phase === 'approach' && fm.agl < 400 && (a.loss > 1.5 || fm.vs < -7)) { a.ga = true; if (fm.goAround('windshear')) { A.gasp(0.6); this._goAroundFollowUp('windshear'); } }
-          if (a.t > 240 || fm.onGround) a.done = true;
-        });
-        break;
-      }
-      case 'go-around': if (fm.goAround('runway')) this._goAroundFollowUp('runway'); break;
-      case 'bird-minor': A.bang(0.35); act((dt, a) => { if (a.t > 2 && !a.m) { a.m = true; S.ui.toast('A faint burnt smell drifts through the cabin.', 5); } if (a.t > 60 && !a.p) { a.p = true; this.say(EMERGENCY_PA.birdMinor); a.done = true; } }); break;
-      case 'lightning': S.flash = Math.max(S.flash, 0.9); A.lightning(); A.gasp(0.8); D.flickerLights(); act((dt, a) => { if (a.t > 45) { this.say(EMERGENCY_PA.lightning); a.done = true; } }); break;
+      case 'wake': S.atmo.addWake(0.3 + r() * 0.2, 2.5, 5); break;
+      case 'windshear': { const p = fm.path.sample(fm.m.touchdown - 3000, {}); S.atmo.addMicroburst(p.x, p.z, { R: 900 + r() * 300, u: 12 + r() * 4, w: 9 + r() * 3 }); break; }
+      // something still on the runway when we get there (a slow vacate, a vehicle): ATC sends us around
+      case 'go-around': S.atc.blockRunway((fm.m.touchdown - fm.s) / Math.max(fm.gs, 60) + 15 + r() * 30); break;
+      case 'bird-minor': A.bang(0.35); fm.thump = Math.max(fm.thump, 0.3); S.crew.later(1.5, () => S.crew.say('pm', 'Bird strike. Engine parameters normal.'));
+        this.later(2, () => S.ui.toast('A faint burnt smell drifts through the cabin.', 5)); this.later(60, () => this.say(EMERGENCY_PA.birdMinor)); break;
+      case 'lightning': S.atmo.forceStrike = true; break;
       case 'medical': this._medical(); break;
-      case 'rto': {
-        if (fm.rejectTakeoff()) {
-          A.gasp(0.7);
-          act((dt, a) => {
-            if (fm.phase === 'rto-stop' && !a.pa) { a.pa = true; a.t0 = a.t; setTimeout(() => this.say(EMERGENCY_PA.rto), 4000); }
-            if (a.pa && a.t - a.t0 > 60) { a.done = true; this._end('rto'); }
-          });
+      case 'rto': case 'efato': A.bang(1.1); A.surge(2); S.ext.setEngineFx(side, { stall: 1.8, smoke: 0.9 }); fm.failEngine(side, 2); break;
+      case 'bird-engine': A.bang(1.1); A.surge(4); S.ext.setEngineFx(side, { stall: 1.8, smoke: 0.9 }); fm.engCause = 'bird'; fm.failEngine(side, 2); break;
+      // the fire warning: the engine keeps running until the crew shuts it down and fires the extinguishers
+      case 'engine-fire': A.bang(0.6); S.ext.setEngineFx(side, { fire: 1, smoke: 1 }); fm.engFire[side] = true; fm.engCause = 'fire'; break;
+      case 'engine-shutdown': A.clunk(0.4); fm.engCause = 'oil'; fm.failEngine(side, 1); break;
+      case 'depress': fm.depressurise(1); break;
+      // green system lost: gear by gravity (and it cannot retract), no autobrake (alternate braking on
+      // yellow), no reverser on engine 1, flaps and slats at half speed
+      case 'hydraulic': fm.hyd.green = false; break;
+      case 'dual-engine': A.bang(1); A.surge(6); for (const i of [0, 1]) { S.ext.setEngineFx(i, { stall: 2.5, smoke: 0.8 }); fm.failEngine(i, 2); } fm.engCause = 'bird'; break;
+      case 'gear-unsafe': fm.gearFailLeg = 1 + side; break;
+      default: break;
+    }
+  }
+
+  // ---------------- the cabin reacts to the aircraft and to the flight deck ----------------
+  onFlightEvent(e) {
+    const S = this.S, fm = S.fm, A = S.audio, D = S.director;
+    switch (e) {
+      case 'crash':
+        A.impact(1.2); A.scream(1.2);
+        S.flash = 0.6; S.flashRed = 1;
+        D.setLights(0.02, '#ffffff', true);
+        if (!fm.survivable) { this._crashDark = 0.01; this.crashT = 0; this.fatal = true; }
+        break;
+      case 'lightning-strike':
+        S.flash = Math.max(S.flash, 0.9); A.lightning(); A.gasp(0.8); D.flickerLights();
+        if (this.once('ltPA', 600)) this.later(45, () => this.say(EMERGENCY_PA.lightning));
+        break;
+      case 'turbulence': if (D.serviceRunning() && this.once('turbPA', 300)) this.say(EMERGENCY_PA.turbModerate); break;
+      case 'turbulence-severe': A.scream(1); if (this.once('sevPA', 300)) this.later(60, () => this.say(EMERGENCY_PA.turbApology)); break;
+      case 'crew-seated': this.say(EMERGENCY_PA.seatedNow, { priority: 3 }); S.people.crewToJumpSeats(() => {}); break;
+      case 'windshear': A.gasp(0.6); break;
+      case 'go-around': A.gasp(0.6); S.ui.toast('Go-around: the engines roar up to take-off thrust and the aircraft climbs away', 5); break;
+      case 'hard-landing': if (!fm.crashed) this.later(9, () => this.say(EMERGENCY_PA.hardLanding)); break;
+      case 'engine-failure-1': case 'engine-failure-2': A.gasp(1); break;
+      case 'depressurisation': A.decompression(); A.scream(0.8); S.cabinFog = 1; this.later(3, () => S.ui.toast('The oxygen masks have dropped! Press O to pull one down and put it on.', 8)); break;
+      case 'emergency-descent': this.say(EMERGENCY_PA.depressAuto, { priority: 3 }); this.later(8, () => S.people.crewToJumpSeats(() => {})); this._roar = true; break;
+      case 'emergency-level': this._roar = false; A.roar(0.1); this.later(20, () => this.say(EMERGENCY_PA.masksOff)); this.later(60, () => A.roar(0)); break;
+      default: if (e.startsWith('go-around-')) { const why = e.slice(10); this.later(45, () => this.say(EMERGENCY_PA.goAround(why))); } break;
+    }
+    if (this._roar) A.roar(fm.h > 4000 ? 0.7 : 0.25);
+  }
+
+  // what the crew tells the cabin (crew.js hooks.emergency)
+  onCrew(kind, d = {}) {
+    const S = this.S, fm = S.fm, A = S.audio, D = S.director;
+    switch (kind) {
+      case 'engine-drill': {
+        // the fire drill: agent 1 puts most engine fires out; if not, agent 2 thirty seconds later
+        if (d.fire) {
+          const out = this.r() < 0.85 ? 12 : 42;
+          this.later(out, () => { fm.engFire[d.i] = false; S.ext.setEngineFx(d.i, { fire: 0, smoke: 0.4 }); if (out > 20) S.crew.say('pm', 'Fire extinguished after agent two.'); });
+          this.later(10, () => S.ext.setEngineFx(d.i, { fire: 0.4 }));
         }
+        this.later(90, () => S.ext.setEngineFx(d.i, { smoke: 0.08 }));
         break;
       }
-      case 'bird-engine': case 'efato': this._engineFailure(this.r() < 0.5 ? 0 : 1, id === 'bird-engine' ? 'bird' : 'failure', true); break;
-      case 'engine-fire': this._engineFailure(this.r() < 0.5 ? 0 : 1, 'fire', this._nearDeparture()); break;
-      case 'engine-shutdown': this._engineFailure(this.r() < 0.5 ? 0 : 1, 'oil', this._nearDeparture()); break;
-      case 'depress': this._depressurisation(); break;
-      case 'hydraulic': {
-        // green system lost: gear by gravity (and it cannot retract), no autobrake (manual alternate braking on yellow),
-        // no reverser on engine 1, no spoilers 1 and 5, flaps and slats at half speed. Nose-wheel steering is on the
-        // yellow system on the A320neo, so the aircraft can still vacate the runway and taxi in.
-        fm.hyd.green = false; fm.abMed = true; A.chime('single');
-        act((dt, a) => { if (a.t > 50 && !a.p) { a.p = true; this.say(EMERGENCY_PA.hydraulic); } if (a.p && ['arrived', 'taxi-in'].includes(fm.phase) || a.t > 5000) a.done = true; });
+      case 'decision': {
+        // the captain tells the passengers what happened and what they are doing about it
+        D.setSeatbelt(true);
+        const i = fm.engFail[0] ? 0 : 1, cause = fm.engCause || 'failure';
+        const pa = /medical/.test(d.what) ? (d.back ? EMERGENCY_PA.medicalReturn : EMERGENCY_PA.medicalCapt)
+          : /engine/.test(d.what) ? (d.back ? EMERGENCY_PA.engineReturn(i, cause) : EMERGENCY_PA.engineContinue(i, cause))
+            : null;
+        if (pa) this.later(45, () => this.say(pa));
+        if (d.back) D.returned = true;
         break;
       }
-      case 'dual-engine': {
-        A.bang(1); A.surge(6); A.gasp(1);
-        for (const i of [0, 1]) { S.ext.setEngineFx(i, { stall: 2.5, smoke: 0.8 }); fm.failEngine(i, 2); }
-        act((dt, a) => {
-          if (a.t > 12 && !a.p) { a.p = true; this.say(EMERGENCY_PA.emergencyLanding, { priority: 3 }); D.setSeatbelt(true); S.people.crewToJumpSeats(() => {}); }
-          if (fm.agl < 150 && !a.brace && !fm.onGround) { a.brace = true; this._brace(); }
-          if (a.t > 30) for (const i of [0, 1]) S.ext.setEngineFx(i, { smoke: 0.2 });
-          if (fm.onGround || fm.crashed) a.done = true;
-        });
-        break;
-      }
-      case 'gear-unsafe': {
-        const g = this.r() < 0.5 ? 1 : 2; fm.gearFailLeg = g;
-        act((dt, a) => {
-          if (fm.gear > 0.99 && !a.s) { a.s = true; fm.gearCollapsed[g] = true; A.clunk(0.6); }
-          if (a.s && a.t > 40 && !a.p) { a.p = true; this.say(EMERGENCY_PA.emergencyLanding, { priority: 3 }); }
-          if (fm.agl < 150 && !a.brace && !fm.onGround && a.s) { a.brace = true; this._brace(); }
-          if (fm.onGround || fm.crashed || a.t > 1200) a.done = true;
+      case 'hydraulic': this.later(50, () => this.say(EMERGENCY_PA.hydraulic)); break;
+      case 'lightning': break;
+      case 'rto': A.gasp(0.7); this.later(4, () => this.say(EMERGENCY_PA.rto)); this.later(64, () => this._end('rto')); break;
+      case 'gear-unsafe': this.later(40, () => this.say(EMERGENCY_PA.gearUnsafe, { priority: 3 })); this.later(90, () => { this.say(EMERGENCY_PA.emergencyLanding, { priority: 3 }); }); break;
+      case 'dual-engine': this.later(12, () => { this.say(EMERGENCY_PA.emergencyLanding, { priority: 3 }); D.setSeatbelt(true); S.people.crewToJumpSeats(() => {}); }); for (const i of [0, 1]) this.later(30, () => S.ext.setEngineFx(i, { smoke: 0.2 })); break;
+      case 'brace': this._brace(); break;
+      case 'stopped': {
+        this.say(EMERGENCY_PA.stayCalm, { priority: 3 });
+        S.ui.toast('Fire engines race up alongside, lights flashing.', 5);
+        if (d.forced || fm.crashed) { this._startEvacuation(fm.crashed ? 'crash' : 'forced'); break; }
+        // after an engine fire the fire services decide; now and then it ends in an evacuation
+        this.later(25, () => {
+          if (d.fire && (this.mode === 'chaos' || this.r() < 0.3)) { fm.evacuating = true; S.ext.setEngineFx(fm.engFail[0] ? 0 : 1, { fire: 0.6, smoke: 1 }); this._startEvacuation('fire'); }
+          else this.later(30, () => this._end('towed'));
         });
         break;
       }
       default: break;
     }
-  }
-
-  _nearDeparture() { const fm = this.S.fm; return !fm.airport && fm.s < 150000; }
-
-  _goAroundFollowUp(reason) {
-    const S = this.S;
-    this.active.push({ id: 'ga-pa', t: 0, step: (dt, a) => { if (a.t > 45) { this.say(EMERGENCY_PA.goAround(reason)); a.done = true; } } });
-    S.ui.toast('Go-around: the engines roar to take-off thrust and the aircraft climbs away', 5);
-  }
-
-  // Engine failure, fire or precautionary shutdown. Near Arlanda the crew returns; later on they continue to Copenhagen.
-  _engineFailure(i, cause, returnHome) {
-    const S = this.S, fm = S.fm, A = S.audio;
-    if (cause === 'bird' || cause === 'failure') { A.bang(1.1); A.surge(cause === 'bird' ? 4 : 2); A.gasp(1); S.ext.setEngineFx(i, { stall: 1.8, smoke: 0.9 }); }
-    if (cause === 'fire') { A.bang(0.6); S.ext.setEngineFx(i, { fire: 1, smoke: 1 }); }
-    if (cause === 'oil') A.clunk(0.4);
-    fm.failEngine(i, cause === 'oil' ? 1 : 2);
-    if (fm.phase === 'takeoff' || fm.phase === 'climb') fm.toga = true;
-    fm.abMed = true;
-    // single-engine ceiling: stay low
-    fm.levelOff = Math.min(fm.levelOff ?? 10973, returnHome ? 914 : 5800);
-    this.active.push({ id: 'engine', t: 0, step: (dt, a) => {
-      if (cause === 'fire' && a.t > 12 && !a.ext1) { a.ext1 = true; S.ext.setEngineFx(i, { fire: 0.4 }); }
-      if (cause === 'fire' && a.t > 42 && !a.ext2) { a.ext2 = true; S.ext.setEngineFx(i, { fire: 0, smoke: 0.4 }); }
-      if (a.t > 90 && !a.smokeOff) { a.smokeOff = true; S.ext.setEngineFx(i, { smoke: 0.08 }); }
-      if (a.t > (cause === 'oil' ? 60 : 75) && !a.pa) {
-        a.pa = true;
-        if (returnHome) {
-          const G2 = fm.pos; fm.divert(buildReturnRoute({ x: G2.x, z: G2.z }, { x: fm.V.x, z: fm.V.z }));
-          S.director.returned = true; this.say(EMERGENCY_PA.engineReturn(i, cause));
-        } else this.say(EMERGENCY_PA.engineContinue(i, cause));
-        S.director.setSeatbelt(true);
-      }
-      // a fire (or chaos) means stopping on the runway for the fire services; chaos may end in an evacuation
-      if (a.pa && (cause === 'fire' || this.mode === 'chaos')) fm.stopOnRunway = true;
-      if (fm.phase === 'runway-stop' && !a.stopped) {
-        a.stopped = true; a.st = a.t;
-        this.say(EMERGENCY_PA.stayCalm, { priority: 3 });
-        S.ui.toast('Fire engines race up alongside, lights flashing.', 5);
-      }
-      if (a.stopped && a.t - a.st > 25 && !a.decide) {
-        a.decide = true;
-        if (cause === 'fire' && (this.mode === 'chaos' || this.r() < 0.3)) { fm.evacuating = true; S.ext.setEngineFx(i, { fire: 0.6, smoke: 1 }); this._startEvacuation('fire'); }
-        else setTimeout(() => this._end('towed'), 30000);
-      }
-      if (fm.phase === 'arrived' || fm.crashed || a.decide) a.done = true;
-    } });
-  }
-
-  _depressurisation() {
-    const S = this.S, fm = S.fm, A = S.audio, D = S.director;
-    A.decompression(); A.scream(0.8);
-    fm.depressurise(1); fm.emergencyDescent(3048);
-    S.cabinFog = 1; D.setSeatbelt(true);
-    this.active.push({ id: 'depress', t: 0, step: (dt, a) => {
-      if (a.t > 3 && !a.pa1) { a.pa1 = true; this.say(EMERGENCY_PA.depressAuto, { priority: 3 }); S.ui.toast('The oxygen masks have dropped! Press O to pull one down and put it on.', 8); }
-      if (a.t > 8 && !a.crew) { a.crew = true; S.people.crewToJumpSeats(() => {}); }
-      S.audio.roar(fm.h > 4000 ? 0.7 : 0.25);
-      if (fm.phase !== 'emergency' && a.t > 30 && !a.pa2) { a.pa2 = true; S.audio.roar(0.1); setTimeout(() => this.say(EMERGENCY_PA.masksOff), 20000); }
-      if (a.pa2 && a.t > 400) { S.audio.roar(0); a.done = true; }
-    } });
   }
 
   _medical() {
@@ -319,13 +292,16 @@ export class Incidents {
     this.say(EMERGENCY_PA.doctor, { priority: 2 });
     const crew = people.crew.filter((c) => !c.seated);
     const helpers = crew.length ? crew.slice(0, 2) : people.crew.slice(0, 2);
+    // a doctor's view after a few minutes: most in-flight medical events are fainting spells and settle
+    // (NEJM 2013: 1 in 604 flights, 7.3% diverted); the captain decides with the purser and the doctor
+    const serious = this.r() < (this.mode === 'realistic' ? 0.1 : 0.4);
     this.active.push({ id: 'medical', t: 0, step: (dt, a) => {
       if (a.t > 8 && !a.go) {
         a.go = true;
         helpers.forEach((c, k) => { c.clear(); c.headTarget = { x: patient.seat.x, y: 0.9, z: patient.seat.z }; c.queue({ type: 'walk', x: 0, z: patient.seat.z - 0.5 + k * 0.9, speed: 1.3 }, { type: 'call', fn: (x) => { x.setProp('l', 'bag'); } }); });
         S.ui.toast(`Two cabin crew hurry down the aisle to row ${patient.seat.row} with the oxygen bottle and the first-aid kit.`, 6);
       }
-      if (a.t > 150 && !a.capt) { a.capt = true; this.say(EMERGENCY_PA.medicalCapt); }
+      if (a.t > 150 && !a.capt) { a.capt = true; S.crew.medical(serious); }
       if (a.t > 600 || S.fm.onGround) { helpers.forEach((c) => { c.headTarget = null; c.setProp('l', null); }); a.done = true; }
     } });
   }
@@ -359,18 +335,6 @@ export class Incidents {
   _fog(dt) { const S = this.S; if (S.cabinFog > 0) { S.cabinFog = Math.max(0, S.cabinFog - dt / 25); if (S.cabinScene.fog) S.cabinScene.fog.density = S.cabinFog * 0.35; } }
 
   // ---------------- crash, evacuation, endings ----------------
-  onFlightEvent(e) {
-    const S = this.S, fm = S.fm, A = S.audio;
-    if (e === 'crash') {
-      A.impact(1.2); A.scream(1.2);
-      S.flash = 0.6; S.flashRed = 1;
-      S.director.setLights(0.02, '#ffffff', true);
-      if (!fm.survivable) { this._crashDark = 0.01; this.crashT = 0; this.fatal = true; }
-    }
-    if (e === 'go-around-unstable') this._goAroundFollowUp('unstable');
-    if (e === 'hard-landing') setTimeout(() => this.say(EMERGENCY_PA.hardLanding), 9000);
-  }
-
   _evacuation(dt) {
     const S = this.S, fm = S.fm, A = S.audio;
     if (fm.crashed) {
@@ -459,7 +423,7 @@ export class Incidents {
       fatal: { label: 'Accident', title: 'The flight did not arrive', text: `${S.opts.flight} was destroyed in an accident. In reality this is extraordinarily rare: in 2024 there were 7 fatal accidents in 40.6 million flights worldwide (IATA), and the Airbus A320 family has flown more than 176 million flights since 1988.`, items: [['Time', `${mins} min`], ['Impact speed', `${Math.round((S.fm.crashSpeed || 0) / KT)} kt`], ['Events', this.log.map((l) => l.text).join(', ') || '—']] },
       evacuated: { label: 'Emergency evacuation', title: 'You got out', text: `You left the aircraft ${Math.round(ev?.t || 0)} seconds after the evacuation order. Aircraft are certified so that everyone can get out in 90 seconds with half the exits blocked. ${S.fm.crashed ? 'The aircraft is damaged beyond repair, but it held together — the cabin crew\'s commands and your brace position are what make crashes like this survivable.' : ''}`, items: [['Time on board', `${mins} min`], ['Your evacuation time', `${Math.round(ev?.t || 0)} s`], ['Passengers out before you', String(ev?.out ?? 0)], ['Events', this.log.map((l) => l.text).join(', ') || '—']] },
       towed: { label: S.fm.airport === 'ARN' ? 'Stockholm Arlanda' : 'Copenhagen Kastrup', title: 'Safely on the ground', text: `The aircraft stopped on the runway, the fire services checked it over, and a tug towed you to a stand. ${this.log.length ? 'Your flight had: ' + this.log.map((l) => l.text).join(', ') + '.' : ''} Emergencies like this are trained for in the simulator every six months, and almost always end exactly like this.`, items: [['Time on board', `${mins} min`], ['Landed at', S.fm.airport === 'ARN' ? 'Stockholm Arlanda (returned)' : 'Copenhagen Kastrup']] },
-      rto: { label: 'Stockholm Arlanda · runway 19R', title: 'Take-off rejected', text: 'The crew stopped the aircraft on the runway. After the brakes had cooled, you taxied back to the gate and SAS rebooked everyone onto a later flight to Copenhagen.', items: [['Time on board', `${mins} min`], ['Top speed', `${Math.round(S.fm._rtoV || 110)} kt`]] },
+      rto: { label: `Stockholm Arlanda · runway ${S.atc?.depRwy || '19R'}`, title: 'Take-off rejected', text: 'The crew stopped the aircraft on the runway. After the brakes had cooled, you taxied back to the gate and SAS rebooked everyone onto a later flight to Copenhagen.', items: [['Time on board', `${mins} min`], ['Top speed', `${Math.round(S.fm._rtoV || 110)} kt`]] },
     }[kind];
     if (!texts) return;
     S.ended = true;

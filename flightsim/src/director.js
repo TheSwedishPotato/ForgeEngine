@@ -1,10 +1,9 @@
 // The flight timeline: signs, lights, announcements, crew routines, service and arrival.
 import * as THREE from 'three';
-import { SCRIPTS, SPEAKERS, context } from './speech.js';
+import { SCRIPTS, SPEAKERS, context, describeWeather, runwayWords } from './speech.js';
 import { rowZ, ROWS, BUSINESS_ROWS } from './cabin.js';
 import { clamp, fmtClock, rng, KT, project } from './core.js';
 import { LANDMARKS } from './places.js';
-import { ReferenceFlight } from './flight.js';
 import { EMERGENCY_PA } from './events.js';
 
 export const MENU = [
@@ -56,33 +55,30 @@ export class Director {
     c.hour = this.clockH; c.timeSv = fmtClock(this.clockH).replace(':', '.'); c.timeEn = fmtClock(this.clockH);
     const land = this.eta() - 390 / 3600; c.etaEn = fmtClock(land); c.etaSv = fmtClock(land).replace(':', '.');
     c.mins = Math.max(8, Math.round((fm.m.touchdown - fm.s) / Math.max(fm.v, 120) / 60 / 5) * 5 + 5);
+    Object.assign(c, describeWeather(this.sim.wx), runwayWords(fm.route.arrRwy || this.sim.atc?.arrRwy));
     return c;
   }
-  // Estimated arrival at the gate (local hours): a reference run of the same flight
-  // model gives the time-to-go for every point of the route.
+  // Estimated arrival at the gate (local hours), from the distance still to fly: taxi at about
+  // 15 kt, the last ~190 km of descent and approach at about 125 m/s, the rest at cruise ground speed.
   eta() {
-    const fm = this.sim.fm;
-    if (fm.airport) return this.clockH + ((fm.m.touchdown - fm.s) / Math.max(fm.gs, 70) + 300) / 3600;
-    if (!this._ref) {
-      const ref = new ReferenceFlight({ path: fm.path, m: fm.m }, {});
-      ref.clearTaxi = true; const tab = []; let t = 0;
-      while (ref.phase !== 'arrived' && t < 7200) {
-        ref.update(0.5); t += 0.5; ref.events.length = 0;
-        if (ref.phase === 'hold') ref.clearLineup = true; if (ref.phase === 'lineup') ref.clearTakeoff = true;
-        if (!tab.length || ref.s - tab[tab.length - 1][0] > 500) tab.push([ref.s, t]);
-      }
-      tab.push([fm.m.stand, t]); this._ref = tab;
-    }
-    const tab = this._ref, total = tab[tab.length - 1][1];
-    let i = 0; while (i < tab.length - 2 && tab[i + 1][0] < fm.s) i++;
-    const [s0, t0] = tab[i], [s1, t1] = tab[i + 1];
-    const tNow = t0 + (t1 - t0) * clamp((fm.s - s0) / Math.max(1, s1 - s0), 0, 1);
-    const hold = fm.phase === 'parked' ? 60 : fm.phase === 'hold' ? 40 : 0;
-    return this.clockH + (total - tNow + hold) / 3600;
+    const fm = this.sim.fm, m = fm.m;
+    const d2td = Math.max(0, m.touchdown - fm.s);
+    let tgo = 0;
+    if (fm.onGround && !fm.airport && fm.s < (m.lineup || 0) + 20) tgo = Math.max(0, (m.lineup || 0) - fm.s) / 8 + 90 + this._airTime(m.touchdown - (m.lineup || 0), 0) + 250;
+    else if (!fm.onGround || fm.phase === 'takeoff') tgo = this._airTime(d2td, fm.gs);
+    tgo += Math.max(0, m.stand - Math.max(fm.s, m.touchdown)) / 8 + 40;
+    return this.clockH + tgo / 3600;
   }
+  _airTime(d, gs) { const dDes = Math.min(d, 190000); return dDes / 125 + Math.max(0, d - dDes) / (gs > 150 ? gs : 225); }
+  serviceRunning() { return this.times.serviceStart != null && this.times.serviceDone == null; }
+  // the cabin crew report "cabin secure" and are in their seats; the pilots wait for it before take-off
+  cabinReady() { return (this.crewSeated && this.playerReady()) || this.sim.fast; }
   setSeatbelt(on, chime = true) {
     if (this.seatbelt === on) return;
     this.seatbelt = on; this.sim.cabin.setSigns(on);
+    const fm = this.sim.fm;
+    if (!on && !fm.onGround) this.mark('beltOffAir');
+    if (!on && fm.phase === 'arrived') this.mark('beltOffGate');
     if (chime && !this.sim.fast) this.sim.audio.chime('low'); // Airbus: a single low tone for the signs
     this.sim.ui.toast(on ? 'Fasten seatbelt sign ON' : 'Fasten seatbelt sign OFF');
     if (!on) this.sim.dialogue?.event('seatbelt-off', {});
@@ -233,53 +229,36 @@ export class Director {
       people.crewNamed('purser').queue({ type: 'walk', x: 0.4, z: -2.8 });
     }
     if (t > 4 && this.flag('welcome')) this.say(SCRIPTS.welcome, { onDone: () => this.mark('welcomeDone') });
-    if (t > 12 && this.flag('taxi')) { fm.clearTaxi = true; }
-    if (t > 26 && this.flag('flaps')) { fm.setConfig(2); }
     if (this.after('welcomeDone', 1) && this.flag('demoPos')) { people.safetyDemoPositions(); this.mark('demoPos'); this.scene = 'warm'; }
     if (this.after('demoPos', 7) && this.flag('demo')) this._runDemo();
     if (this.demoDone && this.flag('check')) { this.phaseTag = 'to'; people.cabinCheck((a, row) => this.checkRow(a, row), () => { this.checkDone = true; this.mark('checkDone'); }); }
-    // captain: seats for take-off when the cabin is secure and we approach the runway
-    if (this.checkDone && (fm.phase === 'hold' || fm.s > fm.m.hold - 600) && this.flag('seatsTO')) {
+    // the captain's "cabin crew, seats for take-off" comes near the runway; the crew sit down once the cabin is secure
+    if (this.checkDone && this.times.seatstakeoff != null && this.flag('seatsTO')) {
       this.say(SCRIPTS.seatsTakeoff, { onDone: () => people.crewToJumpSeats(() => { this.crewSeated = true; this.mark('crewSeated'); }) });
       if (this.nightish()) this.setLights(0.18, '#c8d4ff');
     }
-    if (fm.phase === 'hold' && this.times.arnTrafficRoll == null) this.times.arnTrafficRoll = t + 6;
-    if (fm.phase === 'hold' && this.crewSeated && this.times.arnTrafficRoll != null && t > this.times.arnTrafficRoll + 45 && this.playerReady()) fm.clearLineup = true;
-    if (fm.phase === 'lineup' && fm.v < 0.2 && fm.s > fm.m.lineup - 1) { this.mark('linedUp'); if (this.after('linedUp', 14) && this.playerReady()) fm.clearTakeoff = true; }
-    // --- climb ---
-    if (this.after('passing10k', 25) && this.seatbelt && this.flag('beltOff') && !(S.env?.inCloud > 0.3)) {
-      this.setSeatbelt(false); this.mark('beltOff'); people.crewStand(); this.setLights(this.nightish() ? 0.55 : 1.0, this.nightish() ? '#ffe7cc' : '#fff4e6');
-    }
-    if (this.after('beltOff', 20) && this.flag('capPA')) { this.say(SCRIPTS.captainClimb, { onDone: () => this.mark('capDone') }); if (this.eveningish()) this.scene = 'sunset'; }
-    if (this.after('capDone', 8) && this.flag('svcPA')) this.say(SCRIPTS.service, { onDone: () => this.mark('svcPA') });
-    if (this.after('svcPA', 25) && (fm.engFail.some(Boolean) || fm.airport || fm.phase === 'emergency') && !this.flags.service) this.flags.service = true;
-    if (this.after('svcPA', 25) && this.flag('service')) {
+    // --- climb: the pilots switch the seatbelt sign off when it is smooth; then the cabin comes alive ---
+    if (this.times.beltOffAir != null && this.flag('crewUp')) { people.crewStand(); this.setLights(this.nightish() ? 0.55 : 1.0, this.nightish() ? '#ffe7cc' : '#fff4e6'); }
+    if (this.after('beltOffAir', 20) && this.flag('capPA')) { this.say(SCRIPTS.captainClimb, { onDone: () => this.mark('capDone') }); if (this.eveningish()) this.scene = 'sunset'; }
+    if (this.after('capDone', 8) && this.flag('svcPA') && !S.crew?.diverting && !fm.airport) this.say(SCRIPTS.service, { onDone: () => this.mark('svcPA') });
+    if (this.after('svcPA', 25) && (fm.engFail.some(Boolean) || fm.airport || fm.phase === 'emergency' || S.crew?.diverting || this.times.preparelanding != null) && !this.flags.service) this.flags.service = true;
+    if (this.after('svcPA', 25) && !this.seatbelt && this.flag('service')) {
       S.cabin.setCurtain(true);
       people.startService((a, s, run, business) => this.serve(a, s, run, business), () => { this.mark('serviceDone'); S.cabin.setCurtain(false); });
       this.mark('serviceStart');
     }
     if (this.after('serviceDone', 150) && this.flag('trash')) people.collectTrash(() => this.mark('trashDone'));
-    if (this.after('beltOff', 100) && this.flag('habits')) people.cruiseHabits(this.nightish(), P.seat);
-    // a patch of moderate turbulence in cruise on unsettled days
-    const W = S.world.weather;
-    if (this.times.topOfClimb != null && W.turb >= 0.4 && this.flag('turbPlan')) this.times.turbStart = this.times.topOfClimb + 60 + this.r() * 120;
-    if (this.times.turbStart != null && t > this.times.turbStart && this.flag('turb')) {
-      this.say(SCRIPTS.turbulence); this.setSeatbelt(true); fm.turbBoost = 3.2; S.dialogue?.event('turbulence', {});
-      this.times.turbEnd = t + 75 + this.r() * 40;
-    }
-    if (this.times.turbEnd != null && t > this.times.turbEnd && this.flag('turbEnd')) { fm.turbBoost = 1; if (fm.phase === 'cruise') this.setSeatbelt(false); }
-    if (this.times.topOfClimb != null && this.times.crossing == null) this.times.crossing = this.times.topOfClimb + 150;
+    if (this.after('beltOffAir', 100) && this.flag('habits')) people.cruiseHabits(this.nightish(), P.seat);
+    if (this.times.topofclimb != null && this.times.crossing == null) this.times.crossing = this.times.topofclimb + 150;
     // lavatory visits while the belt sign is off
     if (!this.seatbelt && fm.phase !== 'descent' && t > this.nextLav && people.walkers.length < 2 && !people.servicing()) {
       this.nextLav = t + 70 + this.r() * 120;
       const cand = people.pax.filter((p) => !p.away && !p.sleep && (p.seat.letter === 'C' || p.seat.letter === 'D' || this.r() < 0.3));
       if (cand.length) { const p = cand[Math.floor(this.r() * cand.length)]; const lav = p.seat.row <= 10 ? S.cabin.lavs[0] : S.cabin.lavs[1 + Math.floor(this.r() * 2)]; people.lavVisit(p, lav); }
     }
-    // --- descent & approach ---
-    const d2td = fm.m.touchdown - fm.s;
-    if (!fm.onGround && fm.phase !== 'climb' && d2td < 78000 && this.flag('landingPrep')) {
-      this.setSeatbelt(true);
-      S.cabin.allReadingLights(false); fm.turbBoost = 1;
+    // --- descent & approach: the purser's PA and the cabin check follow the pilots' "prepare for landing" ---
+    if (this.times.preparelanding != null && this.flag('landingPrep')) {
+      S.cabin.allReadingLights(false);
       this.say(SCRIPTS.prepareLanding, { onDone: () => {
         this.phaseTag = 'ldg'; people.stowAllTrays(); S.cabin.setCurtain(false);
         for (const b of S.cabin.bins) b.target = 0;
@@ -287,9 +266,7 @@ export class Director {
       } });
       if (this.nightish()) this.setLights(0.18, '#c8d4ff');
     }
-    if (!fm.onGround && d2td < 16000 && this.flag('seatsLdg')) this.say(SCRIPTS.seatsLanding, { priority: 3 });
-    // traffic departing 22R during our approach
-    if (!fm.onGround && d2td < 14000 && this.times.cphTraffic == null) this.times.cphTraffic = t + 5;
+    if (this.times.seatslanding != null && this.flag('seatsLdg')) this.say(SCRIPTS.seatsLanding, { priority: 3 });
     // the bridge remark
     if (!fm.onGround && fm.h < 1500 && fm.phase === 'approach') {
       const b = project(...LANDMARKS.oresundBridgeW); const d = Math.hypot(b.x - fm.pos.x, b.z - fm.pos.z);
@@ -301,8 +278,7 @@ export class Director {
       this.setLights(this.nightish() ? 0.6 : 1.0, '#fff4e6');
       if (!S.fast) setTimeout(() => S.audio.clicks(14, 25), 3000); // impatient passengers unbuckling early
     }
-    if (this.after('parked', 12) && this.flag('shutdown')) { fm.shutdown(); }
-    if (this.after('parked', 20) && this.flag('arrBelt')) {
+    if (this.times.beltOffGate != null && this.flag('arrBelt')) {
       this.setSeatbelt(false); S.audio.clicks(40, 4);
       people.crewStand(); people.standUpAtGate(); S.ext.beaconOff = true;
       this.say(SCRIPTS.disarm, { chime: 'hilo' });
@@ -355,23 +331,23 @@ export class Director {
   }
 
   onFlightEvent(e) {
-    const S = this.sim, fm = S.fm;
+    const S = this.sim, fm = S.fm, atc = S.atc;
     this.mark(e.replace(/-/g, ''));
     S.incidents?.onFlightEvent(e);
+    const dep = atc?.depRwy || '19R', arr = fm.route.arrRwy || atc?.arrRwy || '22L';
     switch (e) {
-      case 'taxi-start': S.ui.toast('Taxiing to runway 19R'); break;
-      case 'holding-point': S.ui.toast('Holding short of runway 19R'); break;
-      case 'lineup-start': S.ui.toast('Lining up on runway 19R'); break;
-      case 'takeoff-roll': S.ui.toast('Take-off roll — runway 19R, Stockholm Arlanda'); S.dialogue?.event('takeoff-roll', {}); break;
-      case 'liftoff': this.mark('liftoff'); break;
+      case 'taxi-start': S.ui.toast(`Taxiing to runway ${dep}`); break;
+      case 'holding-point': S.ui.toast(`Holding short of runway ${dep}`); break;
+      case 'lineup-start': S.ui.toast(`Lining up on runway ${dep}`); break;
+      case 'takeoff-roll': S.ui.toast(`Take-off roll: runway ${dep}, Stockholm Arlanda`); S.dialogue?.event('takeoff-roll', {}); break;
       case 'gear-up': if (!S.fast) { setTimeout(() => S.audio.clunk(0.7), 300); setTimeout(() => S.audio.clunk(0.9), 8500); } S.dialogue?.event('gear-up', {}); break;
-      case 'passing-10000-climb': this.mark('passing10k'); if (!S.fast) S.audio.chime('single'); break;
-      case 'top-of-climb': this.mark('topOfClimb'); break;
-      case 'top-of-descent': this.mark('topOfDescent'); if (!fm.airport && !fm.engFail.some(Boolean)) this.say(SCRIPTS.descent); S.dialogue?.event('descent', {}); break;
+      case 'passing-10000-climb': if (!S.fast) S.audio.chime('single'); break;
+      case 'top-of-descent': if (!fm.airport && !S.crew?.diverting && !fm.engFail.some(Boolean)) this.say(SCRIPTS.descent); S.dialogue?.event('descent', {}); break;
       case 'gear-down': if (!S.fast) { S.audio.clunk(0.8); setTimeout(() => S.audio.clunk(1.0), 7000); } break;
-      case 'touchdown': if (!S.fast) S.audio.touchdown(fm.thump); S.dialogue?.event('touchdown', {}); S.ui.toast(fm.airport === 'ARN' ? 'Touchdown, runway 01L, Stockholm Arlanda' : 'Touchdown, runway 22L, Copenhagen Kastrup'); break;
-      case 'vacated': this.mark('vacated'); break;
-      case 'parked': this.mark('parked'); S.dialogue?.event('parked', {}); S.ui.toast('Arrived at the gate'); break;
+      case 'go-around': S.dialogue?.event('go-around', {}); break;
+      case 'touchdown': if (!S.fast) S.audio.touchdown(fm.thump); S.dialogue?.event('touchdown', {}); S.ui.toast(fm.airport === 'ARN' ? `Touchdown, runway ${arr}, Stockholm Arlanda` : `Touchdown, runway ${arr}, Copenhagen Kastrup`); break;
+      case 'parked': S.dialogue?.event('parked', {}); S.ui.toast('Arrived at the gate'); break;
+      case 'engines-off': setTimeout(() => { S.ext.beaconOff = true; }, S.fast ? 0 : 6000); break;
       default: break;
     }
   }

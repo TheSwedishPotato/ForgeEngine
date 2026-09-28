@@ -37,10 +37,10 @@
         <div><span class="label">Aircraft</span><span class="v">A320neo · LEAP-1A26</span></div>
         <div><span class="label">Registration</span><span class="v">SE-ROX "Roar Viking"</span></div>
         <div><span class="label">Seat</span><span class="v" id="f-seat">22A</span></div>
-        <div><span class="label">Runway out</span><span class="v">19R</span></div>
-        <div><span class="label">Runway in</span><span class="v">22L</span></div>
+        <div><span class="label">Runway out</span><span class="v" id="f-rwy-out">19R</span></div>
+        <div><span class="label">Runway in</span><span class="v" id="f-rwy-in">22L</span></div>
       </div>
-      <p class="blurb">You are already in your seat. The aircraft has just been pushed back from the gate and the engines are running. Buckle up, look out of the window, talk to the person next to you, get a coffee from the trolley, and ride the whole flight in real time: taxi, safety demonstration, take-off, cruise over Sweden, the approach over the Øresund and taxi to the gate in Copenhagen.</p>
+      <p class="blurb">You are already in your seat. The aircraft has just been pushed back from the gate and the engines are running. Buckle up, look out of the window, talk to the person next to you, get a coffee from the trolley, and ride the whole flight in real time. Nothing is scripted: two pilots fly the aircraft through its controls, ATC picks the runways from the wind you set, and everything that happens comes out of the flight physics and the weather.</p>
       <div class="cta">
         <button class="btn primary" id="go">Take your seat</button>
         <span class="fine">Desktop PC · mouse + keyboard · headphones recommended</span>
@@ -54,6 +54,7 @@
       <div class="opt">
         <span class="label">Weather</span>
         <div class="seg" id="opt-weather" role="group" aria-label="Weather"></div>
+        <div class="wxline"><button class="btn small" id="wx-edit" type="button">Adjust wind, cloud, storms…</button><span class="fine mono" id="wx-sum"></span></div>
       </div>
       <div class="opt">
         <span class="label">Choose your seat</span>
@@ -128,8 +129,27 @@
     </div>
     <div class="opt"><label class="label" for="pause-event">Make something happen</label>
       <div class="evrow"><select id="pause-event"></select><button class="btn small" id="pause-event-go" type="button">Go</button></div></div>
-    <div class="cta"><button class="btn primary" id="resume">Back to the flight</button><button class="btn" id="fullscreen">Fullscreen</button></div>
+    <div class="cta"><button class="btn primary" id="resume">Back to the flight</button><button class="btn" id="pause-wx" type="button">Weather…</button><button class="btn" id="fullscreen">Fullscreen</button></div>
   </div>
+</div>
+
+<div id="wxedit" class="overlay" hidden>
+  <div class="dialog wide" role="dialog" aria-labelledby="wx-title">
+    <h2 id="wx-title">Weather</h2>
+    <p class="fine" id="wx-note" style="margin:0">Set the conditions at Arlanda and Kastrup; between them they blend along the route. The pilots read the METARs below, ATC picks the runways from the wind, and the atmosphere turns it all into physics: wind shear near the ground, gusts and turbulence, storm updrafts, downdrafts, lightning and microbursts.</p>
+    <div class="seg" id="wx-presets" role="group" aria-label="Start from"></div>
+    <div id="wx-body"></div>
+    <pre class="metar mono" id="wx-metar"></pre>
+    <div class="cta"><button class="btn primary" id="wx-apply" type="button">Use this weather</button><button class="btn" id="wx-cancel" type="button">Cancel</button></div>
+  </div>
+</div>
+
+<div id="radio" class="panel" hidden>
+  <h3>Flight deck · <span id="radio-unit">Arlanda Ground</span></h3>
+  <div class="fma mono" id="fma"></div>
+  <div class="pfd mono" id="pfd"></div>
+  <div class="rlog" id="radio-log" aria-live="polite"></div>
+  <div class="fine">Press C to close. The radio and the pilots' calls, as on an airline's "channel 9".</div>
 </div>
 
 <div id="maskoverlay" hidden></div>

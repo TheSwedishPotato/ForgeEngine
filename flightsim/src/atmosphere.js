@@ -340,7 +340,8 @@ export class Atmosphere {
     this.visM = inCloud ? 60 + 200 * (1 - (S.cloud ? 1 : 0.5)) : h < 30 + (vis.fog?.top ?? 0) ? sfc.vis : Math.max(sfc.vis, lerp(sfc.vis, 60000, smoothstep(300, 3000, h))) / (1 + this.rain / 8);
     // lightning strikes on the aircraft: in a storm cloud near the freezing level, climbing or descending
     this.strike = null;
-    if (S.cloud && S.cell) {
+    if (this.forceStrike) { this.forceStrike = false; this.strike = { x: pos.x, y: h, z: pos.z }; }
+    else if (S.cloud && S.cell) {
       const st = this.wx.stage(S.cell, this.t);
       const nearFreezing = Math.exp(-(((this.oat + 2) / 9) ** 2));
       const rate = (1 / 150) * Math.max(st.up, st.down) * nearFreezing * (0.5 + S.cell.k);

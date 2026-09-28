@@ -158,6 +158,7 @@ export class FlightModel {
     this._contact = [false, false, false]; this.contactSink = [0, 0, 0]; this._accLong = 0;
     this.sf = { x: 0, y: G, z: 0 }; this.xtk = 0; this.CL = 0; this.qbar = 0;
     this._tmp = {}; this._t2 = {}; this._wind = {};
+    this.wind = this._wind;     // the air's velocity at the aircraft (mean wind + gusts + storm flows), m/s
     this.gearPoint = { x: 0, y: 0, z: 0 };
     this.air = this.atmo.air(0);
     this.alphaProt = 12 * DEG; this.alphaFloor = 13 * DEG; this.alphaMax = 14 * DEG;
@@ -492,6 +493,8 @@ export class FlightModel {
     const gPrev = this.gear;
     const gearRate = this.hyd.green ? 1 / 9 : 1 / 25;
     if (this.gearCmd < this.gear && !this.hyd.green) { /* cannot retract */ } else this.gear += clamp(this.gearCmd - this.gear, -dt * gearRate, dt * gearRate);
+    // a main leg whose uplock or actuator has failed stays in its bay when the others come down
+    if (this.gearFailLeg && this.gear > 0.9 && !this.gearCollapsed[this.gearFailLeg]) this.gearCollapsed[this.gearFailLeg] = true;
     this.gearMoving = Math.abs(this.gear - gPrev) > 1e-7;
     // speed brakes (inhibited in CONF FULL and in alpha protection) and ground spoilers
     const sbInhibit = this.cfgTarget === 5 || this.alpha > this.alphaProt;
@@ -676,7 +679,9 @@ export class FlightModel {
     const final = this._d2td() < 16000;
     const L = final ? Math.max(700, gs * 10) : Math.max(1500, gs * 18);
     const chiDes = chiPath - Math.atan(e / L);
-    const dchi = angleDiff(chiDes, chi);
+    let dchi = angleDiff(chiDes, chi);
+    // pointing the wrong way: commit to one direction of turn instead of dithering at 180 degrees
+    if (Math.abs(dchi) > 150 * DEG) { this._uturn = this._uturn || Math.sign(dchi) || 1; dchi = this._uturn * Math.abs(dchi); } else this._uturn = 0;
     const kk = path.sample(sref + gs * 2, this._t4 || (this._t4 = {})).k;
     const ff = Math.atan(gs * gs * kk / G);
     const turnRate = clamp(dchi * 0.18, -3 * DEG, 3 * DEG);
@@ -717,9 +722,12 @@ export class FlightModel {
   // ---------------- position along the route ----------------
   _track(dt) {
     const gx = this.gearPoint.x, gz = this.gearPoint.z;
+    // along-route position: projection onto the local tangent, never faster than the aircraft can move
+    // (far off a curved route the projection alone can jump to another leg)
+    const maxStep = Math.max(2, Math.hypot(this.V.x, this.V.z) * dt * 2.5);
     for (let k = 0; k < 2; k++) {
       const tp = this.path.sample(this.s, this._tmp);
-      this.s = clamp(this.s + (gx - tp.x) * tp.dx + (gz - tp.z) * tp.dz, 0, this.path.length);
+      this.s = clamp(this.s + clamp((gx - tp.x) * tp.dx + (gz - tp.z) * tp.dz, -maxStep, maxStep), 0, this.path.length);
     }
     // lift-off and touchdown bookkeeping (the crew decides what to do about them)
     const mainWow = this.wow[1] || this.wow[2];
@@ -736,6 +744,10 @@ export class FlightModel {
       this.airborne = false; this.airborneT = 0;
     }
     if (this.touchdownT > 0 && !mainWow && this.t - this.touchdownT < 5 && this.agl > 0.3 && !this.bounceT && this.phase === 'rollout') { this.bounceT = this.t; this.emit('bounce'); }
+    // after a crash: the wreck has come to rest
+    if (this.crashed && !this.crashStopped) {
+      if (Math.hypot(this.V.x, this.V.z) < 0.8 && Math.abs(this.r) < 0.03 && this.onGround) { this._csT = (this._csT || 0) + dt; if (this._csT > 1.5) { this.crashStopped = true; this.emit('crash-stopped'); } } else this._csT = 0;
+    }
   }
 
   // ---------------- physical failures (the events system) ----------------

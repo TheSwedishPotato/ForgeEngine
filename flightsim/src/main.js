@@ -7,7 +7,10 @@ import { FlightModel } from './physics.js';
 import { Atmosphere } from './atmosphere.js';
 import { CabinDynamics } from './cabinphysics.js';
 import { Incidents, SCENARIOS } from './events.js';
-import { World, WEATHER } from './world.js';
+import { World } from './world.js';
+import { Weather, presetWeather, STATIONS } from './weather.js';
+import { ATC } from './atc.js';
+import { Crew } from './crew.js';
 import { Scenery } from './scenery.js';
 import { Cabin, rowZ } from './cabin.js';
 import { Exterior } from './exterior.js';
@@ -22,10 +25,10 @@ import { randomAppearance } from './humans.js';
 import { setMaxAniso } from './textures.js';
 import { PostFX } from './post.js';
 import { VolumetricClouds } from './clouds.js';
-import { sharedUniforms, clamp, lerp, damp, rng, KT, FT, DEG, isa, vnoise1, smoothstep } from './core.js';
+import { sharedUniforms, clamp, lerp, damp, rng, KT, FT, DEG, vnoise1, smoothstep } from './core.js';
 
 const ui = new UI();
-const PHASE_NAMES = { 'go-around': 'Go-around', emergency: 'Emergency descent', forced: 'Forced landing', 'rto-stop': 'Rejected take-off', parked: 'Pushback complete', 'taxi-out': 'Taxiing', hold: 'Holding short 19R', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', cruise: 'Cruise FL360', descent: 'Descending', approach: 'Approach 22L', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
+const PHASE_NAMES = { 'go-around': 'Go-around', emergency: 'Emergency descent', forced: 'Forced landing', 'rto-stop': 'Rejected take-off', 'runway-stop': 'Stopped on the runway', parked: 'Pushback complete', 'taxi-out': 'Taxiing', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', descent: 'Descending', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
 const G_LOCAL = new THREE.Vector3(0, -3.4, 11.5); // main-gear contact point in aircraft coordinates
 // graphics presets
 const QUALITY = {
@@ -53,9 +56,13 @@ const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
 async function boot(o, audio) {
   ui.showStart(false); ui.loading(0.05, 'Starting the engines…'); await frame();
   const dep = DEPARTURES[o.depIndex];
-  const W = WEATHER[o.weather];
   const Q = QUALITY[o.quality] || QUALITY.high;
-  const opts = { ...o, depTime: dep.time, flight: dep.flight, startClock: dep.time + 4 / 60, temps: W.temp };
+  // the weather you set, ATC's runways from its wind, and the air the aircraft flies through
+  const seed = Math.floor(Math.random() * 1e6);
+  const wx = new Weather(o.wx || presetWeather(o.weather), { seed });
+  const atc = new ATC(wx, { seed, events: o.events || 'realistic' });
+  const W = wx.visualAt(STATIONS.ARN.x, STATIONS.ARN.z, 0);
+  const opts = { ...o, depTime: dep.time, flight: dep.flight, startClock: dep.time + 4 / 60, wx, arrRwy: atc.arrRwy };
   const canvas = document.getElementById('view');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, logarithmicDepthBuffer: true, stencil: true, powerPreference: 'high-performance' });
   // render scale: the preset's ratio, capped so the frame buffer stays within a sane pixel budget
@@ -68,15 +75,14 @@ async function boot(o, audio) {
   renderer.shadowMap.enabled = Q.shadows > 0; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   setMaxAniso(Math.min(Q.aniso, renderer.capabilities.getMaxAnisotropy()));
 
-  ui.loading(0.12, 'Planning the route ARN → CPH…'); await frame();
-  const route = buildRoute();
-  const st = W.stratus;
+  ui.loading(0.12, `Planning the route ARN ${atc.depRwy} → CPH ${atc.arrRwy}…`); await frame();
+  const route = buildRoute(atc.depRwy, atc.arrRwy);
   // the air and the aircraft: a rigid-body flight model flown through a turbulent atmosphere
-  const atmo = new Atmosphere(W, { seed: Math.floor(Math.random() * 1e6) });
-  const fm = new FlightModel(route, { atmosphere: atmo, wet: W.rain > 0 });
+  const atmo = new Atmosphere(wx, { seed });
+  const fm = new FlightModel(route, { atmosphere: atmo });
 
   ui.loading(0.2, 'Drawing Sweden and Denmark from map data…'); await frame();
-  const world = new World(renderer, { weather: o.weather, quality: o.quality, localTime: opts.startClock, volumetric: Q.vol > 0 && W.cumulus > 0 });
+  const world = new World(renderer, { weather: W, quality: o.quality, localTime: opts.startClock, volumetric: Q.vol > 0 && W.cumulus > 0 });
   ui.loading(0.45, 'Building Arlanda, Kastrup and the Øresund Bridge…'); await frame();
   const scenery = new Scenery(world, route, { quality: o.quality });
   scenery.pixelRatio = renderer.getPixelRatio();
@@ -125,12 +131,20 @@ async function boot(o, audio) {
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const post = new PostFX(renderer, { width: size.x, height: size.y, quality: o.quality });
   const extCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
-  S = { ui, renderer, route, fm, atmo, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
+  S = { ui, renderer, route, fm, atmo, wx, atc, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
   const director = new Director(S);
   S.director = director;
   S.cabinDyn = new CabinDynamics(S);
   fm.onSubstep = (h) => S.cabinDyn.substep(h);
   S.incidents = new Incidents(S, o.events || 'realistic');
+  // the two pilots: they fly the aircraft through its controls, talk to ATC and tell the cabin what they need
+  S.crew = new Crew(fm, atc, { seed, hooks: {
+    log: (m) => ui.radio(m),
+    seatbelt: (on) => director.setSeatbelt(on),
+    cabinReady: () => director.cabinReady(),
+    emergency: (kind, d) => S.incidents.onCrew(kind, d),
+  } });
+  S.flashSeen = -1; S.wxT = 0;
 
   ui.loading(0.95, 'Closing the doors…'); await frame();
   resize();
@@ -270,10 +284,11 @@ function loop() {
   wc.updateProjectionMatrix(); wc.updateMatrixWorld();
   sharedUniforms.uViewUp.value.set(0, 1, 0).transformDirection(wc.matrixWorldInverse);
   const localH = S.opts.startClock + director.t / 3600;
+  if (dt > 0) weatherTick(realDt);
   const env = S.env = world.update(dt, fm.t, fm, wc.position, wc.quaternion, localH);
   // sunshine heats the ground and drives thermals (weak under overcast, none at night)
   S.atmo.sunHeat = smoothstep(4, 45, world.sunEl ?? 0) * (world.weather.stratus ? 0.25 : 1);
-  S.scenery.update(dt, fm.t, fm, env, director);
+  S.scenery.update(dt, fm.t, fm, env, director, S.atc);
   // landing lights on the terrain
   const llOn = (!fm.onGround && fm.h < 3048) || fm.phase === 'takeoff' || fm.phase === 'lineup' || fm.phase === 'rollout';
   world.u.uLandingLight.value = llOn ? 1 : 0;
@@ -291,7 +306,7 @@ function loop() {
   ext.amb.color.set('#ffd9a8'); ext.amb.intensity = 0.02 + apron;
   S.skyEnv.t += realDt;
   if (S.skyEnv.t > 2.5) { S.skyEnv.t = 0; S.skyEnv.update(env, sunLocal); S.extScene.environment = S.skyEnv.texture; S.worldEnv.update(env, env.sunDir); S.world.scene.environment = S.worldEnv.texture; const gm = S.scenery.mats.glass; gm.envMap = S.worldEnv.texture; gm.envMapIntensity = 1.8; }
-  const humidity = S.world.weather.rain > 0 ? 1 : S.world.weather.cumulus > 0.5 ? 0.6 : S.world.weather.fog ? 0.7 : 0;
+  const humidity = S.atmo.rain > 0.3 || S.atmo.inCloud ? 1 : S.world.weather.cumulus > 0.5 ? 0.6 : S.world.weather.fog ? 0.7 : 0;
   ext.update(dt, fm.t, fm, { nightK: env.nightK, strobes: !fm.onGround || fm.phase === 'takeoff' || fm.phase === 'rollout', beacon: !ext.beaconOff, scan: env.nightK > 0.3 && (fm.onGround || fm.h < 3048), landing: llOn, outside, humidity: fm.h < 2500 ? humidity : 0, sunLocal, direct: sunUp ? clamp(sunI * 1.2, 0, 1) : 0, cabinLight: director.lightLevel, doorL1: cabin.doors.L1.open });
   cabin.updateDust(fm.t, sunI, sunLocal);
   // cabin sun & lights
@@ -305,12 +320,13 @@ function loop() {
   S.cabinScene.environmentIntensity = 0.1 + 0.55 * L + 0.25 * daylight;
   // window pane effects: frost at cruise, rain streaks at low level, condensation in cloud
   const pmu = cabin.paneMat.uniforms;
-  pmu.uTime.value = fm.t; pmu.uSpeed.value = fm.v; pmu.uRain.value = (S.world.weather.rain > 0 && fm.h < (S.world.weather.stratus?.base ?? 800) + 300) ? S.world.weather.rain : 0;
+  // rain on the windows: what is actually falling where the aircraft is (showers under storms, rain below the cloud)
+  pmu.uTime.value = fm.t; pmu.uSpeed.value = fm.v; pmu.uRain.value = damp(pmu.uRain.value, clamp(S.atmo.rain / 8, 0, 1.2), 0.5, dt || 0.0001);
   pmu.uFrost.value = damp(pmu.uFrost.value, fm.h > 9000 ? 0.85 : 0, 0.03, dt || 0.0001);
   pmu.uFog.value = damp(pmu.uFog.value, env.inCloud > 0.4 ? 0.5 : 0, 0.5, dt || 0.0001);
   pmu.uLight.value = clamp(0.25 + daylight * 0.9 + L * 0.2, 0.05, 1.2);
   // ---- audio ----
-  audio.update(realDt, { n1: fm.n1, ias: fm.ias, onGround: fm.onGround, v: fm.v, agl: fm.h, gear: fm.gear, gearMoving: fm.gearMoving, flapsMoving: fm.flapsMoving, spoiler: fm.spoiler, reverse: fm.reverse, rollRumble: fm.rollRumble, bump: fm.bump, rain: pmu.uRain.value * (fm.onGround || fm.h < 1500 ? 1 : 0), packs: true, gasper: player.gasper, doorOpen: cabin.doors.L1.open > 0.5, outside });
+  audio.update(realDt, { n1: fm.n1, ias: fm.ias, onGround: fm.onGround, v: fm.v, agl: fm.h, gear: fm.gear, gearMoving: fm.gearMoving, flapsMoving: fm.flapsMoving, spoiler: fm.spoiler, reverse: fm.reverse, rollRumble: fm.rollRumble, bump: fm.bump, rain: pmu.uRain.value + (S.atmo.hail || 0) * 0.8, packs: true, gasper: player.gasper, doorOpen: cabin.doors.L1.open > 0.5, outside });
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion), up = new THREE.Vector3(0, 1, 0).applyQuaternion(cam.quaternion);
   audio.setListener(cam.position, fwd, up);
   audio.babble = fm.phase === 'takeoff' || fm.phase === 'flare' ? 0.05 : fm.phase === 'arrived' ? 0.7 : 0.28;
@@ -331,10 +347,11 @@ function loop() {
   S.ui.maskOverlay(!!player.maskOn && S.view === 'cabin');
   // ---- UI ----
   if (!outside) hover(); else { S.hovered = null; ui.prompt(null); }
-  const phaseName = fm.crashed ? 'Emergency' : fm.airport === 'ARN' && fm.phase === 'approach' ? 'Approach 01L, Arlanda' : fm.airport === 'ARN' && fm.phase === 'taxi-in' ? 'Taxiing to the stand' : fm.airport === 'ARN' && fm.phase === 'arrived' ? 'Back at Arlanda' : (fm.phase === 'cruise' ? `Cruise FL${String(Math.round(fm.h / FT / 1000) * 10).padStart(3, '0')}` : PHASE_NAMES[fm.phase] || fm.phase);
+  const arrR = fm.route.arrRwy || S.atc.arrRwy;
+  const phaseName = fm.crashed ? 'Emergency' : fm.phase === 'hold' ? `Holding short ${S.atc.depRwy}` : fm.phase === 'approach' ? `Approach ${arrR}, ${fm.airport === 'ARN' ? 'Arlanda' : 'Kastrup'}` : fm.airport === 'ARN' && fm.phase === 'taxi-in' ? 'Taxiing to the stand' : fm.airport === 'ARN' && fm.phase === 'arrived' ? 'Back at Arlanda' : (fm.phase === 'cruise' ? `Cruise FL${String(Math.round(fm.altInd / FT / 1000) * 10).padStart(3, '0')}` : PHASE_NAMES[fm.phase] || fm.phase);
   ui.hud({ flight: S.opts.flight, clock: localH, phase: phaseName, belt: director.seatbelt, speed: S.speed });
   S.lastMap -= realDt;
-  if (S.lastMap <= 0 && ui.phoneOpen()) { S.lastMap = 0.5; ui.updatePhone(phoneState(localH)); }
+  if (S.lastMap <= 0 && (ui.phoneOpen() || ui.radioOpen())) { S.lastMap = 0.25; if (ui.phoneOpen()) ui.updatePhone(phoneState(localH)); ui.flightDeck(deckState()); }
   // end condition: walk out of the front door
   if (cabin.doors.L1.open > 0.9 && player.state === 'standing' && player.pos.z < -1.7 && player.pos.x < -0.7 && !S.ended) endFlight();
   if (S.photoPending) takePhoto();
@@ -437,8 +454,8 @@ function phoneState(localH) {
   const { fm, route, director } = S;
   if (!S._routePts) { S._routePts = []; const t = {}; for (let s = 0; s <= route.path.length; s += 2500) { route.path.sample(s, t); S._routePts.push([t.x, t.z, s]); } }
   const pts = S._routePts; let idx = 0; while (idx < pts.length - 1 && pts[idx + 1][2] < fm.s) idx++;
-  const oat = isa(fm.h).T - 273.15 + (S.opts.temps?.[0] ?? 14) - 15;
-  return { clock: localH, onGround: fm.onGround, altFt: fm.h / FT + (fm.onGround ? 137 : 0), gs: fm.v / KT, eta: director.eta(), hdg: ((fm.heading / DEG) + 360) % 360, oat, distKm: (route.m.stand - fm.s) / 1000, routePts: pts, flownIdx: idx, x: fm.pos.x, z: fm.pos.z };
+  const oat = S.atmo.oat;
+  return { clock: localH, onGround: fm.onGround, altFt: fm.altInd / FT, gs: fm.v / KT, eta: director.eta(), hdg: ((fm.heading / DEG) + 360) % 360, oat, distKm: (route.m.stand - fm.s) / 1000, routePts: pts, flownIdx: idx, x: fm.pos.x, z: fm.pos.z };
 }
 
 // ---------------- interaction ----------------
@@ -543,6 +560,7 @@ function setupInput() {
   });
   window.addEventListener('pointerup', () => { drag = null; });
   const keyDown = (code) => {
+    if (S.ui.weatherOpen()) return;
     if (S.ui.pauseOpen() && code !== 'Escape') return;
     const P = S.player, D = S.director;
     if (/^Digit[1-5]$/.test(code)) { if (ui.pickNumber(+code.slice(5))) return; }
@@ -556,6 +574,7 @@ function setupInput() {
       case 'KeyY': S.audio.pop(); ui.toast('*swallow* — ears cleared', 2); break;
       case 'KeyH': pause(true); break;
       case 'KeyV': setView(S.view === 'outside' ? 'cabin' : 'outside'); break;
+      case 'KeyC': ui.toggleRadio(); S.lastMap = 0; break;
       case 'KeyO': toggleMask(); break;
       case 'KeyP': S.ui.showHUD(false); S.photoPending = true; S.audio.clunk(0.15); break; // the flash comes after the capture
       case 'F11': case 'KeyU': toggleFullscreen(); break;
@@ -654,6 +673,7 @@ function setupPause() {
     setTimeout(() => { fastForward(sk.cond); ui.loading(1); pause(false); }, 50);
   });
   document.getElementById('resume').onclick = () => pause(false);
+  document.getElementById('pause-wx').onclick = () => ui.openWeather(S.wx.s, { live: true, onApply: (st) => applyWeather(st) });
   document.getElementById('vol').oninput = (e) => S.audio.setVolume(+e.target.value);
   document.getElementById('sens').value = String(S.player.sensitivity); document.getElementById('sens').oninput = (e) => { S.player.sensitivity = +e.target.value; };
   document.getElementById('fov').value = String(S.player.camera.fov); document.getElementById('fov').oninput = (e) => { S.player.camera.fov = +e.target.value; S.player.camera.updateProjectionMatrix(); };
@@ -670,10 +690,59 @@ function endFlight() {
   const d = S.director;
   const mins = Math.round(d.t / 60);
   S.ui.showEnd({
-    text: `You flew ${S.opts.flight} from Stockholm Arlanda to Copenhagen Kastrup on Sunday 10 May 2026, in seat ${S.opts.seat} of SAS A320neo SE-ROX "Roar Viking".`,
-    items: [['Time on board', `${mins} min`], ['Distance', '557 km'], ['Cruise', 'FL360'], ['Coffees', String(d.stats.coffee)], ['Spent on board', `${d.stats.spent} kr`], ['Chats', String(d.stats.talked)]],
+    text: `You flew ${S.opts.flight} from Stockholm Arlanda (runway ${S.atc.depRwy}) to ${S.fm.airport === 'ARN' ? 'Stockholm Arlanda and back' : `Copenhagen Kastrup (runway ${S.fm.route.arrRwy})`} on Sunday 10 May 2026, in seat ${S.opts.seat} of SAS A320neo SE-ROX "Roar Viking". Captain ${S.crew.capt.name} and First Officer ${S.crew.fo.name} flew it by hand and by autopilot${S.crew.goArounds ? `, with ${S.crew.goArounds} go-around${S.crew.goArounds > 1 ? 's' : ''}` : ''}; touchdown at ${Math.round((S.fm.touchdownSink || 0) / FT * 60)} ft/min.`,
+    items: [['Time on board', `${mins} min`], ['Distance', `${Math.round(S.fm.s / 1000 + (S.fm.airport ? 0 : 0))} km flown on this route`], ['Roughest moment', `${(S.maxG || 1).toFixed(2)} g`], ['Coffees', String(d.stats.coffee)], ['Spent on board', `${d.stats.spent} kr`], ['Chats', String(d.stats.talked)]],
   });
   if (document.pointerLockElement) { S._noPauseOnUnlock = true; document.exitPointerLock(); }
+}
+
+// ---------------- weather: follows the aircraft, can be changed live, storms flash and rumble ----------------
+function weatherTick(realDt) {
+  const { wx, atmo, fm, world } = S;
+  S.maxG = Math.max(S.maxG || 1, fm.onGround ? 1 : fm.nz);
+  S.wxT -= realDt;
+  if (S.wxT <= 0) { S.wxT = 2; setVisualWeather(); }
+  // lightning: the newest flash lights the clouds around it; thunder follows at the speed of sound
+  const f = wx.flashes; let best = null;
+  for (let i = f.length - 1; i >= 0; i--) {
+    const e = f[i]; if (e.t <= S.flashSeen) break;
+    const d = Math.hypot(e.x - fm.pos.x, e.y - fm.pos.y, e.z - fm.pos.z);
+    if (d < 150000) { if (!best || e.t > best.t) best = { ...e, d }; if (!S.fast) S.audio.thunder(d, S.view === 'outside' ? 1 : fm.onGround ? 0.8 : 0.5); }
+  }
+  if (f.length) S.flashSeen = f[f.length - 1].t;
+  if (best) { S.flashNow = best; S.flashT = 0; if (best.d < 4000) S.flash = Math.max(S.flash, 0.5 * (1 - best.d / 4000)); }
+  const u = world.u.uFlash.value;
+  if (S.flashNow) {
+    S.flashT += realDt;
+    const k = S.flashT < 0.35 ? S.flashNow.i * (0.6 + 0.4 * Math.sin(S.flashT * 90)) * (S.flashNow.cg ? 1.4 : 1) : 0;
+    u.set(S.flashNow.x, S.flashNow.y, S.flashNow.z, Math.max(0, k));
+    if (S.flashT > 0.35) S.flashNow = null;
+  } else u.w = 0;
+}
+function setVisualWeather() {
+  const V = S.wx.visualAt(S.fm.pos.x, S.fm.pos.z, S.atmo.t);
+  if (S.world.setWeather(V)) stencilTest(S.world.scene);
+  // volumetric cumulus appear when there is cumulus to draw
+  if (S.Q.vol > 0 && V.cumulus > 0 && !S.vol) { S.vol = new VolumetricClouds(S.world, { steps: S.Q.vol }); S.world.u.uVol.value = 1; }
+  if (S.vol) { const u = S.vol.mat.uniforms; u.uBase.value = V.cuBase; u.uTop.value = V.cuTop; if (V.cumulus <= 0) { S.vol = null; S.world.u.uVol.value = 0; } }
+}
+// New weather from the pause menu: the atmosphere, the pilots' plans and the picture all follow it.
+function applyWeather(state) {
+  S.wx.set(state);
+  S.atmo.refresh?.();
+  setVisualWeather();
+  const fm = S.fm;
+  if (!['flare', 'rollout'].includes(fm.phase) && !fm.onGround) S.crew._planApproach();
+  S.ui.toast(`New weather: ${S.wx.metar('CPH', 4.3, S.atc.arrRwy)}`, 6);
+}
+// What the flight deck panel shows
+function deckState() {
+  const { fm, atc } = S; const f = fm.afs.fma();
+  const w = S.fm.wind || {};
+  const wd = Math.hypot(w.wx || 0, w.wz || 0);
+  const from = ((Math.atan2(-(w.wx || 0), (w.wz || 0)) / DEG) + 360) % 360;
+  return { unit: atc.unit, fma: f, ias: fm.ias, alt: fm.altInd / FT, std: fm.baro == null, vs: fm.vs / FT * 60, hdg: ((fm.heading / DEG) + 360) % 360, n1: [fm.n1[0] * 100, fm.n1[1] * 100],
+    flaps: ['0', '1', '2', '3', 'FULL'][fm.ctl.flapLever] + (fm.ctl.flapLever === 1 && fm.flap > 1 ? '+F' : ''), gear: fm.gear > 0.99 ? 'DOWN' : fm.gear < 0.01 ? 'UP' : 'moving', wind: wd < 0.5 ? 'calm' : `${String(Math.round(from)).padStart(3, '0')}°/${Math.round(wd / KT)}` };
 }
 
 // dev hook for automated screenshots
@@ -683,3 +752,4 @@ window.__ff = (cond) => fastForward(cond);
 window.__freeze = (v) => { if (!S) return; S.renderer.setAnimationLoop(v ? null : loop); };
 window.__renderOnce = () => { if (S) loop(); };
 window.__setView = (v) => setView(v);
+window.__weather = (st) => applyWeather(st);

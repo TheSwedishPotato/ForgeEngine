@@ -179,14 +179,25 @@ export function buildReturnRoute(p, dir, rwy = '01L') {
   const uCur = rel.dot(fa.u), vCur = rel.dot(fa.v);
   const pts = [], rad = [];
   const add = (q, r = 0) => { pts.push(q); rad.push(r); };
+  // landing coordinates: a along the landing direction from the threshold, c to the right of it
+  const land19 = rwy === '19R';
+  const toW = (a, c) => (land19 ? fa.to(a, c) : fa.to(L - a, -c));
+  const aC = land19 ? uCur : L - uCur, cC = land19 ? vCur : -vCur;
+  const side = cC >= 0 ? 1 : -1;       // the pattern is flown on the side we are already on
+  const FIN = 20000;                   // final approach about 11 NM, as ATC vectors a return
   add(cur);
-  add(cur.clone().add(new THREE.Vector2(dir.x, dir.z).normalize().multiplyScalar(2500)), 0);
+  add(cur.clone().add(new THREE.Vector2(dir.x, dir.z).normalize().multiplyScalar(3000)), 3500);
+  if (aC < -FIN - 5000) {
+    // already out on the approach side: across to a base leg, then the final
+    add(toW(Math.max(aC * 0.5, -FIN - 16000), side * 7500), 3500);
+  } else {
+    // beside or beyond the airport: a downwind leg on our side (time for the checklists)
+    add(toW(Math.max(aC, 3000), side * 7500), 3500);
+  }
+  add(toW(-FIN, side * 7500), 3200);   // base turn
+  add(toW(-FIN, 0), 3000);             // onto the final, about 9 NM out
   let thr, exit;
-  if (rwy === '19R') {
-    // final from the north, landing south on 19R
-    add(fa.to(Math.max(uCur, 4000) + 6000, 7500), 3200);
-    add(fa.to(-20000, 7500), 3200);
-    add(fa.to(-20000, 0), 3000);
+  if (land19) {
     add(fa.to(60, 0));
     add(fa.to(1850, 0), 60);
     add(fa.to(2040, ARN_LAYOUT.taxiwayZ), 45);
@@ -194,11 +205,6 @@ export function buildReturnRoute(p, dir, rwy = '01L') {
     add(fa.to(1580, -480));
     thr = fa.to(0, 0); exit = fa.to(1850, 0);
   } else {
-    const base = Math.max(uCur + 14000, L + 30000); // time for the checklists on the way out
-    add(fa.to(base, vCur), 3200);
-    add(fa.to(base, 7500), 3200);
-    add(fa.to(L + 20000, 7500), 3200);
-    add(fa.to(L + 20000, 0), 3000);
     add(fa.to(L - 60, 0));          // runway 01L threshold (south end), landing northbound
     add(fa.to(1250, 0), 60);        // end of the landing roll
     add(fa.to(1080, -190), 45);     // exit onto the parallel taxiway, then back south along it
@@ -206,11 +212,31 @@ export function buildReturnRoute(p, dir, rwy = '01L') {
     add(fa.to(1580, -480));         // stand by pier F
     thr = fa.to(L, 0); exit = fa.to(1250, 0);
   }
+  splitSharpTurns(pts, rad, 3);
   const path = new Path(pts, rad);
   const m = { hold: 0, lineup: 0, arnRwyEnd: 0 };
   m.thr = path.locate(thr); m.touchdown = m.thr + 300;
-  m.exit = path.locate(exit); m.crossing = m.exit; m.stand = path.length;
+  m.exit = path.locate(exit, m.thr - 100); m.crossing = m.exit; m.stand = path.length;
   return { path, m, airport: 'ARN', arr: runwayInfo('ESSA', rwy), arrRwy: rwy, dep: runwayInfo('ESSA', rwy === '01L' ? '19R' : '01L'), depRwy: rwy === '01L' ? '19R' : '01L', keys: { pts, rad, thrIdx: keyIdx(pts, exit, 0), exitPt: exit } };
+}
+
+// An airliner cannot fly a hairpin: where the route turns by more than about 100 degrees, add a
+// point that splits the turn (a teardrop), so every corner is one the aircraft can fly at 250 kt.
+function splitSharpTurns(pts, rad, lastAir, R = 5000) {
+  for (let iter = 0; iter < 6; iter++) {
+    let changed = false;
+    for (let i = 1; i <= Math.min(lastAir, pts.length - 2); i++) {
+      const a = pts[i].clone().sub(pts[i - 1]).normalize(), b = pts[i + 1].clone().sub(pts[i]).normalize();
+      const turn = Math.acos(clamp(a.dot(b), -1, 1));
+      if (turn < 100 * DEG) continue;
+      const sgn = a.x * b.y - a.y * b.x >= 0 ? 1 : -1;
+      const perp = sgn > 0 ? new THREE.Vector2(-a.y, a.x) : new THREE.Vector2(a.y, -a.x);
+      const w = pts[i].clone().addScaledVector(a, R).addScaledVector(perp, R * 1.2);
+      pts.splice(i + 1, 0, w); rad.splice(i + 1, 0, 3500); rad[i] = Math.max(rad[i], 3500);
+      lastAir++; changed = true; break;
+    }
+    if (!changed) break;
+  }
 }
 
 // A320neo configuration table: slat/flap degrees, CL0 increment, max speed (kt)

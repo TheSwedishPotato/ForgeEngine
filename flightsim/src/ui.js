@@ -1,7 +1,8 @@
 // DOM user interface: start screen, HUD, captions, panels, phone map, safety card.
 import { ROWS, LETTERS, BUSINESS_ROWS, EXIT_ROWS } from './cabin.js';
 import { DEPARTURES } from './places.js';
-import { WEATHER } from './world.js';
+import { PRESET_LIST, presetWeather, Weather, CAT_LEVELS, STORM_LEVELS, STORM_WHERE } from './weather.js';
+import { ATC } from './atc.js';
 import { GEO } from '../data/geodata.js';
 import { fmtClock, project, unproject, clamp } from './core.js';
 import { MENU } from './director.js';
@@ -10,8 +11,10 @@ const $ = (id) => document.getElementById(id);
 
 export class UI {
   constructor() {
-    this.opts = { depIndex: 0, weather: 'fair', seat: '22A', load: 0.85, lang: 'sv+en', quality: 'high', speed: 1, voice: true, sensitivity: 1, fov: 68, events: 'realistic' };
-    try { const saved = JSON.parse(localStorage.getItem('sk1415-opts-v2') || 'null'); if (saved) Object.assign(this.opts, saved); } catch (e) { /* storage unavailable */ }
+    this.opts = { depIndex: 0, weather: 'fair', wx: null, seat: '22A', load: 0.85, lang: 'sv+en', quality: 'high', speed: 1, voice: true, sensitivity: 1, fov: 68, events: 'realistic' };
+    try { const saved = JSON.parse(localStorage.getItem('sk1415-opts-v3') || 'null'); if (saved) Object.assign(this.opts, saved); } catch (e) { /* storage unavailable */ }
+    if (!PRESET_LIST.some((p) => p.id === this.opts.weather)) this.opts.weather = 'fair';
+    this.radioLog = [];
     this.handlers = {};
     this._buildStart();
     this.toastsEl = $('toasts'); this.capEl = $('captions');
@@ -31,7 +34,9 @@ export class UI {
   _buildStart() {
     const o = this.opts;
     this._seg($('opt-time'), DEPARTURES.map((d, i) => ({ label: d.label, value: i })), o.depIndex, (v) => { o.depIndex = v; this._refreshFacts(); });
-    this._seg($('opt-weather'), Object.entries(WEATHER).map(([k, w]) => ({ label: w.label, value: k })), o.weather, (v) => { o.weather = v; });
+    this._seg($('opt-weather'), PRESET_LIST.map((w) => ({ label: w.label, value: w.id })), o.wx ? null : o.weather, (v) => { o.weather = v; o.wx = null; this._refreshWx(); });
+    $('wx-edit').onclick = () => this.openWeather(o.wx || presetWeather(o.weather), { live: false, onApply: (st) => { o.wx = st; for (const c of $('opt-weather').children) c.setAttribute('aria-pressed', 'false'); this._refreshWx(); } });
+    this._refreshWx();
     // seat map: columns = rows, 7 cells (F E D aisle C B A from top)
     const sm = $('seatmap'); sm.innerHTML = '';
     const order = ['F', 'E', 'D', null, 'C', 'B', 'A'];
@@ -54,12 +59,121 @@ export class UI {
     $('opt-speed').onchange = (e) => { o.speed = +e.target.value; };
     $('opt-voice').onchange = (e) => { o.voice = e.target.checked; };
     if ($('opt-events')) { $('opt-events').value = o.events || 'realistic'; $('opt-events').onchange = (e) => { o.events = e.target.value; }; }
-    $('go').onclick = () => { try { localStorage.setItem('sk1415-opts-v2', JSON.stringify(o)); } catch (e) { /* ignore */ } this.emit('start', { ...o }); };
+    $('go').onclick = () => { try { localStorage.setItem('sk1415-opts-v3', JSON.stringify(o)); } catch (e) { /* ignore */ } this.emit('start', { ...o }); };
     this._refreshFacts();
     // keys list for the pause screen
-    const keys = [['Mouse', 'Look around (click the view first)'], ['Click / E', 'Use what you look at'], ['B', 'Fasten / unfasten seatbelt'], ['F', 'Tray table'], ['R', 'Recline seat'], ['T', 'Talk to your neighbour'], ['1–5', 'Pick a reply'], ['Space', 'Stand up / sit down'], ['W A S D', 'Walk (standing) / lean (seated)'], ['M', 'Phone: flight map'], ['V', 'Outside camera (drag to orbit, scroll to zoom)'], ['P', 'Take a photo'], ['Y', 'Swallow (clear your ears)'], ['+ / −', 'Change time speed'], ['U', 'Fullscreen'], ['Esc', 'Pause']];
+    const keys = [['Mouse', 'Look around (click the view first)'], ['Click / E', 'Use what you look at'], ['B', 'Fasten / unfasten seatbelt'], ['F', 'Tray table'], ['R', 'Recline seat'], ['T', 'Talk to your neighbour'], ['1–5', 'Pick a reply'], ['Space', 'Stand up / sit down'], ['W A S D', 'Walk (standing) / lean (seated)'], ['M', 'Phone: flight map'], ['V', 'Outside camera (drag to orbit, scroll to zoom)'], ['C', 'Flight deck and radio (what the pilots and ATC say)'], ['P', 'Take a photo'], ['Y', 'Swallow (clear your ears)'], ['+ / −', 'Change time speed'], ['U', 'Fullscreen'], ['Esc', 'Pause']];
     $('keys').innerHTML = keys.map(([k, v]) => `<div><kbd>${k}</kbd> ${v}</div>`).join('');
   }
+  // the runways ATC will use and a one-line summary for the chosen weather
+  _refreshWx() {
+    const st = this.opts.wx || presetWeather(this.opts.weather);
+    try {
+      const wx = new Weather(st), atc = new ATC(wx);
+      $('f-rwy-out').textContent = atc.depRwy; $('f-rwy-in').textContent = atc.arrRwy;
+      const a = st.arn, c = st.cph, w = (x) => (x.wspd < 1 ? 'calm' : `${String(Math.round(x.wdir / 10) * 10 || 360).padStart(3, '0')}/${Math.round(x.wspd)}${x.gust > x.wspd + 5 ? 'G' + Math.round(x.gust) : ''} kt`);
+      $('wx-sum').textContent = `${this.opts.wx ? 'Custom · ' : ''}ARN ${w(a)} · CPH ${w(c)}${st.storms ? ' · thunderstorms' : ''}`;
+    } catch (e) { /* keep the defaults */ }
+  }
+
+  // ---------- weather editor ----------
+  openWeather(state, { live = false, onApply } = {}) {
+    const st = JSON.parse(JSON.stringify(state));
+    for (let i = st.clouds.length; i < 3; i++) st.clouds.push({ cover: 'SKC', base: 3000 + i * 3000, top: 5000 + i * 3000, type: 'CU' });
+    st.cirrus = [0, 0.2, 0.45, 0.7].reduce((b, v) => (Math.abs(v - (st.cirrus ?? 0.2)) < Math.abs(b - (st.cirrus ?? 0.2)) ? v : b), 0);
+    $('wxedit').hidden = false;
+    $('wx-note').dataset.live = live ? '1' : '';
+    this._seg($('wx-presets'), PRESET_LIST.map((w) => ({ label: w.label, value: w.id })), null, (v) => { const p = presetWeather(v); Object.keys(st).forEach((k) => delete st[k]); Object.assign(st, p); for (let i = st.clouds.length; i < 3; i++) st.clouds.push({ cover: 'SKC', base: 3000 + i * 3000, top: 5000 + i * 3000, type: 'CU' }); build(); });
+    const VIS = [100, 150, 200, 300, 400, 550, 800, 1000, 1500, 2000, 3000, 5000, 7000, 10000, 20000, 45000, 70000];
+    const visLabel = (v) => (v >= 10000 ? `${v / 1000} km` : `${v} m`);
+    const num = (obj, k, min, max, step = 1) => `<input type="number" data-o="${obj}" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${Math.round(this._get(st, obj)[k] * 10) / 10}">`;
+    const sel = (obj, k, opts) => `<select data-o="${obj}" data-k="${k}">${opts.map(([v, l]) => `<option value="${v}"${String(this._get(st, obj)[k]) === String(v) ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+    const visSel = (obj) => { const cur = this._get(st, obj).vis; const near = VIS.reduce((b, v) => (Math.abs(Math.log(v / cur)) < Math.abs(Math.log(b / cur)) ? v : b), VIS[0]); this._get(st, obj).vis = near; return sel(obj, 'vis', VIS.map((v) => [v, visLabel(v)])); };
+    const PREC = [[0, 'none'], [1, 'light rain'], [2, 'moderate rain'], [3, 'heavy rain']];
+    const row = (label, f) => `<label>${label}</label>${f('arn')}${f('cph')}`;
+    const build = () => {
+      $('wx-body').innerHTML = `
+        <div class="wxgrid">
+          <span></span><span class="h">Arlanda (ESSA)</span><span class="h">Kastrup (EKCH)</span>
+          ${row('Wind from (°)', (o) => num(o, 'wdir', 0, 360, 10))}
+          ${row('Wind speed (kt)', (o) => num(o, 'wspd', 0, 70, 1))}
+          ${row('Gusts to (kt)', (o) => num(o, 'gust', 0, 90, 1))}
+          ${row('Visibility', (o) => visSel(o))}
+          ${row('Temperature (°C)', (o) => num(o, 'temp', -30, 40, 1))}
+          ${row('Dew point (°C)', (o) => num(o, 'dew', -35, 35, 1))}
+          ${row('QNH (hPa)', (o) => num(o, 'qnh', 940, 1060, 1))}
+          ${row('Precipitation', (o) => sel(o, 'precip', PREC))}
+        </div>
+        <div class="wxsec">Cloud layers (feet above the ground)</div>
+        <div class="wxclouds">${st.clouds.map((c, i) => `
+          <label>Layer ${i + 1}${sel(`clouds.${i}`, 'cover', [['SKC', 'none'], ['FEW', 'few'], ['SCT', 'scattered'], ['BKN', 'broken'], ['OVC', 'overcast']])}</label>
+          <label>Type${sel(`clouds.${i}`, 'type', [['CU', 'cumulus'], ['ST', 'stratus']])}</label>
+          <label>Base${num(`clouds.${i}`, 'base', 100, 30000, 100)}</label>
+          <label>Top${num(`clouds.${i}`, 'top', 200, 40000, 100)}</label>`).join('')}
+        </div>
+        <div class="wxsec">Upper air and thunderstorms</div>
+        <div class="wxup">
+          <label>Jet stream from (°)${num('', 'jetDir', 0, 360, 10)}</label>
+          <label>Jet stream (kt)${num('', 'jetKt', 0, 220, 5)}</label>
+          <label>Clear-air turbulence${sel('', 'cat', CAT_LEVELS.map((l, i) => [i, l]))}</label>
+          <label>Cirrus${sel('', 'cirrus', [[0, 'none'], [0.2, 'a little'], [0.45, 'some'], [0.7, 'a lot']])}</label>
+          <label>Thunderstorms${sel('', 'storms', STORM_LEVELS.map((l, i) => [i, l === 'line' ? 'squall line' : l]))}</label>
+          <label>Where${sel('', 'stormWhere', STORM_WHERE.map((w) => [w, { anywhere: 'anywhere', route: 'along the route', ARN: 'around Arlanda', CPH: 'around Kastrup' }[w]]))}</label>
+          <label>Storm tops (ft)${num('', 'stormTopFt', 20000, 50000, 1000)}</label>
+        </div>`;
+      for (const el of $('wx-body').querySelectorAll('[data-k]')) el.oninput = el.onchange = () => { const o = this._get(st, el.dataset.o); const v = el.value; o[el.dataset.k] = el.tagName === 'SELECT' && isNaN(+v) ? v : +v; preview(); };
+      preview();
+    };
+    const clean = () => {
+      const out = JSON.parse(JSON.stringify(st));
+      for (const k of ['arn', 'cph']) { const a = out[k]; a.dew = Math.min(a.dew, a.temp); a.gust = a.gust > a.wspd ? a.gust : 0; a.wdir = ((a.wdir % 360) + 360) % 360; }
+      out.clouds = out.clouds.filter((c) => c.cover !== 'SKC').map((c) => ({ ...c, top: Math.max(c.top, c.base + 300) }));
+      out.label = 'Custom';
+      return out;
+    };
+    const preview = () => {
+      try {
+        const out = clean(); const wx = new Weather(out), atc = new ATC(wx);
+        const utc = 4.3;
+        $('wx-metar').textContent = `${wx.metar('ARN', utc, atc.depRwy)}
+${wx.metar('CPH', utc, atc.arrRwy)}
+Runways in use: Arlanda ${atc.depRwy} for take-off, Kastrup ${atc.arrRwy} for landing${live ? ' (once you are airborne, the take-off runway stays; the landing runway can still change until about 90 km out)' : ''}.`;
+      } catch (e) { $('wx-metar').textContent = ''; }
+    };
+    build();
+    $('wx-apply').onclick = () => { $('wxedit').hidden = true; onApply?.(clean()); };
+    $('wx-cancel').onclick = () => { $('wxedit').hidden = true; };
+  }
+  weatherOpen() { return !$('wxedit').hidden; }
+  _get(st, path) { if (!path) return st; return path.split('.').reduce((o, k) => o[k], st); }
+
+  // ---------- flight deck and radio ----------
+  radio(m) {
+    this.radioLog.push(m); if (this.radioLog.length > 80) this.radioLog.shift();
+    if (!$('radio').hidden) this._appendRadio(m);
+  }
+  _appendRadio(m) {
+    const el = $('radio-log'); const d = document.createElement('div');
+    const cls = m.kind === 'atc' ? (m.who === 'SK1415' ? 'us' : 'atc') : m.kind;
+    d.className = `rl ${cls}`; d.innerHTML = `<span class="who">${escapeHtml(m.who)}</span>${escapeHtml(m.text)}`;
+    el.appendChild(d); while (el.children.length > 80) el.firstChild.remove();
+    el.scrollTop = el.scrollHeight;
+  }
+  toggleRadio(v) {
+    const p = $('radio'); p.hidden = v === undefined ? !p.hidden : !v;
+    if (!p.hidden) { $('radio-log').innerHTML = ''; for (const m of this.radioLog) this._appendRadio(m); }
+    return !p.hidden;
+  }
+  radioOpen() { return !$('radio').hidden; }
+  flightDeck(s) {
+    if ($('radio').hidden) return;
+    $('radio-unit').textContent = s.unit;
+    $('fma').innerHTML = [s.fma.thr, s.fma.vert, s.fma.lat].map((x) => `<span>${escapeHtml(x || ' ')}</span>`).join('') + `<span class="ap">${escapeHtml(s.fma.ap || 'AP OFF')}</span>`;
+    const c = (l, v) => `<div>${l}<b>${v}</b></div>`;
+    $('pfd').innerHTML = c('IAS', `${Math.round(s.ias)} kt`) + c(s.std ? 'ALT (STD)' : 'ALT (QNH)', `${Math.round(s.alt / 10) * 10} ft`) + c('V/S', `${Math.round(s.vs / 50) * 50}`) + c('HDG', `${String(Math.round(s.hdg)).padStart(3, '0')}°`)
+      + c('N1', `${Math.round(s.n1[0])} / ${Math.round(s.n1[1])} %`) + c('Flaps', s.flaps) + c('Gear', s.gear) + c('Wind', s.wind);
+  }
+
   _refreshFacts() { const d = DEPARTURES[this.opts.depIndex]; $('f-flight').textContent = d.flight; $('f-dep').textContent = fmtClock(d.time); $('f-seat').textContent = this.opts.seat; }
 
   showStart(v) { $('start').hidden = !v; }

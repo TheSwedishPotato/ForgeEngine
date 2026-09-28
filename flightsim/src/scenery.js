@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ARN, CPH, ARN_LAYOUT, CPH_LAYOUT, RUNWAYS, runwayGeom, LANDMARKS } from './places.js';
+import { runwayInfo } from './flight.js';
 import { project, curveMaterial, rng, clamp, lerp, DEG, CURVE_GLSL, sharedUniforms, smoothstep } from './core.js';
 import { GEO } from '../data/geodata.js';
 import { canvasTex, glowTex, rr } from './textures.js';
@@ -488,7 +489,10 @@ export class Scenery {
   _airportARN() {
     const f = ARN.frame, L = ARN_LAYOUT;
     const rws = RUNWAYS.ESSA.map((r) => this._runway(r));
+    // approach lights and PAPIs at both ends of the runway we can use (19R, or 01L in a northerly)
     this._approachLights(f);
+    this._approachLights(runwayInfo('ESSA', '01L').frame);
+    const u01 = runwayInfo('ESSA', '01L').thr.clone().sub(f.o).dot(f.u);
     // ground texture 12 km box centred between runways
     const centre = [1800, -600], size = 12000;
     this._registerGround(0, f, centre, size, 2048, (g, M, s) => {
@@ -508,6 +512,8 @@ export class Scenery {
       // taxiways (parallel to 19R, links)
       this._rect(g, M, -120, L.taxiwayZ - 12, 3350, L.taxiwayZ + 12, '#4c4d4f');
       this._rect(g, M, -120, -12 - 40, -60, L.taxiwayZ + 12, '#4c4d4f');
+      this._rect(g, M, u01 + 15, -12 - 40, u01 + 75, L.taxiwayZ + 12, '#4c4d4f'); // entry at the 01L end
+      this._rect(g, M, 3300, L.taxiwayZ - 12, u01 + 75, L.taxiwayZ + 12, '#4c4d4f');
       for (const uu of [900, 1580, 2300, 3000]) this._rect(g, M, uu - 12, -60, uu + 12, L.taxiwayZ, '#4c4d4f');
       this._rect(g, M, 1100, -700, 2700, -1250, '#7c7e80'); // aprons
       this._rect(g, M, 1520, -400, 1760, -950, '#7c7e80');
@@ -595,6 +601,7 @@ export class Scenery {
     const f = CPH.frame, L = CPH_LAYOUT;
     const rws = RUNWAYS.EKCH.map((r) => this._runway(r));
     this._approachLights(f);
+    this._approachLights(runwayInfo('EKCH', '04L').frame);
     const centre = [1400, 600], size = 12000;
     // project NE coastline & manual islands into the CPH texture
     const toUV = (lat, lon) => { const p = project(lat, lon); const d = V2(p.x, p.z).sub(f.o); return [d.dot(f.u), d.dot(f.v)]; };
@@ -683,8 +690,11 @@ export class Scenery {
     // the route ends at the main-gear point, 11.5 m behind the cabin origin: door L1 is 13.8 m ahead of it
     this._dockedJetBridge(f, L.standU + 13.8, L.standV - 2.02, pierB.u - 11);
     // departing traffic on 22R during our approach
-    const dep = makeAirliner(LIVERIES.lufthansa, { len: 37.6 }); this.scene.add(dep); dep.visible = false;
+    const dep = makeAirliner(LIVERIES.klm, { len: 37.6 }); this.scene.add(dep); dep.visible = false;
     this.traffic.push({ obj: dep, kind: 'cph-departure', rw: runwayGeom(RUNWAYS.EKCH[0]) });
+    // the arrival ahead of us on the final
+    const arrA = makeAirliner(LIVERIES.lufthansa, { len: 37.6 }); this.scene.add(arrA); arrA.visible = false;
+    this.traffic.push({ obj: arrA, kind: 'cph-arrival' });
   }
 
   _landmarks() {
@@ -793,7 +803,8 @@ export class Scenery {
     this.traffic.push({ obj: t, kind: 'cruise-crossing', trails });
   }
 
-  update(dt, simT, fm, env, director) {
+  update(dt, simT, fm, env, director, atc = null) {
+    this.atc = atc;
     const u = this.u;
     this.sun.position.copy(env.sunDir).multiplyScalar(1000).add(fm.pos); this.sun.target.position.copy(fm.pos);
     this.sun.color.copy(env.sunCol).multiplyScalar(1 / 3.2); this.sun.intensity = 3.0;
@@ -847,6 +858,15 @@ export class Scenery {
 
   _updateTraffic(tr, simT, fm, director) {
     const o = tr.obj;
+    // the other aircraft are where ATC has them (they fly their own departures and approaches)
+    const id = { 'arn-departure': 'arn-dep', 'arn-arrival': 'arn-arr', 'cph-departure': 'cph-dep', 'cph-arrival': 'cph-arr' }[tr.kind];
+    const e = id && this.atc ? this.atc.tr(id) : null;
+    if (e) {
+      o.visible = !!e.vis && e.x != null;
+      if (o.visible) { o.position.set(e.x, e.y, e.z); o.rotation.set(0, -e.hdg * DEG, 0); o.rotateX(e.pitch || 0); }
+      return;
+    }
+    if (tr.kind === 'cph-arrival') { o.visible = false; return; }
     if (tr.kind === 'arn-departure') {
       const t0 = director?.times?.arnTrafficRoll; // departure roll start (sim seconds)
       if (t0 == null) { // waiting on the runway (lined up)

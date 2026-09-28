@@ -117,8 +117,8 @@ export const SCRIPTS = {
     'Om en liten stund kommer vi ut i kabinen med vår service. Kaffe och te bjuder vi på, och från vår meny kan ni köpa smörgåsar, snacks och dryck. Vi tar endast kort. Flygplanet har också Starlink-wifi, som är gratis för EuroBonus-medlemmar.',
     'In a few minutes we will come through the cabin with our onboard service. Coffee and tea are complimentary, and from our menu you can buy sandwiches, snacks and drinks. We accept card payments only. This aircraft also has high-speed Starlink Wi-Fi, free of charge for EuroBonus members.'),
   descent: (c) => pa(SPEAKERS.captain,
-    `Mina damer och herrar, vi har nu påbörjat inflygningen mot Köpenhamn och beräknar att landa om cirka ${c.mins} minuter. Vi landar på bana två-två vänster, så ni som sitter till vänster får en fin utsikt över Öresundsbron och Malmö. Tack för att ni flyger med oss i dag.`,
-    `Ladies and gentlemen, we have now started our descent into Copenhagen and expect to land in about ${c.mins} minutes. We'll be landing on runway two-two left, so those of you on the left-hand side should get a nice view of the Øresund Bridge and Malmö. Thank you for flying with us today.`),
+    `Mina damer och herrar, vi har nu påbörjat inflygningen mot Köpenhamn och beräknar att landa om cirka ${c.mins} minuter. Vi landar på bana ${c.rwySv}, så ni som sitter till ${c.viewSv} får en fin utsikt över Öresundsbron och Malmö. Vädret i Köpenhamn är ${c.wxSv} och ${c.tempCph} grader. Tack för att ni flyger med oss i dag.`,
+    `Ladies and gentlemen, we have now started our descent into Copenhagen and expect to land in about ${c.mins} minutes. We'll be landing on runway ${c.rwyEn}, so those of you on the ${c.viewEn}-hand side should get a nice view of the Øresund Bridge and Malmö. The weather in Copenhagen is ${c.wxEn} and ${c.tempCph} degrees. Thank you for flying with us today.`),
   prepareLanding: () => pa(SPEAKERS.purser,
     'Mina damer och herrar, vi närmar oss Köpenhamn. Återgå till era platser och spänn fast säkerhetsbältet. Se till att ryggstödet är upprätt, att bordet är uppfällt och att fönsterluckan är öppen, och lägg undan större elektronisk utrustning. Toaletterna är nu stängda.',
     'Ladies and gentlemen, we are approaching Copenhagen. Please return to your seats and fasten your seatbelt. Make sure your seat back is upright, your tray table is stowed and your window blind is open, and please put larger electronic devices away. The lavatories are now closed.'),
@@ -130,13 +130,31 @@ export const SCRIPTS = {
   turbulence: () => pa(SPEAKERS.captain, 'Mina damer och herrar, vi väntar lite turbulens framöver. Återgå till era platser och spänn fast bältet.', 'Ladies and gentlemen, we are expecting some turbulence ahead. Please return to your seats and fasten your seatbelts.'),
 };
 
+// The weather at Kastrup in words, from the conditions set in the weather editor.
+export function describeWeather(wx) {
+  const st = wx?.s?.cph; if (!st) return { wxSv: 'växlande molnighet', wxEn: 'a few clouds', tempCph: 15 };
+  const low = (wx.s.clouds || []).filter((c) => c.base < 6000);
+  const cover = low.reduce((m, c) => Math.max(m, { FEW: 1, SCT: 2, BKN: 3, OVC: 4 }[c.cover] || 0), 0);
+  let d;
+  if (wx.stormNear?.('CPH', 1)) d = ['åska', 'thunderstorms'];
+  else if (st.vis < 1000 && st.temp - st.dew < 1.5) d = ['dimma', 'foggy'];
+  else if (st.precip >= 2) d = ['regn', 'rainy'];
+  else if (st.precip >= 0.5) d = ['lätt regn', 'light rain'];
+  else if (cover >= 4) d = ['mulet', 'overcast'];
+  else if (cover === 3) d = ['mestadels molnigt', 'mostly cloudy'];
+  else if (cover >= 1) d = ['växlande molnighet', 'a few clouds'];
+  else d = ['klart väder', 'clear skies'];
+  if (st.wspd >= 22 || st.gust >= 30) d = [`${d[0]} och blåsigt`, `${d[1]} and windy`];
+  return { wxSv: d[0], wxEn: d[1], tempCph: Math.round(st.temp) };
+}
+const RWY_WORDS = { '22L': ['två-två vänster', 'two-two left', 'vänster', 'left'], '04L': ['noll-fyra vänster', 'zero-four left', 'höger', 'right'], '22R': ['två-två höger', 'two-two right', 'vänster', 'left'], '04R': ['noll-fyra höger', 'zero-four right', 'höger', 'right'] };
+export function runwayWords(id) { const w = RWY_WORDS[id] || RWY_WORDS['22L']; return { rwySv: w[0], rwyEn: w[1], viewSv: w[2], viewEn: w[3] }; }
+
 export function context(opts, clockH, etaH) {
-  const wx = { clear: ['klart väder', 'clear skies'], fair: ['växlande molnighet', 'a few clouds'], broken: ['mulet med uppehåll', 'mostly cloudy but dry'], rain: ['lätt regn', 'light rain'], fog: ['soligt', 'sunny'] }[opts.weather] || ['växlande molnighet', 'a few clouds'];
-  const [, tCph] = opts.temps || [14, 15];
   const toSv = (h) => fmtClock(h).replace(':', '.');
   return {
     hour: clockH, flightSv: spellFlight(opts.flight, 'sv'), flightEn: spellFlight(opts.flight, 'en'),
-    etaSv: toSv(etaH), etaEn: fmtClock(etaH), wxSv: wx[0], wxEn: wx[1], tempCph: tCph,
+    etaSv: toSv(etaH), etaEn: fmtClock(etaH), ...describeWeather(opts.wx), ...runwayWords(opts.arrRwy),
     timeSv: toSv(clockH), timeEn: fmtClock(clockH), mins: 20,
   };
 }

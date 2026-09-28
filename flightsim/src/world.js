@@ -179,7 +179,7 @@ export class World {
   constructor(renderer, opts) {
     this.renderer = renderer;
     this.scene = new THREE.Scene();
-    this.weather = WEATHER[opts.weather] || WEATHER.fair;
+    this.weather = typeof opts.weather === 'object' && opts.weather ? opts.weather : (WEATHER[opts.weather] || WEATHER.fair);
     this.quality = opts.quality || 'medium';
     this.localTime = opts.localTime;
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.5, 900000);
@@ -195,12 +195,9 @@ export class World {
       uLandingLight: { value: 0 }, uLLPos: { value: new THREE.Vector3() }, uLLDir: { value: new THREE.Vector3() },
       uGFog: sharedUniforms.uGFog, uGFogTop: sharedUniforms.uGFogTop, uGFogCol: sharedUniforms.uGFogCol,
       uPreExp: sharedUniforms.uPreExp, uVol: { value: 0 },
+      uFlash: { value: new THREE.Vector4(0, 0, 0, 0) }, // lightning: world position and brightness
     };
-    if (this.weather.fog) {
-      const c = project(59.6519, 17.9186);
-      this.u.uGFog.value.set(c.x, c.z, 16000, 3.0 / 250);
-      this.u.uGFogTop.value = this.weather.fog.top;
-    }
+    this._setFog();
     this.scene.fog = new THREE.FogExp2(0xffffff, 0); // haze & fog for scenery objects
     this.geo = buildGeoTextures();
     this._buildCloudMap();
@@ -213,7 +210,8 @@ export class World {
   // Cumulus coverage field (region-wide), shared by sprite placement and terrain shadows.
   _buildCloudMap() {
     const N = 512, cov = this.weather.cumulus;
-    const data = new Uint8Array(N * N);
+    const data = this.cloudCovData || new Uint8Array(N * N);
+    data.fill(0);
     this.cloudCovData = data; this.cloudCovN = N;
     if (cov > 0) {
       const W = REGION.x1 - REGION.x0, H = REGION.z1 - REGION.z0;
@@ -223,9 +221,40 @@ export class World {
         data[j * N + i] = Math.round(smoothstep(1 - cov - 0.1, 1 - cov + 0.14, n) * 255);
       }
     }
+    if (this.cloudMap) { this.cloudMap.needsUpdate = true; return; }
     const t = new THREE.DataTexture(data, N, N, THREE.RedFormat, THREE.UnsignedByteType);
     t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearFilter; t.flipY = false; t.needsUpdate = true;
     this.cloudMap = t;
+  }
+
+  // Ground fog at whichever airport has it (a patch 16 km across, density from the visibility)
+  _setFog() {
+    const f = this.weather.fog;
+    if (!f) { this.u.uGFog.value.set(0, 0, 1, 0); return; }
+    const c = f.airport === 'CPH' ? project(55.618, 12.656) : project(59.6519, 17.9186);
+    this.u.uGFog.value.set(c.x, c.z, 16000, 3.0 / Math.max(120, f.vis || 250));
+    this.u.uGFogTop.value = f.top;
+  }
+
+  // New weather from the editor or as the flight moves between the two airports' conditions.
+  // Cheap values change at once; the cloud field and the stratus decks are rebuilt only when
+  // the layers themselves change.
+  setWeather(W) {
+    const old = this.weather; this.weather = W;
+    const u = this.u;
+    u.uCloudCov.value = W.cumulus; u.uCloudAlt.value = (W.cuBase + W.cuTop) / 2; u.uWet.value = W.rain > 0 ? 1 : 0;
+    this._setFog();
+    const cuChanged = old.cumulus !== W.cumulus || (W.cumulus > 0 && (Math.abs(old.cuBase - W.cuBase) > 30 || Math.abs(old.cuTop - W.cuTop) > 30));
+    if (cuChanged) { this._buildCloudMap(); this.cloudCenter = null; }
+    const stKey = (x) => (x ? `${Math.round(x.base)}/${Math.round(x.top)}` : '');
+    if (stKey(old.stratus) !== stKey(W.stratus)) {
+      for (const d of this.decks) { this.scene.remove(d.mesh); d.mat.dispose(); }
+      if (this.decks[0]) this.decks[0].mesh.geometry.dispose();
+      this._buildStratus();
+      return true; // new materials: the caller re-applies its render state
+    }
+    if (W.storms !== old.storms) this.cloudCenter = null;
+    return cuChanged;
   }
   cloudCoverAt(x, z) {
     const N = this.cloudCovN, W = REGION.x1 - REGION.x0, H = REGION.z1 - REGION.z0;
@@ -514,7 +543,7 @@ export class World {
           #include <logdepthbuf_vertex>
         }`,
       fragmentShader: `
-        uniform sampler2D uTex; uniform vec3 uAmbient; uniform float uPreExp; varying vec2 vUv; varying float vShade; varying float vAlpha; varying vec3 vW; varying float vTile; varying float vSunward;
+        uniform sampler2D uTex; uniform vec3 uAmbient; uniform float uPreExp; uniform vec4 uFlash; varying vec2 vUv; varying float vShade; varying float vAlpha; varying vec3 vW; varying float vTile; varying float vSunward;
         ${ATMOS_GLSL}
         #include <logdepthbuf_pars_fragment>
         void main(){
@@ -525,6 +554,8 @@ export class World {
           if (a < 0.01) discard;
           float lightK = mix(0.55, 1.0, vShade) * t.r;
           vec3 c = uSunCol * lightK * (0.9 + 0.5*pow(max(vSunward,0.0), 6.0)) + uAmbient * mix(1.1, 1.6, vShade);
+          // lightning lights the cloud from inside
+          if (uFlash.w > 0.0) c += vec3(0.8, 0.84, 1.0) * uFlash.w * 5.0 * exp(-length(vW - uFlash.xyz) / 2600.0) * t.r;
           vec4 ap = aerial(vW);
           c = mix(c, ap.rgb, ap.a*0.9);
           gl_FragColor = vec4(c * uPreExp, a);
@@ -540,40 +571,87 @@ export class World {
 
   _rebuildClouds(cx, cz) {
     const W = this.weather, cov = W.cumulus;
-    if (cov <= 0) { this.clouds.geometry.instanceCount = 0; return; }
-    const S = this.cloudCells, R = this.cloudRange;
-    const i0 = Math.floor((cx - R) / S), i1 = Math.floor((cx + R) / S), j0 = Math.floor((cz - R) / S), j1 = Math.floor((cz + R) / S);
-    let n = 0; const P = this.cPos, A = this.cAttr;
     const puffs = [];
-    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
-      const hx = hash2(i, j), hz = hash2(j + 99, i - 7);
-      const x = (i + hx) * S, z = (j + hz) * S;
-      if ((x - cx) ** 2 + (z - cz) ** 2 > R * R) continue;
-      // same coverage field as the terrain shader, so shadows line up
-      const c = this.cloudCoverAt(x, z);
-      if (hash2(i * 3 + 1, j * 5 + 2) > c * 1.15) continue;
-      const r = rng((i * 73856093) ^ (j * 19349663));
-      const size = lerp(0.6, 1.25, r()) * (0.7 + c * 0.5);
-      const width = 900 * size, depth = (W.cuTop - W.cuBase) * (0.55 + 0.45 * r());
-      const count = Math.floor(7 + 9 * size);
-      for (let k = 0; k < count; k++) {
-        const a = r() * Math.PI * 2, rr = Math.sqrt(r()) * width;
-        const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr * 0.8;
-        const hf = (1 - rr / width);
-        const py = W.cuBase + 120 + depth * (0.15 + 0.75 * hf * r());
-        const ps = (260 + 240 * r()) * (0.7 + hf * 0.6) * size;
-        puffs.push([px, py, pz, ps, clamp((py - W.cuBase) / depth, 0, 1), 0.85, Math.floor(r() * 4)]);
+    if (cov > 0) {
+      const S = this.cloudCells, R = this.cloudRange;
+      const i0 = Math.floor((cx - R) / S), i1 = Math.floor((cx + R) / S), j0 = Math.floor((cz - R) / S), j1 = Math.floor((cz + R) / S);
+      for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+        const hx = hash2(i, j), hz = hash2(j + 99, i - 7);
+        const x = (i + hx) * S, z = (j + hz) * S;
+        if ((x - cx) ** 2 + (z - cz) ** 2 > R * R) continue;
+        // same coverage field as the terrain shader, so shadows line up
+        const c = this.cloudCoverAt(x, z);
+        if (hash2(i * 3 + 1, j * 5 + 2) > c * 1.15) continue;
+        const r = rng((i * 73856093) ^ (j * 19349663));
+        const size = lerp(0.6, 1.25, r()) * (0.7 + c * 0.5);
+        const width = 900 * size, depth = (W.cuTop - W.cuBase) * (0.55 + 0.45 * r());
+        const count = Math.floor(7 + 9 * size);
+        for (let k = 0; k < count; k++) {
+          const a = r() * Math.PI * 2, rr = Math.sqrt(r()) * width;
+          const px = x + Math.cos(a) * rr, pz = z + Math.sin(a) * rr * 0.8;
+          const hf = (1 - rr / width);
+          const py = W.cuBase + 120 + depth * (0.15 + 0.75 * hf * r());
+          const ps = (260 + 240 * r()) * (0.7 + hf * 0.6) * size;
+          puffs.push([px, py, pz, ps, clamp((py - W.cuBase) / depth, 0, 1), 0.85, Math.floor(r() * 4)]);
+        }
       }
     }
+    this._stormPuffs(puffs, cx, cz);
     this.puffs = puffs;
     this._sortClouds(cx, this.lastCamY ?? 0, cz);
   }
 
+  // Thunderstorm cells as they stand now: a towering column from the cloud base to a top that
+  // grows with the cell, the anvil spreading downwind once it is mature, a dark base and grey
+  // rain shafts under it. Seen from up to 150 km away, as cumulonimbus are in real life.
+  _stormPuffs(puffs, cx, cz) {
+    const W = this.weather, cells = W.storms; if (!cells || !cells.length || !W.stage) return;
+    const t = W.stormT ?? 0;
+    const base = Math.max(400, Math.min(W.cuBase || 1200, 1800));
+    const ad = W.anvilDir || { x: 1, z: 0 };
+    for (const c of cells) {
+      const st = W.stage(c, t); if (!st.alive || st.a < 0.03) continue;
+      const d = Math.hypot(c.x - cx, c.z - cz); if (d > 150000) continue;
+      const r = rng(Math.floor(c.x * 7 + c.z * 13) ^ Math.floor(c.t0 * 1000));
+      const top = Math.max(base + 2500, c.topMax * st.top);
+      const Rc = c.R * (0.75 + 0.35 * st.up + 0.25 * st.a);
+      const detail = d < 25000 ? 1 : d < 60000 ? 0.55 : 0.3;
+      const size = (d < 25000 ? 900 : d < 60000 ? 1400 : 2100);
+      // the tower
+      const n = Math.floor(260 * detail);
+      for (let k = 0; k < n; k++) {
+        const hf = Math.pow(r(), 0.75), y = base + (top - base) * hf * 0.92;
+        const rad = Rc * (0.55 + 0.45 * (1 - hf) + 0.25 * r()) * Math.sqrt(r());
+        const a = r() * Math.PI * 2;
+        const ps = size * (0.7 + 0.6 * r()) * (1 + 0.4 * (1 - hf));
+        // dark underneath, bright at the sunlit top; a mature, raining cell is darker still
+        const shade = clamp(hf * 1.1 - 0.15 - 0.25 * st.rain * (1 - hf), 0, 1);
+        puffs.push([c.x + Math.cos(a) * rad, y, c.z + Math.sin(a) * rad, ps, shade, 0.93, Math.floor(r() * 4)]);
+      }
+      // the anvil: flat, spreading downwind with the winds near the tropopause
+      const anvil = smoothstep(0.25, 0.55, st.a) * (1 - 0.4 * st.dissip);
+      const na = Math.floor(120 * detail * anvil);
+      for (let k = 0; k < na; k++) {
+        const along = (r() * 1.3 - 0.2) * Rc * 3.2, cross = (r() - 0.5) * Rc * (1.6 + along / Rc * 0.4);
+        const y = top - r() * 1200 - Math.max(0, along) / (Rc * 3.2) * 900;
+        puffs.push([c.x + ad.x * along - ad.z * cross, y, c.z + ad.z * along + ad.x * cross, size * (0.9 + 0.5 * r()), 0.85 + 0.15 * r(), 0.82, Math.floor(r() * 4)]);
+      }
+      // rain shafts under the mature cell
+      const ns = Math.floor(40 * detail * st.rain);
+      for (let k = 0; k < ns; k++) {
+        const a = r() * Math.PI * 2, rad = Rc * 0.7 * Math.sqrt(r());
+        puffs.push([c.x + Math.cos(a) * rad, r() * base, c.z + Math.sin(a) * rad, size * 0.9, 0.05, 0.38, Math.floor(r() * 4)]);
+      }
+    }
+  }
+
   _sortClouds(cx, cy, cz) {
     const puffs = this.puffs; if (!puffs) return;
-    puffs.sort((a, b) => ((b[0] - cx) ** 2 + (b[1] - cy) ** 2 + (b[2] - cz) ** 2) - ((a[0] - cx) ** 2 + (a[1] - cy) ** 2 + (a[2] - cz) ** 2));
-    const n = Math.min(puffs.length, this.maxPuffs); const P = this.cPos, A = this.cAttr;
-    for (let k = 0; k < n; k++) { const p = puffs[k]; P[k * 4] = p[0]; P[k * 4 + 1] = p[1]; P[k * 4 + 2] = p[2]; P[k * 4 + 3] = p[3]; A[k * 4] = p[4]; A[k * 4 + 1] = p[5]; A[k * 4 + 2] = p[6]; }
+    const d2 = (p) => (p[0] - cx) ** 2 + (p[1] - cy) ** 2 + (p[2] - cz) ** 2;
+    puffs.sort((a, b) => d2(b) - d2(a)); // back to front
+    // over the budget: keep the nearest
+    const skip = Math.max(0, puffs.length - this.maxPuffs), n = puffs.length - skip; const P = this.cPos, A = this.cAttr;
+    for (let k = 0; k < n; k++) { const p = puffs[k + skip]; P[k * 4] = p[0]; P[k * 4 + 1] = p[1]; P[k * 4 + 2] = p[2]; P[k * 4 + 3] = p[3]; A[k * 4] = p[4]; A[k * 4 + 1] = p[5]; A[k * 4 + 2] = p[6]; }
     const g = this.clouds.geometry; g.instanceCount = n;
     g.attributes.iPos.needsUpdate = true; g.attributes.iAttr.needsUpdate = true;
   }
@@ -695,7 +773,10 @@ export class World {
     this.terrain.material.uniforms.uCenter.value.set(camPos.x, camPos.z);
     for (const d of this.decks) d.mat.uniforms.uCenter.value.set(camPos.x, camPos.z);
     // clouds rebuild on movement
-    if (!this.cloudCenter || Math.hypot(camPos.x - this.cloudCenter.x, camPos.z - this.cloudCenter.y) > this.cloudCells * 1.5) {
+    this._stormT = (this._stormT || 0) + dt;
+    const stormRebuild = W.storms && W.storms.length && this._stormT > 20;
+    if (!this.cloudCenter || stormRebuild || Math.hypot(camPos.x - this.cloudCenter.x, camPos.z - this.cloudCenter.y) > this.cloudCells * 1.5) {
+      this._stormT = 0;
       this.cloudCenter = new THREE.Vector2(camPos.x, camPos.z);
       this._rebuildClouds(camPos.x, camPos.z);
       this._sortT = 0;
@@ -704,7 +785,7 @@ export class World {
       if (this._sortT > 1.5) { this._sortT = 0; this._sortClouds(camPos.x, camPos.y, camPos.z); }
     }
     // near-cumulus in-cloud check (for turbulence & fog)
-    if (this.puffs && W.cumulus > 0 && alt > W.cuBase && alt < W.cuTop + 200) {
+    if (this.puffs && this.puffs.length && ((W.cumulus > 0 && alt > W.cuBase && alt < W.cuTop + 200) || (W.storms && W.storms.length))) {
       let best = 0;
       for (let k = this.puffs.length - 1; k >= Math.max(0, this.puffs.length - 60); k--) {
         const p = this.puffs[k]; const d = Math.hypot(p[0] - camPos.x, p[1] - camPos.y, p[2] - camPos.z);

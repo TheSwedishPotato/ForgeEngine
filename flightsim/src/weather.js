@@ -272,8 +272,10 @@ export class Weather {
       label: this.s.label || 'Custom', cumulus: clamp(cov, 0, 0.95), cuBase, cuTop, stratus: deck, cirrus: this.s.cirrus ?? 0.2,
       vis: sfc.vis, turb: 0.2 + 0.25 * (this.s.cat || 0), rain: clamp(sfc.precip / 2, 0, 1.2), wind: `${Math.round(sfc.wdir)}° / ${Math.round(sfc.wspd)} kt`,
       temp: [this.s.arn.temp, this.s.cph.temp], metar: '',
-      fog: fogA || fogC ? { top: 40 + 120 * (1 - clamp(Math.min(fogA ? this.s.arn.vis : 1e4, fogC ? this.s.cph.vis : 1e4) / 1000, 0, 1)), airport: fogA && (!fogC || sfc.k < 0.5) ? 'ARN' : 'CPH' } : null,
-      storms: this.cells, stormT: t,
+      fog: fogA || fogC ? (() => { const apt = fogA && (!fogC || sfc.k < 0.5) ? 'ARN' : 'CPH'; const v = this.station(apt).vis; return { top: 40 + 120 * (1 - clamp(v / 1000, 0, 1)), airport: apt, vis: v }; })() : null,
+      storms: this.cells, stormT: t, stage: this._stageFn || (this._stageFn = (c, tt) => this.stage(c, tt)),
+      // the anvil streams downwind with the winds near the top of the storm
+      anvilDir: { x: -Math.sin((this.s.jetDir ?? 255) * DEG), z: Math.cos((this.s.jetDir ?? 255) * DEG) },
     };
   }
 }

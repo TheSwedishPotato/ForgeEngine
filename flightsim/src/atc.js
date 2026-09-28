@@ -247,11 +247,15 @@ export class ATC {
       this.say('ATC', `${us}, runway ${spellRwy(this.arrRwy)}, cleared to land, ${this.windReport('CPH', this.arrRwy)}.`, 1.5, () => { this.cl.landing = true; crew.readback(`Cleared to land runway ${spellRwy(this.arrRwy)}, ${CALL_SHORT}.`); });
       const cd = this.tr('cph-dep'); if (cd.t0 == null) cd.t0 = this.t + 8;
     }
-    if (this._landingPending && !this.cl.landing && !this.runwayFreeForLanding() && fm.agl < 70 && !fm.onGround && !this._gaSaid) {
+    const blockedNow = this.t < (this._blockedUntil ?? -1) && this.cl.landing && !fm.airport;
+    if ((this._landingPending && !this.cl.landing || blockedNow) && !this.runwayFreeForLanding() && fm.agl < 70 && !fm.onGround && !this._gaSaid) {
       this._gaSaid = true;
       this.say('ATC', `${us}, go around, I say again, go around, runway occupied.`, 0.5, () => crew.goAround('atc'));
     }
   }
+  // Something is on the runway (a slow vacating aircraft, a vehicle): no landing clearance, or a
+  // go-around if one was already given, until it is clear.
+  blockRunway(sec) { this._blockedUntil = this.t + sec; const a = this.tr('cph-arr'); if (a.state === 'landed') a.rot = Math.max(a.rot, this.t - a.tdT + sec); }
   resetLanding() { this._landingPending = false; this._ldgSaid = false; this._gaSaid = false; this.cl.landing = false; const a = this.tr('cph-arr'); if (a.state !== 'vacated') { a.state = 'vacated'; a.vacT = this.t - 100; } }
 
   // We are going somewhere else now (a return to Arlanda): the approach and tower calls follow
@@ -259,6 +263,7 @@ export class ATC {
   // Is the runway free for us? (at Kastrup: the arrival ahead has vacated)
   runwayFreeForLanding() {
     const a = this.tr('cph-arr');
+    if (this.t < (this._blockedUntil ?? -1)) return false;
     return a.state === 'vacated' || a.state === 'far';
   }
 }
