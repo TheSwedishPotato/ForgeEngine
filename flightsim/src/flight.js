@@ -3,7 +3,7 @@
 // director a quick time-to-go table for the ETA.
 import * as THREE from 'three';
 import { DEG, KT, FT, G, clamp, lerp, damp, smoothstep, isa, vnoise1, project } from './core.js';
-import { ARN, CPH, ARN_LAYOUT, CPH_LAYOUT, ROUTE_AIR } from './places.js';
+import { ARN, CPH, ARN_LAYOUT, CPH_LAYOUT, ROUTE_AIR, RUNWAYS, runwayGeom, RunwayFrame } from './places.js';
 
 // ---------------- Path with filleted corners ----------------
 export class Path {
@@ -65,11 +65,11 @@ export class Path {
     out.heading = Math.atan2(out.dx, -out.dz); // radians clockwise from north
     return out;
   }
-  // arc-length of the closest point to p (coarse + refine)
-  locate(p) {
-    let best = 0, bd = Infinity; const tmp = {};
+  // arc-length of the closest point to p (coarse + refine), searching from s0 on
+  locate(p, s0 = 0) {
+    let best = s0, bd = Infinity; const tmp = {};
     const step = Math.max(5, this.length / 20000);
-    for (let s = 0; s <= this.length; s += step) {
+    for (let s = s0; s <= this.length; s += step) {
       this.sample(s, tmp); const d = (tmp.x - p.x) ** 2 + (tmp.z - p.y) ** 2;
       if (d < bd) { bd = d; best = s; }
     }
@@ -88,65 +88,129 @@ export class Path {
   }
 }
 
-// ---------------- Route ----------------
-export function buildRoute() {
+// ---------------- Routes ----------------
+// A runway as the pilots and the ILS see it: threshold, landing/take-off direction, length.
+export function runwayInfo(icao, id) {
+  const list = icao === 'ESSA' ? RUNWAYS.ESSA : RUNWAYS.EKCH;
+  for (const r of list) {
+    const g = runwayGeom(r);
+    const k = r.ids.indexOf(id); if (k < 0) continue;
+    // ids[0] is the 'a' end; that runway's threshold is 'a' and it points to 'b'
+    const thr = k === 0 ? g.a : g.b, end = k === 0 ? g.b : g.a;
+    const dir = end.clone().sub(thr).normalize();
+    const frame = new RunwayFrame(thr, dir);
+    return { icao, id, thr, end, dir, len: g.len, width: g.width, hdg: frame.heading, frame, elev: icao === 'ESSA' ? 42 : 5, gs: 3.0 * DEG, tdz: 300 };
+  }
+  return null;
+}
+
+// The complete ground and air route for a departure runway at Arlanda and an arrival runway at
+// Kastrup: taxi-out from pier F, the runway, a departure that joins the airway, the airway over
+// Sweden, the arrival and final approach, the landing roll, the exit and taxi-in to pier B.
+export function buildRoute(dep = '19R', arr = '22L') {
   const fa = ARN.frame, fc = CPH.frame, L = ARN_LAYOUT, C = CPH_LAYOUT;
   const pts = [], rad = [];
   const add = (p, r = 0) => { pts.push(p); rad.push(r); };
-  // Taxi-out from pier F (just pushed back, nose west) to runway 19R.
+  // ---- Arlanda: taxi from the stand at pier F to the runway, then the departure ----
   add(fa.to(1580, L.startStandV));
   add(fa.to(1580, L.taxiwayZ), 45);
-  add(fa.to(L.holdU, L.taxiwayZ), 45);
-  add(fa.to(L.holdU, 0), 38);
-  add(fa.to(9300, 0));
-  for (const [lat, lon, r] of ROUTE_AIR.slice(1)) { const p = project(lat, lon); add(new THREE.Vector2(p.x, p.z), r); }
-  add(fc.to(-26000, 0), 6000);
-  add(fc.to(1700, 0), 220);
-  add(fc.to(1700 + 300 / Math.tan(33 * DEG), C.parallelV), 50);
-  add(fc.to(330, C.parallelV), 45);
+  let holdPt, lineupPt, rwyEnd;
+  if (dep === '01L') {
+    const Lr = ARN.rwy.len;
+    add(fa.to(Lr + 45, L.taxiwayZ), 45);
+    add(fa.to(Lr + 45, 0), 38);
+    add(fa.to(-6500, 0), 3200);                  // runway heading north
+    add(fa.to(-9000, 7000), 3500);               // left turn to the west
+    holdPt = fa.to(Lr + 45, -88); lineupPt = fa.to(Lr - 30, 0); rwyEnd = fa.to(0, 0);
+    for (const [lat, lon, r] of ROUTE_AIR.slice(1)) { const p = project(lat, lon); add(new THREE.Vector2(p.x, p.z), r); }
+  } else {
+    add(fa.to(L.holdU, L.taxiwayZ), 45);
+    add(fa.to(L.holdU, 0), 38);
+    add(fa.to(9300, 0));
+    holdPt = fa.to(L.holdU, -88); lineupPt = fa.to(30, 0); rwyEnd = fa.to(3300, 0);
+    for (const [lat, lon, r] of ROUTE_AIR.slice(1)) { const p = project(lat, lon); add(new THREE.Vector2(p.x, p.z), r); }
+  }
+  // ---- Kastrup: arrival, final, landing roll, exit and taxi to pier B ----
+  let thrPt, exitPt;
+  const a = runwayInfo('EKCH', arr) || runwayInfo('EKCH', '22L'), f4 = a.frame;
+  if (arr === '04L') {
+    // downwind to the south-east of the airport over the Øresund, base, a 12 NM final from the south-west
+    add(f4.to(9000, 8500), 6000);
+    add(f4.to(-22500, 8500), 3200);
+    add(f4.to(-22500, 0), 3200);
+    add(f4.to(1800, 0), 220);                    // landing roll, then a rapid exit to the right
+    add(f4.to(1800 + 295 / Math.tan(33 * DEG), 295), 50);
+    add(fc.to(330, C.parallelV), 45);
+    thrPt = f4.to(0, 0); exitPt = f4.to(1800, 0);
+  } else {
+    add(fc.to(-26000, 0), 6000);
+    add(fc.to(1700, 0), 220);
+    add(fc.to(1700 + 300 / Math.tan(33 * DEG), C.parallelV), 50);
+    add(fc.to(330, C.parallelV), 45);
+    thrPt = fc.to(0, 0); exitPt = fc.to(1700, 0);
+  }
   add(fc.to(330, C.standV), 32);
   add(fc.to(C.standU, C.standV));
   const path = new Path(pts, rad);
   const m = {
-    hold: path.locate(fa.to(L.holdU, -88)),
-    lineup: path.locate(fa.to(30, 0)),
-    arnRwyEnd: path.locate(fa.to(3300, 0)),
-    thr: path.locate(fc.to(0, 0)),
-    exit: path.locate(fc.to(1700, 0)),
-    crossing: path.locate(fc.to(1190, C.parallelV)),
+    hold: path.locate(holdPt),
+    lineup: path.locate(lineupPt),
+    arnRwyEnd: path.locate(rwyEnd),
+    thr: path.locate(thrPt),
+    exit: path.locate(exitPt),
     stand: path.length,
   };
+  m.crossing = m.exit;
   m.touchdown = m.thr + 300;
-  return { path, m };
+  const d = runwayInfo('ESSA', dep) || runwayInfo('ESSA', '19R');
+  return { path, m, dep: d, arr: a, depRwy: d.id, arrRwy: a.id, airport: null, keys: { pts, rad, thrIdx: keyIdx(pts, exitPt, 0), exitPt } };
 }
 
-// Air return to Arlanda after a problem on departure: straight ahead, a right-hand teardrop
-// onto the runway 01L final from the south, land northbound, vacate onto the parallel taxiway
-// and stop at a stand by pier F. p: the aircraft's main-gear point {x, z}; dir: track {x, z}.
-export function buildReturnRoute(p, dir) {
+// index of the key point just before `p` (the landing roll starts there) minus `back`
+function keyIdx(pts, p, back = 0) { let best = 0, bd = Infinity; pts.forEach((q, i) => { const d = q.distanceTo(p); if (d < bd) { bd = d; best = i; } }); return Math.max(0, best - back); }
+
+// Air return to Arlanda after a problem on departure: a teardrop or a circuit onto the runway into
+// the wind (01L landing north or 19R landing south), vacate onto the parallel taxiway, stand at pier F.
+// p: the aircraft's main-gear point {x, z}; dir: track {x, z}.
+export function buildReturnRoute(p, dir, rwy = '01L') {
   const fa = ARN.frame, L = ARN.rwy.len;
   const cur = new THREE.Vector2(p.x, p.z);
   const rel = cur.clone().sub(fa.o);
   const uCur = rel.dot(fa.u), vCur = rel.dot(fa.v);
-  const base = Math.max(uCur + 14000, L + 30000); // time for the checklists on the way out
   const pts = [], rad = [];
   const add = (q, r = 0) => { pts.push(q); rad.push(r); };
   add(cur);
   add(cur.clone().add(new THREE.Vector2(dir.x, dir.z).normalize().multiplyScalar(2500)), 0);
-  add(fa.to(base, vCur), 3200);
-  add(fa.to(base, 7500), 3200);
-  add(fa.to(L + 20000, 7500), 3200);
-  add(fa.to(L + 20000, 0), 3000);
-  add(fa.to(L - 60, 0));          // runway 01L threshold (south end), landing northbound
-  add(fa.to(1250, 0), 60);        // end of the landing roll
-  add(fa.to(1080, -190), 45);     // exit onto the parallel taxiway, then back south along it
-  add(fa.to(1580, -190), 40);
-  add(fa.to(1580, -480));         // stand by pier F
+  let thr, exit;
+  if (rwy === '19R') {
+    // final from the north, landing south on 19R
+    add(fa.to(Math.max(uCur, 4000) + 6000, 7500), 3200);
+    add(fa.to(-20000, 7500), 3200);
+    add(fa.to(-20000, 0), 3000);
+    add(fa.to(60, 0));
+    add(fa.to(1850, 0), 60);
+    add(fa.to(2040, ARN_LAYOUT.taxiwayZ), 45);
+    add(fa.to(1580, ARN_LAYOUT.taxiwayZ), 40);
+    add(fa.to(1580, -480));
+    thr = fa.to(0, 0); exit = fa.to(1850, 0);
+  } else {
+    const base = Math.max(uCur + 14000, L + 30000); // time for the checklists on the way out
+    add(fa.to(base, vCur), 3200);
+    add(fa.to(base, 7500), 3200);
+    add(fa.to(L + 20000, 7500), 3200);
+    add(fa.to(L + 20000, 0), 3000);
+    add(fa.to(L - 60, 0));          // runway 01L threshold (south end), landing northbound
+    add(fa.to(1250, 0), 60);        // end of the landing roll
+    add(fa.to(1080, -190), 45);     // exit onto the parallel taxiway, then back south along it
+    add(fa.to(1580, -190), 40);
+    add(fa.to(1580, -480));         // stand by pier F
+    thr = fa.to(L, 0); exit = fa.to(1250, 0);
+  }
   const path = new Path(pts, rad);
   const m = { hold: 0, lineup: 0, arnRwyEnd: 0 };
-  m.thr = path.locate(fa.to(L, 0)); m.touchdown = m.thr + 300;
-  m.exit = path.locate(fa.to(1250, 0)); m.crossing = m.exit; m.stand = path.length;
-  return { path, m, airport: 'ARN' };
+  m.thr = path.locate(thr); m.touchdown = m.thr + 300;
+  m.exit = path.locate(exit); m.crossing = m.exit; m.stand = path.length;
+  return { path, m, airport: 'ARN', arr: runwayInfo('ESSA', rwy), arrRwy: rwy, dep: runwayInfo('ESSA', rwy === '01L' ? '19R' : '01L'), depRwy: rwy === '01L' ? '19R' : '01L', keys: { pts, rad, thrIdx: keyIdx(pts, exit, 0), exitPt: exit } };
 }
 
 // A320neo configuration table: slat/flap degrees, CL0 increment, max speed (kt)
