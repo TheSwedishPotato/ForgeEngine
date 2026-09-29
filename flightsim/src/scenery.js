@@ -9,6 +9,7 @@ import { canvasTex, glowTex, rr } from './textures.js';
 import { colorize } from './geom.js';
 import { REGION } from './world.js';
 import { Human, randomAppearance, POSES, composePose } from './humans.js';
+import { MAIN_GEAR, NOSE_GEAR, DOOR_Z } from './airframe.js';
 
 const V2 = (x, y) => new THREE.Vector2(x, y);
 const lp = (lat, lon) => { const p = project(lat, lon); return V2(p.x, p.z); };
@@ -437,7 +438,7 @@ export class Scenery {
     const floorM = curveMaterial(new THREE.MeshBasicMaterial({ color: '#3c414c' }));
     const hidden = new THREE.MeshBasicMaterial({ visible: false });
     const outer = this.mats.jetway;
-    const floorY = 3.36, H = 2.4, W = 2.7;
+    const floorY = -NOSE_GEAR.y, H = 2.4, W = 2.7; // cab floor level with the door sill
     const X = new THREE.Vector3(f.u.x, 0, f.u.y), Y = new THREE.Vector3(0, 1, 0);
     const Z = new THREE.Vector3(-f.v.x, 0, -f.v.y); // outward from the left side of the aircraft
     const basis = new THREE.Matrix4().makeBasis(X, Y, new THREE.Vector3().crossVectors(X, Y)); // right-handed; box is symmetric along z
@@ -687,8 +688,8 @@ export class Scenery {
     for (const o of [this.cphCrew.belt, this.cphCrew.tractor, ...this.cphCrew.carts, this.cphCrew.loader1, this.cphCrew.loader2]) o.visible = false;
     // jet bridge docked at our L1 door (door is 2.3 m ahead of the cabin origin, on the left side)
     const pierB = L.piers.find((p) => p.name === 'B');
-    // the route ends at the main-gear point, 11.5 m behind the cabin origin: door L1 is 13.8 m ahead of it
-    this._dockedJetBridge(f, L.standU + 13.8, L.standV - 2.02, pierB.u - 11);
+    // the route ends at the main-gear point: door L1 is (main gear z - door z) ahead of it
+    this._dockedJetBridge(f, L.standU + (MAIN_GEAR.z - DOOR_Z.L1), L.standV - 2.02, pierB.u - 11);
     // departing traffic on 22R during our approach
     const dep = makeAirliner(LIVERIES.klm, { len: 37.6 }); this.scene.add(dep); dep.visible = false;
     this.traffic.push({ obj: dep, kind: 'cph-departure', rw: runwayGeom(RUNWAYS.EKCH[0]) });

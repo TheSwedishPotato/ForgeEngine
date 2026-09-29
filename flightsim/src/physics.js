@@ -24,29 +24,33 @@ import { DEG, KT, FT, G, clamp, lerp, smoothstep, vnoise1 } from './core.js';
 import { CONFIGS } from './flight.js';
 import { Atmosphere, angleDiff } from './atmosphere.js';
 import { Autoflight, DETENT, N1_RATING } from './autoflight.js';
+import { NOSE_GEAR, MAIN_GEAR, WHEELBASE as WB, cgAt, ENGINE } from './airframe.js';
 
 // ---------------- aircraft data ----------------
 const S = 122.6, B = 35.8, CBAR = 4.19;
 const OEW = 44300, TOW = 64500;
 const IXX0 = 1.30e6, IYY0 = 3.20e6, IZZ0 = 4.45e6;
-const WHEELBASE = 13.8;
+const WHEELBASE = WB;               // 12.64 m
 const T_MAX = 120600;               // N, LEAP-1A26 sea-level static
 const DT = 1 / 120;
-// aircraft-coordinate points (x right, y up, z aft; cabin floor y = 0, L1 door z = -2.3)
-const CG = [0, 0.6, 10.3];
+// aircraft-coordinate points (x right, y up, z aft; cabin floor y = 0) from airframe.js
+const CG = [0, 0.5, cgAt(0.27)];    // 27 % MAC, a typical take-off centre of gravity
+const NOSE_LOAD = (MAIN_GEAR.z - CG[2]) / WB; // static share of the weight on the nose leg (about 11 %)
 const GEAR = [ // contact points when the strut carries its static load
-  { name: 'nose', p: [0, -3.41, -2.3], load: 0.087, defl: 0.12, steer: true, brake: false },
-  { name: 'left', p: [-3.8, -3.4, 11.5], load: 0.4565, defl: 0.25, steer: false, brake: true },
-  { name: 'right', p: [3.8, -3.4, 11.5], load: 0.4565, defl: 0.25, steer: false, brake: true },
+  { name: 'nose', p: [0, NOSE_GEAR.y, NOSE_GEAR.z], load: NOSE_LOAD, defl: 0.12, steer: true, brake: false },
+  { name: 'left', p: [-MAIN_GEAR.x, MAIN_GEAR.y, MAIN_GEAR.z], load: (1 - NOSE_LOAD) / 2, defl: 0.25, steer: false, brake: true },
+  { name: 'right', p: [MAIN_GEAR.x, MAIN_GEAR.y, MAIN_GEAR.z], load: (1 - NOSE_LOAD) / 2, defl: 0.25, steer: false, brake: true },
 ];
-const G_LOCAL = [0, -3.4, 11.5];
+const G_LOCAL = [0, MAIN_GEAR.y, MAIN_GEAR.z];
+const ENG_X = ENGINE.x, ENG_ARM = CG[1] - ENGINE.y; // engine spanwise position; thrust line below the CG
 // structure that must never touch the ground
 const STRIKE = [
-  // the tail cone touches at 11.7 degrees of pitch on compressed main gear (Airbus A320 airport planning figure)
-  { name: 'tail', p: [0, -0.40, 26.0] }, { name: 'tail', p: [0, 0.15, 28.5] },
-  { name: 'pod-left', p: [-5.75, -2.85, 4.5] }, { name: 'pod-right', p: [5.75, -2.85, 4.5] },
-  { name: 'wingtip-left', p: [-17.4, 1.0, 15.5] }, { name: 'wingtip-right', p: [17.4, 1.0, 15.5] },
-  { name: 'nose', p: [0, -0.9, -6.2] }, { name: 'belly', p: [0, -1.25, 9.8] }, { name: 'belly', p: [0, -0.97, 18] },
+  // the underside of the tail cone: the fuselage clears the ground up to about 11.5 degrees of pitch
+  // on the main wheels (Airbus quotes 11.7 degrees with the struts compressed)
+  { name: 'tail', p: [0, -1.14, 21.6] }, { name: 'tail', p: [0, -0.93, 22.6] }, { name: 'tail', p: [0, -0.48, 24.6] }, { name: 'tail', p: [0, 0.30, 27.6] },
+  { name: 'pod-left', p: [-ENG_X, ENGINE.y - 1.25, 5.2] }, { name: 'pod-right', p: [ENG_X, ENGINE.y - 1.25, 5.2] },
+  { name: 'wingtip-left', p: [-16.3, 0.76, 13.6] }, { name: 'wingtip-right', p: [16.3, 0.76, 13.6] },
+  { name: 'nose', p: [0, -1.14, -6.4] }, { name: 'belly', p: [0, -1.90, 7.6] }, { name: 'belly', p: [0, -1.70, 15.6] },
 ];
 // per configuration: CL at zero alpha, stall alpha, CLmax, drag increment, VFE (kt)
 const AERO = [
@@ -315,8 +319,8 @@ export class FlightModel {
       this.thrust[i] = t; T += t;
     }
     Fx += T;
-    N += (this.thrust[0] - this.thrust[1]) * 5.75; // left engine pushes the nose right
-    M += T * 2.3;                                  // thrust line below the CG
+    N += (this.thrust[0] - this.thrust[1]) * ENG_X; // left engine pushes the nose right
+    M += T * ENG_ARM;                               // thrust line below the CG
     // ---- convert aero+thrust to world ----
     const fb = rot(Q, Fy, -Fz, -Fx, this._fw || (this._fw = {}));
     let Fwx = fb.x, Fwy = fb.y, Fwz = fb.z;
@@ -383,7 +387,7 @@ export class FlightModel {
 
   // radio altitude: height of the main-gear contact point (of the belly with the gear up)
   _lowestGear() {
-    return this.gear > 0.5 ? this.worldPoint(G_LOCAL[0], G_LOCAL[1], G_LOCAL[2], this._t2).y : this.worldPoint(0, -1.25, 10, this._t2).y + 2.15;
+    return this.gear > 0.5 ? this.worldPoint(G_LOCAL[0], G_LOCAL[1], G_LOCAL[2], this._t2).y : this.worldPoint(0, -1.90, 8.6, this._t2).y + (MAIN_GEAR.y + 1.90);
   }
 
   // ---------------- gear, tyres, brakes, structure strikes ----------------

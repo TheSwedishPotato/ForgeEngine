@@ -1,7 +1,7 @@
 // The flight timeline: signs, lights, announcements, crew routines, service and arrival.
 import * as THREE from 'three';
 import { SCRIPTS, SPEAKERS, context, describeWeather, runwayWords } from './speech.js';
-import { rowZ, ROWS, BUSINESS_ROWS } from './cabin.js';
+import { rowZ, ROWS, BUSINESS_ROWS, LAYOUT, DOORS } from './cabin.js';
 import { clamp, fmtClock, rng, KT, project } from './core.js';
 import { LANDMARKS } from './places.js';
 import { EMERGENCY_PA } from './events.js';
@@ -227,7 +227,7 @@ export class Director {
     // --- pre-departure sequence ---
     if (this.flag('start')) {
       S.cabin.setSigns(true); this.setLights(this.nightish() ? 0.45 : 0.9, this.nightish() ? '#dfe6ff' : '#fff4e6', true);
-      people.crewNamed('purser').queue({ type: 'walk', x: 0.4, z: -2.8 });
+      people.crewNamed('purser').queue({ type: 'walk', x: 0.4, z: LAYOUT.fwdMonAftZ + 0.3 });
     }
     if (t > 4 && this.flag('welcome')) this.say(SCRIPTS.welcome, { onDone: () => this.mark('welcomeDone') });
     if (this.after('welcomeDone', 1) && this.flag('demoPos')) { people.safetyDemoPositions(); this.mark('demoPos'); this.scene = 'warm'; }
@@ -288,8 +288,8 @@ export class Director {
     if (this.after('parked', 40) && this.flag('dayScene')) this.scene = 'warm';
     if (this.after('parked', 55) && this.flag('doorOpen')) {
       S.cabin.doors.L1.target = 1; S.audio.doorThud();
-      const pur = people.crewNamed('purser'); pur.clear(); pur.queue({ type: 'walk', x: 0, z: -1.2 }, { type: 'walk', x: -1.05, z: -1.2 }, { type: 'face', h: Math.PI * 0.85 }, { type: 'gesture', name: 'wave' });
-      const fw = people.crewNamed('fwd'); fw.clear(); fw.queue({ type: 'walk', x: 0, z: -1.6 }, { type: 'walk', x: 0.85, z: -2.9 }, { type: 'face', h: -Math.PI / 2 - 0.4 });
+      const pur = people.crewNamed('purser'); pur.clear(); pur.queue({ type: 'walk', x: 0, z: DOORS.L1.z + 0.95 }, { type: 'walk', x: -1.0, z: DOORS.L1.z + 0.95 }, { type: 'face', h: Math.PI * 0.85 }, { type: 'gesture', name: 'wave' });
+      const fw = people.crewNamed('fwd'); fw.clear(); fw.queue({ type: 'walk', x: 0, z: DOORS.L1.z + 0.6 }, { type: 'walk', x: 0.85, z: LAYOUT.fwdMonAftZ + 0.3 }, { type: 'face', h: -Math.PI / 2 - 0.4 });
       people.startDeplaning(); this.mark('doorOpen');
     }
     // attendant call

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { UI } from './ui.js';
 import { buildRoute } from './flight.js';
-import { FlightModel } from './physics.js';
+import { FlightModel, GEAR_POINT } from './physics.js';
 import { Atmosphere } from './atmosphere.js';
 import { CabinDynamics } from './cabinphysics.js';
 import { Incidents, SCENARIOS } from './events.js';
@@ -12,7 +12,7 @@ import { Weather, presetWeather, STATIONS } from './weather.js';
 import { ATC } from './atc.js';
 import { Crew } from './crew.js';
 import { Scenery } from './scenery.js';
-import { Cabin, rowZ } from './cabin.js';
+import { Cabin, rowZ, wallX, DOORS } from './cabin.js';
 import { Exterior } from './exterior.js';
 import { People } from './people.js';
 import { Player } from './player.js';
@@ -29,7 +29,7 @@ import { sharedUniforms, clamp, lerp, damp, rng, KT, FT, DEG, vnoise1, smoothste
 
 const ui = new UI();
 const PHASE_NAMES = { 'go-around': 'Go-around', emergency: 'Emergency descent', forced: 'Forced landing', 'rto-stop': 'Rejected take-off', 'runway-stop': 'Stopped on the runway', parked: 'Pushback complete', 'taxi-out': 'Taxiing', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', descent: 'Descending', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
-const G_LOCAL = new THREE.Vector3(0, -3.4, 11.5); // main-gear contact point in aircraft coordinates
+const G_LOCAL = new THREE.Vector3(...GEAR_POINT); // main-gear contact point in aircraft coordinates
 // graphics presets
 const QUALITY = {
   low: { dpr: 1.0, shadows: 0, bloom: false, smaa: false, vol: 0, aniso: 4, people: 0.6 },
@@ -168,7 +168,7 @@ function buildWindowMask(cabin) {
   for (const d of Object.values(cabin.doors)) d.pivot.traverse((o) => { if (o.isMesh && o.material === cabin.paneMat) doorPanes.push({ src: o, m: add(o) }); });
   scene.userData.doorPanes = doorPanes;
   // open L1 door (shown when the door opens at the gate)
-  const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.95), mat); hole.position.set(-1.8, 0.98, -2.3); hole.rotation.y = Math.PI / 2; hole.visible = false; scene.add(hole);
+  const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.95), mat); hole.position.set(-wallX(1.0, DOORS.L1.z) - 0.02, 0.98, DOORS.L1.z); hole.rotation.y = Math.PI / 2; hole.visible = false; scene.add(hole);
   scene.userData.doorHole = hole;
   return scene;
 }
@@ -353,7 +353,7 @@ function loop() {
   S.lastMap -= realDt;
   if (S.lastMap <= 0 && (ui.phoneOpen() || ui.radioOpen())) { S.lastMap = 0.25; if (ui.phoneOpen()) ui.updatePhone(phoneState(localH)); ui.flightDeck(deckState()); }
   // end condition: walk out of the front door
-  if (cabin.doors.L1.open > 0.9 && player.state === 'standing' && player.pos.z < -1.7 && player.pos.x < -0.7 && !S.ended) endFlight();
+  if (cabin.doors.L1.open > 0.9 && player.state === 'standing' && Math.abs(player.pos.z - DOORS.L1.z) < 0.4 && player.pos.x < -0.7 && !S.ended) endFlight();
   if (S.photoPending) takePhoto();
 }
 
@@ -393,7 +393,7 @@ function renderOutside(r, cam, wc, preExp) {
 function updateOrbitCamera(dt) {
   const o = S.orbit, c = S.extCam;
   const target = new THREE.Vector3(0, 0.2, 9.5);
-  const ground = -3.3 + 0.3; // keep the camera above the tarmac in aircraft coordinates
+  const ground = G_LOCAL.y + 0.4; // keep the camera above the tarmac in aircraft coordinates
   const minPitch = S.fm.onGround ? Math.asin(clamp((ground - target.y) / o.dist, -1, 1)) + 0.02 : -1.2;
   o.pitch = clamp(o.pitch, Math.max(-1.4, minPitch), 1.45);
   const cp = Math.cos(o.pitch);

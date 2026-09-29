@@ -128,10 +128,11 @@ export function psuTexture(lenPx, rows, zA, zB, side) {
       g.fillStyle = '#b3b8c0'; for (let k = -1; k <= 1; k++) { g.beginPath(); g.arc(x + k * 22, 44, 4, 0, 7); g.fill(); }
       // gaspers
       g.fillStyle = '#9ca1aa'; for (let k = -1; k <= 1; k++) { g.beginPath(); g.arc(x + k * 22, 80, 8, 0, 7); g.fill(); g.fillStyle = '#5d626b'; g.beginPath(); g.arc(x + k * 22, 80, 3, 0, 7); g.fill(); g.fillStyle = '#9ca1aa'; }
-      // row label
-      g.save(); g.translate(x, 118); g.scale(-1, 1);
-      g.fillStyle = '#394150'; g.font = 'bold 22px Arial, sans-serif'; g.textAlign = 'center';
-      g.fillText(`${r.row}  ${side === 'L' ? 'ABC' : 'DEF'}`, 0, 0); g.restore();
+      // row label, readable from the aisle when walking aft (u runs aft, v from the aisle edge to the wall)
+      g.save(); g.translate(x + 62, 64);
+      if (side === 'L') { g.rotate(-Math.PI / 2); g.scale(1, -1); } else g.rotate(Math.PI / 2);
+      g.fillStyle = '#394150'; g.font = 'bold 21px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(`${r.row} ${side === 'L' ? 'ABC' : 'DEF'}`, 0, 0); g.restore();
       // oxygen door seam
       g.strokeStyle = 'rgba(0,0,0,0.12)'; g.strokeRect(x - 70, 58, 140, 40);
     }

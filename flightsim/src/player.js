@@ -1,7 +1,7 @@
 // First-person passenger: seated look/lean, belt, tray, recline, walking the aisle.
 import * as THREE from 'three';
 import { Human, randomAppearance, POSES, composePose, HUMAN_MATS } from './humans.js';
-import { CAB, rowZ, wallX } from './cabin.js';
+import { CAB, rowZ, wallX, LAYOUT } from './cabin.js';
 import { clamp, damp, lerp, DEG } from './core.js';
 import { colorize, mergeColored, trs } from './geom.js';
 
@@ -135,18 +135,24 @@ export class Player {
 
   // walkable test for standing mode
   _inLavBox(l, x, z, m = 0.18) { return x > l.x0 + m && x < l.x1 - m && z > l.z0 + m && z < l.z1 - m; }
+  // the doorway of a lavatory: in its aft/forward wall, or (lavatory A) in its inboard side wall
+  _inLavDoor(l, x, z) { return l.sideDoor ? Math.abs(x - l.doorX) < 0.45 && Math.abs(z - l.doorZ) < 0.26 : Math.abs(x - l.cx) < 0.32 && Math.abs(z - l.doorZ) < 0.5; }
   _walkable(x, z) {
     // inside a lavatory: walk freely inside; leave only through an open door
     for (const l of this.cabin.lavs) {
       if (this._inLavBox(l, this.pos.x, this.pos.z, 0.05)) {
         if (this._inLavBox(l, x, z)) return true;
-        return l.open > 0.8 && Math.abs(x - l.cx) < 0.32 && Math.abs(z - l.doorZ) < 0.5;
+        return l.open > 0.8 && this._inLavDoor(l, x, z);
       }
     }
-    for (const l of this.cabin.lavs) if (l.open > 0.8 && (this._inLavBox(l, x, z) || (Math.abs(x - l.cx) < 0.32 && Math.abs(z - l.doorZ) < 0.5))) return true;
-    if (Math.abs(x) < 0.22 && z > -2.9 && z < 24.95) return true;
-    if (z > -2.95 && z < -1.05 && Math.abs(x) < 1.35) return true; // forward door area
-    if (z > 23.6 && z < 24.9 && Math.abs(x) < 1.45) return true; // aft door area
+    for (const l of this.cabin.lavs) if (l.open > 0.8 && (this._inLavBox(l, x, z) || this._inLavDoor(l, x, z))) return true;
+    const F = LAYOUT;
+    if (this.extraWalk && this.extraWalk(x, z)) return true;  // flight deck, jet bridge, terminal
+    if (Math.abs(x) < 0.22 && z > F.aisleZ0 && z < F.aisleZ1) return true;
+    if (z > F.fwdMonAftZ + 0.18 && z < rowZ(1) - 0.4 && Math.abs(x) < 1.3) return true;              // forward door area
+    if (z > CAB.zFront + 0.2 && z <= F.fwdMonAftZ + 0.2 && x > -0.3 && x < 0.3) return true;        // in front of the cockpit door
+    if (z > rowZ(31) + 0.5 && z < F.aftMonZ - 0.18 && Math.abs(x) < wallX(0.5, z) - 0.3) return true; // aft door area
+    if (z >= F.aftMonZ - 0.2 && z < F.aftGalleyZ - 0.2 && Math.abs(x) < 0.33) return true;           // aft galley
     // own row, to get back into the seat
     const s = this.seat;
     if (Math.abs(z - (s.z - 0.28)) < 0.2 && Math.sign(x) === Math.sign(s.x) && Math.abs(x) < Math.abs(s.x) + 0.1) return true;
@@ -172,7 +178,7 @@ export class Player {
       this.lean.x = damp(this.lean.x, this.leanCmd.x, 6, dt); this.lean.y = damp(this.lean.y, this.leanCmd.y, 6, dt); this.lean.z = damp(this.lean.z, this.leanCmd.z, 6, dt);
       const base = new THREE.Vector3(this.seat.x - side * 0.02, 1.17 - this.recline * 0.04, this.seat.z + 0.03 + this.recline * 0.08);
       const e = base.add(this.lean);
-      const maxX = wallX(e.y) - 0.22;
+      const maxX = wallX(e.y, this.seat.z) - 0.22;
       e.x = clamp(e.x, -maxX, maxX);
       this.eye.copy(e);
       this.pos.set(this.seat.x, 0, this.seat.z);

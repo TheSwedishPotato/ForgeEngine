@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Human, randomAppearance, crewAppearance, POSES, composePose, walkPose, makeProp, HUMAN_MATS } from './humans.js';
-import { rowZ, ROWS, LETTERS, SEAT_X, BUSINESS_ROWS, CAB, DOORS } from './cabin.js';
+import { rowZ, ROWS, LETTERS, SEAT_X, BUSINESS_ROWS, CAB, DOORS, LAYOUT } from './cabin.js';
 import { rng, clamp, lerp, damp, dampAngle, smooth } from './core.js';
 import { colorize, mergeColored, trs } from './geom.js';
 
@@ -313,7 +313,7 @@ export class People {
     }
     const [A, B, C, Dd] = this.crew;
     // initial positions: doors closed & armed, crew doing final checks before the demo
-    A.place(0.35, -2.9, 0); B.place(0, 0.6, 0);
+    A.place(0.35, LAYOUT.fwdMonAftZ + 0.3, 0); B.place(0, rowZ(2), 0);
     C.place(0, rowZ(9), 0); Dd.place(0, rowZ(24), 0);
     this.byRole = { purser: A, fwd: B, mid: C, aft: Dd };
   }
@@ -335,7 +335,7 @@ export class People {
   // ------------- scripted crew routines (called by the director) -------------
   safetyDemoPositions() {
     const { purser, fwd, mid, aft } = this.byRole;
-    purser.clear(); purser.queue({ type: 'walk', x: 0.6, z: -2.75 }, { type: 'face', h: 0 }, { type: 'gesture', name: 'handset', dur: 0.1 });
+    purser.clear(); purser.queue({ type: 'walk', x: 0.6, z: LAYOUT.fwdMonAftZ + 0.35 }, { type: 'face', h: 0 }, { type: 'gesture', name: 'handset', dur: 0.1 });
     fwd.clear(); fwd.queue({ type: 'walk', x: 0, z: rowZ(1) - 0.55 }, { type: 'face', h: 0 });
     mid.clear(); mid.queue({ type: 'walk', x: 0, z: rowZ(12) - 0.3 }, { type: 'face', h: 0 });
     aft.clear(); aft.queue({ type: 'walk', x: 0, z: rowZ(24) - 0.3 }, { type: 'face', h: 0 });
@@ -346,7 +346,7 @@ export class People {
   // Walk the cabin checking belts/tables/blinds; issues -> callback(actor, seat, issue)
   cabinCheck(checkFn, onDone) {
     const { purser, fwd, mid, aft } = this.byRole;
-    const zones = [[fwd, -0.4, rowZ(10) + 0.5], [mid, rowZ(11) - 0.2, rowZ(21) + 0.4], [aft, rowZ(22) - 0.2, rowZ(31) + 0.5]];
+    const zones = [[fwd, rowZ(1) - 0.5, rowZ(10) + 0.5], [mid, rowZ(11) - 0.2, rowZ(21) + 0.4], [aft, rowZ(22) - 0.2, rowZ(31) + 0.5]];
     let remaining = zones.length;
     for (const [c, z0, z1] of zones) {
       c.clear();
@@ -379,7 +379,7 @@ export class People {
   // Trolley service: two carts working towards the middle. serveFn(actor, seat) returns choice & duration.
   startService(serveFn, onDone) {
     const { purser, fwd, mid, aft } = this.byRole;
-    const mkCartRun = (crew1, rows, fromZ, dir, galleyZ) => {
+    const mkCartRun = (crew1, rows, fromZ, dir) => {
       const cart = makeCart(); this.scene.add(cart); cart.position.set(0, 0, fromZ);
       const run = { cart, crew: crew1, rows, i: 0, dir, state: 'toStart', t: 0, seatQ: [], cur: null };
       crew1.clear(); crew1.carrying = true;
@@ -390,8 +390,8 @@ export class People {
     // aft cart serves 31 -> 14, forward cart 5 -> 12; purser serves SAS Business rows 1-4
     const econFwd = ROWS.filter((r) => r > BUSINESS_ROWS && r <= 12);
     const econAft = ROWS.filter((r) => r >= 14).reverse();
-    this.cartF = mkCartRun(fwd, econFwd, rowZ(BUSINESS_ROWS + 1) - 1.0, 1, -1.5);
-    this.cartA = mkCartRun(aft, econAft, rowZ(31) + 0.9, -1, 25);
+    this.cartF = mkCartRun(fwd, econFwd, rowZ(BUSINESS_ROWS + 1) - 1.0, 1);
+    this.cartA = mkCartRun(aft, econAft, rowZ(31) + 0.9, -1);
     mid.clear(); mid.queue({ type: 'walk', x: 0, z: rowZ(31) + 1.4, speed: 1.0 }, { type: 'face', h: Math.PI });
     this.cartA.helper = mid;
     purser.clear(); purser.queue({ type: 'walk', x: 0, z: rowZ(1) - 0.4 });
@@ -411,8 +411,8 @@ export class People {
     if (c.busy()) return;
     if (run.i >= run.rows.length) {
       run.finished = true; c.carrying = false;
-      c.queue({ type: 'call', fn: () => { this.scene.remove(cart); } }, { type: 'walk', x: 0, z: run.dir > 0 ? -1.5 : 24.5, speed: 1 });
-      if (run.helper) run.helper.queue({ type: 'walk', x: 0, z: 24.5, speed: 1 });
+      c.queue({ type: 'call', fn: () => { this.scene.remove(cart); } }, { type: 'walk', x: 0, z: run.dir > 0 ? rowZ(1) - 0.5 : LAYOUT.aftGalleyZ - 0.35, speed: 1 });
+      if (run.helper) run.helper.queue({ type: 'walk', x: 0, z: LAYOUT.aftGalleyZ - 0.35, speed: 1 });
       if (this.carts.every((r) => r.finished)) { this.audio?.cart(false); if (this.serviceDone) this.serviceDone(); }
       return;
     }
@@ -439,7 +439,7 @@ export class People {
   _updateBusiness(dt) {
     const b = this.businessRun; if (!b || b.finished) return;
     const c = b.crew; if (c.busy()) return;
-    if (b.i >= b.rows.length) { b.finished = true; c.queue({ type: 'walk', x: 0.5, z: -2.8 }); return; }
+    if (b.i >= b.rows.length) { b.finished = true; c.queue({ type: 'walk', x: 0.5, z: LAYOUT.fwdMonAftZ + 0.3 }); return; }
     const row = b.rows[b.i++];
     const seats = this.cabin.seats.filter((s) => s.row === row && s.occupant);
     c.queue({ type: 'walk', x: 0, z: rowZ(row) - 0.5, speed: 0.6 }, { type: 'face', h: Math.PI });
@@ -459,7 +459,7 @@ export class People {
       const rows = ROWS.filter((r) => (from < to ? rowZ(r) >= from && rowZ(r) <= to : rowZ(r) <= from && rowZ(r) >= to));
       if (from > to) rows.reverse();
       for (const row of rows) c.queue({ type: 'walk', x: 0, z: rowZ(row) - 0.4, speed: 0.7 }, { type: 'call', fn: () => this._collectRow(row, c) }, { type: 'wait', dur: 0.9 });
-      c.queue({ type: 'call', fn: (a) => a.setProp('r', null) }, { type: 'walk', x: 0, z: from < to ? -1.4 : 24.6, speed: 1 }, { type: 'call', fn: () => { if (--n === 0 && onDone) onDone(); } });
+      c.queue({ type: 'call', fn: (a) => a.setProp('r', null) }, { type: 'walk', x: 0, z: from < to ? rowZ(1) - 0.5 : LAYOUT.aftGalleyZ - 0.35, speed: 1 }, { type: 'call', fn: () => { if (--n === 0 && onDone) onDone(); } });
     }
   }
   _collectRow(row, c) {
@@ -633,7 +633,7 @@ export class People {
       for (const d of sorted) {
         if (!d.act.task && !d.act.tasks.length) {
           d.act.headTarget = null;
-          d.act.queue({ type: 'walk', x: 0, z: -2.3, speed: 0.7 }, { type: 'walk', x: -1.4, z: -2.3, speed: 0.7 },
+          d.act.queue({ type: 'walk', x: 0, z: DOORS.L1.z, speed: 0.7 }, { type: 'walk', x: -1.4, z: DOORS.L1.z, speed: 0.7 },
             { type: 'call', fn: () => { d.out = true; d.act.root.visible = false; this.walkers.splice(this.walkers.indexOf(d.act), 1); } });
           d.act.setProp('r', this.r() < 0.6 ? 'bag' : null);
         }

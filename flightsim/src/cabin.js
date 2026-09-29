@@ -1,54 +1,87 @@
 // A320neo cabin interior in SAS configuration (180 seats, 3-3, rows 1-31 without 13).
 // Aircraft-local frame: x = right (starboard), y = up (cabin floor = 0), z = aft.
+//
+// Cross-section: the upper lobe of the A320 fuselage is a 1.98 m circle about a point 0.52 m above
+// the cabin floor (3.95 m wide, widest at armrest height); the lining sits 0.13 m inside the skin,
+// which gives the published 3.70 m cabin width. Towards the cockpit and the rear pressure bulkhead
+// the fuselage narrows, and the lining (and everything fixed to it) narrows with it.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { sweepProfile, rrLoop, tunnel, mergeColored, trs, colorize } from './geom.js';
 import * as TX from './textures.js';
-import { rng } from './core.js';
+import { rng, clamp } from './core.js';
+import { SKIN, DOOR_Z, COCKPIT_DOOR_Z, AFT_BULKHEAD_Z, fusHalfWidthAt } from './airframe.js';
 
+export const LINING = 0.13;
 export const CAB = {
-  yc: 1.02, Rw: 1.82, Rpane: 1.962, Rskin: 1.99,
-  zFront: -4.6, zAft: 26.6,
+  yc: SKIN.yc, Rw: SKIN.R - LINING, Rpane: SKIN.R - 0.03, Rskin: SKIN.R,
+  zFront: COCKPIT_DOOR_Z, zAft: AFT_BULKHEAD_Z,
   winY: 1.10, winW: 0.268, winH: 0.378, paneW: 0.228, paneH: 0.33,
   binBottomY: 1.62, ceilingY: 2.24,
 };
-export const wallX = (y) => Math.sqrt(Math.max(0, CAB.Rw * CAB.Rw - (y - CAB.yc) ** 2));
+// how much narrower the cabin is at z than in the constant section (1 = full width)
+const W_REF = fusHalfWidthAt(8, CAB.winY);
+export const taperK = (z) => clamp(fusHalfWidthAt(z, CAB.winY) / W_REF, 0.5, 1);
+export const wallX = (y, z = 8) => Math.sqrt(Math.max(0, CAB.Rw * CAB.Rw - (y - CAB.yc) ** 2)) * taperK(z);
+// scale x of every vertex by the local taper
+export function taperGeometry(g) {
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) p.setX(i, p.getX(i) * taperK(p.getZ(i)));
+  p.needsUpdate = true; g.computeVertexNormals();
+  return g;
+}
 export const ROWS = [...Array(12).keys()].map((i) => i + 1).concat([...Array(18).keys()].map((i) => i + 14));
 export const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 export const SEAT_X = { A: -1.512, B: -1.005, C: -0.498, D: 0.498, E: 1.005, F: 1.512 };
 export const BUSINESS_ROWS = 4;
 export const EXIT_ROWS = [11, 12];
 
+// Seat pitch on SAS's A320neo (seat maps): rows 2-10 30 in, exit rows 11 and 12 34 and 33 in,
+// rows 14-29 29 in, rows 30-31 28 in. Row 1 starts 0.6 m behind the forward doors.
+const IN = 0.0254;
+const PITCH = (r) => (r <= 10 ? 30 : r === 11 ? 34 : r === 12 ? 33 : r <= 29 ? 29 : 28) * IN;
+export const DOORS = { L1: { side: -1, z: DOOR_Z.L1 }, R1: { side: 1, z: DOOR_Z.L1 }, L4: { side: -1, z: DOOR_Z.L4 }, R4: { side: 1, z: DOOR_Z.L4 } };
+export const DOOR_W = 0.81, DOOR_H = 1.85;
 const ROW_Z = (() => {
-  const m = {}; let z = 0.1;
-  for (const r of ROWS) { if (r !== 1) z += (r === 11 || r === 12) ? 0.94 : 0.762; m[r] = z; }
+  const m = {}; let z = DOOR_Z.L1 + DOOR_W / 2 + 0.6 + 0.26;
+  for (const r of ROWS) { if (r !== 1) z += PITCH(r); m[r] = z; }
   return m;
 })();
 export const rowZ = (r) => ROW_Z[r];
 export const HATCH_Z = [rowZ(11) - 0.47, rowZ(12) - 0.47];
-export const DOORS = { L1: { side: -1, z: -2.3 }, R1: { side: 1, z: -2.3 }, L4: { side: -1, z: 24.2 }, R4: { side: 1, z: 24.2 } };
-export const DOOR_W = 0.81, DOOR_H = 1.85;
+// Monuments: the forward lavatory (left) reaches forward beside the cockpit door, galley G1 on the
+// right; two lavatories and the galley at the back behind doors 4 (Airbus Space-Flex).
+export const LAYOUT = {
+  fwdLavZ0: -3.95, fwdMonAftZ: -2.87,    // forward lav/galley: aft faces just ahead of doors 1
+  aftMonZ: DOOR_Z.L4 + DOOR_W / 2 + 0.12, // aft lavatories' forward faces, just behind doors 4
+  aftGalleyZ: 23.30,                      // aft galley face (between the aft lavatories)
+  aftStandZ: DOOR_Z.L4,                   // where the aft crew work, between doors 4
+  fwdStandZ: DOOR_Z.L1,
+  aisleZ0: -2.85, aisleZ1: DOOR_Z.L4 + DOOR_W / 2 + 0.1,
+};
 
+// Windows every 21 in (the frame pitch) from door 1 to door 4, the grid anchored on the two
+// overwing exits (which carry their own windows).
 export function windowList() {
   const wins = [];
+  const P = 0.5334, zMin = DOOR_Z.L1 + DOOR_W / 2 + 0.3, zMax = DOOR_Z.L4 - DOOR_W / 2 - 0.3;
+  const zs = [];
+  for (let z = HATCH_Z[0] - P; z > zMin; z -= P) zs.push(z);
+  for (let z = HATCH_Z[1] + P; z < zMax; z += P) zs.push(z);
   for (const side of [-1, 1]) {
-    for (let k = 0; k < 46; k++) {
-      const z = -0.95 + k * 0.5334;
-      if (HATCH_Z.some((h) => Math.abs(h - z) < 0.36)) continue;
-      wins.push({ side, z, hatch: false });
-    }
+    for (const z of zs) wins.push({ side, z, hatch: false });
     for (const hz of HATCH_Z) wins.push({ side, z: hz, hatch: true });
   }
   return wins;
 }
 
-// point on the fuselage circle of radius R at angle th (from +x about (0,yc)) for a side
+// point on the lining circle of radius R at angle th (from +x about (0,yc)) for a side
 const cyl = (side, R, th, z) => new THREE.Vector3(side * R * Math.cos(th), CAB.yc + R * Math.sin(th), z);
 const thOfY = (R, y) => Math.asin((y - CAB.yc) / R);
 
 function windowLoop(side, R, z, w, h, r, yCentre = CAB.winY) {
-  const th0 = thOfY(CAB.Rw, yCentre);
-  return rrLoop(w, h, r, 32).map(([a, b]) => cyl(side, R, th0 + b / R, z + a * (side > 0 ? 1 : -1)));
+  const th0 = thOfY(CAB.Rw, yCentre), k = taperK(z);
+  return rrLoop(w, h, r, 32).map(([a, b]) => { const p = cyl(side, R, th0 + b / R, z + a * (side > 0 ? 1 : -1)); p.x *= k; return p; });
 }
 
 export class Cabin {
@@ -108,16 +141,19 @@ export class Cabin {
   _buildShell() {
     const zA = CAB.zFront, zB = CAB.zAft, L = zB - zA;
     const g = this.group;
-    // floor
+    const SEG = 120; // along z, so the taper at both ends is smooth
+    // floor (narrows with the fuselage; the carpet texture tiles every 1.2 m)
     const fw = wallX(0);
-    const floor = new THREE.PlaneGeometry(fw * 2, L, 1, 1);
+    const floor = new THREE.PlaneGeometry(fw * 2, L, 1, SEG);
     floor.rotateX(-Math.PI / 2); floor.translate(0, 0, (zA + zB) / 2);
     const uv = floor.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * fw * 2 / 1.2, uv.getY(i) * L / 1.2);
+    taperGeometry(floor);
     const fm = new THREE.Mesh(floor, this.mat.carpet); fm.receiveShadow = true; g.add(fm);
     // floor path marking strips
     for (const s of [-1, 1]) {
-      const st = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.004, 23.5), this.mat.floorStrip);
-      st.position.set(s * 0.262, 0.002, 11.3); g.add(st);
+      const len = LAYOUT.aisleZ1 - (rowZ(1) - 1.0);
+      const st = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.004, len), this.mat.floorStrip);
+      st.position.set(s * 0.262, 0.002, rowZ(1) - 1.0 + len / 2); g.add(st);
     }
     // sidewalls with alpha-tested window and door holes
     const th0 = thOfY(CAB.Rw, 0), th1 = thOfY(CAB.Rw, CAB.binBottomY + 0.02);
@@ -141,7 +177,7 @@ export class Cabin {
     const segs = 24;
     const prof = []; for (let i = 0; i <= segs; i++) { const th = th0 + (th1 - th0) * i / segs; prof.push([CAB.Rw * Math.cos(th), CAB.yc + CAB.Rw * Math.sin(th)]); }
     for (const side of [-1, 1]) {
-      const geo = sweepProfile(prof, zA, zB, { segZ: 1, uScale: L, vScale: arcLen, flipX: side < 0, invert: true });
+      const geo = taperGeometry(sweepProfile(prof, zA, zB, { segZ: SEG, uScale: L, vScale: arcLen, flipX: side < 0, invert: true }));
       // second uv set for the tiled colour texture
       const mat = this._std({ color: '#ecebe8', roughness: 0.6, alphaMap: this.wallTex.alpha, alphaTest: 0.5, map: this.wallTex.color, side: THREE.FrontSide });
       mat.map.repeat.set(L / 1.2, 1);
@@ -157,15 +193,24 @@ export class Cabin {
     // ceiling (centre panel) and cove
     const ceilProf = [];
     for (let i = 0; i <= 10; i++) { const x = -0.86 + 1.72 * i / 10; ceilProf.push([x, CAB.ceilingY - 0.14 * (x / 0.86) ** 2]); }
-    const ceil = sweepProfile(ceilProf, zA, zB, { uScale: 1.6, vScale: 1.72 });
+    const ceil = taperGeometry(sweepProfile(ceilProf, zA, zB, { segZ: SEG, uScale: 1.6, vScale: 1.72 }));
     const cm = new THREE.Mesh(ceil, this.mat.ceiling); cm.receiveShadow = true; g.add(cm);
-    // end bulkheads (cockpit wall & aft pressure bulkhead)
-    for (const [z, flip] of [[zA, 1], [zB, -1]]) {
-      const sh = new THREE.Shape();
-      for (let i = 0; i <= 40; i++) { const th = -Math.PI / 2 + Math.PI * 2 * i / 40; const x = CAB.Rw * Math.cos(th), y = CAB.yc + CAB.Rw * Math.sin(th); if (i === 0) sh.moveTo(x, Math.max(0, y)); else sh.lineTo(x, Math.max(0, y)); }
-      const bg = new THREE.ShapeGeometry(sh, 4);
-      const bm = new THREE.Mesh(bg, this.mat.wall); bm.position.z = z; if (flip < 0) bm.rotation.y = Math.PI; g.add(bm);
-    }
+    // end walls cut to the local cabin section: the rear pressure bulkhead, and the cockpit
+    // partition with its door opening (left of x = -0.48 the forward lavatory takes the space)
+    const k0 = taperK(zA), kB = taperK(zB);
+    const aft = new THREE.Shape();
+    for (let i = 0; i <= 48; i++) { const th = -Math.PI / 2 + Math.PI * 2 * i / 48; const x = CAB.Rw * Math.cos(th) * kB, y = CAB.yc + CAB.Rw * Math.sin(th); if (i === 0) aft.moveTo(x, Math.max(0, y)); else aft.lineTo(x, Math.max(0, y)); }
+    const am = new THREE.Mesh(new THREE.ShapeGeometry(aft, 4), this.mat.wall); am.position.z = zB; am.rotation.y = Math.PI; g.add(am);
+    const part = new THREE.Shape();
+    const xL = -0.48, thL = Math.PI - Math.acos(Math.min(1, -xL / (CAB.Rw * k0)));
+    part.moveTo(xL, 0); part.lineTo(wallX(0, zA), 0);
+    for (let i = 0; i <= 32; i++) { const th = thOfY(CAB.Rw, 0) + (thL - thOfY(CAB.Rw, 0)) * i / 32; part.lineTo(CAB.Rw * Math.cos(th) * k0, CAB.yc + CAB.Rw * Math.sin(th)); }
+    part.lineTo(xL, 0);
+    const door = new THREE.Path(); door.moveTo(-0.42, 0.001); door.lineTo(0.42, 0.001); door.lineTo(0.42, 1.98); door.lineTo(-0.42, 1.98); door.lineTo(-0.42, 0.001);
+    part.holes.push(door);
+    const pm = new THREE.Mesh(new THREE.ShapeGeometry(part, 6), this.mat.wall2 || (this.mat.wall2 = Object.assign(this.mat.wall.clone(), { side: THREE.DoubleSide })));
+    pm.position.z = zA; g.add(pm);
+    this.cockpitDoorOpening = { x0: -0.42, x1: 0.42, z: zA, h: 1.98 };
   }
 
   // --------------- windows: reveals, shades, panes ---------------
@@ -237,8 +282,9 @@ export class Cabin {
       const rm = new THREE.Mesh(rev, this.mat.reveal); rm.castShadow = true; rm.receiveShadow = true;
       this.group.add(rm);
       // pane
+      const k = taperK(w.z);
       const pane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), paneMat);
-      const c = cyl(side, CAB.Rpane, th, w.z);
+      const c = cyl(side, CAB.Rpane, th, w.z); c.x *= k;
       const nrm = new THREE.Vector3(side * Math.cos(th), Math.sin(th), 0); // outward
       pane.position.copy(c);
       pane.lookAt(c.clone().sub(nrm)); // face inward
@@ -257,8 +303,10 @@ export class Cabin {
       }
       const shadeRoot = new THREE.Group(); shadeRoot.position.set(0, CAB.yc, w.z); shadeRoot.rotation.z = side > 0 ? th : -th;
       const shade = new THREE.Mesh(shadeGeoCache.get(key), this.mat.shade); shade.castShadow = true; shade.receiveShadow = true;
-      shadeRoot.add(shade); g.add(shadeRoot);
-      const win = { side, z: w.z, hatch: w.hatch, centre: cyl(side, CAB.Rw, th, w.z), normal: nrm.clone().negate(), shade: 0, shadeTarget: 0, shadeRoot, shadeMesh: shade, th, pane };
+      shadeRoot.add(shade);
+      const narrow = new THREE.Group(); narrow.scale.x = k; narrow.add(shadeRoot); g.add(narrow); // follows the taper
+      const centre = cyl(side, CAB.Rw, th, w.z); centre.x *= k;
+      const win = { side, z: w.z, hatch: w.hatch, centre, normal: nrm.clone().negate(), shade: 0, shadeTarget: 0, shadeRoot, shadeMesh: shade, th, pane };
       shade.userData.interact = { kind: 'shade', win, prompt: () => (win.shadeTarget > 0.5 ? 'Open window shade' : 'Close window shade') };
       this.windows.push(win);
       this.setShade(win, 0, true);
@@ -277,43 +325,44 @@ export class Cabin {
   // --------------- overhead bins, PSU, cove lights ---------------
   _buildBins() {
     const g = this.group;
-    const z0 = -1.25, z1 = 23.45;
+    const z0 = DOOR_Z.L1 + DOOR_W / 2 + 0.15, z1 = DOOR_Z.L4 - DOOR_W / 2 - 0.15;
+    this.binZ = [z0, z1];
     const L = z1 - z0;
     const yb = CAB.binBottomY;
     const xw = wallX(yb) - 0.01;
     // PSU / bin bottom surface
     const psuProf = [[0.97, yb + 0.045], [xw, yb]];
     const rows = ROWS.map((r) => ({ row: r, z: rowZ(r) - 0.28 }));
+    const SEG = 60;
     for (const side of [-1, 1]) {
       const tex = TX.psuTexture(4096, rows, z0, z1, side < 0 ? 'L' : 'R');
       const mat = this._std({ color: '#ffffff', roughness: 0.55, map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.18 });
       this.psuMats = this.psuMats || []; this.psuMats.push(mat);
-      const geo = sweepProfile(psuProf, z0, z1, { uScale: L, vScale: 0.76, flipX: side < 0 });
-      if (side < 0) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i)); }
+      const geo = taperGeometry(sweepProfile(psuProf, z0, z1, { segZ: SEG, uScale: L, vScale: 0.76, flipX: side < 0 }));
       const m = new THREE.Mesh(geo, mat); m.receiveShadow = true; m.castShadow = true; g.add(m);
-      // bin body back (between bin top and wall) - hidden mostly, darker
-      const back = sweepProfile([[xw, yb], [xw - 0.05, 2.1], [0.84, 2.13]], z0, z1, { flipX: side < 0, invert: true });
+      // bin body back, following the curved upper wall - mostly hidden, darker
+      const back = taperGeometry(sweepProfile([[xw, yb], [wallX(1.8) - 0.01, 1.8], [wallX(2.0) - 0.01, 2.0], [0.84, 2.13]], z0, z1, { segZ: SEG, flipX: side < 0, invert: true }));
       const bm = new THREE.Mesh(back, this.mat.binInside); g.add(bm);
       // cove light strip (between bin top and ceiling), in segments for the mood scenes
       const NSEG = 24;
       for (let k = 0; k < NSEG; k++) {
-        const za = z0 + L * k / NSEG, zb = z0 + L * (k + 1) / NSEG;
+        const za = z0 + L * k / NSEG, zb = z0 + L * (k + 1) / NSEG, kz = taperK((za + zb) / 2);
         const cove = new THREE.Mesh(new THREE.PlaneGeometry(0.09, zb - za), this._coveMat(1, (k + 0.5) / NSEG, side));
-        cove.rotation.x = -Math.PI / 2; cove.rotation.y = side * 0.5; cove.position.set(side * 0.855, 2.105, (za + zb) / 2);
+        cove.rotation.x = -Math.PI / 2; cove.rotation.y = side * 0.5; cove.position.set(side * 0.855 * kz, 2.105, (za + zb) / 2);
         g.add(cove);
         // wash light under the bin lip, lighting the window band
         const wash = new THREE.Mesh(new THREE.PlaneGeometry(0.05, zb - za), this._coveMat(0.6, (k + 0.5) / NSEG, side));
-        wash.rotation.x = Math.PI / 2; wash.position.set(side * 1.0, yb + 0.028, (za + zb) / 2);
+        wash.rotation.x = Math.PI / 2; wash.position.set(side * 1.0 * kz, yb + 0.028, (za + zb) / 2);
         g.add(wash);
       }
     }
     // end caps closing the bin run at both ends
-    const capShape = (side) => {
-      const sh = new THREE.Shape(); const pts = [[xw, yb], [0.97, yb + 0.045], [0.87, 2.1], [0.84, 2.14], [xw - 0.05, 2.14]];
-      pts.forEach(([x, y], i) => (i ? sh.lineTo(side * x, y) : sh.moveTo(side * x, y))); sh.closePath(); return new THREE.ShapeGeometry(sh);
+    const capShape = (side, k) => {
+      const sh = new THREE.Shape(); const pts = [[xw, yb], [0.97, yb + 0.045], [0.87, 2.1], [wallX(2.1) - 0.01, 2.1], [wallX(1.9) - 0.01, 1.9]];
+      pts.forEach(([x, y], i) => (i ? sh.lineTo(side * x * k, y) : sh.moveTo(side * x * k, y))); sh.closePath(); return new THREE.ShapeGeometry(sh);
     };
     for (const side of [-1, 1]) for (const z of [z0, z1]) {
-      const cap = new THREE.Mesh(capShape(side), this.mat.wall2 || (this.mat.wall2 = Object.assign(this.mat.wall.clone(), { side: THREE.DoubleSide })));
+      const cap = new THREE.Mesh(capShape(side, taperK(z)), this.mat.wall2 || (this.mat.wall2 = Object.assign(this.mat.wall.clone(), { side: THREE.DoubleSide })));
       cap.position.z = z; g.add(cap);
     }
     // bin doors: segments ~1.52 m, hinge at top, open upward
@@ -326,11 +375,12 @@ export class Cabin {
         const za = z0 + k * segLen + 0.004, zb = za + segLen - 0.008;
         const geo = sweepProfile(lidProf.map(([x, y]) => [x, y - 2.1]), za, zb, { uScale: segLen, vScale: 0.5, flipX: side < 0, invert: true });
         const lid = new THREE.Mesh(geo, this.mat.bin); lid.castShadow = true; lid.receiveShadow = true;
-        const pivot = new THREE.Group(); pivot.position.set(side * 0.85, 2.1, 0); lid.position.set(-side * 0.85, 0, 0);
+        const kz = taperK((za + zb) / 2);
+        const pivot = new THREE.Group(); pivot.position.set(side * 0.85 * kz, 2.1, 0); pivot.scale.x = kz; lid.position.set(-side * 0.85, 0, 0);
         pivot.add(lid); g.add(pivot);
         // interior (visible when open)
-        const box = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.4, segLen - 0.02), this.mat.binInside);
-        box.position.set(side * 1.3, 1.86, (za + zb) / 2); g.add(box);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, segLen - 0.02), this.mat.binInside);
+        box.position.set(side * 1.2 * kz, 1.84, (za + zb) / 2); g.add(box);
         const bin = { side, z0: za, z1: zb, pivot, open: 0, target: 0 };
         lid.userData.interact = { kind: 'bin', bin, prompt: () => (bin.target > 0.5 ? 'Close overhead bin' : 'Open overhead bin') };
         this.bins.push(bin);
@@ -468,69 +518,89 @@ export class Cabin {
     // forward lavatory (left) and galley (right)
     this.lavs = [];
     const lavDoorMat = this._std({ color: '#ffffff', roughness: 0.5, map: TX.lavDoorTex() });
-    const mkLav = (x0, x1, z0, z1, doorFace, name) => {
+    // doorFace: -1 door in the forward wall, +1 in the aft wall, 'in' in the inboard side wall
+    // (then doorZ is the door's centre along z)
+    const mkLav = (x0, x1, z0, z1, doorFace, name, doorZc = null) => {
       const w = x1 - x0, d = z1 - z0;
       const walls = new THREE.Group();
-      const t = 0.04;
+      const t = 0.04, H = 2.12;
       const ww = (sw, sh, sd, px, py, pz) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sw, sh, sd), M.wall); m.position.set(px, py, pz); m.castShadow = true; m.receiveShadow = true; walls.add(m); };
-      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-      ww(w, 2.15, t, cx, 1.075, doorFace < 0 ? z1 : z0); // back wall
-      ww(t, 2.15, d, x0, 1.075, cz); ww(t, 2.15, d, x1, 1.075, cz);
-      ww(w, 0.04, d, cx, 2.15, cz);
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, sx = Math.sign(cx);
+      const side = doorFace === 'in';
+      const xin = sx < 0 ? x1 : x0, xout = sx < 0 ? x0 : x1; // inboard and outboard walls
+      ww(t, H, d, xout, H / 2, cz);
+      ww(w, 0.04, d, cx, H, cz);
+      let pivot, door, dz, indPos, indRot;
+      if (side) {
+        ww(w, H, t, cx, H / 2, z0); ww(w, H, t, cx, H / 2, z1);
+        // inboard wall with the door opening (0.56 m) centred at doorZc
+        const a = doorZc - 0.28, b = doorZc + 0.28;
+        if (a - z0 > 0.02) ww(t, H, a - z0, xin, H / 2, (z0 + a) / 2);
+        if (z1 - b > 0.02) ww(t, H, z1 - b, xin, H / 2, (b + z1) / 2);
+        ww(t, H - 1.9, 0.56, xin, 1.9 + (H - 1.9) / 2, doorZc);
+        door = new THREE.Mesh(new THREE.BoxGeometry(0.03, 1.9, 0.56), lavDoorMat);
+        pivot = new THREE.Group(); pivot.position.set(xin, 0.95, a); door.position.set(0, 0, 0.28);
+        dz = doorZc; indPos = [xin - sx * 0.02, 1.97, doorZc]; indRot = -sx * Math.PI / 2;
+      } else {
+        ww(w, H, t, cx, H / 2, doorFace < 0 ? z1 : z0); // back wall
+        ww(t, H, d, xin, H / 2, cz);
+        dz = doorFace < 0 ? z0 : z1;
+        door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.9, 0.03), lavDoorMat);
+        const hingeX = cx - 0.3 * sx;
+        pivot = new THREE.Group(); pivot.position.set(hingeX, 0.95, dz); door.position.set(0.3 * sx, 0, 0);
+        const rem = w - 0.62;
+        if (rem > 0.02) { const m = new THREE.Mesh(new THREE.BoxGeometry(rem, H, t), M.wall); m.position.set(cx + sx * (0.31 + rem / 2), H / 2, dz); g.add(m); }
+        indPos = [cx, 1.97, dz + (doorFace < 0 ? -0.02 : 0.02)]; indRot = doorFace < 0 ? Math.PI : 0;
+      }
       g.add(walls);
-      // door (bifold) facing aisle
-      const dz = doorFace < 0 ? z0 : z1;
-      const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.9, 0.03), lavDoorMat);
-      const hingeX = cx - 0.3 * Math.sign(cx);
-      const pivot = new THREE.Group(); pivot.position.set(hingeX, 0.97, dz); door.position.set(0.3 * Math.sign(cx), 0, 0);
       pivot.add(door); g.add(pivot);
-      // front wall pieces around the door
-      const rem = w - 0.62;
-      if (rem > 0.02) { const m = new THREE.Mesh(new THREE.BoxGeometry(rem, 2.15, t), M.wall); m.position.set(cx + Math.sign(cx) * (0.31 + rem / 2), 1.075, dz); g.add(m); }
       // occupied indicator
       const ind = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.04), new THREE.MeshBasicMaterial({ color: '#2ecc71' }));
-      ind.position.set(cx, 1.97, dz + (doorFace < 0 ? -0.02 : 0.02)); if (doorFace < 0) ind.rotation.y = Math.PI; g.add(ind);
-      // interior fixtures: toilet, sink, mirror
+      ind.position.set(...indPos); ind.rotation.y = indRot; g.add(ind);
+      // interior fixtures: toilet against the outboard wall, sink, mirror
       const toilet = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.17, 0.42, 12), this._std({ color: '#d9dcdf', roughness: 0.25, metalness: 0.5 }));
-      toilet.position.set(cx + Math.sign(cx) * 0.15, 0.21, doorFace < 0 ? z1 - 0.3 : z0 + 0.3); g.add(toilet);
-      const sink = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.34), this._std({ color: '#e9eaea', roughness: 0.3 }));
-      sink.position.set(cx - Math.sign(cx) * 0.18, 0.85, cz); g.add(sink);
+      toilet.position.set(xout - sx * 0.3, 0.21, side ? z0 + 0.35 : (doorFace < 0 ? z1 - 0.3 : z0 + 0.3)); g.add(toilet);
+      const sink = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.4), this._std({ color: '#e9eaea', roughness: 0.3 }));
+      sink.position.set(side ? cx : cx - sx * 0.18, 0.85, side ? z1 - 0.25 : cz); g.add(sink);
       const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.5), this._std({ color: '#b8c4cc', roughness: 0.05, metalness: 1 }));
-      mirror.position.set(x1 - 0.03 * Math.sign(cx) * 0 + (cx > 0 ? -0.022 : 0.022) + (cx > 0 ? 0 : 0), 1.45, cz);
-      mirror.position.x = cx > 0 ? x1 - 0.03 : x0 + 0.03; mirror.rotation.y = cx > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(mirror);
+      mirror.position.set(xout - sx * 0.03, 1.45, cz); mirror.rotation.y = sx > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(mirror);
       const lamp = new THREE.PointLight('#fff1dc', 0, 2.2, 2); lamp.position.set(cx, 2.0, cz); g.add(lamp);
-      const lav = { name, x0, x1, z0, z1, door: pivot, doorMesh: door, indicator: ind, open: 0, target: 0, occupied: false, lamp, toilet, doorZ: dz, doorFace, cx, cz };
+      const lav = { name, x0, x1, z0, z1, door: pivot, doorMesh: door, indicator: ind, open: 0, target: 0, occupied: false, lamp, toilet, doorZ: dz, doorFace, doorX: side ? xin : cx, cx, cz, sideDoor: side };
       door.userData.interact = { kind: 'lavdoor', lav, prompt: () => (lav.occupied ? 'Occupied' : lav.target > 0.5 ? 'Close door' : 'Open lavatory door') };
       toilet.userData.interact = { kind: 'flush', lav, prompt: () => 'Flush' };
       sink.userData.interact = { kind: 'sink', lav, prompt: () => 'Wash hands' };
       this.lavs.push(lav);
       return lav;
     };
-    mkLav(-1.72, -0.5, -4.6, -3.05, 1, 'Lavatory A');
-    mkLav(-1.75, -0.92, 24.95, 26.58, -1, 'Lavatory D');
-    mkLav(0.92, 1.75, 24.95, 26.58, -1, 'Lavatory E');
-    // forward galley (right)
-    const fg = box(1.25, 2.1, 1.5, 1.12, 1.05, -3.85, M.galley);
-    fg.material = [M.wall, M.wall, M.wall, M.wall, M.wall, M.galley].map((m, i) => (i === 4 ? M.galley : m));
-    fg.material = M.wall; const fgFace = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.0), M.galley); fgFace.position.set(1.12, 1.02, -3.09); g.add(fgFace);
-    fgFace.rotation.y = 0; fg.position.z = -3.86; fg.scale.z = 1;
-    // aft galley (centre)
-    const ag = box(1.82, 2.1, 1.3, 0, 1.05, 25.95, M.wall);
-    const agFace = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.0), M.galley); agFace.position.set(0, 1.02, 25.29); agFace.rotation.y = Math.PI; g.add(agFace);
+    const F = LAYOUT;
+    // forward lavatory: left, from beside the cockpit door back to door 1L; its door opens into the
+    // vestibule in front of the cockpit door
+    mkLav(-1.42, -0.48, F.fwdLavZ0, F.fwdMonAftZ, 'in', 'Lavatory A', (CAB.zFront + F.fwdMonAftZ) / 2);
+    // Space-Flex rear: two lavatories in the corners behind doors 4, the galley between them
+    mkLav(-1.30, -0.55, F.aftMonZ, CAB.zAft - 0.06, -1, 'Lavatory D');
+    mkLav(0.55, 1.30, F.aftMonZ, CAB.zAft - 0.06, -1, 'Lavatory E');
+    // forward galley G1 (right), working face towards the door area
+    box(1.02, 2.1, F.fwdMonAftZ - CAB.zFront, 0.99, 1.05, (CAB.zFront + F.fwdMonAftZ) / 2, M.wall);
+    const fgFace = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.0), M.galley); fgFace.position.set(0.99, 1.02, F.fwdMonAftZ + 0.005); g.add(fgFace);
+    fgFace.userData.interact = { kind: 'galley', prompt: () => 'Galley' };
+    // aft galley (centre, against the pressure bulkhead)
+    box(1.06, 2.1, CAB.zAft - F.aftGalleyZ, 0, 1.05, (CAB.zAft + F.aftGalleyZ) / 2, M.wall);
+    const agFace = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 2.0), M.galley); agFace.position.set(0, 1.02, F.aftGalleyZ - 0.005); agFace.rotation.y = Math.PI; g.add(agFace);
     agFace.userData.interact = { kind: 'galley', prompt: () => 'Galley' };
-    this.aftGalley = { z: 25.2 };
-    // row-1 bulkhead: Scandinavian wood-effect panels with the airline logo, either side of the aisle
-    for (const side of [-1, 1]) {
-      const panel = new THREE.Mesh(new THREE.PlaneGeometry(1.32, 2.1), side < 0 ? M.bulkhead : M.wood);
-      panel.position.set(side * 1.1, 1.06, -3.0); panel.rotation.y = 0; panel.receiveShadow = true; g.add(panel);
-      const trim = box(1.36, 0.04, 0.03, side * 1.1, 2.12, -3.0, M.metal);
-    }
-    // cockpit door
-    const cd = box(0.86, 1.98, 0.06, 0, 0.99, -4.56, this._std({ color: '#d5d7da', roughness: 0.4 }));
-    const peep = new THREE.Mesh(new THREE.CircleGeometry(0.018, 12), M.dark); peep.position.set(0, 1.55, -4.525); g.add(peep);
-    const keypad = box(0.08, 0.12, 0.02, -0.55, 1.3, -4.57, M.dark);
-    cd.userData.interact = { kind: 'cockpit', prompt: () => 'Cockpit door (locked)' };
-    // forward partition behind row 1? (open plan); jump seats
+    this.aftGalley = { z: F.aftGalleyZ - 0.1 };
+    // Scandinavian wood-effect panel with the SAS logo on the lavatory wall facing door 1
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 2.05), M.bulkhead); panel.position.set(-0.95, 1.05, F.fwdMonAftZ + 0.03); panel.receiveShadow = true; g.add(panel);
+    box(0.94, 0.04, 0.03, -0.95, 2.1, F.fwdMonAftZ + 0.03, M.metal);
+    // cockpit door: hinged on its left, swinging into the flight deck
+    const cdMat = this._std({ color: '#b9bdc3', roughness: 0.45 });
+    const cdPivot = new THREE.Group(); cdPivot.position.set(-0.42, 0, CAB.zFront); g.add(cdPivot);
+    const cd = new THREE.Mesh(new THREE.BoxGeometry(0.84, 1.97, 0.05), cdMat); cd.position.set(0.42, 0.985, 0); cd.castShadow = true; cdPivot.add(cd);
+    const peep = new THREE.Mesh(new THREE.CircleGeometry(0.018, 12), M.dark); peep.position.set(0.42, 1.55, 0.027); cdPivot.add(peep);
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.05), M.metal); handle.position.set(0.74, 1.0, 0.05); cdPivot.add(handle);
+    const keypad = box(0.02, 0.12, 0.08, -0.465, 1.3, CAB.zFront + 0.25, M.dark);
+    this.cockpitDoor = { pivot: cdPivot, mesh: cd, open: 0, target: 0, locked: true };
+    const cdi = { kind: 'cockpit', prompt: () => (this.cockpitDoor.target > 0.5 ? 'Close the cockpit door' : this.cockpitDoor.locked ? 'Cockpit door (locked)' : 'Open the cockpit door') };
+    cd.userData.interact = cdi; keypad.userData.interact = { kind: 'keypad', prompt: () => 'Cockpit door keypad: ask for access' };
     this.jumpSeats = [];
     const js = (x, z, face) => {
       const seat = new THREE.Group(); seat.position.set(x, 0, z); seat.rotation.y = face > 0 ? 0 : Math.PI;
@@ -538,10 +608,10 @@ export class Cabin {
       const back = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.55, 0.06, 2, 0.02), M.curtain); back.position.set(0, 0.8, 0.02); seat.add(back);
       g.add(seat); this.jumpSeats.push({ x, z: z + (face > 0 ? -0.18 : 0.18), face, root: seat });
     };
-    // front double jump seat on the lav wall (facing aft)
-    js(-1.3, -3.0, -1); js(-0.85, -3.0, -1);
-    // aft jump seats on the galley face (facing forward)
-    js(-0.45, 25.25, 1); js(0.45, 25.25, 1);
+    // front double cabin-crew seat on the lavatory wall (facing aft, towards door 1L)
+    js(-1.18, F.fwdMonAftZ + 0.05, -1); js(-0.74, F.fwdMonAftZ + 0.05, -1);
+    // aft seats folding down from the galley face (facing forward)
+    js(-0.25, F.aftGalleyZ - 0.03, 1); js(0.25, F.aftGalleyZ - 0.03, 1);
     // business curtain (open, gathered at the bins)
     this.curtains = [];
     const zc = rowZ(BUSINESS_ROWS) + 0.47;
@@ -570,30 +640,23 @@ export class Cabin {
     const doorMat = this._std({ color: '#ffffff', roughness: 0.5, map: TX.doorTex() });
     this.doors = {};
     for (const [name, d] of Object.entries(DOORS)) {
-      const R = CAB.Rw - 0.02;
       const prof = []; const n = 10;
-      for (let i = 0; i <= n; i++) { const y = 0.02 + (DOOR_H) * i / n; prof.push([Math.min(wallX(y), R) - 0.02, y]); }
+      for (let i = 0; i <= n; i++) { const y = 0.02 + (DOOR_H) * i / n; prof.push([wallX(y, d.z) - 0.02, y]); }
       const geo = sweepProfile(prof, -DOOR_W / 2, DOOR_W / 2, { uScale: DOOR_W, vScale: DOOR_H, flipX: d.side < 0, invert: d.side > 0 });
-      // uv fix: swap so texture is upright (u across width, v up)
       // hinge on the forward edge, just outside the skin
-      const hx = d.side * (CAB.Rskin - 0.05), hz = d.z - DOOR_W / 2;
+      const hx = d.side * (fusHalfWidthAt(d.z, 1.0) - 0.05), hz = d.z - DOOR_W / 2;
       const pivot = new THREE.Group(); pivot.position.set(hx, 0, hz);
       const mesh = new THREE.Mesh(geo, doorMat); mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.position.set(-hx, 0, d.z - hz);
       pivot.add(mesh); g.add(pivot);
-      // door surround (upper wall where bins are absent)
-      const za = d.z < 0 ? -3.05 : 23.44, zb = d.z < 0 ? -1.24 : 24.95;
-      const up = sweepProfile([[wallX(CAB.binBottomY), CAB.binBottomY], [wallX(2.0) - 0.02, 2.0], [0.86, 2.13]], za, zb, { flipX: d.side < 0, invert: true });
+      // door surround (upper wall where the bins stop): between the monuments and the bin run
+      const za = d.z < 10 ? LAYOUT.fwdMonAftZ : this.binZ[1], zb = d.z < 10 ? this.binZ[0] : LAYOUT.aftMonZ;
+      const up = taperGeometry(sweepProfile([[wallX(CAB.binBottomY), CAB.binBottomY], [wallX(2.0) - 0.02, 2.0], [0.86, 2.13]], za, zb, { segZ: 4, flipX: d.side < 0, invert: true }));
       if (!this.mat.wall2) { this.mat.wall2 = this.mat.wall.clone(); this.mat.wall2.side = THREE.DoubleSide; }
       g.add(new THREE.Mesh(up, this.mat.wall2));
-      // door lining (frame) — dark seal around the opening
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.06, DOOR_H + 0.05, DOOR_W + 0.1), this._std({ color: '#d0d1d3', roughness: 0.6 }));
-      frame.position.set(d.side * (wallX(1.0) + 0.05), DOOR_H / 2, d.z); g.add(frame);
-      frame.visible = false;
       // window in the door (small)
       const pane = new THREE.Mesh(new THREE.CircleGeometry(0.1, 20), this.paneMat);
-      const th = thOfY(CAB.Rw, 1.38);
-      pane.position.set(d.side * (wallX(1.38) - 0.01) - hx, 1.38, d.z - hz);
+      pane.position.set(d.side * (wallX(1.38, d.z) - 0.01) - hx, 1.38, d.z - hz);
       pane.rotation.set(0, d.side > 0 ? -Math.PI / 2 : Math.PI / 2, 0);
       pivot.add(pane);
       this.doors[name] = { name, side: d.side, z: d.z, pivot, mesh, open: 0, target: 0, armed: true, hx, hz };
@@ -603,7 +666,7 @@ export class Cabin {
     this.hatches = [];
     for (const side of [-1, 1]) for (const hz of HATCH_Z) {
       const prof = []; const n = 8;
-      for (let i = 0; i <= n; i++) { const y = 0.3 + 1.06 * i / n; prof.push([wallX(y) - 0.012, y]); }
+      for (let i = 0; i <= n; i++) { const y = 0.3 + 1.06 * i / n; prof.push([wallX(y, hz) - 0.012, y]); }
       const geo = sweepProfile(prof, hz - 0.255, hz + 0.255, { uScale: 0.51, vScale: 1.06, flipX: side < 0, invert: side > 0 });
       // cut a hole for the window using alpha map
       const m = new THREE.Mesh(geo, hatchMat); m.castShadow = true; g.add(m);
@@ -645,14 +708,14 @@ export class Cabin {
     const exitTex = TX.exitSignTexture();
     const exitMat = new THREE.MeshBasicMaterial({ map: exitTex, side: THREE.DoubleSide });
     this.exitMat = exitMat;
-    for (const z of [-1.1, (HATCH_Z[0] + HATCH_Z[1]) / 2, 23.7]) {
+    for (const z of [DOOR_Z.L1 + 0.75, (HATCH_Z[0] + HATCH_Z[1]) / 2, DOOR_Z.L4 - 0.75]) {
       const s = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.105), exitMat);
       s.position.set(0, 2.08, z); g.add(s);
     }
     // life vest placards on seat backs are in texture; "EXIT" placards next to hatches
     for (const side of [-1, 1]) for (const hz of HATCH_Z) {
       const s = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.075), exitMat);
-      s.position.set(side * (wallX(1.5) - 0.01), 1.5, hz); s.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(s);
+      s.position.set(side * (wallX(1.5, hz) - 0.01), 1.5, hz); s.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; g.add(s);
     }
   }
 
@@ -766,7 +829,7 @@ export class Cabin {
   _buildMasks() {
     const spots = [];
     for (const r of ROWS) for (const side of [-1, 1]) {
-      const xs = side < 0 ? [-1.62, -1.26, -0.9, -0.55] : [0.55, 0.9, 1.26, 1.62];
+      const kz = taperK(rowZ(r)), xs = [0.98, 1.14, 1.3, 1.44].map((x) => side * x * kz); // across the PSU
       for (const x of xs) spots.push({ x, z: rowZ(r) - 0.16 + (Math.random() - 0.5) * 0.06, ph: Math.random() * 6.28, len: 0.5 + Math.random() * 0.12 });
     }
     this.maskSpots = spots;
@@ -811,7 +874,7 @@ export class Cabin {
     }
     for (const l of this.lavs) {
       if (Math.abs(l.open - l.target) > 1e-3) l.open += Math.sign(l.target - l.open) * Math.min(Math.abs(l.target - l.open), dt * 2.5);
-      l.door.rotation.y = -Math.sign(l.cx) * l.open * 1.35 * (l.doorFace < 0 ? -1 : 1);
+      l.door.rotation.y = l.sideDoor ? -Math.sign(l.cx) * l.open * 1.35 : -Math.sign(l.cx) * l.open * 1.35 * (l.doorFace < 0 ? -1 : 1);
       l.indicator.material.color.set(l.occupied ? '#e74c3c' : '#2ecc71');
     }
     for (const d of Object.values(this.doors)) {
@@ -821,6 +884,9 @@ export class Cabin {
       d.pivot.position.set(d.hx + d.side * k1 * 0.12, k1 * 0.04, d.hz);
       d.pivot.rotation.y = d.side * k2 * 1.72;
     }
+    const cd = this.cockpitDoor;
+    if (Math.abs(cd.open - cd.target) > 1e-3) cd.open += Math.sign(cd.target - cd.open) * Math.min(Math.abs(cd.target - cd.open), dt * 1.4);
+    cd.pivot.rotation.y = cd.open * 1.6; // swings into the flight deck
   }
   setShadeInternal(w) {
     const R = CAB.Rw + 0.025;
