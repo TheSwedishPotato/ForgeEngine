@@ -406,6 +406,9 @@ export class FlightModel {
     this.lift = lift; this.drag = drag; this.CL = CL;
     const ca = Math.cos(alpha), sa = Math.sin(alpha);
     let Fx = -drag * ca + lift * sa, Fy = side, Fz = -drag * sa - lift * ca;
+    // force breakdown in aircraft coordinates (x right, y up, z aft) for the debug view
+    const dF = this.dbgF || (this.dbgF = { lift: [0, 0, 0], drag: [0, 0, 0], side: [0, 0, 0], thrust: [0, 0, 0], ground: { x: 0, y: 0, z: 0 }, tow: 0 });
+    dF.lift[1] = lift * ca; dF.lift[2] = -lift * sa; dF.drag[1] = drag * sa; dF.drag[2] = drag * ca; dF.side[0] = side;
     // moments (aviation body)
     const pH = pa * B / (2 * Va), qH = qa * CBAR / (2 * Va), rH = ra * B / (2 * Va);
     let Cl = -0.10 * beta - 0.45 * pH + 0.12 * rH + 0.09 * this.da - 0.015 * this.dr;
@@ -428,6 +431,7 @@ export class FlightModel {
       this.thrust[i] = t; T += t;
     }
     Fx += T;
+    dF.thrust[2] = -T;
     N += (this.thrust[0] - this.thrust[1]) * ENG_X; // left engine pushes the nose right
     M += T * ENG_ARM;                               // thrust line below the CG
     // ---- convert aero+thrust to world ----
@@ -437,6 +441,7 @@ export class FlightModel {
     // ---- landing gear & structure contacts ----
     const gr = this._ground(dt, fx, fz);
     Fwx += gr.fx; Fwy += gr.fy; Fwz += gr.fz;
+    rotInv(Q, gr.fx, gr.fy, gr.fz, dF.ground); dF.tow = this.tug && this.tug.state !== 'off' ? this.tug.F : 0;
     if (this.tug && this.tug.state !== 'off' && this.wow[0]) {
       this._tugStep(dt);
       // towbar force along the nose wheel, at the nose-gear contact point

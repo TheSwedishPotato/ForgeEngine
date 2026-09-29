@@ -108,10 +108,11 @@ class Display {
       g.strokeStyle = n1 > 101 ? '#ff2b2b' : '#35e05a'; g.lineWidth = 4; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); g.stroke();
       g.fillStyle = '#35e05a'; g.font = 'bold 26px monospace'; g.fillText(n1.toFixed(1), cx + 28, cy + 36);
       g.fillStyle = '#35e05a'; g.font = '20px monospace'; g.fillText(String(Math.round(d.egt[i])), cx, cy + 110);
+      g.fillText((d.n2[i] * 100).toFixed(1), cx, cy + 150);
       g.fillText(String(Math.round(d.ff[i] * 3600 / 10) * 10), cx, cy + 190);
       if (d.fail[i]) { g.fillStyle = '#ffae00'; g.fillText('FAIL', cx, cy - 20); }
     }
-    g.fillStyle = '#fff'; g.font = '18px monospace'; g.fillText('N1 %', 256, 130); g.fillText('EGT °C', 256, 240); g.fillText('FF KG/H', 256, 320);
+    g.fillStyle = '#fff'; g.font = '18px monospace'; g.fillText('N1 %', 256, 130); g.fillText('EGT °C', 256, 240); g.fillText('N2 %', 256, 280); g.fillText('FF KG/H', 256, 320);
     g.textAlign = 'left'; g.fillText(`FOB: ${Math.round(d.fob / 10) * 10} KG`, 18, 372);
     g.fillStyle = '#29c5ff'; g.font = 'bold 22px monospace'; g.fillText(d.flaps === '0' ? '' : `FLAP ${d.flaps}`, 340, 372);
     g.fillStyle = '#fff'; g.fillRect(0, 398, W, 2);
@@ -347,7 +348,7 @@ export class FlightDeck {
     const fm = S.fm, afs = fm.afs, air = fm.air || {};
     const w = fm.wind || {}; const wd = Math.hypot(w.wx || 0, w.wz || 0); const from = ((Math.atan2(-(w.wx || 0), (w.wz || 0)) / DEG) + 360) % 360;
     const sat = (air.T ?? 288) - 273.15, tat = sat + (air.T ?? 288) * 0.2 * fm.mach * fm.mach;
-    const egt = fm.n1.map((n, i) => (fm.engineRunning[i] ? 380 + 520 * Math.max(0, n - 0.2) ** 1.4 : Math.max(20, sat + 10)));
+    const egt = fm.egt;
     const memo = [];
     if (fm.onGround && fm.phase !== 'takeoff') memo.push({ t: `T.O ${fm.ctl.autobrake === 'MAX' ? 'AUTO BRK MAX' : 'CONFIG'}` });
     if (fm.ctl.parkBrake) memo.push({ t: 'PARK BRK', c: '#35e05a' });
@@ -365,7 +366,7 @@ export class FlightDeck {
       warn: fm.stallWarn ? 'STALL' : fm.overspeed ? 'OVERSPEED' : '',
       gs: fm.gs / KT, tas: fm.tas / KT, wind: wd < 0.5 ? 'CALM' : `${String(Math.round(from)).padStart(3, '0')}°/${Math.round(wd / KT)}`,
       dest: fm.airport === 'ARN' ? 'ESSA' : 'EKCH', distNm: (fm.m.stand - fm.s) / 1852, route: pts, ndScale,
-      n1: fm.n1.map((n) => n * 100), egt, ff: fm.ff || [0, 0], fail: fm.engFail, fob: fm.fuel,
+      n1: fm.n1.map((n) => n * 100), n2: fm.n2, egt, ff: fm.ff || [0, 0], fail: fm.engFail, fob: fm.fuel,
       flaps: ['0', '1', '1+F', '2', '3', 'FULL'][fm.cfgTarget] || '0', memo,
       sdPage: fm.onGround ? 'WHEEL' : 'CRUISE',
       sdRows: fm.onGround

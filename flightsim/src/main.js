@@ -15,6 +15,7 @@ import { Scenery } from './scenery.js';
 import { Cabin, rowZ, wallX, DOORS } from './cabin.js';
 import { Exterior } from './exterior.js';
 import { FlightDeck } from './flightdeck.js';
+import { Debug } from './debug.js';
 import { Boarding, FACADE_Z } from './boarding.js';
 import { COCKPIT_DOOR_Z } from './airframe.js';
 import { People } from './people.js';
@@ -179,6 +180,7 @@ async function boot(o, audio) {
   ui.loading(1); ui.showHUD(true);
   setupInput();
   setupPause();
+  S.debug = new Debug(S, { run: (n) => window.__run(n) });
   S.clock = new THREE.Clock();
   S.lastMap = 0;
   renderer.setAnimationLoop(loop);
@@ -304,6 +306,7 @@ function loop() {
   const realDt = Math.min(S.clock.getDelta(), 0.1);
   const { fm, world, cabin, ext, player, audio, people, director, ui, post } = S;
   const dt = S.paused ? 0 : realDt * S.speed;
+  S.debug?.beginFrame();
   if (dt > 0) simStep(dt);
   // ---- camera & head motion ----
   const rr = fm.rollRumble;
@@ -313,9 +316,12 @@ function loop() {
   thumpY = Math.max(0, thumpY - realDt * 6); if (fm.thump > 0.5 && !S._thumped) { thumpY = 0.035 * fm.thump; S._thumped = true; } if (fm.thump < 0.1) S._thumped = false;
   S.cabinDyn.headOffset(shake); shake.y += vib - thumpY;
   const sf = S.cabinDyn.sfCabin;
+  const freeView = S.view === 'free';
+  const pKeys = player.keys; if (freeView) player.keys = {}; // WASD fly the debug camera instead
   player.update(realDt, { headOffset: shake, headRoll: clamp(-sf.x / 9.81 * 0.05, -0.08, 0.08) + (vnoise1(tt * 5 + 50) - 0.5) * 0.003 * (fm.turbLevel || 0), blocked: (x, z) => people.crew.concat(people.walkers).some((c) => c.root.visible && !c.seated && Math.abs(c.x - x) < 0.35 && Math.abs(c.z - z) < 0.45) });
-  const outside = S.view === 'outside';
-  const cam = outside ? updateOrbitCamera(realDt) : player.camera;
+  if (freeView) player.keys = pKeys;
+  const outside = S.view !== 'cabin';
+  const cam = freeView ? S.debug.freeCamera(realDt, pKeys) : outside ? updateOrbitCamera(realDt) : player.camera;
   // world camera = aircraft pose * aircraft-local camera
   const wc = world.camera;
   wc.fov = cam.fov;
@@ -381,7 +387,13 @@ function loop() {
   sharedUniforms.uPreExp.value = preExp;
   const r = S.renderer;
   S.frameNo++;
-  if (outside) renderOutside(r, cam, wc, preExp); else renderCabin(r, cam, wc, preExp, L);
+  if (freeView) {
+    // debug camera: the outside world and exterior; inside the fuselage or the terminal, the cabin scene too
+    renderOutside(r, cam, wc, preExp);
+    const p = cam.position, inFuselage = Math.abs(p.x) < 1.9 && p.y > -0.3 && p.y < 2.5 && p.z > -6.5 && p.z < 24.5;
+    if (inFuselage || (S.boarding && S.boarding.group.visible && (p.x < -2 || p.z < -14))) { r.clearDepth(); r.render(S.cabinScene, cam); }
+  }
+  else if (outside) renderOutside(r, cam, wc, preExp); else renderCabin(r, cam, wc, preExp, L);
   S.flash = Math.max(0, S.flash - realDt * 3);
   S.flashRed = Math.max(0, (S.flashRed || 0) - realDt * 0.8);
   post.finish({ exposure: expIn, time: fm.t, night: nk, earFade: audio.muffle * 0.5 + (S.hypoxia || 0) * 0.9, flash: S.flash, red: S.flashRed, dark: S.blackout || 0, bloom: S.Q.bloom, smaa: S.Q.smaa });
@@ -397,6 +409,7 @@ function loop() {
   if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && !S._deckInvite && !S.deckAccess) { S._deckInvite = true; ui.toast('The captain is saying goodbye at the door — ask at the cockpit door keypad if you would like to see the flight deck', 7); }
   if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && player.state === 'standing' && Math.abs(player.pos.z - DOORS.L1.z) < 0.4 && player.pos.x < -0.7 && !S.ended) endFlight();
   if (S.photoPending) takePhoto();
+  S.debug?.update(realDt);
 }
 
 // Cabin view: outside world only where windows are (stencil), then aircraft exterior, then the cabin.
@@ -616,6 +629,7 @@ function setupInput() {
   document.addEventListener('mousemove', (e) => {
     if (document.pointerLockElement !== canvas) return;
     if (S.view === 'outside') { S.orbit.yaw -= e.movementX * 0.004; S.orbit.pitch += e.movementY * 0.004; }
+    else if (S.view === 'free') S.debug.look(e.movementX, e.movementY);
     else player.look(e.movementX, e.movementY);
   });
   canvas.addEventListener('wheel', (e) => { if (S.view === 'outside') { S.orbit.dist = clamp(S.orbit.dist * (1 + Math.sign(e.deltaY) * 0.1), 14, 160); e.preventDefault(); } }, { passive: false });
@@ -624,7 +638,7 @@ function setupInput() {
   canvas.addEventListener('pointerdown', (e) => { if (document.pointerLockElement !== canvas) drag = { x: e.clientX, y: e.clientY, moved: 0 }; });
   window.addEventListener('pointermove', (e) => {
     if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; drag.moved += Math.abs(dx) + Math.abs(dy);
-    if (S.view === 'outside') { S.orbit.yaw += dx * 0.006; S.orbit.pitch -= dy * 0.006; } else player.look(-dx * 1.6, -dy * 1.6);
+    if (S.view === 'outside') { S.orbit.yaw += dx * 0.006; S.orbit.pitch -= dy * 0.006; } else if (S.view === 'free') S.debug.look(-dx * 1.6, -dy * 1.6); else player.look(-dx * 1.6, -dy * 1.6);
   });
   window.addEventListener('pointerup', () => { drag = null; });
   const keyDown = (code) => {
@@ -633,6 +647,7 @@ function setupInput() {
     const P = S.player, D = S.director;
     if (/^Digit[1-5]$/.test(code)) { if (ui.pickNumber(+code.slice(5))) return; }
     switch (code) {
+      case 'F3': case 'Backquote': S.debug.toggle(); break;
       case 'KeyE': if (S.view === 'cabin') use(S.hovered); break;
       case 'KeyB': if (P.state === 'seated') { P.setBelt(!P.belt); ui.toast(P.belt ? 'Seatbelt fastened' : 'Seatbelt unfastened', 2); } break;
       case 'KeyF': P.setTray(!P.tray); break;
@@ -667,7 +682,7 @@ function setupInput() {
   };
   window.addEventListener('keydown', (e) => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
-    if (e.code === 'Space' || e.code.startsWith('Arrow') || e.code === 'F11') e.preventDefault();
+    if (e.code === 'Space' || e.code.startsWith('Arrow') || e.code === 'F11' || e.code === 'F3') e.preventDefault();
     S.player.keys[e.code] = true;
     if (!e.repeat) keyDown(e.code);
   });
