@@ -158,7 +158,7 @@ async function boot(o, audio) {
     S.boarding = new Boarding(S, { gate: route.gate.name });
     scenery.setBoardingMode(true);
     cabin.doors.L1.open = cabin.doors.L1.target = 1;
-    player.startStanding(-10, FACADE_Z - 1.5, -2.5);
+    player.startStanding(6, FACADE_Z - 1.5, 2.52);
     people.hallZ = FACADE_Z - 1; // in the open hall people walk round you
     player.floorAt = (x, z) => (S.boarding.group.visible ? S.boarding.floorAt(x, z) : 0);
     people.floorAt = player.floorAt;

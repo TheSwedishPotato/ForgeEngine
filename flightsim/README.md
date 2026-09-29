@@ -2,8 +2,9 @@
 
 A first-person passenger simulator that runs in the browser. You sit in a seat of an
 SAS Airbus A320neo on Sunday 10 May 2026 and ride the whole flight in real time:
-pushback is done, the engines are running, and from there you get taxi, the safety
-demonstration, take-off, the climb over Stockholm, cruise at FL360 over Östergötland
+you start at gate F36 in pier F of Arlanda's Terminal 5 half an hour before departure, board
+with everyone else through the jet bridge, find your seat, and then get the doors closing, a
+towed pushback with the engines starting, taxi, the safety demonstration, take-off, the climb over Stockholm, cruise at FL360 over Östergötland
 and Småland, the trolley service, descent over Skåne, the approach over the Øresund,
 landing, taxi-in and deplaning at Terminal 3.
 
@@ -54,9 +55,52 @@ system voice; captions are always shown).
 | **Y** | Swallow — clears blocked ears during the descent |
 | **O** | Put on / take off your oxygen mask (once the masks have dropped) |
 | **+ / −** | Time speed 1× … 16× |
+| **Space** (on the observer seat) | Get up again |
+| **F3** or **§/`** | Debug mode (see below) |
 | **Esc** | Pause, help, jump ahead to a phase, volume |
 
 ## What is simulated
+
+**Boarding.** You start in the hold room of gate F36 at pier F with the other passengers in the
+chairs, the aircraft outside the glass and the jet bridge on its L1 door. The gate agent calls the
+boarding groups in Swedish and English (group 1 SkyPriority, 2 Premium and EuroBonus Silver, 3, then
+4 Economy Light); your boarding pass says which is yours. When it is called you scan your pass at the
+self-boarding gates and walk down the bridge, which rises from the pier floor to the door sill; the
+purser greets you at the door and tells you which side your seat is on. Everyone else walks the same
+way, queues in the bridge and the aisle, opens the bins and lifts their bags in, so the aisle jams
+like it does. About 17 minutes later the last passenger sits down, the purser reports boarding
+complete, the doors close in time for the start-up slot and the bridge pulls back. (*Skip to
+Pushback* in the pause menu seats everyone at once.)
+
+**Pushback and engine start.** The crew ask Arlanda Ground for pushback and start-up (A-CDM: the
+ground controller approves both), release the brakes, and a tug pushes the aircraft through a towbar
+on the nose gear: a real force in the physics, steering the nose wheel up to the towbar limit and
+keeping to walking pace, straight back and then round into a turn to face west. During the push the
+captain starts engine 2 (yellow hydraulics for the brakes and steering) and then engine 1: the
+starter spins the core, the FADEC motors it dry, ignition above 15 % N2, fuel above 20 %, light-off
+in two or three seconds, EGT peaking around 700 °C, starter cut-out at 63 %, idle at about 20 % N1
+and 68 % N2 — about 45 seconds each. The headset man asks for the parking brake, disconnects, shows
+the bypass pin and the tug drives off to the pier.
+
+**The flight deck.** The cockpit door is locked from boarding to arrival, as it is on real flights
+(EU Part-CAT CAT.GEN.MPA.135: only the crew, inspectors and people the operator's manual allows,
+the commander deciding). At the gate after landing the captain lets you in: the nose section is
+built inside with the six windows (the outside world is drawn through them), the glareshield and
+FCU, six display units drawn live from the aircraft (PFD with FMA, speed and altitude tapes;
+navigation display with the route ahead; E/WD with N1, EGT, N2 and fuel flow; system display),
+thrust, flap and speed-brake levers, sidesticks and pedals that move with the pilots' hands, the
+overhead panel and both pilots in their seats. A start-screen *what-if* option unlocks the door for
+the whole flight so you can ride on the observer (jump) seat; that is not allowed on a real flight.
+
+**Debug mode (F3).** Live readouts of everything under the hood: position, air data, attitude,
+angle of attack and its protections, CL/CD and forces, engines (N1, N2, EGT, fuel flow, thrust,
+start state), gear struts and brakes, the tug; pilot inputs, control surfaces, fly-by-wire law,
+FMA and FCU; the crew's procedure state, ATC clearances and radio; wind, turbulence, weather,
+sun and clock; the cabin, boarding and incidents; frame rate, draw calls and memory; and an
+error/warning log. Strip charts plot the last three minutes. Tools: pause, time scale,
+fast-forward, event injection, failures, teleports (seat, flight deck, gate), cockpit door
+unlock, skip boarding, a free camera (W A S D, Q/E, Shift) and force vectors drawn on the
+aircraft (lift, drag, thrust, weight, ground).
 
 **Aircraft and cabin.** A320neo in SAS layout: 180 Recaro slim-line seats, 3-3,
 rows 1–31 without row 13, SAS Business in rows 1–4 with the middle seat blocked and a
@@ -152,7 +196,9 @@ landing runway change comes if the wind changes while you are still far out.
 Lift, drag and side force come from angle of attack and sideslip with a real lift curve and
 stall for each flap setting, spoilers, gear drag and ground effect. The LEAP-1A26 engines
 lose thrust with density and Mach, spool up and down, burn fuel and can fail. Three oleo
-struts with tyre friction, brakes and nose-wheel steering carry it on the ground. Between the
+struts (gas springs that stiffen towards the end of their stroke, damped harder in rebound),
+tyres whose side force builds up with slip angle, brakes and nose-wheel steering carry it on
+the ground; on pushback a tug's towbar force acts at the nose gear. Between the
 pilots' hands and the control surfaces sit the Airbus fly-by-wire laws: a ground law, then the
 normal law (load-factor demand with automatic trim, roll-rate command to 15°/s with bank hold to
 33° and protection at 67°, a yaw damper), alpha, pitch-attitude, load-factor and high-speed
@@ -214,7 +260,8 @@ Departure time (06:00 is SK1415's real slot; later departures use representative
 numbers), weather (nine presets — clear, fair-weather cumulus, broken and breezy, overcast with
 rain, fog at Arlanda, CAT III fog at Kastrup, thunderstorms, a westerly gale, a cold northerly —
 and the full editor), your seat (clickable seat map), passenger load, announcement languages,
-graphics quality, time speed and spoken voices.
+graphics quality, time speed, spoken voices, starting at the gate (boarding, pushback and engine
+start) or after pushback, and the what-if flight-deck observer seat.
 
 ## Sources
 
@@ -255,11 +302,37 @@ graphics quality, time speed and spoken voices.
 * In-flight medical emergencies: 1 in 604 flights (Peterson et al., *NEJM* 2013).
 * Abnormal gear landing: ground spoilers, anti-skid and autobrake not used with the A320 LDG WITH
   ABNORMAL L/G procedure (Airbus *Safety First* magazine, August 2010).
-* ATC: Arlanda Tower 118.500 and Ground 121.700 (OurAirports), Kastrup Tower 118.100 and Copenhagen
+* ATC: Arlanda Tower 118.500 and Ground 121.705 (OurAirports, VATSIM Scandinavia ESSA page), Kastrup Tower 118.100 and Copenhagen
   Approach 119.800; ICAO phraseology. Pilot model: McRuer crossover / human-operator model. Airbus
   normal law, protections and FMA modes: FlyByWire A32NX documentation.
 * Wing and fuselage bending: Airbus publishes no A320 figures, so the mode frequencies (about 2 Hz and
   3.2 Hz) and the tip deflection (about 0.85 m per g) are engineering estimates.
+* Airframe geometry (fuselage stations, cockpit windows, wing planform, flaps, slats and spoilers,
+  sharklets, tailplane and fin, LEAP nacelle, gear positions): measured from the FlightGear A320
+  family model (legoboyvdlp/a320-family on GitHub, GPL: numbers only, no code). SAS 2019 livery:
+  SAS press release *SAS presents new livery* (2019).
+* Aerodynamics: CLmax per configuration from the Airbus 1-g stall speeds; alpha protection,
+  floor and max tables and the managed speeds (VLS, F, S, green dot) from the FlyByWire A32NX
+  source (flybywiresim/aircraft, GPL: numbers and equations only); moments of inertia from the
+  same; drag polar (CD0 0.017, k 0.038, gear +0.017, 124 m² wing, 4.29 m MAC) from OpenAP's
+  A20N model (junzis/openap, LGPL). Engine thrust lapse after Bartel & Young, *Simplified thrust
+  and fuel consumption models for modern two-shaft turbofan engines* (J. Aircraft, 2008); fuel
+  flow from the ICAO engine emissions databank entry for the LEAP-1A26.
+* LEAP-1A start: ignition above 15 % N2, fuel above 20 %, light-off within 2–3 s, ignition off at
+  55 % and starter cut-out at 63 % N2, dry motoring for a bowed rotor up to about a minute at up to
+  30 % N2 (AviationHunt *A320neo LEAP-1A engine start*, PPRuNe *A20N engine start*); engine 2 first
+  for the yellow system.
+* Towing: A320 towbar steering limit 95°, towing speed limit 25 km/h (A320 limitations, PPRuNe
+  *push back and towing angle limits*).
+* Arlanda A-CDM: Delivery gives the TSAT, Ground approves start-up and pushback; push-back is
+  required for jets at the terminal stands (VATSIM Scandinavia ESSA page, Eurocontrol A-CDM
+  Stockholm Arlanda). Terminal 5 piers and gates: Swedavia T5 map. Gate F36 for SK1415 is
+  representative.
+* SAS boarding: priority groups first (SkyPriority, then Plus/Premium and EuroBonus Silver), Go
+  Light/Economy Light last (FlyerTalk, More Premium); fare families renamed Economy, Premium and
+  Business from October 2025 (Live and Let's Fly). SAS A320neo seat pitch per row: seatmaps.com.
+* Admission to the flight crew compartment: EU Regulation 965/2012 Part-CAT CAT.GEN.MPA.135
+  (UK CAA regulatory library).
 * Runways: OurAirports `runways.csv` (ESSA 01L/19R, 01R/19L, 08/26; EKCH 04L/22R,
   04R/22L, 12/30). Terrain: Natural Earth 1:10m (public domain), rebuilt with
   `tools/build_geodata.py`.
@@ -289,7 +362,11 @@ or Copenhagen Airports.
 | `src/scenery.js` | Airports, runway lights, parked aircraft, bridge, wind farms, traffic |
 | `src/exterior.js` | Wing, flaps, slats, spoilers, engines, sharklets, fuselage and livery, tail, undercarriage, lights |
 | `src/textures.js` | Procedural textures: seat backs, fabric/leather/carpet normal maps, faces |
+| `src/airframe.js` | Measured A320neo geometry shared by the exterior, cabin, physics and scenery |
 | `src/cabin.js` | Cabin interior, seats, windows, bins, galleys, lavatories, doors, signs |
+| `src/flightdeck.js` | The flight deck: panels, live display units, levers, pilots, observer seat |
+| `src/boarding.js` | Gate hold room, self-boarding gates, jet bridge, passengers boarding, doors and bridge |
+| `src/debug.js` | Debug mode: readouts, strip charts, error log, tools, free camera, force vectors |
 | `src/humans.js` | Procedural people, clothing, faces, poses |
 | `src/people.js` | Passengers and crew behaviour, safety demo gestures, trolleys |
 | `src/director.js` | The cabin's side of the flight: signs, lights, PAs, service, arrival — reacting to the crew |
@@ -308,6 +385,8 @@ node tools/flight-test.mjs gale 6000 --wind=270/30/45 --sc=efato
 ```
 
 Scenarios: `efato rto engcruise fire fire2 depress dual hyd cat shear shearto gear medical medical2 ga`.
+`--boarding` starts at the gate with the engines off (pushback and engine start); `--win=<t>:<s>`
+prints the gear and roll state every step within `s` seconds of time `t`.
 
 Rebuild `dist/SK1415.html` after changing the source:
 

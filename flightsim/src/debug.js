@@ -95,7 +95,7 @@ export class Debug {
     if (a === 'clr') { this.errors.length = 0; return; }
     if (a === 'tpSeat') { if (P.state === 'jump') P.leaveJump(); P.state = 'standing'; P.pos.set(0, 0, P.seat.z - 0.28); P.sitDown(); return; }
     if (a === 'tpDeck') { S.cabin.cockpitDoor.locked = false; S.cabin.cockpitDoor.target = S.cabin.cockpitDoor.open = 1; if (P.state === 'seated') { P.belt = false; P.tray = false; P.standUp(); } P.state = 'standing'; P.pos.set(0, 0, -3.75); P.yaw = 0; return; }
-    if (a === 'tpGate') { if (!S.boarding || S.boarding.hidden) { this.log('the gate is gone once the aircraft has left the stand'); return; } if (P.state === 'seated') { P.belt = false; P.tray = false; P.standUp(); } P.state = 'standing'; S.boarding.playerScanned = true; P.pos.set(-10, 0, FACADE_Z - 1.5); P.yaw = -2.5; }
+    if (a === 'tpGate') { if (!S.boarding || S.boarding.hidden) { this.log('the gate is gone once the aircraft has left the stand'); return; } if (P.state === 'seated') { P.belt = false; P.tray = false; P.standUp(); } P.state = 'standing'; S.boarding.playerScanned = true; P.pos.set(6, 0, FACADE_Z - 1.5); P.yaw = 2.52; }
   }
 
   // ---------------- free camera ----------------

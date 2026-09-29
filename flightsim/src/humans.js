@@ -20,13 +20,14 @@ function faceMat(tex) {
 export const HUMAN_MATS = { body: bodyMat };
 
 // Random passenger appearance (skews Scandinavian but mixed).
+function pickW(r, items) { let t = 0; for (const [, w] of items) t += w; let x = r() * t; for (const [v, w] of items) { x -= w; if (x <= 0) return v; } return items[items.length - 1][0]; }
 export function randomAppearance(r, over = {}) {
   const female = over.female ?? r() < 0.5;
   const age = over.age ?? Math.round(clamp(20 + r() * 50 + (r() < 0.12 ? 15 : 0), 4, 85));
   const skinIdx = r() < 0.72 ? r.int(0, 2) : r.int(2, 7);
   const skin = SKIN[skinIdx];
   const darkish = skinIdx >= 4;
-  let hairColor = darkish ? r.pick([HAIR.dark, HAIR.black, HAIR.black]) : r.pick([HAIR.blonde, HAIR.ash, HAIR.light, HAIR.brown, HAIR.brown, HAIR.dark, HAIR.red]);
+  let hairColor = darkish ? r.pick([HAIR.dark, HAIR.black, HAIR.black]) : pickW(r, [[HAIR.blonde, 3], [HAIR.ash, 2], [HAIR.light, 3], [HAIR.brown, 4], [HAIR.dark, 2], [HAIR.red, 0.35]]); // red hair is a few per cent in Scandinavia
   if (age > 58) hairColor = r.pick([HAIR.grey, HAIR.white, HAIR.grey, hairColor]);
   const hairStyle = female ? r.pick(['long', 'long', 'ponytail', 'bun', 'bob', 'short']) : (age > 55 && r() < 0.35 ? 'bald' : r.pick(['short', 'short', 'short', 'crop', 'curly', 'long']));
   const business = r() < 0.34 && age > 24 && age < 66;

@@ -273,7 +273,7 @@ export class Director {
     if (this.after('beltOffAir', 100) && this.flag('habits')) people.cruiseHabits(this.nightish(), P.seat);
     if (this.times.topofclimb != null && this.times.crossing == null) this.times.crossing = this.times.topofclimb + 150;
     // lavatory visits while the belt sign is off
-    if (!this.seatbelt && fm.phase !== 'descent' && t > this.nextLav && people.walkers.length < 2 && !people.servicing()) {
+    if (!this.seatbelt && fm.phase !== 'descent' && fm.phase !== 'boarding' && fm.phase !== 'pushback' && t > this.nextLav && people.walkers.length < 2 && !people.servicing()) {
       this.nextLav = t + 70 + this.r() * 120;
       const cand = people.pax.filter((p) => !p.away && !p.sleep && (p.seat.letter === 'C' || p.seat.letter === 'D' || this.r() < 0.3));
       if (cand.length) { const p = cand[Math.floor(this.r() * cand.length)]; const lav = p.seat.row <= 10 ? S.cabin.lavs[0] : S.cabin.lavs[1 + Math.floor(this.r() * 2)]; people.lavVisit(p, lav); }

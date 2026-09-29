@@ -334,7 +334,7 @@ export class Boarding {
     // doors close once everyone including the player is seated
     // (A-CDM: the doors close in time for the target start-up approval time, a few minutes before departure)
     const clock = S.opts.startClock + S.director.t / 3600, tsat = (S.opts.depTime ?? 6) - 7 / 60;
-    if (this.everyoneAboard && P.state === 'seated' && !this.doorClosed && !this._closeT && (clock >= tsat || S.fast)) { this._closeT = t + 25; }
+    if (this.everyoneAboard && P.state === 'seated' && !this.doorClosed && !this._closeT && clock >= tsat) { this._closeT = t + (S.fast ? 5 : 25); }
     if (this._closeT && t > this._closeT && !this.doorClosed) this._closeDoors();
     if (this.doorClosed) {
       this.retract = Math.min(1, this.retract + dt / 30);
