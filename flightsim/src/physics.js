@@ -29,7 +29,8 @@ import { NOSE_GEAR, MAIN_GEAR, WHEELBASE as WB, cgAt, ENGINE } from './airframe.
 // ---------------- aircraft data ----------------
 const S = 122.6, B = 35.8, CBAR = 4.19;
 const OEW = 44300, TOW = 64500;
-const IXX0 = 1.30e6, IYY0 = 3.20e6, IZZ0 = 4.45e6;
+// moments of inertia of the empty aircraft (42.5 t; FlyByWire A32NX flight model): roll, pitch, yaw kg m2
+const IXX0 = 1.341e6, IYY0 = 3.327e6, IZZ0 = 4.293e6;
 const WHEELBASE = WB;               // 12.64 m
 const T_MAX = 120600;               // N, LEAP-1A26 sea-level static
 const DT = 1 / 120;
@@ -53,16 +54,38 @@ const STRIKE = [
   { name: 'nose', p: [0, -1.14, -6.4] }, { name: 'belly', p: [0, -1.90, 7.6] }, { name: 'belly', p: [0, -1.70, 15.6] },
 ];
 // per configuration: CL at zero alpha, stall alpha, CLmax, drag increment, VFE (kt)
+// ---------------- aerodynamics, per configuration: clean, 1, 1+F, 2, 3, FULL ----------------
+// a0: zero-lift angle of attack and aProt / aFloor / aMax: the angle-of-attack protection
+//   thresholds (deg, fuselage angle) of the flight augmentation computer, low-Mach values;
+// clmax: from the Airbus 1-g stall speeds (VS1g): clean 154.8, 1: 126.2, 1+F: 116, 2: 113.2,
+//   3: 113.2 (111.2 gear down), FULL: 104.2 kt CAS at 64 t, i.e. CLmax = 2W / (rho0 S VS1g^2);
+// cd: profile drag of the extended slats and flaps; df: flap angle (deg); vfe: flap limit speed (kt).
+// The lift slope of each configuration makes V(alpha max) = 1.06 VS1g, as on the real aircraft.
 const AERO = [
-  { cl0: 0.25, as: 14.0, clmax: 1.55, cd: 0.000, vfe: 350 },
-  { cl0: 0.30, as: 18.0, clmax: 2.00, cd: 0.008, vfe: 230 },
-  { cl0: 0.55, as: 17.0, clmax: 2.15, cd: 0.016, vfe: 215 },
-  { cl0: 0.72, as: 16.5, clmax: 2.28, cd: 0.034, vfe: 200 },
-  { cl0: 0.85, as: 16.0, clmax: 2.38, cd: 0.046, vfe: 185 },
-  { cl0: 1.00, as: 16.5, clmax: 2.62, cd: 0.078, vfe: 177 },
+  { a0: -1.84, aProt: 6.5, aFloor: 7.6, aMax: 8.7, clmax: 1.32, cd: 0.000, df: 0, vfe: 350 },
+  { a0: -1.84, aProt: 11.7, aFloor: 12.5, aMax: 13.6, clmax: 1.98, cd: 0.004, df: 0, vfe: 230 },
+  { a0: -2.18, aProt: 11.7, aFloor: 12.7, aMax: 13.6, clmax: 2.35, cd: 0.012, df: 10, vfe: 215 },
+  { a0: -4.72, aProt: 11.9, aFloor: 13.1, aMax: 14.2, clmax: 2.46, cd: 0.020, df: 15, vfe: 200 },
+  { a0: -4.27, aProt: 11.0, aFloor: 12.1, aMax: 13.1, clmax: 2.50, cd: 0.030, df: 20, vfe: 185 },
+  { a0: -6.94, aProt: 10.6, aFloor: 11.8, aMax: 13.0, clmax: 2.91, cd: 0.060, df: 35, vfe: 177 },
 ];
-const CLA = 5.6, K_IND = 0.039, CD0 = 0.0215;
+for (const a of AERO) { a.cla = (a.clmax / (1.06 * 1.06)) / ((a.aMax - a.a0) * DEG); a.a0r = a.a0 * DEG; }
+// Clean-wing CLmax falls with Mach as shocks separate the flow; the buffet boundary sits below it.
+const CLMAX_MACH = [[0.3, 1.32], [0.5, 1.30], [0.6, 1.25], [0.7, 1.18], [0.78, 1.12], [0.82, 1.05], [0.86, 0.95], [0.95, 0.8]];
+const CL_BUFFET = [[0.3, 1.2], [0.5, 1.12], [0.6, 1.0], [0.7, 0.87], [0.75, 0.80], [0.78, 0.76], [0.82, 0.68], [0.86, 0.55], [0.95, 0.4]];
+// Drag polar of the A320neo (OpenAP): CD0 0.017, k 0.038, landing gear +0.017. Extending the flaps
+// raises the span efficiency: k = 1 / (1/k + pi A 0.0026 flap-deg). Wave drag 20 (M - Mcrit)^4 with the
+// Korn equation for Mcrit (kappa 0.95, 25 deg sweep, 11 % thickness).
+const CD0 = 0.017, K_IND = 0.038, CD_GEAR = 0.017, ASPECT = B * B / S;
 const VR = 141, V2 = 146, VAPP = 137;
+const tab = (T, x) => { if (x <= T[0][0]) return T[0][1]; for (let i = 1; i < T.length; i++) if (x <= T[i][0]) return lerp(T[i - 1][1], T[i][1], (x - T[i - 1][0]) / (T[i][0] - T[i - 1][0])); return T[T.length - 1][1]; };
+// lift-curve slope grows with Mach (a swept-wing fit, milder than Prandtl-Glauert)
+const kMach = (m) => Math.pow(Math.sqrt(0.96) / Math.sqrt(1 - Math.min(m, 0.86) ** 2), 0.4);
+const COS_L = Math.cos(25 * DEG);
+function waveDrag(mach, CL) {
+  const mcrit = 0.95 / COS_L - 0.11 / (COS_L * COS_L) - 0.1 * Math.max(0, CL) / (COS_L ** 3) - 0.108;
+  return mach > mcrit ? 20 * (mach - mcrit) ** 4 : 0;
+}
 // Flexible modes. Airbus publishes no A320 figures, so these are engineering estimates: wing first bending
 // about 2 Hz (large transports 1-2 Hz; an A320 wing is short and stiff); tip about 0.85 m up per g of
 // lift (about 5 % of the semi-span), 0.18 m of droop under its own, fuel and engine weight.
@@ -79,26 +102,44 @@ function rot(q, x, y, z, o = tv) { // rotate (x,y,z) by quaternion q = {x,y,z,w}
 }
 function rotInv(q, x, y, z, o = tv) { return rot({ x: -q.x, y: -q.y, z: -q.z, w: q.w }, x, y, z, o); }
 
-function engineThrust(n1, sigma, mach) {
-  const frac = clamp((n1 - 0.19) / 0.81, 0, 1.05);
-  const tmax = T_MAX * Math.pow(sigma, 0.92) * (1 - 0.35 * mach + 0.2 * mach * mach);
-  return tmax * frac * frac + 3000 * sigma;
+// ---------------- engines: CFM LEAP-1A26 ----------------
+// Thrust from the fan speed in corrected form, T = delta * F(N1 / sqrt(theta)) * g(M), as turbofans
+// behave: 120.6 kN at 97 % N1 sea-level static, about 3 kN at ground idle. g(M) matches Bartel &
+// Young's take-off lapse at Mach 0.2 (0.78 for a bypass ratio of 11.1) and, with ram recovery, their
+// maximum climb thrust at altitude (about 25 kN per engine at Mach 0.78 and FL360, 37 kN at FL200).
+// That puts cruise near 78 % N1 and a CONF FULL approach near 59 % N1.
+const N1_REF = 0.97, N1_GI = 0.205;
+const fanF = (n1c) => (n1c <= N1_GI ? 0.025 * (n1c / N1_GI) ** 2 : 0.025 + 0.975 * ((n1c - N1_GI) / (N1_REF - N1_GI)) ** 2.5);
+const machLapse = (m) => { const mm = Math.min(m, 0.9); return 1 - 1.3686 * mm + 1.393 * mm * mm; };
+function engineThrust(n1, air, mach) {
+  const theta = air.T / 288.15, delta = air.p / 101325;
+  return T_MAX * delta * fanF(n1 / Math.sqrt(theta)) * machLapse(mach);
 }
-function n1ForThrust(t, sigma, mach) {
-  const tmax = T_MAX * Math.pow(sigma, 0.92) * (1 - 0.35 * mach + 0.2 * mach * mach);
-  return 0.19 + 0.81 * Math.sqrt(clamp((t - 3000 * sigma) / tmax, 0, 1.1));
+function n1ForThrust(t, air, mach) {
+  const theta = air.T / 288.15, delta = air.p / 101325;
+  const f = Math.max(0, t) / (T_MAX * delta * machLapse(mach));
+  const n1c = f <= 0.025 ? N1_GI * Math.sqrt(f / 0.025) : N1_GI + (N1_REF - N1_GI) * Math.pow((f - 0.025) / 0.975, 0.4);
+  return n1c * Math.sqrt(theta);
+}
+// Fuel: sea-level static TSFC from the ICAO emissions databank (0.861 kg/s at 120.6 kN take-off,
+// 0.71 at 85 %), rising with Mach to about 15 g/kN/s in cruise; ground idle burns about 0.09 kg/s.
+function fuelFlow(thrust, air, mach) {
+  const tsfc = 7.1e-6 * (1 + 1.85 * mach) * Math.sqrt(air.T / 288.15);
+  return Math.max(tsfc * Math.max(0, thrust), 0.05 + 0.04 * air.sigma);
 }
 
-function liftCurve(a, alpha, mach) {
-  const cla = CLA / Math.sqrt(1 - Math.min(mach, 0.8) ** 2);
-  const as = a.as * DEG * (1 - 0.35 * smoothstep(0.3, 0.8, mach)); // shock-induced separation lowers the stall alpha
-  const lin = a.cl0 + cla * alpha;
-  const clmax = Math.min(a.clmax, a.cl0 + cla * as - 0.01);
-  const ak = as - 2 * (a.cl0 + cla * as - clmax) / cla;
-  if (alpha <= ak) return lin;
-  if (alpha <= as) { const d = alpha - ak, L = as - ak; return a.cl0 + cla * ak + cla * d - cla * d * d / (2 * L); }
+// Lift coefficient at fuselage angle of attack alpha (rad): linear from the zero-lift angle, rounding
+// off above 85 % of CLmax to the stall, then falling away.
+function liftCurve(a, alpha, mach, clmaxCap = 9) {
+  const cla = a.cla * kMach(mach);
+  const clmax = Math.min(a.clmax, clmaxCap);
+  const clk = 0.85 * clmax, ak = a.a0r + clk / cla, span = 2 * (clmax - clk) / cla, as = ak + span;
+  if (alpha <= ak) return cla * (alpha - a.a0r);
+  if (alpha <= as) { const d = alpha - ak; return clk + cla * d - cla * d * d / (2 * span); }
   return Math.max(0.55 * clmax, clmax - 2.2 * (alpha - as)); // stalled
 }
+// stall angle of attack of that curve
+const stallAlpha = (a, mach, clmaxCap = 9) => { const cla = a.cla * kMach(mach), clmax = Math.min(a.clmax, clmaxCap); return a.a0r + 1.15 * clmax / cla; };
 
 export class FlightModel {
   constructor(route, opts = {}) {
@@ -109,7 +150,7 @@ export class FlightModel {
     this.phase = 'parked';
     this.events = []; this._flags = {};
     // rigid-body state (CG, world frame) and attitude (aircraft axes -> world)
-    this.mass = TOW; this.fuel = TOW - OEW - 13200; // payload ~13.2 t
+    this.payload = 13200; this.mass = TOW; this.fuel = TOW - OEW - this.payload; // 13.2 t of passengers, bags and cargo
     this.P = { x: 0, y: 0, z: 0 }; this.V = { x: 0, y: 0, z: 0 };
     this.Q = { x: 0, y: 0, z: 0, w: 1 };
     this.p = 0; this.q = 0; this.r = 0;        // body rates: roll (right wing down +), pitch (nose up +), yaw (nose right +)
@@ -185,7 +226,8 @@ export class FlightModel {
   // compatibility: configuration index 0 (clean) .. 5 (FULL) through the flap lever
   setConfig(i) { this.ctl.flapLever = [0, 1, 1, 2, 3, 4][clamp(i, 0, 5)]; }
   shutdown() { this._flags.shutdown = true; this.ctl.engMaster = [false, false]; }
-  n1ForThrust(T, air, mach) { return n1ForThrust(T, air.sigma, mach); }
+  n1ForThrust(T, air, mach) { return n1ForThrust(T, air, mach); }
+  thrustAt(n1, air, mach) { return engineThrust(n1, air, mach); }
 
   // ---------------- placement ----------------
   _placeOnGround(s) {
@@ -263,34 +305,45 @@ export class FlightModel {
     const cf = this._cfgf(), i0 = Math.floor(cf), i1 = Math.min(5, i0 + 1), kf = cf - i0;
     const A0 = AERO[i0], A1 = AERO[i1];
     const aero = this._aeroTmp || (this._aeroTmp = {});
-    for (const key of ['cl0', 'as', 'clmax', 'cd']) aero[key] = lerp(A0[key], A1[key], kf);
-    const asM = aero.as * (1 - 0.35 * smoothstep(0.3, 0.8, mach));
-    this.alphaProt = (asM - 3.5) * DEG; this.alphaFloor = (asM - 2.8) * DEG; this.alphaMax = (asM - 1.6) * DEG;
-    this.stallWarn = this.law !== 'normal' && alpha > (asM - 1) * DEG && !this.onGround;
+    for (const key of ['a0r', 'cla', 'clmax', 'cd', 'df', 'aProt', 'aFloor', 'aMax']) aero[key] = lerp(A0[key], A1[key], kf);
+    // the clean wing's CLmax falls with Mach (with slats out the aircraft is always slow)
+    const cap = cf < 1 ? lerp(tab(CLMAX_MACH, mach), 9, cf) : 9;
+    const aStall = stallAlpha(aero, mach, cap);
+    // protections: the FAC thresholds (the clean ones fall between Mach 0.5 and 0.9), kept below the stall
+    const mk = cf < 1 ? clamp((mach - 0.5) / 0.4, 0, 1) * (1 - cf) : 0;
+    this.alphaProt = Math.min((aero.aProt - 1.9 * mk) * DEG, aStall - 2.5 * DEG);
+    this.alphaFloor = Math.min((aero.aFloor - 1.57 * mk) * DEG, aStall - 1.5 * DEG);
+    this.alphaMax = Math.min((aero.aMax - 2.3 * mk) * DEG, aStall - 0.8 * DEG);
+    this.alphaStall = aStall;
+    // stall warning (alternate and direct law only): the FAC's warning threshold, the alpha-prot values
+    this.stallWarn = this.law !== 'normal' && alpha > this.alphaProt && !this.onGround;
     // ---- the crew's hands, the autopilot, the fly-by-wire computers ----
     if (this.crew) this.crew.control(dt);
     this.afs.update(dt);
     this._fbw(dt, theta, phi, alpha, beta, qbar, Va);
     // ---- aerodynamics ----
     const pa = this.p - w.pg, qa = this.q - w.qg, ra = this.r - w.rg;
-    const hb = Math.max(0.5, gearH + 3.4) / B;
+    const hb = Math.max(0.5, gearH + 2.9) / B; // the wing sits about 2.9 m above the wheels' contact points
     const ge = hb < 1 ? (16 * hb) ** 2 / (1 + (16 * hb) ** 2) : 1; // ground effect on induced drag
-    let CL = liftCurve(aero, alpha, mach) + (hb < 1 ? 0.08 * (1 - hb) : 0);
+    let CL = liftCurve(aero, alpha, mach, cap) + (hb < 1 ? 0.08 * (1 - hb) : 0);
     // panels 1-5 on each wing are powered green, yellow, blue, yellow, green; speedbrakes use 2-4, ground spoilers all five
     const H = this.hyd;
     const sb = this.spoiler * ((H.yellow ? 2 : 0) + (H.blue ? 1 : 0)) / 3;
     const gsp = this.groundSpoiler * ((H.green ? 2 : 0) + (H.yellow ? 2 : 0) + (H.blue ? 1 : 0)) / 5;
     CL += -0.12 * sb - 0.75 * gsp * clamp(CL, 0, 2);
     // the flexing wing: bending velocity changes the local angle of attack (aerodynamic damping)
-    CL += -CLA * 0.35 * this.wingFlexV / Math.max(Va, 20);
+    CL += -aero.cla * 0.35 * this.wingFlexV / Math.max(Va, 20);
     CL += 4.5 * qa * CBAR / (2 * Va) + 0.35 * this.de;
-    const stalled = alpha > asM * DEG;
+    const stalled = alpha > aStall;
     this.stall = stalled ? 1 : 0;
-    this.buffet = smoothstep(asM * DEG - 3 * DEG, asM * DEG, alpha) + smoothstep(0.8, 0.86, mach);
-    let CD = CD0 + aero.cd + K_IND * ge * CL * CL + 0.016 * this.gear + 0.03 * sb + 0.07 * gsp;
-    if (mach > 0.72) CD += 20 * (mach - 0.72) ** 4;
-    if (stalled) CD += 0.6 * (alpha - asM * DEG);
+    // buffet: near the stall at low speed, shock buffet above the buffet-onset lift at high Mach
+    const clBo = cf < 1 ? tab(CL_BUFFET, mach) : 9;
+    this.buffet = smoothstep(aStall - 3 * DEG, aStall, alpha) + (cf < 1 ? smoothstep(clBo, clBo * 1.2, CL) : 0) + smoothstep(0.82, 0.86, mach);
+    const kInd = 1 / (1 / K_IND + Math.PI * ASPECT * 0.0026 * aero.df);
+    let CD = CD0 + aero.cd + kInd * ge * CL * CL + CD_GEAR * this.gear + 0.03 * sb + 0.07 * gsp + waveDrag(mach, CL);
+    if (stalled) CD += 0.6 * (alpha - aStall);
     for (let i = 0; i < 2; i++) if (this.engFail[i]) CD += 0.004; // windmilling engine
+    this.CD = CD;
     const CY = -0.85 * beta - 0.2 * this.dr;
     const lift = qbar * S * CL, drag = qbar * S * CD, side = qbar * S * CY;
     this.lift = lift; this.drag = drag; this.CL = CL;
@@ -305,17 +358,16 @@ export class FlightModel {
     const adH = this._adot * CBAR / (2 * Va);
     let Cm = 0.06 - 1.0 * alpha - 22 * qH - 8 * adH - 1.3 * this.de - 2.4 * this.ths - 0.035 * cf + 0.02 * gsp + 0.02 * sb;
     let Cn = 0.12 * beta - 0.22 * rH - 0.03 * pH + 0.085 * this.dr - 0.012 * this.da;
-    if (stalled) { Cm -= 0.25 * (alpha - asM * DEG) * 3; Cl += 0.02 * (vnoise1(this.t * 1.7) - 0.5) * (this.law === 'normal' ? 0.3 : 1); }
+    if (stalled) { Cm -= 0.25 * (alpha - aStall) * 3; Cl += 0.02 * (vnoise1(this.t * 1.7) - 0.5) * (this.law === 'normal' ? 0.3 : 1); }
     let L = qbar * S * B * Cl, M = qbar * S * CBAR * Cm, N = qbar * S * B * Cn;
     // ---- engines ----
-    const sig = air.sigma;
     let T = 0;
     for (let i = 0; i < 2; i++) {
-      let t = this.engFail[i] ? -0.012 * qbar * 2.0 : engineThrust(this.n1[i], sig, mach);
+      let t = this.engFail[i] ? -0.012 * qbar * 2.0 : engineThrust(this.n1[i], air, mach);
       if (!this.engineRunning[i] && !this.engFail[i]) t = 0;
       // reverser 1 is green, reverser 2 yellow: without its hydraulics a reverser stays stowed and the FADEC holds that engine at idle
       const revOk = i === 0 ? this.hyd.green : this.hyd.yellow;
-      if (this.reverse > 0.05 && !this.engFail[i] && this.ctl.thr[i] < 0) t = revOk ? t * (1 - this.reverse) - t * this.reverse * 0.38 : engineThrust(Math.min(this.n1[i], 0.205), sig, mach);
+      if (this.reverse > 0.05 && !this.engFail[i] && this.ctl.thr[i] < 0) t = revOk ? t * (1 - this.reverse) - t * this.reverse * 0.38 : engineThrust(Math.min(this.n1[i], 0.205), air, mach);
       this.thrust[i] = t; T += t;
     }
     Fx += T;
@@ -337,7 +389,9 @@ export class FlightModel {
     V.x += sfw.x * dt; V.y += (sfw.y - G) * dt; V.z += sfw.z * dt;
     P.x += V.x * dt; P.y += V.y * dt; P.z += V.z * dt;
     // ---- rotational dynamics (aviation body axes) ----
-    const k = this.mass / TOW, Ixx = IXX0 * (0.85 + 0.15 * this.fuel / 7000) * k, Iyy = IYY0 * k, Izz = IZZ0 * k;
+    // inertia: the empty aircraft plus the payload spread along the cabin and the fuel in the wings
+    const pay = this.payload, fuel = Math.max(0, this.fuel), ke = OEW / 42500;
+    const Ixx = IXX0 * ke + fuel * 28 + pay * 1.0, Iyy = IYY0 * ke + pay * 41 + fuel * 2.5, Izz = IZZ0 * ke + pay * 42 + fuel * 30;
     const Lb = -Mtz, Mb = Mtx, Nb = -Mty;
     this.pd = (Lb + (Iyy - Izz) * this.q * this.r) / Ixx;
     this.qd = (Mb + (Izz - Ixx) * this.p * this.r) / Iyy;
@@ -351,8 +405,8 @@ export class FlightModel {
     Q.w += 0.5 * dt * (-qx * ox - qy * oy - qz * oz);
     const qn = Math.hypot(Q.x, Q.y, Q.z, Q.w); Q.x /= qn; Q.y /= qn; Q.z /= qn; Q.w /= qn;
     // ---- fuel ----
-    const tsfc = lerp(1.05e-5, 1.5e-5, smoothstep(0, 10000, P.y));
-    for (let i = 0; i < 2; i++) if (this.engineRunning[i] && !this.engFail[i]) { const ff = Math.max(0.07, tsfc * Math.max(0, this.thrust[i])); this.fuel -= ff * dt; this.mass -= ff * dt; }
+    this.ff = [0, 0];
+    for (let i = 0; i < 2; i++) if (this.engineRunning[i] && !this.engFail[i]) { const ff = fuelFlow(engineThrust(this.n1[i], air, mach), air, mach); this.ff[i] = ff; this.fuel -= ff * dt; this.mass -= ff * dt; }
     // ---- load factors & structural limits ----
     this.nz = this.sf.y / G; this.ny = this.sf.x / G; this.nx = -this.sf.z / G;
     if (!this.onGround && (this.nz > 2.6 || this.nz < -1.1)) this._damage('overstress');

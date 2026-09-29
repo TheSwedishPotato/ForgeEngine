@@ -12,7 +12,29 @@ import { DEG, KT, FT, G, clamp, lerp, smoothstep } from './core.js';
 import { angleDiff } from './atmosphere.js';
 
 export const DETENT = { REV_MAX: -1, REV_IDLE: -0.08, IDLE: 0, CL: 0.6, FLX: 0.8, TOGA: 1 };
-const N1 = { idleGnd: 0.205, idleAir: 0.26, idleApp: 0.30, CL: 0.885, FLX: 0.855, TOGA: 0.97, REV: 0.72 };
+// Airbus A320 characteristic speeds (kt CAS) against gross weight 40, 45 ... 80 t, per configuration
+// clean, 1, 1+F, 2, 3, FULL: 1-g stall speed VS1g, lowest selectable speed VLS (in flight and for
+// take-off), and the F and S flap-retraction speeds (A320 FCOM tables, as used by the FlyByWire A32NX)
+const SPD = {
+  vs: [[124, 131, 138, 145, 150, 156, 161, 166, 172], [102, 107, 112, 117, 123, 127, 132, 137, 141], [93, 98, 103, 108, 112, 117, 122.8, 126.8, 130],
+    [91, 96, 101, 105, 110, 114, 119, 122, 126], [91, 96, 101, 105, 110, 114, 119, 122, 126], [84, 88, 93, 97, 101, 105, 109, 113, 116]],
+  vs3Gear: [89, 94, 99, 103, 108, 112, 117, 120, 124],
+  vls: [[159, 168, 177, 186, 192, 198, 206, 212, 220], [125, 132, 138, 144, 151, 156, 162, 169, 173], [114, 121, 127, 133, 138, 144, 149, 154, 160],
+    [110, 119, 125, 131, 137, 142, 145, 149, 154], [117, 119, 125, 131, 137, 142, 147, 152, 156], [116, 116, 116, 120, 125, 130, 135, 139, 143]],
+  vls3Gear: [116, 118, 124, 130, 136, 141, 146, 151, 155],
+  vlsTo: [[159, 168, 177, 186, 192, 198, 206, 212, 220], [125, 132, 138, 144, 151, 156, 162, 169, 173], [105, 111, 116, 122, 127, 132, 137, 141, 147],
+    [101, 108, 114, 119, 125, 130, 132, 136, 140], [101, 106, 112, 116, 122, 127, 132, 136, 140], [116, 116, 116, 120, 125, 130, 135, 139, 143]],
+  f: [131, 131, 131, 137, 144, 149, 155, 160, 166],
+  s: [152, 161, 169, 178, 186, 193, 200, 207, 214],
+};
+function speedAt(row, massKg) {
+  const t = Math.min(79.999, Math.max(40, massKg / 1000)), i = Math.floor((t - 40) / 5), k = (t - 40 - i * 5) / 5;
+  return row[i] + (row[i + 1] - row[i]) * k;
+}
+export { SPD as SPEED_TABLES, speedAt };
+// FADEC N1 targets: idle on the ground / in flight / approach idle, climb, FLX (a typical flexible
+// take-off, about 83 % of TOGA thrust; MCT shares its detent), TOGA and maximum reverse
+const N1 = { idleGnd: 0.205, idleAir: 0.26, idleApp: 0.30, CL: 0.885, FLX: 0.90, TOGA: 0.97, REV: 0.72 };
 export { N1 as N1_RATING };
 
 export class Autoflight {
@@ -50,25 +72,30 @@ export class Autoflight {
   armAppr(rwy) { this.approachRwy = rwy; this.latArmed = 'LOC'; this.vertArmed = 'G/S'; }
   // thrust levers to TOGA in flight (go-around) or on the runway
   toga(ga = false) {
+    this.athr = true; this.athrArmed = true; // TOGA engages the autothrust (active once the levers come back to CL)
     if (ga) { this.phase = 'GO AROUND'; this.vert = 'SRS'; this.lat = 'GA TRK'; this.latArmed = ''; this.vertArmed = ''; this.fcu.spd = null; this._gaTrack = this.fm.track; }
   }
 
-  // Take-off data from weight and configuration (what the crew enters in the MCDU PERF page)
+  // Take-off data from weight and configuration (what the crew enters in the MCDU PERF page):
+  // V2 = 1.2 VS1g in CONF 1+F, at least 1.1 VMCA (114 kt at Arlanda's elevation)
   takeoffData(massKg, flexOk = true) {
-    const Vs = Math.sqrt(2 * massKg * G / (1.225 * 122.6 * 2.15)) / KT;
-    this.v2 = Math.round(Math.max(1.2 * Vs, 125));
-    this.vr = this.v2 - 5; this.v1 = this.vr - 3;
+    const vs = speedAt(SPD.vs[2], massKg);
+    this.v2 = Math.round(Math.max(1.2 * vs, 1.1 * 114, speedAt(SPD.vlsTo[2], massKg)));
+    this.vr = this.v2 - 4; this.v1 = this.vr - 2;
     this.flex = flexOk;
     return { v1: this.v1, vr: this.vr, v2: this.v2 };
   }
-  // Approach speeds: VLS = 1.23 VS1g in the landing configuration, Vapp = VLS + max(5, headwind/3) up to +15
+  // VLS (the lowest selectable speed, 1.23 VS1g in the landing configurations) from the Airbus tables;
+  // Vapp = VLS + max(5, headwind/3), at most +15
   vls(cfg = 5, mass = this.fm.mass) {
-    const clmax = [1.55, 2.0, 2.15, 2.28, 2.38, 2.62][cfg];
-    return Math.sqrt(2 * mass * G / (1.225 * 122.6 * clmax)) / KT * (cfg === 0 ? 1.28 : 1.23);
+    if (cfg === 4 && this.fm.gear > 0.5) return speedAt(SPD.vls3Gear, mass);
+    return speedAt(SPD.vls[cfg], mass);
   }
-  greenDot(mass = this.fm.mass) { return Math.sqrt(2 * mass * G / (1.225 * 122.6)) * 1.161 / KT; }
-  sSpeed(mass = this.fm.mass) { return this.vls(0, mass) / 1.28 * 1.23 + 8; }
-  fSpeed(mass = this.fm.mass) { return this.vls(2, mass) / 1.23 * 1.26; }
+  vs1g(cfg = 0, mass = this.fm.mass) { return cfg === 4 && this.fm.gear > 0.5 ? speedAt(SPD.vs3Gear, mass) : speedAt(SPD.vs[cfg], mass); }
+  // green dot (best lift/drag, clean): 2 kt per tonne + 85 kt below FL200, 1 kt per 1,000 ft above it
+  greenDot(mass = this.fm.mass) { const alt = this.fm.altInd / FT; return 2 * mass / 1000 + 85 + Math.max(0, (alt - 20000) / 1000); }
+  sSpeed(mass = this.fm.mass) { return speedAt(SPD.s, mass); }
+  fSpeed(mass = this.fm.mass) { return speedAt(SPD.f, mass); }
 
   // ---------- per physics step ----------
   update(dt) {
@@ -91,6 +118,8 @@ export class Autoflight {
     const tla = Math.max(fm.engineRunning[0] ? fm.ctl.thr[0] : -9, fm.engineRunning[1] ? fm.ctl.thr[1] : -9, eoNow ? -9 : 0);
     this.athrTop = eoNow ? DETENT.FLX : DETENT.CL;
     const inAthrRange = tla > 0.02 && tla <= this.athrTop + 0.02;
+    // setting the thrust levers to IDLE disconnects the autothrust (the retard in the flare, or on the ground)
+    if (this.athr && this.phase !== 'PREFLIGHT' && tla <= 0.01 && (fm.onGround || this.vert === 'FLARE' || this.retard)) { this.athr = false; this.athrArmed = false; }
     this.alphaFloor = fm.law === 'normal' && !fm.onGround && agl > 30 && (fm.alphaF ?? fm.alpha) > fm.alphaFloor && this.athrArmed;
     if (this.alphaFloor) { this.thr = 'A.FLOOR'; this._toga = 3; }
     // --- speed target ---
