@@ -428,6 +428,7 @@ export class Scenery {
     this.scene.add(m);
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3.4, 0.5), this.mats.dark);
     const lp2 = a.clone().lerp(b, 0.75); leg.position.set(lp2.x, 1.7, lp2.y); this.scene.add(leg);
+    return [m, leg];
   }
 
   // A jet bridge whose cab is docked against our forward left door; its interior is
@@ -557,7 +558,8 @@ export class Scenery {
     const livs = ['sas', 'sas', 'norwegian', 'lufthansa', 'sas', 'finnair', 'klm', 'sas', 'airfrance', 'sas'];
     let k = 0;
     for (let v = pf.v0 - 40; v > pf.v1 + 30; v -= 55) {
-      const skipOurs = Math.abs(v - L.startStandV) < 30;
+      const skipOurs = Math.abs(v - L.gateStand.v) < 30;
+      if (skipOurs) this.ourJetway = this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); // pulled back from our stand
       if (!skipOurs) { this._parked(f, pf.u0 - 10 - 26, v, f.heading, livs[k % livs.length]); this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); }
       this._parked(f, pf.u0 + 10 + 26, v + 20, (f.heading + 180) % 360, livs[(k + 3) % livs.length]);
       this._jetway(f, pf.u0 + 10, v + 28, pf.u0 + 10 + 12, v + 22.5, -1);
@@ -804,6 +806,34 @@ export class Scenery {
     this.traffic.push({ obj: t, kind: 'cruise-crossing', trails });
   }
 
+  showOurJetway(v) { if (this.ourJetway) for (const m of this.ourJetway) m.visible = v; }
+  setBoardingMode(on) {
+    this.boardingMode = on;
+    this.showOurJetway(!on);
+    if (on) {
+      this.tug.mesh.visible = false;
+      const t = this.pt = { mesh: this._vehicle('tug'), bar: new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 4.2), this.mats.dark), gone: 0 };
+      this.scene.add(t.mesh, t.bar);
+    }
+  }
+  _pushTug(dt, fm) {
+    const t = this.pt; if (!t) return;
+    const n = fm.worldPoint(0, NOSE_GEAR.y, NOSE_GEAR.z, this._nw || (this._nw = {}));
+    if (!fm.tug || fm.tug.state !== 'off') {
+      const h = fm.heading + fm.steer, dx = Math.sin(h), dz = -Math.cos(h);
+      t.mesh.position.set(n.x + dx * 6.9, 0, n.z + dz * 6.9); t.mesh.rotation.y = -(h + Math.PI);
+      t.bar.position.set(n.x + dx * 2.4, 0.45, n.z + dz * 2.4); t.bar.rotation.y = -h;
+      t.h = h + Math.PI;
+    } else {
+      // disconnected: the tug backs off, turns towards the pier and drives away
+      t.bar.visible = false; t.gone += dt;
+      const f = ARN.frame, hp = Math.atan2(f.u.x, -f.u.y);
+      if (t.gone > 3) { t.h += Math.atan2(Math.sin(hp - t.h), Math.cos(hp - t.h)) * Math.min(1, dt * 0.5); t.mesh.rotation.y = -t.h; }
+      const sp = t.gone < 3 ? -1.2 : Math.min(4, (t.gone - 3) * 0.8);
+      t.mesh.position.x += Math.sin(t.h) * sp * dt; t.mesh.position.z += -Math.cos(t.h) * sp * dt;
+      if (t.gone > 80) t.mesh.visible = false;
+    }
+  }
   update(dt, simT, fm, env, director, atc = null) {
     this.atc = atc;
     const u = this.u;
@@ -829,8 +859,10 @@ export class Scenery {
       });
       this.rotors.instanceMatrix.needsUpdate = true;
     }
+    // our pushback tug: on the towbar at the nose wheel during the push, then off to the pier
+    if (fm.tug || fm.phase === 'boarding') this._pushTug(dt, fm);
     // pushback tug drives away at the start
-    if (this.tug) {
+    if (this.tug && !this.boardingMode) {
       const k = clamp((simT - 8) / 60, 0, 1);
       const p = this.tug.start.clone().addScaledVector(this.tug.dir, k * 160);
       this.tug.mesh.position.set(p.x, 0.8, p.y);

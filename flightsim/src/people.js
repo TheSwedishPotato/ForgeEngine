@@ -40,6 +40,8 @@ export const GESTURES = {
   wave: [[0, ARMS_DOWN], [0.5, { rShoulder: [-2.4, 0, 0.4], rElbow: [-0.5, 0, 0] }], [1.0, { rShoulder: [-2.4, 0, 0.6], rElbow: [-0.8, 0, 0] }], [1.5, { rShoulder: [-2.4, 0, 0.4], rElbow: [-0.5, 0, 0] }], [2.2, ARMS_DOWN]],
   offer: [[0, ARMS_DOWN], [0.6, { rShoulder: [-1.1, 0.2, 0.3], rElbow: [-0.6, 0, 0] }], [2.5, { rShoulder: [-1.1, 0.2, 0.3], rElbow: [-0.6, 0, 0] }], [3.2, ARMS_DOWN]],
   pour: [[0, ARMS_DOWN], [0.5, { rShoulder: [-0.9, 0, 0.15], rElbow: [-0.9, 0, 0], lShoulder: [-0.7, 0, -0.1], lElbow: [-0.9, 0, 0] }], [2.5, { rShoulder: [-0.9, 0, 0.15], rElbow: [-0.9, -0.4, 0.5], lShoulder: [-0.7, 0, -0.1], lElbow: [-0.9, 0, 0] }], [3.2, ARMS_DOWN]],
+  // lifting a cabin bag into the overhead bin
+  stow: [[0, ARMS_DOWN], [0.8, { rShoulder: [-2.6, 0, 0.2], rElbow: [-0.5, 0, 0], lShoulder: [-2.5, 0, -0.2], lElbow: [-0.5, 0, 0] }], [1.4, { rShoulder: [-2.8, 0, 0.2], rElbow: [-0.3, 0, 0], lShoulder: [-2.7, 0, -0.2], lElbow: [-0.3, 0, 0] }, { r: null }], [2.4, { rShoulder: [-2.6, 0, 0.2], rElbow: [-0.4, 0, 0], lShoulder: [-2.6, 0, -0.2], lElbow: [-0.4, 0, 0] }], [3.1, ARMS_DOWN]],
   handset: [[0, ARMS_DOWN], [0.6, { rShoulder: [-0.9, 0.4, 0.4], rElbow: [-2.2, -0.2, 0] }], [100, { rShoulder: [-0.9, 0.4, 0.4], rElbow: [-2.2, -0.2, 0] }]],
 };
 
@@ -176,7 +178,8 @@ export class Actor {
     } else { this.headYaw = damp(this.headYaw, 0, 4, dt); this.headPitch = damp(this.headPitch, 0, 4, dt); }
     this.h.j.neck.rotation.y += this.headYaw * 0.4; this.h.j.head.rotation.y = this.headYaw * 0.6; this.h.j.head.rotation.x += this.headPitch;
     const turnOff = this.turnOffset || 0;
-    this.root.position.set(this.x, (this.seated ? this.seatY : 0) + (this.lift || 0) + (this.fallen ? 0.1 - 0.84 * this.h.s : 0), this.z);
+    const floor = !this.seated && world && world.floorAt ? world.floorAt(this.x, this.z) : 0;
+    this.root.position.set(this.x, (this.seated ? this.seatY : floor) + (this.lift || 0) + (this.fallen ? 0.1 - 0.84 * this.h.s : 0), this.z);
     this.root.rotation.y = this.heading + turnOff;
     if (this.sayT > 0) { this.sayT -= dt; if (this.sayT <= 0) this.say = null; }
     // eyes, mouth and breathing
@@ -550,6 +553,20 @@ export class People {
   blocked(actor, tz) {
     // keep ~0.62 m spacing to anyone ahead in the aisle. Crew only yield to crew
     // (passengers step aside for them); passengers also stop for trolleys.
+    if (actor.boarding && actor.task) {
+      // boarding: keep about 0.6 m behind whoever is ahead on the way to the aircraft
+      const T = actor.task, dx = (T.x ?? actor.x) - actor.x, dz = T.z - actor.z, d = Math.hypot(dx, dz) || 1;
+      for (const o of this.walkers) {
+        if (o === actor || !o.boarding || o.seated) continue;
+        const ox = o.x - actor.x, oz = o.z - actor.z, ahead = (ox * dx + oz * dz) / d, lat = Math.abs(ox * dz - oz * dx) / d;
+        if (!(ahead > 0.05 && ahead < 0.62 && lat < 0.35)) continue;
+        // someone coming the other way in the open hall: step past each other instead of both waiting
+        const U = o.task; if (U && U.type === 'walk' && ((U.x ?? o.x) - o.x) * dx + (U.z - o.z) * dz < 0) continue;
+        return true;
+      }
+      if (this.playerBlock && actor.z > (this.hallZ ?? -99)) { const ox = this.playerBlock.x - actor.x, oz = this.playerBlock.z - actor.z, ahead = (ox * dx + oz * dz) / d, lat = Math.abs(ox * dz - oz * dx) / d; if (ahead > 0.05 && ahead < 0.6 && lat < 0.35) return true; }
+      if (Math.abs(actor.x) > 0.4) return false;
+    }
     const dir = Math.sign(tz - actor.z);
     if (!dir) return false;
     const others = actor.crew ? this.crew : [...this.walkers, ...this.crew];

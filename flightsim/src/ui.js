@@ -58,6 +58,7 @@ export class UI {
     $('opt-quality').onchange = (e) => { o.quality = e.target.value; };
     $('opt-speed').onchange = (e) => { o.speed = +e.target.value; };
     $('opt-voice').onchange = (e) => { o.voice = e.target.checked; };
+    if ($('opt-boarding')) { $('opt-boarding').checked = o.boarding !== false; $('opt-boarding').onchange = (e) => { o.boarding = e.target.checked; }; }
     if ($('opt-deck')) { $('opt-deck').checked = !!o.deck; $('opt-deck').onchange = (e) => { o.deck = e.target.checked; }; }
     if ($('opt-events')) { $('opt-events').value = o.events || 'realistic'; $('opt-events').onchange = (e) => { o.events = e.target.value; }; }
     $('go').onclick = () => { try { localStorage.setItem('sk1415-opts-v3', JSON.stringify(o)); } catch (e) { /* ignore */ } this.emit('start', { ...o }); };

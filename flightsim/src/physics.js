@@ -101,6 +101,15 @@ function rot(q, x, y, z, o = tv) { // rotate (x,y,z) by quaternion q = {x,y,z,w}
   return o;
 }
 function rotInv(q, x, y, z, o = tv) { return rot({ x: -q.x, y: -q.y, z: -q.z, w: q.w }, x, y, z, o); }
+function pathLen(pts) { let L = 0; for (let k = 1; k < pts.length; k++) L += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].z - pts[k - 1].z); return L; }
+function pointAlong(pts, s) {
+  for (let k = 1; k < pts.length; k++) {
+    const a = pts[k - 1], b = pts[k], L = Math.hypot(b.x - a.x, b.z - a.z);
+    if (s <= L || k === pts.length - 1) { const u = s / Math.max(L, 1e-6); return { x: a.x + (b.x - a.x) * u, z: a.z + (b.z - a.z) * u }; }
+    s -= L;
+  }
+  return pts[pts.length - 1];
+}
 
 // ---------------- engines: CFM LEAP-1A26 ----------------
 // Thrust from the fan speed in corrected form, T = delta * F(N1 / sqrt(theta)) * g(M), as turbofans
@@ -169,10 +178,13 @@ export class FlightModel {
       spoilersArmed: false,
       autobrake: 'OFF',            // OFF, LO, MED, MAX
       engMaster: [true, true],
+      engMode: 'NORM',             // ENG MODE selector: NORM, IGN/START
       trim: null,                  // take-off trim set on the pedestal (rad)
     };
     // systems
     this.n1 = [0.205, 0.205]; this.n1Cmd = [0.205, 0.205]; this.engineRunning = [true, true];
+    this.n2 = [0.68, 0.68]; this.egt = [480, 480]; this.engStart = [null, null]; // start sequence per engine
+    this.tug = null;            // pushback tug on the nose gear
     this.engFail = [0, 0];      // 0 ok, 1 failed (windmilling), 2 seized/damaged
     this.engFire = [false, false];
     this.cfg = 0; this.cfgTarget = 0; this.slat = 0; this.flap = 0; this._leverPrev = 0;
@@ -212,7 +224,11 @@ export class FlightModel {
     this.afs = new Autoflight(this);
     this.baro = null;           // altimeter setting in hPa (null = standard 1013.25)
     this.crew = null;           // set by the crew
-    this._placeOnGround(0);
+    if (opts.stand) this.placeAt(opts.stand.x, opts.stand.z, opts.stand.heading); else this._placeOnGround(0);
+    if (opts.coldStart) { // at the gate before start: engines off, masters off, APU on
+      this.ctl.engMaster = [false, false]; this.engineRunning = [false, false];
+      this.n1 = [0, 0]; this.n1Cmd = [0, 0]; this.n2 = [0, 0]; this.phase = 'boarding';
+    }
     this.ctl.trim = this._toTrim(); this.ths = this.ctl.trim;
     this.update(0);
   }
@@ -238,6 +254,47 @@ export class FlightModel {
     const off = rot(this.Q, CG[0] - G_LOCAL[0], CG[1] - G_LOCAL[1], CG[2] - G_LOCAL[2], {});
     this.P.x = tp.x + off.x; this.P.y = off.y; this.P.z = tp.z + off.z;
     this.V.x = this.V.y = this.V.z = 0; this.p = this.q = this.r = 0; this.s = s;
+  }
+
+  // main-gear point at (x, z) facing `hdg` (radians, 0 = north, clockwise)
+  placeAt(x, z, hdg) {
+    this.Q.x = 0; this.Q.y = Math.sin(-hdg / 2); this.Q.z = 0; this.Q.w = Math.cos(-hdg / 2);
+    const off = rot(this.Q, CG[0] - G_LOCAL[0], CG[1] - G_LOCAL[1], CG[2] - G_LOCAL[2], {});
+    this.P.x = x + off.x; this.P.y = off.y; this.P.z = z + off.z;
+    this.V.x = this.V.y = this.V.z = 0; this.p = this.q = this.r = 0; this.s = 0;
+  }
+
+  // Pushback: the tug steers the nose wheel through the towbar (nose-wheel steering disconnected by
+  // the towing pin) and pushes, keeping to walking pace, so that the main gear follows `pts`
+  // (world {x, z}); limits for the A320 with a towbar: 95 degrees of steering, 25 km/h.
+  startPushback(pts) { this.tug = { pts, v: 0, F: 0, steer: 0, i: 0, state: 'push', I: 0, len: pathLen(pts) }; this.emit('pushback-start'); }
+  _tugStep(dt) {
+    const T = this.tug; if (!T || T.state === 'off') return;
+    const M = this.worldPoint(G_LOCAL[0], G_LOCAL[1], G_LOCAL[2], this._tg || (this._tg = {}));
+    const hd = this.heading, fx = Math.sin(hd), fz = -Math.cos(hd), rx = -fz, rz = fx;
+    const along = this.V.x * fx + this.V.z * fz; // + forward
+    // nearest point along the polyline (search forwards only)
+    let best = T.i, bd = Infinity, sAt = 0, acc = 0;
+    for (let k = 0; k < T.pts.length - 1; k++) {
+      const a = T.pts[k], b = T.pts[k + 1], ex = b.x - a.x, ez = b.z - a.z, L = Math.hypot(ex, ez);
+      if (k >= T.i) { const u = clamp(((M.x - a.x) * ex + (M.z - a.z) * ez) / (L * L), 0, 1); const d = Math.hypot(a.x + ex * u - M.x, a.z + ez * u - M.z); if (d < bd) { bd = d; best = k; sAt = acc + u * L; } }
+      acc += L;
+    }
+    T.i = best; T.sAt = sAt;
+    const remain = T.len - sAt;
+    // pure pursuit for the main gear moving backwards: look-ahead point along the path
+    const tgt = pointAlong(T.pts, Math.min(T.len + 3, sAt + 7));
+    const dx = tgt.x - M.x, dz = tgt.z - M.z, lf = dx * fx + dz * fz, ll = dx * rx + dz * rz;
+    const kappa = 2 * ll / Math.max(1, lf * lf + ll * ll);
+    T.steer = clamp(Math.atan(kappa * WHEELBASE), -95 * DEG, 95 * DEG);
+    // speed: up to 1.5 m/s, easing to a stop at the end of the push
+    const vDes = T.state === 'push' ? Math.min(1.5, Math.sqrt(Math.max(0, 2 * 0.12 * (remain - 0.3)))) : 0;
+    const back = -along, err = vDes - back;
+    T.I = clamp(T.I + err * dt, -2, 2);
+    const drag = 0.012 * this.mass * G * Math.sign(back || 1) + (this.thrust[0] + this.thrust[1]);
+    T.F = -clamp(this.mass * (0.25 * err + 0.05 * T.I) + (T.state === 'push' && vDes > 0 ? drag : 0), -150000, 150000);
+    if (T.state === 'push' && remain < 0.35 && Math.abs(along) < 0.08) { T.state = 'stopped'; T.F = 0; this.emit('pushback-stopped'); }
+    if (T.state === 'stopped') T.F = clamp(this.mass * 0.5 * -along, -60000, 60000); // the tug holds the aircraft on its own brakes
   }
 
   // world position of an aircraft-coordinate point
@@ -380,6 +437,17 @@ export class FlightModel {
     // ---- landing gear & structure contacts ----
     const gr = this._ground(dt, fx, fz);
     Fwx += gr.fx; Fwy += gr.fy; Fwz += gr.fz;
+    if (this.tug && this.tug.state !== 'off' && this.wow[0]) {
+      this._tugStep(dt);
+      // towbar force along the nose wheel, at the nose-gear contact point
+      const sfx = Math.sin(this.steer), cfx = Math.cos(this.steer);
+      const lx = fx * cfx - fz * sfx, lz = fz * cfx + fx * sfx, F = this.tug.F;
+      const r = rot(this.Q, GEAR[0].p[0] - CG[0], GEAR[0].p[1] - CG[1], GEAR[0].p[2] - CG[2], this._rt || (this._rt = {}));
+      const Fx = lx * F, Fz = lz * F;
+      Fwx += Fx; Fwz += Fz;
+      const tm = rotInv(this.Q, r.y * Fz, r.z * Fx - r.x * Fz, -r.y * Fx, this._tm || (this._tm = {}));
+      Mtx += tm.x; Mty += tm.y; Mtz += tm.z;
+    }
     const gm = rotInv(Q, gr.mx, gr.my, gr.mz, this._gm || (this._gm = {}));
     Mtx += gm.x; Mty += gm.y; Mtz += gm.z;
     // ---- translational dynamics ----
@@ -583,12 +651,17 @@ export class FlightModel {
       if (afs._toga > 0 || afs.alphaFloor) tgt = N1_RATING.TOGA;
       tgt = Math.max(tgt, idleA);
       if (this.engFail[i]) { this.n1[i] += (0.06 * clamp(this.ias / 250, 0, 1.2) * (this.engFail[i] === 2 ? 0.1 : 1) - this.n1[i]) * dt * 0.4; this.engineRunning[i] = false; this.n1Cmd[i] = 0; continue; }
+      if (this._engineStart(i, dt, c)) continue;
       const cmd = this.engineRunning[i] ? tgt : 0;
       this.n1Cmd[i] = cmd;
       const n = this.n1[i];
       const up = cmd > n;
       const rate = up ? (n < 0.5 ? 0.075 : 0.19) : (this.engineRunning[i] ? 0.22 : 0.05);
       this.n1[i] += clamp((cmd - n) * (up ? 1.4 : 1.1), -rate, rate) * dt;
+      // core speed and exhaust temperature follow the fan (ground idle about 20 % N1, 68 % N2)
+      const oat = this.air ? this.air.T - 273.15 : 15;
+      if (this.engineRunning[i]) { this.n2[i] = 0.68 + 0.32 * clamp((this.n1[i] - 0.205) / 0.765, -0.3, 1.1); this.egt[i] += (430 + 470 * Math.max(0, this.n1[i] - 0.205) ** 1.3 + oat - (this.egt[i])) * Math.min(1, dt * 0.5); }
+      else { this.n2[i] = Math.max(0, this.n2[i] - dt * 0.012 * (0.3 + this.n2[i])); this.egt[i] += (oat - this.egt[i]) * dt * 0.01; }
     }
     // ---- brakes: toe brakes, autobrake, parking brake ----
     this.parkBrake = c.parkBrake;
@@ -611,12 +684,39 @@ export class FlightModel {
     // speed, fading out by 70 kt; pedals up to 6 degrees, fading out by 130 kt ----
     const tillerK = 1 - smoothstep(20, 70, gsKt), pedalK = 1 - smoothstep(40, 130, gsKt);
     const nws = this.hyd.yellow && this.wow[0] ? clamp(c.tiller * 75 * tillerK + c.pedal * 6 * pedalK, -75, 75) * DEG : 0;
-    this.steer += clamp(nws - this.steer, -25 * DEG * dt, 25 * DEG * dt);
+    const towing = this.tug && this.tug.state !== 'off';
+    this.steer += clamp((towing ? this.tug.steer : nws) - this.steer, -25 * DEG * dt, 25 * DEG * dt);
     // cabin pressure: schedule ~ 8000 ft cabin at FL360, leak to outside if pressurisation is lost
     const h = Math.max(0, this.P.y);
     this.cabinAltTarget = this.pressurised ? Math.min(h, h * 0.22 + 0) : h;
     const leak = this.pressurised ? 2.5 : 30 + this.pressLeak * 400;
     this.cabinAlt += clamp(this.cabinAltTarget - this.cabinAlt, -leak * dt * 1.5, leak * dt);
+  }
+
+  // LEAP-1A automatic start with the ENG MODE selector at IGN/START and the master switch ON: the
+  // starter (APU bleed air) cranks the core, the FADEC first motors it dry for a bowed-rotor cool-down
+  // (short for an engine that has stood cold overnight), ignition above 15 % N2, fuel above 20 % N2,
+  // light-off in 2-3 s, ignition off at 55 % and starter cut-out at 63 % N2, then idle.
+  _engineStart(i, dt, c) {
+    let st = this.engStart[i];
+    if (!st && c.engMaster[i] && !this.engineRunning[i] && !this.engFail[i] && c.engMode === 'IGN/START') { st = this.engStart[i] = { phase: 'crank', t: 0, motor: this._warm ? 40 : 6 }; this.emit(`engine-start-${i + 1}`); }
+    if (!st) return false;
+    if (!c.engMaster[i] || this.engFail[i]) { this.engStart[i] = null; return false; }
+    st.t += dt;
+    const n2 = this.n2[i], oat = this.air ? this.air.T - 273.15 : 15;
+    if (st.phase === 'crank') { this.n2[i] += (Math.min(0.3, 0.26 + 0.04 * (st.t > st.motor ? 1 : 0)) - n2) * dt * 0.35; if (st.t > st.motor && n2 > 0.2) { st.phase = 'fuel'; st.tf = st.t; this.emit(`engine-fuel-${i + 1}`); } }
+    else if (st.phase === 'fuel') { this.n2[i] += 0.004 * dt; if (st.t - st.tf > 2.5) { st.phase = 'lit'; this.emit(`engine-lightoff-${i + 1}`); } }
+    else if (st.phase === 'lit') {
+      this.n2[i] += (0.006 + 0.03 * clamp(n2 - 0.2, 0, 0.5)) * dt;
+      if (n2 > 0.63 && !st.cut) { st.cut = true; this.emit(`engine-starter-cut-${i + 1}`); }
+      if (n2 >= 0.675) { this.engStart[i] = null; this.engineRunning[i] = true; this.emit(`engine-running-${i + 1}`); }
+    }
+    const lit = st.phase === 'lit';
+    this.n1[i] = 0.205 * clamp((this.n2[i] - 0.14) / 0.54, 0, 1) ** 1.5;
+    const egtT = lit ? 430 + oat + 260 * Math.sin(Math.PI * clamp((this.n2[i] - 0.2) / 0.5, 0, 1)) : oat;
+    this.egt[i] += (egtT - this.egt[i]) * Math.min(1, dt * (lit ? 0.9 : 0.05));
+    this.n1Cmd[i] = 0;
+    return true;
   }
 
   // ---------------- fly-by-wire control laws ----------------

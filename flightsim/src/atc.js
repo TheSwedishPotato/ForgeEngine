@@ -4,7 +4,7 @@
 // and landing clearances, keep the spacing to the traffic ahead and send a go-around when the
 // runway is still occupied. Nothing is timed: a clearance comes when the situation allows it.
 //
-// Frequencies used: Arlanda Ground 121.700, Arlanda Tower 118.500, Copenhagen Approach 119.800,
+// Frequencies used: Arlanda Ground 121.705, Arlanda Tower 118.500, Copenhagen Approach 119.800,
 // Kastrup Tower 118.100. Transition altitude 5000 ft in Sweden and Denmark.
 import { DEG, KT, FT, clamp, lerp, rng } from './core.js';
 import { windComponents, STATIONS } from './weather.js';
@@ -12,11 +12,12 @@ import { runwayInfo } from './flight.js';
 
 const NATO = { 0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'niner' };
 export const spellNum = (n) => String(n).split('').map((c) => NATO[c] ?? c).join(' ');
+const spellStand = (s) => `${{ F: 'Foxtrot', B: 'Bravo', E: 'Echo' }[s[0]] || s[0]} ${spellNum(s.slice(1))}`;
 export const spellRwy = (id) => `${spellNum(id.replace(/[LRC]/, ''))}${id.endsWith('L') ? ' left' : id.endsWith('R') ? ' right' : id.endsWith('C') ? ' centre' : ''}`;
 const CALL = 'Scandinavian one four one five';
 const CALL_SHORT = 'Scandinavian one five';
 
-export const FREQ = { arnGround: '121.700', arnTower: '118.500', cphApproach: '119.800', cphTower: '118.100' };
+export const FREQ = { arnGround: '121.705', arnTower: '118.500', cphApproach: '119.800', cphTower: '118.100' };
 
 export class ATC {
   constructor(wx, opts = {}) {
@@ -26,7 +27,7 @@ export class ATC {
     this.unit = 'Arlanda Ground';
     this.depRwy = this.selectRunway('ARN');
     this.arrRwy = this.selectRunway('CPH');
-    this.cl = { taxi: false, lineup: false, takeoff: false, altFt: 0, approach: false, landing: false, vacated: false, taxiIn: false, spd: null, descent: false };
+    this.cl = { push: false, taxi: false, lineup: false, takeoff: false, altFt: 0, approach: false, landing: false, vacated: false, taxiIn: false, spd: null, descent: false };
     this.traffic = [];
     this._makeTraffic();
   }
@@ -150,6 +151,14 @@ export class ATC {
     const r = this.r, d = 2.5 + r() * 3.5, c = this.cl;
     const us = CALL;
     switch (kind) {
+      case 'startup': {
+        // A-CDM at Arlanda: the ground controller approves start-up and pushback at the TSAT
+        this.unit = 'Arlanda Ground';
+        const f = crew.fm.route.gate;
+        this.say('SK1415', `Arlanda Ground, ${us}, stand ${spellStand(f.name)}, request pushback and start-up.`, 0);
+        this.say('ATC', `${us}, pushback and start-up approved, facing ${f.facing}, QNH ${spellNum(Math.round(this.wx.s.arn.qnh))}.`, d, () => { c.push = true; crew.readback(`Pushback and start-up approved, facing ${f.facing}, QNH ${spellNum(Math.round(this.wx.s.arn.qnh))}, ${CALL_SHORT}.`); });
+        break;
+      }
       case 'taxi':
         this.unit = 'Arlanda Ground';
         this.say('SK1415', `Arlanda Ground, ${us}, request taxi.`, 0);

@@ -125,6 +125,8 @@ export class Player {
     this.onChange?.('stand', true);
     return true;
   }
+  // start the game standing somewhere (the gate)
+  startStanding(x, z, yaw) { this.state = 'standing'; this.pos.set(x, 0, z); this.yaw = yaw; this.pitch = -0.05; this.bodyRoot.visible = false; }
   sitDown() {
     if (this.state !== 'standing') return false;
     if (Math.abs(this.pos.z - (this.seat.z - 0.28)) > 0.6 || Math.abs(this.pos.x) > 0.45) return false;
@@ -229,7 +231,8 @@ export class Player {
       this.bob += moving ? dt * 8 : 0;
       if (moving) { this.stepAcc += dt * sp; if (this.stepAcc > 0.62) { this.stepAcc = 0; this.audio.footstep(); } }
       const bobY = moving ? Math.sin(this.bob) * 0.025 : 0;
-      this.eye.set(this.pos.x + (moving ? Math.cos(this.bob * 0.5) * 0.01 : 0), 1.62 + bobY, this.pos.z);
+      const floor = this.floorAt ? this.floorAt(this.pos.x, this.pos.z) : 0; // jet bridge and terminal floors
+      this.eye.set(this.pos.x + (moving ? Math.cos(this.bob * 0.5) * 0.01 : 0), floor + 1.62 + bobY, this.pos.z);
     }
     this.trayK = damp(this.trayK, this.tray ? 1 : 0, 7, dt);
     this.trayPivot.rotation.x = lerp(-Math.PI / 2 + 0.24, 0, this.trayK) * -1 * -1;

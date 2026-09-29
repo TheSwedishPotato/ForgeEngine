@@ -72,6 +72,7 @@ export class Crew {
 
   // ---------- speaking ----------
   say(who, text) { const p = who === 'pf' ? this.pf : who === 'pm' ? this.pm : who === 'capt' ? this.capt : this.fo; this.hooks.log({ kind: 'cockpit', who: p.role === 'capt' ? 'Captain' : 'First officer', text }); }
+  ground(text) { this.hooks.log({ kind: 'cockpit', who: 'Ground crew (headset)', text }); }
   readback(text) { this.later(0.8 + this.r() * 1.5, () => this.atc.say('SK1415', text, 0)); }
   later(sec, fn) { this.tasks.push({ at: this.t + sec, fn }); }
   onClearance(kind, v, qnh) {
@@ -297,6 +298,36 @@ export class Crew {
     if (!fm.onGround && !afs.ap && this.mode === 'none' && fm.phase !== 'forced') this.mode = fm.phase === 'approach' || fm.phase === 'flare' ? 'landing' : 'air';
     const agl = fm.agl, ias = fm.ias, altFt = fm.altInd / FT;
     switch (fm.phase) {
+      case 'boarding': {
+        // at the gate: the pilots wait for the load sheet and the purser's "boarding complete"
+        fm.ctl.parkBrake = true; this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
+        if (this.boardingDone && !st.pushReq) { st.pushReq = true; this.later(10, () => { this.say('capt', 'Doors closed, beacon on. Before start checklist complete.'); atc.call('startup', this); }); }
+        if (atc.cl.push && !st.pushGo) {
+          st.pushGo = true;
+          this.later(4, () => this.say('capt', `Ground from cockpit, cleared for pushback facing ${fm.route.gate.facing}. Brakes released.`));
+          this.later(6, () => { fm.ctl.parkBrake = false; });
+          this.later(10, () => { this.ground('Brakes released, pushback commencing. Cleared to start the engines.'); fm.startPushback(fm.route.pushPts); fm.phase = 'pushback'; st.pushT = this.t; });
+        }
+        break;
+      }
+      case 'pushback': {
+        fm.ctl.parkBrake = fm.tug?.state === 'stopped' ? fm.ctl.parkBrake : false; this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
+        // engine 2 first (it drives the yellow hydraulics for the brakes and steering), then engine 1
+        if (!st.eng2 && this.t - st.pushT > 15) { st.eng2 = true; fm.ctl.engMode = 'IGN/START'; this.say('capt', 'Starting engine two.'); this.later(3, () => { fm.ctl.engMaster[1] = true; }); }
+        if (st.eng2 && fm.engineRunning[1] && !st.eng1) { st.eng1 = true; this.later(8, () => { this.say('capt', 'Starting engine one.'); fm.ctl.engMaster[0] = true; }); }
+        if (fm.tug?.state === 'stopped' && !st.pushStop) {
+          st.pushStop = true;
+          this.ground('Pushback complete, set parking brake.');
+          this.later(2.5, () => { fm.ctl.parkBrake = true; this.say('capt', 'Parking brake set.'); });
+          this.later(9, () => this.ground('Parking brake set. Disconnecting, bypass pin removed. Stand by for visual signals on the left.'));
+          this.later(16, () => { fm.tug.state = 'off'; fm.emit('tug-disconnected'); });
+        }
+        if (st.pushStop && fm.tug?.state === 'off' && fm.engineRunning[0] && fm.engineRunning[1] && !st.afterStart) {
+          st.afterStart = true;
+          this.later(4, () => { fm.ctl.engMode = 'NORM'; this.say('pf', 'After start checklist: APU bleed off, engine mode normal, ground spoilers armed, rudder trim zero.'); fm.phase = 'parked'; fm.emit('pushback-complete'); });
+        }
+        break;
+      }
       case 'parked': {
         fm.ctl.parkBrake = true; this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
         if (!st.clr) { st.clr = true; this.later(6, () => { atc.call('taxi', this); }); }

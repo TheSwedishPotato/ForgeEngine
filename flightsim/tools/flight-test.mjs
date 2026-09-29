@@ -1,7 +1,7 @@
 // Headless flight test: the whole flight flown by the crew agents through the physics, with ATC
 // and the weather, in a few seconds.
 // usage: node tools/flight-test.mjs [preset] [maxSeconds] [--trace] [--radio] [--seed=N] [--wind=DDD/SS[/GG]]
-//        [--sc=efato|rto|engcruise|fire|fire2|depress|dual|hyd|cat|shear|ga|gear|medical|medical2|shearto]
+//        [--boarding] [--sc=efato|rto|engcruise|fire|fire2|depress|dual|hyd|cat|shear|ga|gear|medical|medical2|shearto]
 import { buildRoute } from '../src/flight.js';
 import { FlightModel } from '../src/physics.js';
 import { Atmosphere } from '../src/atmosphere.js';
@@ -25,9 +25,10 @@ const atc = new ATC(wx, { seed, events: opt('events') || 'realistic' });
 const route = buildRoute(atc.depRwy, atc.arrRwy);
 const atmo = new Atmosphere(wx, { seed });
 atmo.sunHeat = 0.8;
-const fm = new FlightModel(route, { atmosphere: atmo });
+const fm = new FlightModel(route, { atmosphere: atmo, ...(flag('boarding') ? { coldStart: true, stand: route.gate } : {}) });
 const log = [];
 const crew = new Crew(fm, atc, { seed, hooks: { log: (m) => { log.push(m); if (flag('radio')) console.log(`${String(Math.round(fm.t)).padStart(5)}s  ${m.kind.padEnd(7)} ${m.who.padEnd(18)} ${m.text}`); }, seatbelt: (on) => { if (flag('radio')) console.log(`${String(Math.round(fm.t)).padStart(5)}s  [seatbelt sign ${on ? 'ON' : 'OFF'}]`); }, cabinReady: () => true } });
+if (flag('boarding')) crew.boardingDone = true; // from the gate: pushback and engine start
 const f = (x, n = 1) => (x ?? NaN).toFixed(n);
 const row = (tag) => `${f(fm.t, 0).padStart(5)}s ${tag.padEnd(22)} ph=${fm.phase.padEnd(9)} s=${f(fm.s, 0).padStart(6)} h=${f(fm.altInd / FT, 0).padStart(6)}ft ias=${f(fm.ias, 0).padStart(4)} gs=${f(fm.gs / KT, 0).padStart(4)} vs=${f(fm.vs / FT * 60, 0).padStart(6)}fpm th=${f(fm.pitch / DEG)} bk=${f(fm.bank / DEG)} a=${f(fm.alpha / DEG)} n1=${f(fm.n1[0] * 100, 0)}/${f(fm.n1[1] * 100, 0)} cfg=${fm.cfgTarget} gear=${f(fm.gear, 1)} xtk=${f(fm.xtk, 0)} nz=${f(fm.nz, 2)} ${fm.afs.ap ? 'AP' : 'man'} ${fm.afs.thr}|${fm.afs.vert}|${fm.afs.lat} stk=${f(fm.ctl.stickY, 2)}`;
 console.log(`weather ${preset}: ${wx.metar('ARN')} | ${wx.metar('CPH')} | runways ${atc.depRwy} -> ${atc.arrRwy} | PF ${crew.pf.name}`);

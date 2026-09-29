@@ -15,6 +15,7 @@ import { Scenery } from './scenery.js';
 import { Cabin, rowZ, wallX, DOORS } from './cabin.js';
 import { Exterior } from './exterior.js';
 import { FlightDeck } from './flightdeck.js';
+import { Boarding, FACADE_Z } from './boarding.js';
 import { COCKPIT_DOOR_Z } from './airframe.js';
 import { People } from './people.js';
 import { Player } from './player.js';
@@ -30,7 +31,7 @@ import { VolumetricClouds } from './clouds.js';
 import { sharedUniforms, clamp, lerp, damp, rng, KT, FT, DEG, vnoise1, smoothstep } from './core.js';
 
 const ui = new UI();
-const PHASE_NAMES = { 'go-around': 'Go-around', emergency: 'Emergency descent', forced: 'Forced landing', 'rto-stop': 'Rejected take-off', 'runway-stop': 'Stopped on the runway', parked: 'Pushback complete', 'taxi-out': 'Taxiing', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', descent: 'Descending', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
+const PHASE_NAMES = { boarding: 'Boarding', pushback: 'Pushback', 'go-around': 'Go-around', emergency: 'Emergency descent', forced: 'Forced landing', 'rto-stop': 'Rejected take-off', 'runway-stop': 'Stopped on the runway', parked: 'Pushback complete', 'taxi-out': 'Taxiing', lineup: 'Lining up', takeoff: 'Take-off roll', climb: 'Climbing', descent: 'Descending', flare: 'Landing', rollout: 'Landing roll', 'taxi-in': 'Taxiing to the gate', arrived: 'At the gate' };
 const G_LOCAL = new THREE.Vector3(...GEAR_POINT); // main-gear contact point in aircraft coordinates
 // graphics presets
 const QUALITY = {
@@ -64,7 +65,9 @@ async function boot(o, audio) {
   const wx = new Weather(o.wx || presetWeather(o.weather), { seed });
   const atc = new ATC(wx, { seed, events: o.events || 'realistic' });
   const W = wx.visualAt(STATIONS.ARN.x, STATIONS.ARN.z, 0);
-  const opts = { ...o, depTime: dep.time, flight: dep.flight, startClock: dep.time + 4 / 60, wx, arrRwy: atc.arrRwy };
+  const boarding = o.boarding !== false;
+  // boarding starts about 30 minutes before departure; without it the game starts after pushback
+  const opts = { ...o, boarding, depTime: dep.time, flight: dep.flight, startClock: dep.time + (boarding ? -31 : 4) / 60, wx, arrRwy: atc.arrRwy };
   const canvas = document.getElementById('view');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, logarithmicDepthBuffer: true, stencil: true, powerPreference: 'high-performance' });
   // render scale: the preset's ratio, capped so the frame buffer stays within a sane pixel budget
@@ -81,7 +84,7 @@ async function boot(o, audio) {
   const route = buildRoute(atc.depRwy, atc.arrRwy);
   // the air and the aircraft: a rigid-body flight model flown through a turbulent atmosphere
   const atmo = new Atmosphere(wx, { seed });
-  const fm = new FlightModel(route, { atmosphere: atmo });
+  const fm = new FlightModel(route, { atmosphere: atmo, ...(boarding ? { coldStart: true, stand: route.gate } : {}) });
 
   ui.loading(0.2, 'Drawing Sweden and Denmark from map data…'); await frame();
   const world = new World(renderer, { weather: W, quality: o.quality, localTime: opts.startClock, volumetric: Q.vol > 0 && W.cumulus > 0 });
@@ -149,8 +152,20 @@ async function boot(o, audio) {
   } });
   S.flashSeen = -1; S.wxT = 0;
   deck.setCrew(S.crew);
+  if (boarding) {
+    // at gate F36 in pier F: the player waits in the hold room with everyone else
+    S.boarding = new Boarding(S, { gate: route.gate.name });
+    scenery.setBoardingMode(true);
+    cabin.doors.L1.open = cabin.doors.L1.target = 1;
+    player.startStanding(-10, FACADE_Z - 1.5, -2.5);
+    people.hallZ = FACADE_Z - 1; // in the open hall people walk round you
+    player.floorAt = (x, z) => (S.boarding.group.visible ? S.boarding.floorAt(x, z) : 0);
+    people.floorAt = player.floorAt;
+    addMasks(maskScene, S.boarding.maskMeshes, () => S.boarding.group.visible);
+  }
   // the flight deck: reachable through the cockpit door when it is open
   player.extraWalk = (x, z) => {
+    if (S.boarding && S.boarding.walkable(x, z)) return true;
     if (cabin.cockpitDoor.open > 0.85) return deck.walkable(x, z) || (z > COCKPIT_DOOR_Z - 0.1 && z < COCKPIT_DOOR_Z + 0.3 && Math.abs(x) < 0.3);
     return player.pos.z < COCKPIT_DOOR_Z && z < COCKPIT_DOOR_Z - 0.08 && deck.walkable(x, z); // door shut behind you
   };
@@ -167,7 +182,10 @@ async function boot(o, audio) {
   S.clock = new THREE.Clock();
   S.lastMap = 0;
   renderer.setAnimationLoop(loop);
-  ui.toast('Click the view to look around · B fastens your seatbelt · Esc for help', 7);
+  if (S.boarding) {
+    ui.toast(`Gate ${route.gate.name}, pier F, Arlanda Terminal 5 · your boarding pass: ${opts.flight} to Copenhagen, seat ${o.seat}, group ${S.boarding.playerGroup} · wait for your group, then scan your pass at the gate`, 10);
+    setTimeout(() => ui.toast('Click the view to look around · W A S D to walk · E to use things · Esc for help', 7), 10500);
+  } else ui.toast('Click the view to look around · B fastens your seatbelt · Esc for help', 7);
   setTimeout(() => ui.toast('Tip: M for the flight map on your phone · T talks to your neighbour · V looks at the aircraft from outside', 7), 8000);
 }
 
@@ -186,6 +204,11 @@ function buildWindowMask(cabin, deck) {
   const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 1.95), mat); hole.position.set(-wallX(1.0, DOORS.L1.z) - 0.02, 0.98, DOORS.L1.z); hole.rotation.y = Math.PI / 2; hole.visible = false; scene.add(hole);
   scene.userData.doorHole = hole;
   return scene;
+}
+// stencil openings that move or come and go (the jet bridge and the terminal glass)
+function addMasks(scene, meshes, visible) {
+  const mat = maskMaterial();
+  for (const src of meshes) { const m = new THREE.Mesh(src.geometry, mat); scene.add(m); scene.userData.dynamic = scene.userData.dynamic || []; scene.userData.dynamic.push({ src, m, visible }); }
 }
 function maskMaterial() {
   return new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false, side: THREE.DoubleSide,
@@ -251,6 +274,7 @@ function simStep(dt, render = true) {
   const pp = player.pos;
   people.playerBlock = player.state === 'standing' ? { x: pp.x, z: pp.z } : null;
   people.update(dt, { player: { x: player.eye.x, z: player.eye.z }, phase: fm.phase, bump: fm.bump, force: !render, crewNear: (seat) => people.crew.some((c) => Math.abs(c.z - seat.z) < 1.2 && !c.seated) });
+  if (S.boarding && !S.boarding.hidden) S.boarding.update(dt);
   cabin.update(dt);
   S.deck.update(dt, S, render && player.eye.z < -2.6 && S.view === 'cabin');
   S.cabinDyn.update(dt);
@@ -260,6 +284,7 @@ function simStep(dt, render = true) {
 function fastForward(cond, maxSec = 5400) {
   S.fast = true; S.voice.skipAll(); S.ui.mute = true; S.dialogue.muted = true;
   const P = S.player;
+  if (S.boarding && !S.boarding.complete && !cond()) S.boarding.skipToSeat();
   let t = 0;
   while (t < maxSec && !cond()) {
     if (P.state !== 'seated' && P.state !== 'jump') { P.pos.set(0, 0, P.seat.z - 0.28); P.sitDown(); }
@@ -370,7 +395,7 @@ function loop() {
   if (S.lastMap <= 0 && (ui.phoneOpen() || ui.radioOpen())) { S.lastMap = 0.25; if (ui.phoneOpen()) ui.updatePhone(phoneState(localH)); ui.flightDeck(deckState()); }
   // end condition: walk out of the front door
   if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && !S._deckInvite && !S.deckAccess) { S._deckInvite = true; ui.toast('The captain is saying goodbye at the door — ask at the cockpit door keypad if you would like to see the flight deck', 7); }
-  if (cabin.doors.L1.open > 0.9 && player.state === 'standing' && Math.abs(player.pos.z - DOORS.L1.z) < 0.4 && player.pos.x < -0.7 && !S.ended) endFlight();
+  if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && player.state === 'standing' && Math.abs(player.pos.z - DOORS.L1.z) < 0.4 && player.pos.x < -0.7 && !S.ended) endFlight();
   if (S.photoPending) takePhoto();
 }
 
@@ -379,6 +404,7 @@ function renderCabin(r, cam, wc, preExp, L) {
   const { post, world, cabin, maskScene: mask, vol } = S;
   r.setRenderTarget(post.rtMain); r.clear(true, true, true);
   for (const dp of mask.userData.doorPanes) { dp.src.updateMatrixWorld(); dp.src.matrixWorld.decompose(dp.m.position, dp.m.quaternion, dp.m.scale); }
+  for (const dp of mask.userData.dynamic || []) { dp.m.visible = dp.visible(); if (dp.m.visible) { dp.src.updateWorldMatrix(true, false); dp.src.matrixWorld.decompose(dp.m.position, dp.m.quaternion, dp.m.scale); } }
   mask.userData.doorHole.visible = cabin.doors.L1.open > 0.05;
   if (anyWindowVisible(cam)) {
     r.render(mask, cam);
@@ -461,6 +487,7 @@ function takePhoto() {
 function anyWindowVisible(cam) {
   // skip the whole outside pass when no window, door or hatch is in view
   if (cam.position.z < -3.3) return true; // in the flight deck: the windshield fills the view
+  if (S.boarding && S.boarding.group.visible && cam.position.x < -2.0) return true; // in the jet bridge or the terminal
   if (!S._frustum) S._frustum = new THREE.Frustum();
   const f = S._frustum; const m = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); f.setFromProjectionMatrix(m);
   const sph = S._sph || (S._sph = new THREE.Sphere(new THREE.Vector3(), 0.35));
@@ -489,6 +516,7 @@ function interactables() {
   }
   const list = [...S._inter, ...player.interactables()];
   if (S.cabin.cockpitDoor.open > 0.5 && player.state === 'standing') list.push(...S.deck.interactables);
+  if (S.boarding && S.boarding.group.visible) list.push(...S.boarding.interactables);
   if (people.neighbor) { const a = people.neighbor.actor; if (!a.root.userData.interact) a.root.userData.interact = { kind: 'neighbor', prompt: () => `Talk to ${people.neighbor.P.name}  [T]` }; a.root.traverse((o) => { if (o.isMesh) list.push(o); }); }
   for (const c of people.crew) { if (!c.root.userData.interact) c.root.userData.interact = { kind: 'crew', actor: c, prompt: () => `Excuse me, ${c.name}…` }; if (Math.abs(c.z - player.eye.z) < 2) c.root.traverse((o) => { if (o.isMesh) list.push(o); }); }
   return list;
@@ -531,6 +559,7 @@ function use(p) {
       else ui.toast('Nobody is admitted to the flight deck in flight or on the ground before the flight. The crew can visit you, not the other way round.', 5);
       break;
     }
+    case 'egate': S.boarding.playerScan(); break;
     case 'jumpseat': {
       if (player.sitJump(S.deck.jumpEye)) { cabin.cockpitDoor.target = 0; ui.toast('Observer seat, harness on · look around with the mouse · Space to get up', 5); }
       break;
@@ -699,6 +728,7 @@ function setupPause() {
   const { ui } = S;
   ui.setEvents(SCENARIOS, (id) => { S.incidents.trigger(id); });
   const skips = [
+    { id: 'pushback', label: 'Pushback', cond: () => S.fm.phase !== 'boarding' },
     { id: 'takeoff', label: 'Take-off', cond: () => S.fm.phase === 'lineup' || S.fm.phase === 'takeoff' || !S.fm.onGround },
     { id: 'cruise', label: 'Cruise', cond: () => S.fm.phase === 'cruise' || S.fm.phase === 'descent' },
     { id: 'service', label: 'Trolley service', cond: () => S.director.times.serviceStart != null },
@@ -789,6 +819,7 @@ function deckState() {
 window.__sim = () => S;
 window.__boot = (o) => { const a = new AudioEngine(); return boot({ ...ui.opts, ...o }, a); };
 window.__ff = (cond) => fastForward(cond);
+window.__run = (sec, dt = 0.25) => { S.fast = true; for (let t = 0; t < sec; t += dt) simStep(dt, false); S.fast = false; };
 window.__freeze = (v) => { if (!S) return; S.renderer.setAnimationLoop(v ? null : loop); };
 window.__renderOnce = () => { if (S) loop(); };
 window.__setView = (v) => setView(v);

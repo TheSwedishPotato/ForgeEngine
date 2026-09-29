@@ -103,6 +103,22 @@ export function runwayInfo(icao, id) {
   return null;
 }
 
+// Main-gear track of a pushback: `straight` metres tail-first from the stand, then an arc of radius
+// R that ends with the nose pointing along `hdg1` (radians).
+export function pushbackPath(x, z, hdg0, hdg1, straight = 15, R = 24) {
+  const pts = [{ x, z }];
+  const bx = -Math.sin(hdg0), bz = Math.cos(hdg0);           // tail-first direction
+  for (let d = 2; d <= straight; d += 2) pts.push({ x: x + bx * d, z: z + bz * d });
+  const p0 = pts[pts.length - 1];
+  let turn = hdg1 - hdg0; turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+  // moving backwards, the heading turns by `turn` while the direction of motion turns the same way
+  const sgn = Math.sign(turn) || 1, rx = -bz * sgn, rz = bx * sgn;   // unit vector to the centre
+  const cx = p0.x + rx * R, cz = p0.z + rz * R, a0 = Math.atan2(p0.x - cx, p0.z - cz);
+  const n = Math.max(4, Math.ceil(Math.abs(turn) * R / 2));
+  for (let k = 1; k <= n; k++) { const a = a0 - turn * k / n; pts.push({ x: cx + Math.sin(a) * R, z: cz + Math.cos(a) * R }); }
+  return pts;
+}
+
 // The complete ground and air route for a departure runway at Arlanda and an arrival runway at
 // Kastrup: taxi-out from pier F, the runway, a departure that joins the airway, the airway over
 // Sweden, the arrival and final approach, the landing roll, the exit and taxi-in to pier B.
@@ -111,7 +127,7 @@ export function buildRoute(dep = '19R', arr = '22L') {
   const pts = [], rad = [];
   const add = (p, r = 0) => { pts.push(p); rad.push(r); };
   // ---- Arlanda: taxi from the stand at pier F to the runway, then the departure ----
-  add(fa.to(1580, L.startStandV));
+  add(fa.to(L.pushEndU, L.startStandV));
   add(fa.to(1580, L.taxiwayZ), 45);
   let holdPt, lineupPt, rwyEnd;
   if (dep === '01L') {
@@ -162,7 +178,11 @@ export function buildRoute(dep = '19R', arr = '22L') {
   m.crossing = m.exit;
   m.touchdown = m.thr + 300;
   const d = runwayInfo('ESSA', dep) || runwayInfo('ESSA', '19R');
-  return { path, m, dep: d, arr: a, depRwy: d.id, arrRwy: a.id, airport: null, keys: { pts, rad, thrIdx: keyIdx(pts, exitPt, 0), exitPt } };
+  // the gate at pier F, nose in, and the pushback that brings the aircraft to the start of the taxi route
+  const G = L.gateStand, gp = fa.to(G.u, G.v), hU = Math.atan2(fa.u.x, -fa.u.y), hV = Math.atan2(fa.v.x, -fa.v.y);
+  const gate = { x: gp.x, z: gp.y, heading: hU, name: G.name, facing: 'west' };
+  const pushR = G.v - L.startStandV, pushPts = pushbackPath(gp.x, gp.y, hU, hV, G.u - L.pushEndU - pushR, pushR);
+  return { gate, pushPts, path, m, dep: d, arr: a, depRwy: d.id, arrRwy: a.id, airport: null, keys: { pts, rad, thrIdx: keyIdx(pts, exitPt, 0), exitPt } };
 }
 
 // index of the key point just before `p` (the landing roll starts there) minus `back`

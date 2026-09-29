@@ -68,6 +68,8 @@ export class Director {
     if (fm.onGround && !fm.airport && fm.s < (m.lineup || 0) + 20) tgo = Math.max(0, (m.lineup || 0) - fm.s) / 8 + 90 + this._airTime(m.touchdown - (m.lineup || 0), 0) + 250;
     else if (!fm.onGround || fm.phase === 'takeoff') tgo = this._airTime(d2td, fm.gs);
     tgo += Math.max(0, m.stand - Math.max(fm.s, m.touchdown)) / 8 + 40;
+    if (fm.phase === 'boarding') tgo += 300 + (this.sim.boarding && !this.sim.boarding.complete ? Math.max(0, 1150 - this.sim.boarding.t) : 0);
+    else if (fm.phase === 'pushback') tgo += 150;
     return this.clockH + tgo / 3600;
   }
   _airTime(d, gs) { const dDes = Math.min(d, 190000); return dDes / 125 + Math.max(0, d - dDes) / (gs > 150 ? gs : 225); }
@@ -83,6 +85,14 @@ export class Director {
     if (chime && !this.sim.fast) this.sim.audio.chime('low'); // Airbus: a single low tone for the signs
     this.sim.ui.toast(on ? 'Fasten seatbelt sign ON' : 'Fasten seatbelt sign OFF');
     if (!on) this.sim.dialogue?.event('seatbelt-off', {});
+  }
+
+  // the purser's "boarding completed": doors closed, seatbelt signs on, the purser to the front
+  boardingDone() {
+    const S = this.sim;
+    this.mark('boardDone');
+    this.setSeatbelt(true);
+    const pur = S.people.crewNamed('purser'); pur.clear(); pur.queue({ type: 'walk', x: 0.4, z: LAYOUT.fwdMonAftZ + 0.3 });
   }
 
   setLights(level, mood, instant = false) { this.lightTarget = level; this.moodTarget = mood; if (instant) { this.lightLevel = level; this.mood = mood; } }
@@ -226,10 +236,21 @@ export class Director {
     while (fm.events.length) this.onFlightEvent(fm.events.shift());
     // --- pre-departure sequence ---
     if (this.flag('start')) {
-      S.cabin.setSigns(true); this.setLights(this.nightish() ? 0.45 : 0.9, this.nightish() ? '#dfe6ff' : '#fff4e6', true);
-      people.crewNamed('purser').queue({ type: 'walk', x: 0.4, z: LAYOUT.fwdMonAftZ + 0.3 });
+      this.setLights(this.nightish() ? 0.45 : 0.9, this.nightish() ? '#dfe6ff' : '#fff4e6', true);
+      if (S.boarding) {
+        // boarding: signs off, the purser greets at door 1
+        this.seatbelt = false; S.cabin.setSigns(false);
+        const pur = people.crewNamed('purser'); pur.clear(); pur.place(-0.55, DOORS.L1.z + 0.75, -Math.PI / 2 + 0.5);
+        // the others keep the aisle clear: one in the forward galley, two at the back
+        const fwd = people.crewNamed('fwd'); if (fwd) { fwd.clear(); fwd.place(0.85, LAYOUT.fwdMonAftZ + 0.35, -Math.PI / 2); }
+        for (const [role, x] of [['mid', -0.25], ['aft', 0.25]]) { const c = people.crewNamed(role); if (c) { c.clear(); c.place(x, LAYOUT.aftGalleyZ - 0.35, Math.PI); } }
+      } else {
+        S.cabin.setSigns(true);
+        people.crewNamed('purser').queue({ type: 'walk', x: 0.4, z: LAYOUT.fwdMonAftZ + 0.3 });
+      }
     }
-    if (t > 4 && this.flag('welcome')) this.say(SCRIPTS.welcome, { onDone: () => this.mark('welcomeDone') });
+    const boarded = !S.boarding || this.times.boardDone != null;
+    if (boarded && t - (this.times.boardDone ?? 0) > 4 && this.flag('welcome')) this.say(SCRIPTS.welcome, { onDone: () => this.mark('welcomeDone') });
     if (this.after('welcomeDone', 1) && this.flag('demoPos')) { people.safetyDemoPositions(); this.mark('demoPos'); this.scene = 'warm'; }
     if (this.after('demoPos', 7) && this.flag('demo')) this._runDemo();
     if (this.demoDone && this.flag('check')) { this.phaseTag = 'to'; people.cabinCheck((a, row) => this.checkRow(a, row), () => { this.checkDone = true; this.mark('checkDone'); }); }

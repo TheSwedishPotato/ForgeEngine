@@ -59,7 +59,9 @@ export const ARN_LAYOUT = {
   terminal2: { u: 2350, v: -1180, len: 260, depth: 60 },
   pierE: { u0: 1300, v0: -960, v1: -700, width: 18 },
   tower: { u: 1420, v: -1260 },
-  startStandV: -560,        // stand we pushed back from
+  gateStand: { u: 1620, v: -565, name: 'F36' }, // main gear on the stand, nose in towards pier F
+  startStandV: -589,        // where the pushback ends (15 m straight back, then a 24 m radius turn)
+  pushEndU: 1581,
   holdU: -45,               // holding point level with the threshold
 };
 

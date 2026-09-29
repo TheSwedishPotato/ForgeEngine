@@ -214,6 +214,7 @@ export class Autoflight {
     this.n1Cmd = n1;
     this.athrActive = this.athr && inAthrRange;
     if (!this.athrActive) this.thr = tla > 0.98 ? 'MAN TOGA' : tla > DETENT.CL + 0.05 ? (fm.onGround || agl < 30 ? 'MAN FLX' : 'MAN MCT') : tla < 0 ? 'REV' : 'MAN THR';
+    if (!fm.engineRunning[0] && !fm.engineRunning[1] && fm.onGround) this.thr = '';
     this.speedOnPitch = speedOnPitch;
     // --- flight path -> pitch rate order (limited to comfortable load factors) ---
     const phi = fm.bank;
