@@ -167,8 +167,10 @@ export class Crew {
       case 'takeoff': case 'rollout': {
         // keep the centreline with the rudder pedals (and the nose wheel through them)
         const R = this.mode === 'takeoff' || this.st.rtoWatch ? fm.route.dep : this.approachRwy;
-        const lat = this._latDev(R);
-        const hdgErr = angleDiff(R.hdg * DEG, fm.heading);
+        // off-airport (a forced landing): keep straight along the touchdown heading
+        const offField = this.mode === 'rollout' && this.st.forcedStop && this.st.tdHdg != null && Math.abs(this._latDev(R)) > 150;
+        const lat = offField ? 0 : this._latDev(R);
+        const hdgErr = angleDiff(offField ? this.st.tdHdg : R.hdg * DEG, fm.heading);
         const rudK = clamp(80 / Math.max(gsKt, 20), 0.5, 3);
         out.ped = clamp((hdgErr * 3.2 - lat * 0.012 - fm.r * 1.4) * rudK * p.gain, -1, 1);
         // on the runway the stick stays near neutral: a little into-wind aileron at speed, no wing-levelling
@@ -680,7 +682,7 @@ export class Crew {
   onEvent(e) {
     const fm = this.fm, st = this.st;
     if (e === 'touchdown' && (fm.phase === 'flare' || fm.phase === 'approach' || fm.phase === 'forced')) {
-      if (fm.phase === 'forced') { fm.phase = 'rollout'; this.mode = 'rollout'; this.lev = [0, 0]; this.brk = 1; st.tdT = this.t; this.stopOnRunway = true; this.st.forcedStop = true; return; }
+      if (fm.phase === 'forced') { fm.phase = 'rollout'; this.mode = 'rollout'; this.lev = [0, 0]; this.brk = 0; st.tdT = this.t; st.tdHdg = fm.track; this.stopOnRunway = true; this.st.forcedStop = true; return; }
       fm.phase = 'rollout'; this._flareEndSy = fm.ctl.stickY; this.mode = 'rollout'; st.tdT = this.t;
       this.lev = [0, 0];
       if (!st.gearUnsafe) this.later(0.4 + this.pf.react * 0.5, () => { const r = this.revMax ? DETENT.REV_MAX : DETENT.REV_IDLE; this.lev = [r, r]; });
@@ -709,7 +711,10 @@ export class Crew {
     if (kt < 30 && this.lev[0] < 0) { this.lev = [0, 0]; }
     // stop straight ahead for the fire services after an engine fire or an evacuation-type event
     if (this.stopOnRunway || fm.stopOnRunway) {
-      this.brk = kt > 2 ? clamp((kt - 5) / 30, 0.4, 1) : 1;
+      // lower the nose first, then brake hard (braking with the nose up slams the nose gear down)
+      const noseDown = fm.wow[0] && this.t - (st.tdT ?? 0) > 1.5;
+      if (noseDown && st.brkOnT == null) st.brkOnT = this.t;
+      this.brk = !noseDown ? 0 : kt > 2 ? clamp((kt - 5) / 30, 0.4, 1) * clamp((this.t - st.brkOnT) / 2, 0.2, 1) : 1;
       if (kt < 0.5) { fm.phase = 'runway-stop'; fm.ctl.parkBrake = true; fm.emit('stopped-on-runway'); this.hooks.emergency('stopped', { forced: !!this.st.forcedStop, fire: fm.engFire.some(Boolean) }); if (this.st.forcedStop) { this.say('capt', 'Evacuate, evacuate, evacuate!'); fm.evacuating = true; } }
       return;
     }
@@ -930,6 +935,7 @@ export class Crew {
     const fm = this.fm, afs = this.afs;
     if (fm.phase === 'forced') return;
     fm.phase = 'forced'; fm.emit('forced-landing');
+    fm.ctl.autobrake = 'OFF'; // the take-off MAX setting must not fire at touchdown: the pilots brake by hand once the nose is down
     this.say('capt', 'I have control. Engine dual failure. Mayday.');
     afs.disconnectAP('pilot'); this.mode = 'air';
     this.atc.call('mayday', this, { what: 'both engines failed', intent: 'forced landing' });

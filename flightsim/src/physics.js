@@ -38,10 +38,13 @@ const DT = 1 / 120;
 const CG = [0, 0.5, cgAt(0.27)];    // 27 % MAC, a typical take-off centre of gravity
 const NOSE_LOAD = (MAIN_GEAR.z - CG[2]) / WB; // static share of the weight on the nose leg (about 11 %)
 const GEAR = [ // contact points when the strut carries its static load
-  { name: 'nose', p: [0, NOSE_GEAR.y, NOSE_GEAR.z], load: NOSE_LOAD, defl: 0.12, steer: true, brake: false },
-  { name: 'left', p: [-MAIN_GEAR.x, MAIN_GEAR.y, MAIN_GEAR.z], load: (1 - NOSE_LOAD) / 2, defl: 0.25, steer: false, brake: true },
-  { name: 'right', p: [MAIN_GEAR.x, MAIN_GEAR.y, MAIN_GEAR.z], load: (1 - NOSE_LOAD) / 2, defl: 0.25, steer: false, brake: true },
+  { name: 'nose', p: [0, NOSE_GEAR.y, NOSE_GEAR.z], load: NOSE_LOAD, defl: 0.12, stroke: 0.30, steer: true, brake: false },
+  { name: 'left', p: [-MAIN_GEAR.x, MAIN_GEAR.y, MAIN_GEAR.z], load: (1 - NOSE_LOAD) / 2, defl: 0.25, stroke: 0.47, steer: false, brake: true },
+  { name: 'right', p: [MAIN_GEAR.x, MAIN_GEAR.y, MAIN_GEAR.z], load: (1 - NOSE_LOAD) / 2, defl: 0.25, stroke: 0.47, steer: false, brake: true },
 ];
+// oleo gas spring: F = F_static ((L - c_static) / (L - c))^1.35, with the gas column L chosen so that the
+// strut reaches the end of its stroke at about four times its static load (a landing-design load)
+for (const g of GEAR) g.gasL = (Math.pow(4, 1 / 1.35) * g.stroke - g.defl) / (Math.pow(4, 1 / 1.35) - 1);
 const G_LOCAL = [0, MAIN_GEAR.y, MAIN_GEAR.z];
 const ENG_X = ENGINE.x, ENG_ARM = CG[1] - ENGINE.y; // engine spanwise position; thrust line below the CG
 // structure that must never touch the ground
@@ -539,9 +542,10 @@ export class FlightModel {
       const wv = rot(this.Q, this.q, -this.r, -this.p, this._wv || (this._wv = {}));
       const cvx = this.V.x + wv.y * r.z - wv.z * r.y, cvy = this.V.y + wv.z * r.x - wv.x * r.z, cvz = this.V.z + wv.x * r.y - wv.y * r.x;
       const k = g.load * W / g.defl, d = 2 * 0.55 * Math.sqrt(k * this.mass * g.load);
-      let Fn = k * c - d * cvy * Math.min(1, c / 0.06); // tyre then oleo: damping builds up with stroke
-      const stroke = 0.5;
-      if (c > stroke) Fn += k * 30 * (c - stroke); // bottoming out
+      // tyre then oleo: the gas spring stiffens with stroke; the orifice damps rebound harder than compression
+      const cs = Math.min(c, g.stroke - 0.01);
+      let Fn = g.load * W * Math.pow((g.gasL - g.defl) / (g.gasL - cs), 1.35) * Math.min(1, c / 0.04) - d * cvy * (cvy > 0 ? 2.5 : 1) * Math.min(1, c / 0.06);
+      if (c > g.stroke) Fn += k * 30 * (c - g.stroke); // bottoming out
       Fn = Math.max(0, Fn);
       if (!this._contact[i]) {
         this._contact[i] = true; this.contactSink[i] = -cvy;
@@ -556,7 +560,10 @@ export class FlightModel {
       const vl = cvx * lx + cvz * lz, vlat = cvx * -lz + cvz * lx;
       const bk = g.brake ? (this.parkBrake ? 1 : (i === 1 ? this.brakeL : this.brakeR)) * muBrake * hydBrake : 0;
       const Flong = -(0.010 + bk) * Fn * Math.tanh(vl / 0.12);
-      const Flat = -mu * Fn * Math.tanh(vlat / 0.12);
+      // tyre side force from the slip angle: cornering force builds up over the first few degrees of
+      // slip (aircraft tyres peak near 8-10 degrees), not at a few centimetres per second of side speed
+      const slip = Math.atan2(vlat, Math.max(Math.abs(vl), 0.6));
+      const Flat = -mu * Fn * Math.tanh(slip / 0.09);
       const Fx = lx * Flong + -lz * Flat, Fz = lz * Flong + lx * Flat, Fy = Fn;
       out.fx += Fx; out.fy += Fy; out.fz += Fz;
       out.mx += r.y * Fz - r.z * Fy; out.my += r.z * Fx - r.x * Fz; out.mz += r.x * Fy - r.y * Fx;

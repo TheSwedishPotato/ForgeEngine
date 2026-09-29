@@ -194,9 +194,11 @@ Runways in use: Arlanda ${atc.depRwy} for take-off, Kastrup ${atc.arrRwy} for la
   }
   toast(msg, secs = 3.5) {
     if (this.mute) return;
+    // the same message twice: keep the one on screen a little longer instead of stacking a copy
+    for (const old of this.toastsEl.children) if (old.textContent === msg) { clearTimeout(old._t); old._t = setTimeout(() => old.remove(), secs * 1000); return; }
     const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg; this.toastsEl.appendChild(d);
     while (this.toastsEl.children.length > 3) this.toastsEl.firstChild.remove();
-    setTimeout(() => d.remove(), secs * 1000);
+    d._t = setTimeout(() => d.remove(), secs * 1000);
   }
 
   // generic choice panel

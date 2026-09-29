@@ -1,7 +1,7 @@
 // Headless flight test: the whole flight flown by the crew agents through the physics, with ATC
 // and the weather, in a few seconds.
 // usage: node tools/flight-test.mjs [preset] [maxSeconds] [--trace] [--radio] [--seed=N] [--wind=DDD/SS[/GG]]
-//        [--boarding] [--sc=efato|rto|engcruise|fire|fire2|depress|dual|hyd|cat|shear|ga|gear|medical|medical2|shearto]
+//        [--boarding] [--win=<t>:<halfwidth>] [--sc=efato|rto|engcruise|fire|fire2|depress|dual|hyd|cat|shear|ga|gear|medical|medical2|shearto]
 import { buildRoute } from '../src/flight.js';
 import { FlightModel } from '../src/physics.js';
 import { Atmosphere } from '../src/atmosphere.js';
@@ -58,6 +58,7 @@ while (t < maxT && fm.phase !== 'arrived' && fm.phase !== 'rto-stop' && fm.phase
   while (fm.events.length) { const e = fm.events.shift(); if (!['flaps', 'alt-star', 'alt-captured', 'ap-off'].includes(e) || flag('trace')) console.log(row('EV ' + e)); if (e === 'touchdown') tdSink = fm.touchdownSink; }
   if (!fm.onGround && fm.phase !== 'climb') { nzMin = Math.min(nzMin, fm.nz); nzMax = Math.max(nzMax, fm.nz); }
   if (flag('trace') && t - lastTrace >= (fm.onGround ? 10 : 30)) { lastTrace = t; console.log(row('')); }
+  if (opt('win') && Math.abs(fm.t - +opt('win').split(':')[0]) < +(opt('win').split(':')[1] || 5)) console.log(`${f(fm.t, 2)} bk=${f(fm.bank / DEG, 2)} p=${f(fm.p / DEG, 1)} th=${f(fm.pitch / DEG, 2)} wow=${fm.wow.map(Number).join('')} str=${fm.strutC.map((x) => f(x, 3)).join('/')} sx=${f(fm.ctl.stickX, 2)} da=${f(fm.da / DEG, 1)} sp=${f(fm.groundSpoiler, 2)} gs=${f(fm.gs / KT, 0)} law=${fm.fbwMode}`);
   if (flag('final') && !fm.onGround && fm.agl < 200 && fm.phase !== 'climb') console.log(row('F'));
   if (!isFinite(fm.P.x) || !isFinite(fm.P.y)) { console.log('NaN!', row('')); break; }
 }
