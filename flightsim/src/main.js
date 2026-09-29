@@ -14,6 +14,8 @@ import { Crew } from './crew.js';
 import { Scenery } from './scenery.js';
 import { Cabin, rowZ, wallX, DOORS } from './cabin.js';
 import { Exterior } from './exterior.js';
+import { FlightDeck } from './flightdeck.js';
+import { COCKPIT_DOOR_Z } from './airframe.js';
 import { People } from './people.js';
 import { Player } from './player.js';
 import { AudioEngine } from './audio.js';
@@ -97,6 +99,7 @@ async function boot(o, audio) {
   cabinScene.environment = roomEnv;
   const cabin = new Cabin({ quality: o.quality });
   cabinScene.add(cabin.group);
+  const deck = new FlightDeck(cabinScene, { seed: seed + 11 });
   const extScene = new THREE.Scene();
   const ext = new Exterior({ quality: o.quality }); extScene.add(ext.group);
   const skyEnv = makeSkyEnv(renderer);
@@ -124,14 +127,14 @@ async function boot(o, audio) {
   ui.loading(0.88, 'Preparing the cameras…'); await frame();
   // Window stencil: the outside world and the aircraft exterior are only shaded
   // inside the window panes, door windows and (on arrival) the open door.
-  const maskScene = buildWindowMask(cabin);
+  const maskScene = buildWindowMask(cabin, deck);
   const maskAll = buildFullMask();
   stencilTest(world.scene); stencilTest(extScene);
   renderer.shadowMap.autoUpdate = false;
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const post = new PostFX(renderer, { width: size.x, height: size.y, quality: o.quality });
   const extCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
-  S = { ui, renderer, route, fm, atmo, wx, atc, world, scenery, cabin, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
+  S = { ui, renderer, route, fm, atmo, wx, atc, world, scenery, cabin, deck, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
   const director = new Director(S);
   S.director = director;
   S.cabinDyn = new CabinDynamics(S);
@@ -145,6 +148,16 @@ async function boot(o, audio) {
     emergency: (kind, d) => S.incidents.onCrew(kind, d),
   } });
   S.flashSeen = -1; S.wxT = 0;
+  deck.setCrew(S.crew);
+  // the flight deck: reachable through the cockpit door when it is open
+  player.extraWalk = (x, z) => {
+    if (cabin.cockpitDoor.open > 0.85) return deck.walkable(x, z) || (z > COCKPIT_DOOR_Z - 0.1 && z < COCKPIT_DOOR_Z + 0.3 && Math.abs(x) < 0.3);
+    return player.pos.z < COCKPIT_DOOR_Z && z < COCKPIT_DOOR_Z - 0.08 && deck.walkable(x, z); // door shut behind you
+  };
+  // Admission to the flight deck is the commander's decision under the operator's manual (EU Part-CAT
+  // CAT.GEN.MPA.135); in flight the door stays locked. The observer-seat option is a what-if.
+  S.deckAccess = !!o.deck;
+  if (S.deckAccess) cabin.cockpitDoor.locked = false;
 
   ui.loading(0.95, 'Closing the doors…'); await frame();
   resize();
@@ -158,12 +171,14 @@ async function boot(o, audio) {
   setTimeout(() => ui.toast('Tip: M for the flight map on your phone · T talks to your neighbour · V looks at the aircraft from outside', 7), 8000);
 }
 
-function buildWindowMask(cabin) {
+function buildWindowMask(cabin, deck) {
   const scene = new THREE.Scene();
   const mat = maskMaterial();
   cabin.group.updateMatrixWorld(true);
   const add = (src, scale = 1.06) => { const m = new THREE.Mesh(src.geometry, mat); src.matrixWorld.decompose(m.position, m.quaternion, m.scale); m.scale.multiplyScalar(scale); scene.add(m); return m; };
   for (const w of cabin.windows) add(w.pane);
+  deck.group.updateMatrixWorld(true);
+  for (const m of deck.maskMeshes) add(m, 1);
   const doorPanes = [];
   for (const d of Object.values(cabin.doors)) d.pivot.traverse((o) => { if (o.isMesh && o.material === cabin.paneMat) doorPanes.push({ src: o, m: add(o) }); });
   scene.userData.doorPanes = doorPanes;
@@ -237,6 +252,7 @@ function simStep(dt, render = true) {
   people.playerBlock = player.state === 'standing' ? { x: pp.x, z: pp.z } : null;
   people.update(dt, { player: { x: player.eye.x, z: player.eye.z }, phase: fm.phase, bump: fm.bump, force: !render, crewNear: (seat) => people.crew.some((c) => Math.abs(c.z - seat.z) < 1.2 && !c.seated) });
   cabin.update(dt);
+  S.deck.update(dt, S, render && player.eye.z < -2.6 && S.view === 'cabin');
   S.cabinDyn.update(dt);
   S.dialogue.playerPos = player.eye;
 }
@@ -246,7 +262,7 @@ function fastForward(cond, maxSec = 5400) {
   const P = S.player;
   let t = 0;
   while (t < maxSec && !cond()) {
-    if (P.state !== 'seated') { P.pos.set(0, 0, P.seat.z - 0.28); P.sitDown(); }
+    if (P.state !== 'seated' && P.state !== 'jump') { P.pos.set(0, 0, P.seat.z - 0.28); P.sitDown(); }
     if (!P.belt) P.belt = true; if (P.tray) P.tray = false; if (P.recline) P.setRecline(false);
     for (const w of S.cabin.windows) if (Math.abs(w.z - P.seat.z) < 0.6 && Math.sign(w.side) === Math.sign(P.seat.x)) w.shadeTarget = 0;
     S.director.serviceAtPlayer = null;
@@ -353,6 +369,7 @@ function loop() {
   S.lastMap -= realDt;
   if (S.lastMap <= 0 && (ui.phoneOpen() || ui.radioOpen())) { S.lastMap = 0.25; if (ui.phoneOpen()) ui.updatePhone(phoneState(localH)); ui.flightDeck(deckState()); }
   // end condition: walk out of the front door
+  if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && !S._deckInvite && !S.deckAccess) { S._deckInvite = true; ui.toast('The captain is saying goodbye at the door — ask at the cockpit door keypad if you would like to see the flight deck', 7); }
   if (cabin.doors.L1.open > 0.9 && player.state === 'standing' && Math.abs(player.pos.z - DOORS.L1.z) < 0.4 && player.pos.x < -0.7 && !S.ended) endFlight();
   if (S.photoPending) takePhoto();
 }
@@ -371,7 +388,10 @@ function renderCabin(r, cam, wc, preExp, L) {
     r.setRenderTarget(post.rtMain);
     if (vol) vol.render(r, wc, post.rtWorld, preExp, S.fm.t); else post.blitWorld();
     r.clearDepth();
+    const inDeck = cam.position.z < -3.3;
+    for (const m of S.ext.cockpitGlazing) m.visible = !inDeck;
     r.render(S.extScene, cam);
+    for (const m of S.ext.cockpitGlazing) m.visible = true;
   }
   if (r.shadowMap.enabled && S.frameNo % 2 === 0) r.shadowMap.needsUpdate = true;
   r.render(S.cabinScene, cam);
@@ -440,6 +460,7 @@ function takePhoto() {
 
 function anyWindowVisible(cam) {
   // skip the whole outside pass when no window, door or hatch is in view
+  if (cam.position.z < -3.3) return true; // in the flight deck: the windshield fills the view
   if (!S._frustum) S._frustum = new THREE.Frustum();
   const f = S._frustum; const m = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); f.setFromProjectionMatrix(m);
   const sph = S._sph || (S._sph = new THREE.Sphere(new THREE.Vector3(), 0.35));
@@ -467,6 +488,7 @@ function interactables() {
     S._inter = list;
   }
   const list = [...S._inter, ...player.interactables()];
+  if (S.cabin.cockpitDoor.open > 0.5 && player.state === 'standing') list.push(...S.deck.interactables);
   if (people.neighbor) { const a = people.neighbor.actor; if (!a.root.userData.interact) a.root.userData.interact = { kind: 'neighbor', prompt: () => `Talk to ${people.neighbor.P.name}  [T]` }; a.root.traverse((o) => { if (o.isMesh) list.push(o); }); }
   for (const c of people.crew) { if (!c.root.userData.interact) c.root.userData.interact = { kind: 'crew', actor: c, prompt: () => `Excuse me, ${c.name}…` }; if (Math.abs(c.z - player.eye.z) < 2) c.root.traverse((o) => { if (o.isMesh) list.push(o); }); }
   return list;
@@ -495,7 +517,24 @@ function use(p) {
     case 'light': player.setReadingLight(!player.readingLight); break;
     case 'call': player.setCall(!player.callOn); break;
     case 'gasper': player.gasper = !player.gasper; audio.clunk(0.08); break;
-    case 'cockpit': ui.toast('The cockpit door is locked for the whole flight.'); break;
+    case 'cockpit': {
+      const cd = cabin.cockpitDoor;
+      if (cd.target > 0.5) { if (player.pos.z < COCKPIT_DOOR_Z + 0.1 && player.state === 'standing') { ui.toast('Step out of the flight deck first.'); break; } cd.target = 0; audio.clunk(0.25); break; }
+      if (cd.locked) { ui.toast(S.fm.onGround && ['arrived'].includes(S.fm.phase) ? 'Ask the crew — press the keypad.' : 'The cockpit door is locked for the whole flight.'); break; }
+      if (player.state !== 'standing') { ui.toast('Stand up first (Space).'); break; }
+      cd.target = 1; audio.clunk(0.25); break;
+    }
+    case 'keypad': {
+      const cd = cabin.cockpitDoor;
+      if (!cd.locked) { ui.toast('The door is unlocked.'); break; }
+      if (S.fm.phase === 'arrived') { cd.locked = false; audio.chime('single'); ui.toast(`${S.crew.capt.name}: "Of course — come and have a look at the flight deck."`, 5); }
+      else ui.toast('Nobody is admitted to the flight deck in flight or on the ground before the flight. The crew can visit you, not the other way round.', 5);
+      break;
+    }
+    case 'jumpseat': {
+      if (player.sitJump(S.deck.jumpEye)) { cabin.cockpitDoor.target = 0; ui.toast('Observer seat, harness on · look around with the mouse · Space to get up', 5); }
+      break;
+    }
     case 'galley': ui.toast('The galley is for crew only.'); break;
     case 'lavdoor': {
       const l = p.lav;
@@ -581,6 +620,7 @@ function setupInput() {
       case 'Space': {
         if (S.view === 'outside') break;
         if (P.fallen) { if (P.getUp()) ui.toast('You get back on your feet.', 2); break; }
+        if (P.state === 'jump') { P.leaveJump(); break; }
         if (P.state === 'seated') { const r = P.standUp(); if (r === 'belt') ui.toast('Unfasten your seatbelt first (B)'); else if (r === 'tray') ui.toast('Fold the tray table first (F)'); else if (r === true) { ui.toast('Walk with W A S D · Space to sit when you are back at your row', 4); if (D.seatbelt && S.fm.phase !== 'arrived') ui.toast('The seatbelt sign is on!', 3); } }
         else if (!P.sitDown()) ui.toast('Walk back to your row to sit down');
         break;

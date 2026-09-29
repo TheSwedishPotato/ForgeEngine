@@ -251,7 +251,10 @@ function skinTexture(holes, side) {
   });
   const alpha = canvasTex(4096, 1024, (g, w, h) => {
     g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.fillStyle = '#000';
-    for (const o of holes) { rr(g, X(o.z0) * w, h - o.v1 * h, (X(o.z1) - X(o.z0)) * w, (o.v1 - o.v0) * h, o.r ?? 7); g.fill(); }
+    for (const o of holes) {
+      if (o.poly) { g.beginPath(); o.poly.forEach(([z, v], i) => (i ? g.lineTo(X(z) * w, h - v * h) : g.moveTo(X(z) * w, h - v * h))); g.closePath(); g.fill(); continue; }
+      rr(g, X(o.z0) * w, h - o.v1 * h, (X(o.z1) - X(o.z0)) * w, (o.v1 - o.v0) * h, o.r ?? 7); g.fill();
+    }
   }, { srgb: false });
   return { color, alpha };
 }
@@ -526,6 +529,8 @@ export class Exterior {
       if (d.side > 0) continue;
       holes.push({ z0: d.z - DOOR_W / 2 + 0.02, z1: d.z + DOOR_W / 2 - 0.02, v0: vOf(d.z, 0.0), v1: vOf(d.z, DOOR_H + 0.02), r: 12 });
     }
+    // the six flight-deck windows, so the world shows through them from inside
+    for (const pane of COCKPIT_PANES) holes.push({ poly: pane.pts.map(([z, y]) => [z, vOf(z, y)]) });
     // stations: fine at the nose and tail
     const zs = [];
     for (let z = NOSE_Z; z < -3.4; z += 0.08) zs.push(z);
@@ -592,7 +597,7 @@ export class Exterior {
   _buildCockpitGlazing() {
     const glass = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#0c1219', roughness: 0.06, metalness: 0.85, envMapIntensity: 1.4, side: THREE.DoubleSide }));
     const seal = exposeMaterial(new THREE.MeshStandardMaterial({ color: '#23272e', roughness: 0.7, side: THREE.DoubleSide }));
-    this.cockpitGlass = glass;
+    this.cockpitGlass = glass; this.cockpitGlazing = [];
     // a point on the upper lobe (an ellipse), pushed out along its normal
     const onSkin = (z, x, y, grow) => { const s = fusSection(z); const a = s.hw, b = s.top - s.yw; let nx = Math.abs(x) / (a * a), ny = (y - s.yw) / (b * b); const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l; return [Math.abs(x) + nx * grow, y + ny * grow]; };
     const onTop = (z, x) => { const s = fusSection(z); const d = clamp(Math.abs(x) / Math.max(s.hw, 1e-3), 0, 1); return s.yw + (s.top - s.yw) * Math.sqrt(Math.max(0, 1 - d * d)); };
@@ -622,7 +627,7 @@ export class Exterior {
             idx.push(a, c, b, b, c, d);
           }
           const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-          this._add(g, mat); // double-sided: three.js turns the normals to face the viewer
+          this.cockpitGlazing.push(this._add(g, mat)); // double-sided: three.js turns the normals to face the viewer
         }
       }
       // wiper parked at the bottom of each windshield

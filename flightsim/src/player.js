@@ -133,6 +133,19 @@ export class Player {
     return true;
   }
 
+  // the flight deck's observer seat: harness on, looking over the pilots' shoulders
+  sitJump(eye) {
+    if (this.state !== 'standing') return false;
+    this.state = 'jump'; this.jumpEye = eye.clone(); this.yaw = 0; this.pitch = -0.12; this.lean.set(0, 0, 0);
+    this.audio.seatbelt(); this.onChange?.('jump', true);
+    return true;
+  }
+  leaveJump() {
+    if (this.state !== 'jump') return false;
+    this.state = 'standing'; this.pos.set(this.jumpEye.x, 0, this.jumpEye.z + 0.25); this.audio.seatbeltOpen();
+    return true;
+  }
+
   // walkable test for standing mode
   _inLavBox(l, x, z, m = 0.18) { return x > l.x0 + m && x < l.x1 - m && z > l.z0 + m && z < l.z1 - m; }
   // the doorway of a lavatory: in its aft/forward wall, or (lavatory A) in its inboard side wall
@@ -182,6 +195,14 @@ export class Player {
       e.x = clamp(e.x, -maxX, maxX);
       this.eye.copy(e);
       this.pos.set(this.seat.x, 0, this.seat.z);
+    } else if (this.state === 'jump') {
+      this.leanCmd.set(0, 0, 0);
+      if (k.KeyA) this.leanCmd.x -= 0.12; if (k.KeyD) this.leanCmd.x += 0.12;
+      if (k.KeyW) { this.leanCmd.z -= 0.18; this.leanCmd.y += 0.04; }
+      if (k.KeyS) this.leanCmd.z += 0.05;
+      this.lean.x = damp(this.lean.x, this.leanCmd.x, 6, dt); this.lean.y = damp(this.lean.y, this.leanCmd.y, 6, dt); this.lean.z = damp(this.lean.z, this.leanCmd.z, 6, dt);
+      this.eye.copy(this.jumpEye).add(this.lean);
+      this.pos.set(this.jumpEye.x, 0, this.jumpEye.z);
     } else if (this.fallen) {
       // thrown to the floor: sitting in the aisle until Space
       this.fallT = (this.fallT || 0) + dt;
@@ -251,7 +272,7 @@ export class Player {
     const s = 0.0022 * (this.sensitivity || 1);
     this.yaw -= dx * s; this.pitch -= dy * s;
     this.pitch = clamp(this.pitch, -1.35, 1.2);
-    if (this.state === 'seated') this.yaw = clamp(this.yaw, -2.7, 2.7);
+    if (this.state === 'seated' || this.state === 'jump') this.yaw = clamp(this.yaw, -2.7, 2.7);
     else this.yaw = ((this.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
   }
 

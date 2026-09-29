@@ -54,7 +54,7 @@ export class CabinDynamics {
     this.sfCabin.copy(tmp);
     const nzHere = tmp.y / G;
     this.minNz = Math.min(this.minNz, nzHere); this.maxNz = Math.max(this.maxNz, nzHere);
-    const seated = P.state === 'seated';
+    const seated = P.state === 'seated' || P.state === 'jump'; // the observer seat has a four-point harness
     this.player.ceiling = seated ? 0.36 : 0.45;
     // head on a spring-damper (seated) or knees (standing); relative acceleration = -(specific force deviation)
     const k = seated ? 70 : 45, c = seated ? 11 : 9;
@@ -64,7 +64,7 @@ export class CabinDynamics {
     this.headV.x += ax * h; this.headV.y += ay * h; this.headV.z += az * h;
     this.head.x += this.headV.x * h; this.head.y += this.headV.y * h; this.head.z += this.headV.z * h;
     // the whole body leaving the seat or the floor
-    const impact = this.player.step(h, -tmp.y, seated && P.belt);
+    const impact = this.player.step(h, -tmp.y, seated && (P.belt || P.state === 'jump'));
     if (impact > 1.2) this._playerImpact(impact, seated);
     this._people(h);
     this._nzWin = Math.min(this._nzWin ?? 9, nzHere); this._nzWinMax = Math.max(this._nzWinMax ?? -9, nzHere);
