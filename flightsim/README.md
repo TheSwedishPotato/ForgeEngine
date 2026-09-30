@@ -113,6 +113,11 @@ Copenhagen Approach 119.805, Kastrup Tower 118.105, Kastrup Apron 121.630; 8.33 
 The flight deck's TCAS shows them; you see them taxi past the window, at the holding point and in the
 sky, with contrails at cruise levels.
 
+**At the gate.** The departure keeps to the A-CDM slot: when the doors close early the crew wait and
+ask for start-up inside the TSAT window, and Ground holds a push while another aircraft is on the
+taxilane behind the stand. Taxiing, an aircraft that meets another head-on gives way onto the parallel
+taxiway (departures give way to arrivals, everyone to us), so nobody waits for ever.
+
 **Hands on the controls.** Nothing in the cockpit changes by itself. Every switch, lever and knob the
 pilots use — parking brake, engine masters and ENG MODE, flap and speed-brake levers, gear lever,
 autobrake, FCU knobs and the AP push-button, EFIS, MCDU, the overhead's APU, bleed, anti-ice, signs
@@ -216,6 +221,10 @@ go around when not stabilised, when the runway is not in sight at the minima, af
 the windshear system calls, and after two go-arounds for weather they divert. With a failure they
 run the drill (ECAM actions, engine fire drill with the extinguishers, emergency descent, gear
 gravity extension) and choose the nearest suitable airport.
+When the pilots call "cabin crew, be seated" in rough air, the cabin crew brake the trolleys where
+they stand, strap into their jump seats and only get up again a little while after the seatbelt sign
+goes off; then they walk back to the trolleys and carry on from the row they left (a round cut short
+by the landing preparation goes back to the galleys unfinished).
 
 **ATC and traffic.** Arlanda Ground and Tower, Stockholm Control, Copenhagen Approach and Kastrup
 Tower on their real frequencies. The controllers pick the runways with the most headwind (19R or 01L at
@@ -314,6 +323,9 @@ start) or after pushback, and the what-if flight-deck observer seat.
   turbulence follows the SQ321 recorder data (TSIB preliminary report, May 2024: +1.35 g to
   −1.5 g in 0.6 s). Hypoxia: FAA AC 61-107B time of useful consciousness, halved for a rapid
   decompression (SKYbrary).
+* Cabin crew in turbulence: FAA AC 120-88A (Preventing Injuries Caused by Turbulence): secure the
+  service carts and themselves; in sudden severe turbulence the crew sit down first rather than
+  finishing the cabin check.
 * A320 procedures and systems: CONF FULL for a one-engine-out landing, autobrake LO 1.7 m/s²
   after 4 s and MED 3 m/s² after 2 s (FlyByWire A32NX documentation), oxygen masks deploying
   at 14,000 ft cabin altitude, 11.7° tail-strike attitude on compressed gear, 7.59 m main-gear
@@ -361,7 +373,17 @@ start) or after pushback, and the what-if flight-deck observer seat.
   *push back and towing angle limits*).
 * Arlanda A-CDM: Delivery gives the TSAT, Ground approves start-up and pushback; push-back is
   required for jets at the terminal stands (VATSIM Scandinavia ESSA page, Eurocontrol A-CDM
-  Stockholm Arlanda). Terminal 5 piers and gates: Swedavia T5 map. Gate F36 for SK1415 is
+  Stockholm Arlanda).
+* A-CDM start-up window: the crew requests start-up and push-back within TSAT ±5 minutes, TOBT being
+  the time the aircraft is ready (Swedavia, *Stockholm Arlanda Airport CDM* operations page and airport
+  regulation A-12-2013); Ground keeps one push at a time on a taxilane.
+* Boarding: a full A320 takes 16-23 minutes depending on the method, about 6-12 passengers a minute
+  through one door; 21 minutes was observed for 128 passengers (ERAU *Improving airplane boarding
+  time* review and field study; Simple Flying). Here the pace comes from people stowing bags (longer as
+  the bins fill) and window passengers waiting for the aisle seats to get up.
+* Deplaning: about 20 passengers a minute through one door is the industry figure; 14 a minute was
+  observed on an A320 with 128 passengers through a single jet bridge (Simple Flying, *narrowbody
+  turnaround times*). Here most passengers stop to take a bag from the bin, which sets the pace. Terminal 5 piers and gates: Swedavia T5 map. Gate F36 for SK1415 is
   representative.
 * SAS boarding: priority groups first (SkyPriority, then Plus/Premium and EuroBonus Silver), Go
   Light/Economy Light last (FlyerTalk, More Premium); fare families renamed Economy, Premium and
@@ -437,7 +459,7 @@ node tools/flight-test.mjs storms 6000 --seed=2 --radio
 node tools/flight-test.mjs gale 6000 --wind=270/30/45 --sc=efato
 ```
 
-Scenarios: `efato rto engcruise fire fire2 depress dual hyd cat shear shearto gear medical medical2 ga`.
+Scenarios: `efato efatoga rto engcruise fire fire2 depress dual hyd cat shear shearto gear medical medical2 ga`.
 `--boarding` starts at the gate with the engines off (pushback and engine start); `--traffic` prints
 the other flights' states every 30 s; `--win=<t>:<s>`
 prints the gear and roll state every step within `s` seconds of time `t`.

@@ -44,6 +44,8 @@ while (t < maxT && fm.phase !== 'arrived' && fm.phase !== 'rto-stop' && fm.phase
   if (sc === 'fire' && fm.phase === 'climb' && fm.altInd > 3000 * FT && !fm._sc) { fm._sc = 1; fm.engFire[0] = true; fm.failEngine(0, 1); }
   if (sc === 'depress' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; fm.depressurise(1); }
   if (sc === 'dual' && fm.phase === 'climb' && fm.agl > 900 && !fm._sc) { fm._sc = 1; fm.failEngine(0, 2); fm.failEngine(1, 2); }
+  // a bird into one engine in the initial climb (between 120 and 900 m above the ground)
+  if (sc === 'birdeng' && fm.phase === 'climb' && fm.agl > +(opt('at') || 300) && !fm._sc) { fm._sc = 1; fm.engCause = 'bird'; fm.failEngine(+(opt('eng') || 1), 2); }
   if (sc === 'hyd' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; fm.hyd.green = false; }
   if (sc === 'cat' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; atmo.addCAT(5.0, 50, 19, 0.28); }
   if (sc === 'fire2' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; fm.engFire[1] = true; }
@@ -51,6 +53,9 @@ while (t < maxT && fm.phase !== 'arrived' && fm.phase !== 'rto-stop' && fm.phase
   if (sc === 'medical' && fm.phase === 'cruise' && !fm._sc) { fm._sc = 1; crew.medical(true); }
   if (sc === 'medical2' && fm.phase === 'climb' && fm.altInd > 12000 * FT && !fm._sc) { fm._sc = 1; crew.medical(true); }
   if (sc === 'ga' && fm.phase === 'approach' && fm.m.touchdown - fm.s < 15000 && !fm._sc) { fm._sc = 1; atc.blockRunway((fm.m.touchdown - fm.s) / Math.max(fm.gs, 60) + 30); }
+  // engine failure after V1, then the runway blocked on the return approach: a go-around while diverting
+  if (sc === 'efatoga' && fm.phase === 'takeoff' && fm.ias > fm.afs.v1 + 3 && !fm._sc) { fm._sc = 1; fm.failEngine(0, 2); }
+  if (sc === 'efatoga' && fm._sc === 1 && fm.phase === 'approach' && fm.m.touchdown - fm.s < 9000) { fm._sc = 2; const p = fm.path.sample(fm.m.touchdown - 3500, {}); atmo.addMicroburst(p.x, p.z, { R: 900, u: 14, w: 10 }); }
   if (sc === 'fire2' && fm.engFire[1] && fm.ctl.engMaster[1] === false && !fm._fx) { fm._fx = 1; setTimeout(() => {}, 0); fm._fxT = fm.t + 12; }
   if (fm._fxT && fm.t > fm._fxT) { fm.engFire[1] = false; fm._fxT = null; }
   if (sc === 'shearto' && fm.phase === 'climb' && fm.agl > 60 && !fm._sc) { fm._sc = 1; const p = fm.path.sample(fm.s + 700, {}); atmo.addMicroburst(p.x, p.z, { R: 1000, u: 16, w: 12 }); }
@@ -65,4 +70,6 @@ while (t < maxT && fm.phase !== 'arrived' && fm.phase !== 'rto-stop' && fm.phase
   if (!isFinite(fm.P.x) || !isFinite(fm.P.y)) { console.log('NaN!', row('')); break; }
 }
 console.log(row('END'));
+if (flag('dumptraffic')) for (const a of atc.traffic) if (a.x != null) { const d = Math.hypot(a.x - fm.pos.x, a.z - fm.pos.z); if (d < 3000) console.log(`   ${a.flt} ${a.state} d=${d.toFixed(0)} h=${a.h.toFixed(0)} v=${a.v.toFixed(1)} s=${a.s.toFixed(0)} cleared=${JSON.stringify(a.cleared)}`); }
+if (flag('dumptraffic')) console.log(`   own: gap=${crew._trafficAhead().toFixed(0)} stopS=${crew.st.stopS} mode=${crew.mode} gs=${fm.gs.toFixed(2)} cl=${JSON.stringify(atc.cl)}`);
 console.log(`runtime ${(Date.now() - t0) / 1000}s  nz ${f(nzMin, 2)}..${f(nzMax, 2)}  touchdownSink ${f(tdSink, 2)}m/s (${f((tdSink ?? 0) / FT * 60, 0)} fpm)  tdS-thr ${f((fm.touchdownS ?? 0) - fm.m.thr, 0)}m  fuel ${f(fm.fuel, 0)}  go-arounds ${crew.goArounds}  damage ${Object.keys(fm.damage).join(',')}  radio ${log.filter((m) => m.kind === 'atc').length} calls`);

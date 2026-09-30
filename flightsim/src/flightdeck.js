@@ -282,7 +282,7 @@ export class FlightDeck {
       const pf = S.crew && S.crew.pf === pl.p;
       const manual = !afs.ap && pf && !fm.onGround;
       const onLevers = pf && (fm.phase === 'takeoff' || fm.phase === 'flare' || fm.phase === 'rollout' || (fm.phase === 'approach' && fm.agl < 300));
-      const rest = { lShoulder: [0.1, 0, -0.12], rShoulder: [0.1, 0, 0.12], lElbow: [-1.35, 0.25, 0], rElbow: [-1.35, -0.25, 0] };
+      const rest = { lShoulder: [0.2, 0, 0.2], rShoulder: [0.2, 0, -0.2], lElbow: [-0.95, 0.7, 0], rElbow: [-0.95, -0.7, 0], lWrist: [0.3, 0, 0], rWrist: [0.3, 0, 0] }; // hands on the thighs
       // the outboard hand on the sidestick grip, the inboard hand on the thrust levers (solved once)
       if (!pl._grip) {
         const base = composePose(POSES.stand, POSES.sit, rest), sd = pl.x < 0 ? -1 : 1;

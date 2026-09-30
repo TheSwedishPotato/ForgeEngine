@@ -463,12 +463,15 @@ export class Scenery {
     const cabLen = 4.2;
     const cabC = new THREE.Vector3(door.x, 0, door.y).addScaledVector(Z, cabLen / 2);
     const cab = mk(cabLen, cabC.x, cabC.z); cab.quaternion.setFromRotationMatrix(basis); this.scene.add(cab);
+    const parts = [cab];
     const cabEnd = new THREE.Vector3(door.x, 0, door.y).addScaledVector(Z, cabLen);
     const pierPt = f.to(pierU, doorV - 12);
     const tv = new THREE.Vector3(pierPt.x - cabEnd.x, 0, pierPt.y - cabEnd.z); const tl = tv.length(); tv.normalize();
     const tun = mk(tl + 0.3, (cabEnd.x + pierPt.x) / 2, (cabEnd.z + pierPt.y) / 2);
     tun.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(Y, tv), Y, tv)); this.scene.add(tun);
     const leg = new THREE.Mesh(new THREE.BoxGeometry(0.6, floorY, 0.6), this.mats.dark); leg.position.set(cabEnd.x, floorY / 2, cabEnd.z); this.scene.add(leg);
+    parts.push(tun, leg);
+    return parts;
   }
 
   _trees(frame, fn, count, seed) {
@@ -563,7 +566,12 @@ export class Scenery {
     let k = 0;
     for (let v = pf.v0 - 40; v > pf.v1 + 30; v -= 55) {
       const skipOurs = Math.abs(v - L.gateStand.v) < 30;
-      if (skipOurs) this.ourJetway = this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); // pulled back from our stand
+      if (skipOurs) {
+        this.ourJetway = this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); // pulled back from our stand
+        // and docked at our L1 door while we board (seen from outside; the boarding scene has its own interior)
+        this.arnDocked = this._dockedJetBridge(f, L.gateStand.u + (MAIN_GEAR.z - DOOR_Z.L1), L.gateStand.v - 2.02, pf.u0 - pf.width / 2);
+        for (const m of this.arnDocked) m.visible = false;
+      }
       const liveStand = TRAFFIC_STANDS_F.some((sv) => Math.abs(sv - v) < 10); // a scheduled departure parks here and flies its own flight
       if (!skipOurs) { if (!liveStand) this._parked(f, pf.u0 - 10 - 26, v, f.heading, livs[k % livs.length]); this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); }
       this._parked(f, pf.u0 + 10 + 26, v + 20, (f.heading + 180) % 360, livs[(k + 3) % livs.length]);
@@ -827,6 +835,7 @@ export class Scenery {
   setBoardingMode(on) {
     this.boardingMode = on;
     this.showOurJetway(!on);
+    if (this.arnDocked) for (const m of this.arnDocked) m.visible = on;
     if (on) {
       this.tug.mesh.visible = false;
       const t = this.pt = { mesh: this._vehicle('tug'), bar: new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 4.2), this.mats.dark), gone: 0 };
@@ -878,6 +887,8 @@ export class Scenery {
     }
     // our pushback tug: on the towbar at the nose wheel during the push, then off to the pier
     if (fm.tug || fm.phase === 'boarding') this._pushTug(dt, fm);
+    // the jet bridge pulls back from our door once the doors are closed
+    if (this.arnDocked && this.arnDocked[0].visible && director?.times?.boardDone != null) { for (const m of this.arnDocked) m.visible = false; this.showOurJetway(true); }
     // pushback tug drives away at the start
     if (this.tug && !this.boardingMode) {
       const k = clamp((simT - 8) / 60, 0, 1);

@@ -68,6 +68,9 @@ export class CabinDynamics {
     if (impact > 1.2) this._playerImpact(impact, seated);
     this._people(h);
     this._nzWin = Math.min(this._nzWin ?? 9, nzHere); this._nzWinMax = Math.max(this._nzWinMax ?? -9, nzHere);
+    // what loose objects and bin latches respond to: the load factor over ~50 ms, not a single gear-spring spike
+    this._nzLP = (this._nzLP ?? nzHere) + (nzHere - (this._nzLP ?? nzHere)) * Math.min(1, h / 0.05);
+    this._lpLo = Math.min(this._lpLo ?? 9, this._nzLP); this._lpHi = Math.max(this._lpHi ?? -9, this._nzLP);
   }
 
   update(dt) {
@@ -77,6 +80,8 @@ export class CabinDynamics {
     const nzLo = this._nzWin ?? tmpY / G, nzHi = this._nzWinMax ?? tmpY / G;
     this._nzWin = null; this._nzWinMax = null;
     const worst = Math.abs(nzLo - 1) > Math.abs(nzHi - 1) ? nzLo : nzHi;
+    const lpLo = this._lpLo ?? nzLo, lpHi = this._lpHi ?? nzHi; this._lpLo = null; this._lpHi = null;
+    const worstLP = Math.abs(lpLo - 1) > Math.abs(lpHi - 1) ? lpLo : lpHi;
     this.severity = damp(this.severity, Math.min(3, Math.abs(worst - 1) * 3 + Math.abs(this.sfCabin.x) / G * 4), 1.5, dt);
     this.head.clampLength(0, 0.09);
     // standing: feet resist about 0.25 g; beyond that the player slides and staggers
@@ -96,7 +101,7 @@ export class CabinDynamics {
       if ((excess > 0.28 * G || this.player.airT > 0.35 || this.player.y > 0.12) && !P.fallen) this._playerFall();
     } else this.playerSlide.set(0, 0);
     this._peopleFrame(dt);
-    this._objects(dt, worst);
+    this._objects(dt, worstLP);
   }
 
   // Camera offset for the player: head sway plus the body lifting off its seat.
@@ -134,13 +139,15 @@ export class CabinDynamics {
     if (this._paxAcc >= 1 / 30) {
       const hp = this._paxAcc; this._paxAcc = 0;
       for (const p of people.pax) {
-        if (p.away || !p.group) continue;
-        if (p.baseY == null) { p.baseY = p.group.position.y; p.baseRX = p.group.rotation.x; p.belted = Math.random() < 0.72; p.vb = new VBody(0.38, 0.03); }
+        // only passengers sitting in their aircraft seat (not in the gate hold room, walking or gone)
+        if (p.away || !p.group || p.inLounge || !p.group.visible) continue;
+        if (!p.vb) { p.belted = Math.random() < 0.72; p.vb = new VBody(0.38, 0.03); }
         const sf = fm.accelAt(p.seat.x, 1.0, p.seat.z, tmp);
         const imp = p.vb.step(hp, -sf.y, p.belted || signOn);
         if (imp > 1.5) { this.injuries.pax += imp; if (imp > 2.5) this.emit('pax-impact', { p, v: imp }); }
-        p.group.position.y = p.baseY + p.vb.y;
-        p.group.rotation.x = p.baseRX + (p.brace ? -0.55 : 0) + clamp(sf.z * 0.004, -0.06, 0.06);
+        // resting height is the seat cushion (0.455 m) under the pelvis, as the passenger was placed
+        p.group.position.y = 0.455 - 0.84 * (p.s || 1) + p.vb.y;
+        p.group.rotation.x = (p.brace ? -0.55 : 0) + clamp(sf.z * 0.004, -0.06, 0.06);
       }
     }
     for (const a of people.crew) this._actorBody(a, h);

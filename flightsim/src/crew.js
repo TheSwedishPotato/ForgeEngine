@@ -95,7 +95,8 @@ export class Crew {
     if (fm.onGround && y.wingAI && !this._aiPress) { this._aiPress = true; this.press('pm', 'ovhAntiIce', () => { this._aiPress = false; y.wingAI = false; }); }
   }
   ground(text) { this.hooks.log({ kind: 'cockpit', who: 'Ground crew (headset)', text }); }
-  readback(text) { this.later(0.8 + this.r() * 1.5, () => this.atc.say('SK1415', text, 0)); }
+  // the read-back; `then` runs once it has been said (on the ground the crew acts only after reading back)
+  readback(text, then = null) { this.later(0.8 + this.r() * 1.5, () => this.atc.say('SK1415', text, 0, then)); }
   // everything a pilot does takes a human, variable amount of time
   later(sec, fn) { this.tasks.push({ at: this.t + (sec < 0.6 ? sec * (0.8 + this.r() * 0.4) : this.r.human(sec, 0.3)), fn }); }
   // ---------- hands: a switch moves only when a pilot's hand gets to it ----------
@@ -386,7 +387,11 @@ export class Crew {
       case 'boarding': {
         // at the gate: the pilots wait for the load sheet and the purser's "boarding complete"
         if (!st.pushGo) this.setCtl('capt', 'parkBrake', true); this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
-        if (this.boardingDone && !st.pushReq) { st.pushReq = true; this.later(8, () => this.press('capt', 'ovhExtLt', () => { this.sys.beacon = true; this.say('capt', 'Doors closed, beacon on. Before start checklist complete.'); this.later(2, () => atc.call('startup', this)); })); }
+        if (this.boardingDone && !st.pushReq && atc.tsat != null && !st.tsatSet) {
+          // ready: TOBT is the scheduled time unless the doors closed later; the crew calls inside the TSAT window
+          st.tsatSet = true; atc.tobt = Math.max(atc.tobt ?? 0, atc.clockH() + 2 / 60); atc.tsat = atc.tobt; st.callAhead = clamp(this.r.human(3, 0.4), 0.5, 4.5) / 60;
+        }
+        if (this.boardingDone && !st.pushReq && (atc.tsat == null || atc.clockH() >= atc.tsat - (st.callAhead ?? 0))) { st.pushReq = true; this.later(8, () => this.press('capt', 'ovhExtLt', () => { this.sys.beacon = true; this.say('capt', 'Doors closed, beacon on. Before start checklist complete.'); this.later(2, () => atc.call('startup', this)); })); }
         if (atc.cl.push && !st.pushGo) {
           st.pushGo = true;
           // parking brake off by hand, then the report to the headset man, who starts the push
@@ -401,8 +406,8 @@ export class Crew {
       case 'pushback': {
         this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
         // engine 2 first (it drives the yellow hydraulics for the brakes and steering), then engine 1
-        if (!st.eng2 && this.t - st.pushT > 15) { st.eng2 = true; this.setCtl('capt', 'engMode', 'IGN/START'); this.press('capt', 'engMode', () => this.say('capt', 'Starting engine two.')); this.later(3, () => this.setCtl('capt', 'engMaster', true, 1)); }
-        if (st.eng2 && fm.engineRunning[1] && !st.eng1) { st.eng1 = true; this.later(8, () => { this.say('capt', 'Starting engine one.'); this.setCtl('capt', 'engMaster', true, 0); }); }
+        if (!st.start2 && this.t - st.pushT > 15) { st.start2 = true; this.setCtl('capt', 'engMode', 'IGN/START'); this.press('capt', 'engMode', () => this.say('capt', 'Starting engine two.')); this.later(3, () => this.setCtl('capt', 'engMaster', true, 1)); }
+        if (st.start2 && fm.engineRunning[1] && !st.start1) { st.start1 = true; this.later(8, () => { this.say('capt', 'Starting engine one.'); this.setCtl('capt', 'engMaster', true, 0); }); }
         if (fm.tug?.state === 'stopped' && !st.pushStop) {
           st.pushStop = true;
           this.ground('Pushback complete, set parking brake.');
@@ -534,7 +539,11 @@ export class Crew {
     if (phase === 'climb' || phase === 'go-around') {
       if (!st.posClimb && fm.vs > 1.2 && agl > 8 * FT && tAir > 1.5) { st.posClimb = true; this.say('pm', 'Positive climb.'); this.later(0.5, () => this.say('pf', 'Gear up.')); this.later(0.6 + pm.react * 0.4, () => this.press('pm', 'gear', () => { fm.ctl.gearLever = 0; fm.emit(phase === 'go-around' ? 'ga-gear-up' : 'gear-up'); }, 0.4)); }
       if (!afs.ap && !st.apOn && agl > Math.max(100 * FT, pf.apAgl) && tAir > 5 && !this._handFlyWanted()) { st.apOn = true; this._apOn(); }
-      if (!st.lvrClb && agl > afs.thrRedAgl && (phase === 'climb' ? tAir > 10 : true)) { st.lvrClb = true; this.later(pf.react, () => { this.lev = [DETENT.CL, DETENT.CL]; this.say('pf', 'Climb thrust.'); fm.emit(phase === 'go-around' ? 'ga-thrust-reduction' : 'thrust-reduction'); }); }
+      if (!st.lvrClb && agl > afs.thrRedAgl && (phase === 'climb' ? tAir > 10 : true)) {
+        st.lvrClb = true;
+        // with an engine out the live engine stays at MCT (the FLX/MCT detent), never climb thrust
+        this.later(pf.react, () => { const eo = fm.engFail.some(Boolean); this.lev = eo ? fm.engFail.map((f) => (f ? 0 : DETENT.FLX)) : [DETENT.CL, DETENT.CL]; this.say('pf', eo ? 'Maximum continuous thrust.' : 'Climb thrust.'); fm.emit(phase === 'go-around' ? 'ga-thrust-reduction' : 'thrust-reduction'); });
+      }
       // clean up: flaps 1 at F speed, flaps up at S speed
       const eo = fm.engFail[0] || fm.engFail[1];
       const accel = agl > (eo ? 1500 * FT : afs.accAgl * 0.33);
@@ -614,7 +623,7 @@ export class Crew {
     // windshear: the reactive warning, then the escape manoeuvre
     this._windshearWatch(dt);
     // failures the crew has not handled yet
-    for (let i = 0; i < 2; i++) if ((fm.engFail[i] || fm.engFire[i]) && !st[`eng${i}`]) { st[`eng${i}`] = true; this._engineFailure(i); }
+    for (let i = 0; i < 2; i++) if ((fm.engFail[i] || fm.engFire[i]) && !st[`engFailSeen${i}`]) { st[`engFailSeen${i}`] = true; this._engineFailure(i); }
     this._gearWatch();
     if (!fm.pressurised && !st.depress) { st.depress = true; this._depressurised(); }
     if (!fm.hyd.green && !st.hydG) { st.hydG = true; this.later(this.pm.react + 2, () => { this.say('pm', 'ECAM: hydraulic green system low pressure.'); this.hooks.emergency('hydraulic', {}); this._planApproach(); }); }
@@ -854,10 +863,11 @@ export class Crew {
     // weather below minima twice, or a windshear: divert to Arlanda
     if (st.gaLevel && !st.gaDecided) {
       st.gaDecided = true;
-      if ((this.gaReason === 'minima' && this.goArounds >= 2) || (this.gaReason === 'windshear' && this.goArounds >= 2)) this._divertArlanda('weather at Copenhagen');
+      if (!this.diverting && ((this.gaReason === 'minima' && this.goArounds >= 2) || (this.gaReason === 'windshear' && this.goArounds >= 2))) this._divertArlanda('weather at Copenhagen');
     }
     const d2td = fm.m.touchdown - fm.s;
-    if (st.gaLevel && d2td < 26000 && !this.diverting) {
+    // back on the circuit to final (also when it is the return to Arlanda)
+    if (st.gaLevel && d2td < 26000) {
       fm.phase = 'approach'; afs.phase = 'APPROACH'; fm.emit('ga-rejoin'); st.appClr = true;
       this._planApproach();
       this.later(2, () => { this.atc.call('approach', this); });

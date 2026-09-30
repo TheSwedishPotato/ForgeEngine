@@ -28,6 +28,7 @@ export class Director {
     this.crewSeated = false; this.demoDone = false; this.checkDone = false;
     this.nextLav = 400;
     this.playerOrders = [];
+    this.timers = [];                 // things that happen a while later, in simulation time
     this.stats = { coffee: 0, spent: 0, talked: 0, belt: 0 };
     const o = sim.opts;
     this.ctx = context(o, o.depTime, o.depTime + 1.2);
@@ -81,7 +82,7 @@ export class Director {
   _airTime(d, gs) { const dDes = Math.min(d, 190000); return dDes / 125 + Math.max(0, d - dDes) / (gs > 150 ? gs : 225); }
   serviceRunning() { return this.times.serviceStart != null && this.times.serviceDone == null; }
   // the cabin crew report "cabin secure" and are in their seats; the pilots wait for it before take-off
-  cabinReady() { return (this.crewSeated && this.playerReady()) || this.sim.fast; }
+  cabinReady() { return this.crewSeated && this.playerReady(); }
   setSeatbelt(on, chime = true) {
     if (this.seatbelt === on) return;
     this.seatbelt = on; this.sim.cabin.setSigns(on);
@@ -141,6 +142,7 @@ export class Director {
   }
   playerIssues() {
     const P = this.sim.player; const out = [];
+    if (P.state === 'jump') return out; // strapped into the flight-deck observer seat (four-point harness)
     if (P.state !== 'seated') out.push({ say: 'Please take your seat now, we are about to depart.', hint: 'Walk back to your seat and press Space to sit down' });
     else if (!P.belt) out.push({ say: 'Could you fasten your seatbelt, please?', hint: 'Press B to fasten your seatbelt' });
     if (P.tray) out.push({ say: 'Could you fold up your tray table, please?', hint: 'Press F to fold the tray table' });
@@ -171,7 +173,7 @@ export class Director {
       // the player: interactive
       this.serviceAtPlayer = { actor, t: this.t, business };
       actor.queue({ type: 'call', fn: (a) => { a.headTarget = { x: seat.x, y: 1.1, z: seat.z }; this.crewLine(a, business ? 'Hej! Would you like something to drink with your meal?' : 'Hej! Something to drink? Kaffe eller te? Coffee or tea?'); S.ui.serviceMenu(true, business); } },
-        { type: 'until', cond: () => !this.serviceAtPlayer || this.t - this.serviceAtPlayer.t > (S.fast ? 0 : 25) }, { type: 'call', fn: (a) => { a.headTarget = null; S.ui.serviceMenu(false); this.serviceAtPlayer = null; } });
+        { type: 'until', cond: () => !this.serviceAtPlayer || this.t - this.serviceAtPlayer.t > (S.fast ? 0 : this.serviceAtPlayer.paying ? 60 : 25) }, { type: 'call', fn: (a) => { a.headTarget = null; a.setProp('l', null); S.ui.serviceMenu(false); S.ui.hidePay?.(); this.serviceAtPlayer = null; } });
       return { dur: 0 };
     }
     const p = seat.occupant; if (!p || p.away) return { dur: 0 };
@@ -191,7 +193,7 @@ export class Director {
     if (!S.player.tray) S.player.setTray(true);
     if (choice === 'buy') {
       this.crewLine(a, `${item.name}? That is ${item.price} kronor. Please tap your card on the terminal.`);
-      a.setProp('l', 'terminal');
+      a.setProp('l', 'terminal'); sa.paying = true;
       S.ui.payPrompt(item, () => {
         S.audio.beep(); this.crewLine(a, 'Approved. Varsågod, enjoy!'); a.setProp('l', null);
         this.stats.spent += item.price; this.playerOrders.push(item.id); S.ui.addTrayItem(item.id); S.player.addItem?.(item.id);
@@ -204,7 +206,17 @@ export class Director {
     this.crewLine(a, lines[choice] || 'Here you go.');
     this.stats.coffee += choice === 'coffee' ? 1 : 0;
     S.player.addItem?.(choice);
-    setTimeout(() => { this.serviceAtPlayer = null; }, 2500);
+    this.wait(2.5, () => { this.serviceAtPlayer = null; });
+  }
+
+  // the crew were called to their seats in the middle of the round: the player is asked again when the trolley is back
+  _serviceHeld() {
+    const S = this.sim, sa = this.serviceAtPlayer; if (!sa) return;
+    const a = sa.actor; a.headTarget = null; a.setProp('l', null);
+    S.ui.serviceMenu(false); S.ui.hidePay?.(); this.serviceAtPlayer = null;
+    const run = S.people.carts.find((r) => r.crew === a && !r.finished);
+    const seat = S.cabin.seats.find((q) => q.id === S.player.seat.id);
+    if (run && seat) run.resumeQ = [seat, ...(run.resumeQ || [])];
   }
 
   // ---------------- attendant call ----------------
@@ -232,19 +244,23 @@ export class Director {
       sorry: 'No problem at all!',
     };
     this.crewLine(c, lines[id] || lines.sorry);
-    if (id === 'water') setTimeout(() => { S.player.addItem?.('water'); S.audio.pour(); }, 9000);
-    setTimeout(() => { this.callResponder = null; }, 3500);
+    if (id === 'water') this.wait(9, () => { S.player.addItem?.('water'); S.audio.pour(); });
+    this.wait(3.5, () => { this.callResponder = null; });
   }
 
   // ---------------- per-frame timeline ----------------
+  // run fn after `sec` seconds of simulated time (follows time acceleration and fast-forward)
+  wait(sec, fn) { this.timers.push({ at: this.t + sec, fn }); }
   update(dt) {
     const S = this.sim, fm = S.fm, P = S.player, people = S.people;
     this.t += dt;
     const t = this.t;
+    for (let i = 0; i < this.timers.length; i++) { const k = this.timers[i]; if (k.at <= t) { this.timers.splice(i--, 1); k.fn(); } }
     // events from the flight model
     while (fm.events.length) this.onFlightEvent(fm.events.shift());
     // --- pre-departure sequence ---
     if (this.flag('start')) {
+      people.onServiceHold = () => this._serviceHeld();
       this.setLights(this.nightish() ? 0.45 : 0.9, this.nightish() ? '#dfe6ff' : '#fff4e6', true);
       if (S.boarding) {
         // boarding: signs off, the purser greets at door 1
@@ -270,6 +286,11 @@ export class Director {
     }
     // --- climb: the pilots switch the seatbelt sign off when it is smooth; then the cabin comes alive ---
     if (this.times.beltOffAir != null && this.flag('crewUp')) { people.crewStand(); this.setLights(this.nightish() ? 0.55 : 1.0, this.nightish() ? '#ffe7cc' : '#fff4e6'); }
+    // after "cabin crew, be seated" they stay down until the belt sign has been off for a little while
+    if (people.crewDown === 'turbulence' && !fm.onGround && this.times.preparelanding == null) {
+      if (!this.seatbelt) { if (this._upAt == null) this._upAt = t + this.r.human(20, 0.4); if (t >= this._upAt) { this._upAt = null; people.crewStand(); } }
+      else this._upAt = null;
+    }
     if (this.after('beltOffAir', 20) && this.flag('capPA')) { this.say(SCRIPTS.captainClimb, { onDone: () => this.mark('capDone') }); if (this.eveningish()) this.scene = 'sunset'; }
     if (this.after('capDone', 8) && this.flag('svcPA') && !S.crew?.diverting && !fm.airport) this.say(SCRIPTS.service, { onDone: () => this.mark('svcPA') });
     if (this.after('svcPA', 25) && (fm.engFail.some(Boolean) || fm.airport || fm.phase === 'emergency' || S.crew?.diverting || this.times.preparelanding != null) && !this.flags.service) this.flags.service = true;
@@ -278,7 +299,7 @@ export class Director {
       people.startService((a, s, run, business) => this.serve(a, s, run, business), () => { this.mark('serviceDone'); S.cabin.setCurtain(false); });
       this.mark('serviceStart');
     }
-    if (this.after('serviceDone', 150) && this.flag('trash')) people.collectTrash(() => this.mark('trashDone'));
+    if (this.after('serviceDone', 150) && !people.crewDown && this.flag('trash')) people.collectTrash(() => this.mark('trashDone'));
     if (this.after('beltOffAir', 100) && this.flag('habits')) people.cruiseHabits(this.nightish(), P.seat);
     // lavatory visits while the belt sign is off
     if (!this.seatbelt && fm.phase !== 'descent' && fm.phase !== 'boarding' && fm.phase !== 'pushback' && t > this.nextLav && people.walkers.length < 2 && !people.servicing()) {
@@ -288,7 +309,7 @@ export class Director {
     }
     // --- descent & approach: the purser's PA and the cabin check follow the pilots' "prepare for landing" ---
     if (this.times.preparelanding != null && this.flag('landingPrep')) {
-      S.cabin.allReadingLights(false);
+      S.cabin.allReadingLights(false); people.endService();
       this.say(SCRIPTS.prepareLanding, { onDone: () => {
         this.phaseTag = 'ldg'; people.stowAllTrays(); S.cabin.setCurtain(false);
         for (const b of S.cabin.bins) b.target = 0;

@@ -130,7 +130,7 @@ export function psuTexture(lenPx, rows, zA, zB, side) {
       g.fillStyle = '#9ca1aa'; for (let k = -1; k <= 1; k++) { g.beginPath(); g.arc(x + k * 22, 80, 8, 0, 7); g.fill(); g.fillStyle = '#5d626b'; g.beginPath(); g.arc(x + k * 22, 80, 3, 0, 7); g.fill(); g.fillStyle = '#9ca1aa'; }
       // row label, readable from the aisle when walking aft (u runs aft, v from the aisle edge to the wall)
       g.save(); g.translate(x + 62, 64);
-      if (side === 'L') { g.rotate(-Math.PI / 2); g.scale(1, -1); } else g.rotate(Math.PI / 2);
+      g.rotate(Math.PI / 2); // the left strip's mapping is mirrored with its geometry, so both sides use the same
       g.fillStyle = '#394150'; g.font = 'bold 21px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(`${r.row} ${side === 'L' ? 'ABC' : 'DEF'}`, 0, 0); g.restore();
       // oxygen door seam

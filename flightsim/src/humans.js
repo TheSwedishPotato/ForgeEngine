@@ -180,7 +180,7 @@ export class Human {
       const br = new THREE.BoxGeometry(S(0.018), S(0.004), S(0.004)); br.translate(0, S(0.135), S(0.1)); add(j.head, br, fc, 'head');
     }
     if (app.headphones) {
-      const band = new THREE.TorusGeometry(S(0.092), S(0.012), 4, 16, Math.PI); band.translate(0, S(0.13), -S(0.005)); add(j.head, band, app.headphones, 'head');
+      const band = new THREE.TorusGeometry(S(0.092), S(0.012), 4, 16, Math.PI); band.scale(1, 1.42, 1); band.translate(0, S(0.125), -S(0.005)); // over the crown, clear of the hair add(j.head, band, app.headphones, 'head');
       for (const sx of [-1, 1]) { const cup = new THREE.CylinderGeometry(S(0.04), S(0.04), S(0.03), 12); cup.rotateZ(Math.PI / 2); cup.translate(sx * S(0.092), S(0.115), 0); add(j.head, cup, app.headphones, 'head'); }
     } else if (app.earbuds) {
       for (const sx of [-1, 1]) { const eb = new THREE.SphereGeometry(S(0.008), 6, 4); eb.translate(sx * S(0.082), S(0.115), S(0.012)); add(j.head, eb, '#f4f4f4', 'head'); }
@@ -214,7 +214,7 @@ export class Human {
   _hair(add, head, S, app) {
     const hc = app.hairColor, st = app.hairStyle;
     if (app.cap) {
-      const cap = new THREE.SphereGeometry(S(0.086), 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.5); cap.scale(1, 0.8, 1.12); cap.translate(0, S(0.155), -S(0.005)); add(head, cap, app.cap, 'head');
+      const cap = new THREE.SphereGeometry(S(0.089), 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.5); cap.scale(1, 1.08, 1.18); cap.translate(0, S(0.152), -S(0.006)); add(head, cap, app.cap, 'head'); // covers the crown (top of the head is at 0.238)
       const brim = new THREE.CylinderGeometry(S(0.07), S(0.07), S(0.008), 12, 1, false, -Math.PI / 2, Math.PI); brim.scale(1, 1, 1.2); brim.translate(0, S(0.16), S(0.08)); add(head, brim, app.cap, 'head');
       return;
     }
@@ -330,7 +330,8 @@ export const POSES = {
   sit: { pelvis: [0, 0, 0], spine: [-10 * D, 0, 0], chest: [-4 * D, 0, 0], neck: [8 * D, 0, 0], head: [4 * D, 0, 0],
     lShoulder: [-18 * D, 0, -0.1], rShoulder: [-18 * D, 0, 0.1], lElbow: [-62 * D, 0.2, 0], rElbow: [-62 * D, -0.2, 0], lWrist: [0.2, 0, 0], rWrist: [0.2, 0, 0],
     lHip: [-86 * D, 0, -0.06], rHip: [-86 * D, 0, 0.06], lKnee: [84 * D, 0, 0], rKnee: [84 * D, 0, 0], lAnkle: [-0.05, 0, 0], rAnkle: [-0.05, 0, 0] },
-  sitPhone: { lShoulder: [-30 * D, 0, -0.05], rShoulder: [-32 * D, 0, 0.05], lElbow: [-105 * D, 0.5, 0], rElbow: [-105 * D, -0.5, 0], neck: [22 * D, 0, 0], head: [12 * D, 0, 0] },
+  // phone held in both hands in front of the chest, head down to it
+  sitPhone: { lShoulder: [-22 * D, 0, 0.1], rShoulder: [-24 * D, 0, -0.1], lElbow: [-88 * D, 0.9, 0], rElbow: [-88 * D, -0.9, 0], neck: [24 * D, 0, 0], head: [14 * D, 0, 0] },
   sitRead: { lShoulder: [-25 * D, 0, -0.1], rShoulder: [-25 * D, 0, 0.1], lElbow: [-95 * D, 0.6, 0], rElbow: [-95 * D, -0.6, 0], neck: [18 * D, 0, 0], head: [10 * D, 0, 0] },
   sitSleep: { spine: [-16 * D, 0, 0], neck: [-6 * D, 0, 0.12], head: [10 * D, 0.2, 0.18], lElbow: [-45 * D, 0.1, 0], rElbow: [-45 * D, -0.1, 0] },
   sitArmsCrossed: { lShoulder: [-30 * D, 0, 0.1], rShoulder: [-30 * D, 0, -0.1], lElbow: [-100 * D, 0.9, 0], rElbow: [-100 * D, -0.9, 0] },

@@ -49,7 +49,11 @@ export class ATC {
   }
 
   // The flights around us, from the timetable, once the route (runways, stands) is known
-  initTraffic(route, startClock, depTime = 6) { this.tf = new Traffic(this, route, startClock, this.r, depTime); this.traffic = this.tf.list; this.startClock = startClock; }
+  initTraffic(route, startClock, depTime = 6) { this.tf = new Traffic(this, route, startClock, this.r, depTime); this.traffic = this.tf.list; this.startClock = startClock; this.tobt = depTime; this.tsat = depTime; }
+  // local time (hours) and the A-CDM start-up window: start-up and push-back are requested within TSAT ±5 min
+  // (Swedavia Arlanda A-CDM); TOBT is the scheduled off-block time, or later if the aircraft is not ready
+  clockH() { return (this.startClock ?? 0) + this.t / 3600; }
+  inTsatWindow() { return this.tsat == null || Math.abs(this.clockH() - this.tsat) <= 5 / 60; }
 
   on(fn) { this.listeners.push(fn); }
   // A transmission: who, text, the earliest time from now, what happens when it has been said, and
@@ -127,22 +131,28 @@ export class ATC {
     if (q.length && !this._pushBusy) {
       const req = q[0];
       const standV = req.own ? ARN_LAYOUT.gateStand.v : req.a.standV;
-      const pushing = this.traffic.some((a) => a.state === 'pushback' && a !== req.a) || (fm.phase === 'pushback' && !req.own) || (fm.tug && fm.tug.state === 'push' && !req.own);
+      // the taxilane behind the stand must be free: nobody pushing, or out there starting engines or
+      // waiting to taxi, within a couple of stands either side (A-CDM: one push at a time per lane)
+      const onLane = (v) => Math.abs(v - standV) < 130;
+      const pushing = this.traffic.some((a) => a !== req.a && a.apt === 'ARN' && (['pushback', 'starting', 'wait-taxi'].includes(a.state) || (a.pushCleared && a.state === 'ready-push')) && a.standV != null && onLane(a.standV))
+        || (!req.own && !fm.airport && (['pushback', 'parked'].includes(fm.phase) || ((this.cl.push || this.cl.pushPending) && fm.phase === 'boarding')) && onLane(ARN_LAYOUT.gateStand.v))
+        || (!req.own && fm.tug && fm.tug.state === 'push');
       let passing = false;
       for (const a of this.traffic) { if (a === req.a || a.x == null || a.state !== 'taxi') continue; const [u, v] = this._arnUV(a.x, a.z); if (u > 1540 && u < 1640 && Math.abs(v - standV) < 160) passing = true; }
       if (!req.own && fm.onGround && !fm.airport && ['taxi-out'].includes(fm.phase)) { const [u, v] = this._arnUV(fm.pos.x, fm.pos.z); if (u > 1540 && u < 1640 && Math.abs(v - standV) < 160) passing = true; }
       const queueOk = this._departing() < 5;
       if (!pushing && !passing && queueOk) {
         q.shift(); this._pushBusy = true;
+        if (!req.own) req.a.pushCleared = true; else this.cl.pushPending = true;
         const tel = req.own ? CALL : req.a.tel;
         this.say('ATC', `${tel}, push-back and start-up approved, facing west${req.own ? `, QNH ${spellNum(this.qnh('ARN'))}` : ''}.`, this.resp(), () => {
           this._pushBusy = false;
-          if (req.own) { this.cl.push = true; crew.readback(`Push-back and start-up approved, facing west${`, QNH ${spellNum(this.qnh('ARN'))}`}, ${CALL_SHORT}.`); }
+          if (req.own) crew.readback(`Push-back and start-up approved, facing west${`, QNH ${spellNum(this.qnh('ARN'))}`}, ${CALL_SHORT}.`, () => { this.cl.push = true; });
           else { this.say(req.a.flt, `Push and start approved, ${req.a.tel}.`, this.resp(1.5), () => { req.a.state = req.a.push ? 'pushback' : 'starting'; req.a.startT = req.a.startT ?? this.r.human(60, 0.3); }, 'Arlanda Ground'); }
         }, 'Arlanda Ground');
       } else if (!req.standbySaid) {
         req.standbySaid = true;
-        const why = passing ? 'traffic passing behind' : pushing ? 'one pushing on the taxilane' : 'the departure queue is full';
+        const why = passing ? 'traffic passing behind' : pushing ? 'traffic on the taxilane behind you' : 'the departure queue is full';
         this.say('ATC', `${req.own ? CALL : req.a.tel}, stand by, ${why}.`, this.resp(), null, 'Arlanda Ground');
       }
     }
@@ -156,7 +166,7 @@ export class ATC {
       const tel = req.own ? CALL : req.a.tel;
       this.say('ATC', `${tel}, taxi to holding point runway ${rw}${follow}.`, this.resp(), () => {
         this._taxiBusy = false;
-        if (req.own) { this.cl.taxi = true; crew.readback(`Taxi to holding point runway ${rw}${follow}, ${CALL_SHORT}.`); }
+        if (req.own) crew.readback(`Taxi to holding point runway ${rw}${follow}, ${CALL_SHORT}.`, () => { this.cl.taxi = true; });
         else this.say(req.a.flt, `Holding point ${rw}, ${req.a.tel}.`, this.resp(1.5), () => { req.a.state = 'taxi'; req.a.s = 0; req.a._place(); }, 'Arlanda Ground');
       }, 'Arlanda Ground');
     }
@@ -185,7 +195,7 @@ export class ATC {
         req.lineup = true;
         const tel = req.own ? CALL : req.a.tel;
         this.say('ATC', `${tel}, line up and wait runway ${spellRwy(rw)}.`, this.resp(), () => {
-          if (req.own) { this.cl.lineup = true; crew.readback(`Line up and wait runway ${spellRwy(rw)}, ${CALL_SHORT}.`); }
+          if (req.own) crew.readback(`Line up and wait runway ${spellRwy(rw)}, ${CALL_SHORT}.`, () => { this.cl.lineup = true; });
           else this.say(req.a.flt, `Lining up ${spellRwy(rw)}, ${req.a.tel}.`, this.resp(1.5), () => { req.a.state = 'lineup'; req.a.cleared.lineup = true; }, 'Arlanda Tower');
         }, 'Arlanda Tower');
       } else if (!req.lineup && !req.holdSaid && dq.length > 0) {
@@ -200,7 +210,7 @@ export class ATC {
         const tel = req.own ? CALL : req.a.tel;
         this.say('ATC', `${tel}, ${this.windReport('ARN')}, runway ${spellRwy(rw)}, cleared for take-off.`, this.resp(2), () => {
           dq.shift(); req.rollT = this.t; this._lastDep = req;
-          if (req.own) { this.cl.takeoff = true; crew.readback(`Cleared for take-off runway ${spellRwy(rw)}, ${CALL_SHORT}.`); }
+          if (req.own) crew.readback(`Cleared for take-off runway ${spellRwy(rw)}, ${CALL_SHORT}.`, () => { this.cl.takeoff = true; });
           else this.say(req.a.flt, `Cleared for take-off ${spellRwy(rw)}, ${req.a.tel}.`, this.resp(1.5), () => { req.a.cleared.takeoff = true; }, 'Arlanda Tower');
         }, 'Arlanda Tower');
       }

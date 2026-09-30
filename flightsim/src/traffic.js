@@ -69,7 +69,8 @@ export class TrafficAircraft {
   // ---------- motion along the path ----------
   _place() {
     const tp = this.path.sample(this.s, this._tp || (this._tp = {}));
-    this.x = tp.x; this.z = tp.z;
+    // a sideways offset (m, to the right) while giving way on a parallel taxiway
+    this.x = tp.x - tp.dz * (this.lat || 0); this.z = tp.z + tp.dx * (this.lat || 0);
     const hd = Math.atan2(tp.dx, -tp.dz);
     this.hdg = this.back ? hd + Math.PI : hd; this.k = tp.k || 0;
     this.y = this.h;
@@ -184,7 +185,7 @@ export class Traffic {
   }
   ownship(fm) {
     const o = this._own || (this._own = { own: true });
-    o.x = fm.pos.x; o.z = fm.pos.z; o.y = fm.h; o.airborne = !fm.onGround; o.onGroundNow = fm.onGround; o.s = fm.s; o.v = fm.gs;
+    o.x = fm.pos.x; o.z = fm.pos.z; o.y = fm.h; o.hdg = fm.heading; o.airborne = !fm.onGround; o.onGroundNow = fm.onGround; o.s = fm.s; o.v = fm.gs;
     return o;
   }
 
@@ -231,6 +232,7 @@ export class Traffic {
         let vT = Math.min(9, kAhead > 0 ? Math.sqrt(0.9 / kAhead) : 9);
         const limit = a.state === 'lineup' ? a.lineS : a.cleared.lineup ? a.lineS : a.holdS;
         const toLimit = limit - a.s; vT = Math.min(vT, Math.sqrt(Math.max(0, 2 * 0.6 * (toLimit - 2))));
+        this._giveWay(a, others, dt);
         const gap = this._gapAhead(a, others); if (gap < 400) vT = Math.min(vT, Math.max(0, (gap - 55) * 0.25));
         a._speedTo(vT, dt, 0.6, 1.2);
         a.s += a.v * dt; a._place();
@@ -308,7 +310,9 @@ export class Traffic {
         break;
       }
       case 'vacating': {
-        a._speedTo(8, dt, 0.5, 1.5); a.s += a.v * dt; a._place();
+        this._giveWay(a, others, dt);
+        const gapV = this._gapAhead(a, others);
+        a._speedTo(gapV < 400 ? Math.min(8, Math.max(0, (gapV - 55) * 0.25)) : 8, dt, 0.5, 1.5); a.s += a.v * dt; a._place();
         if (a.s > a.exitS + 200 && !a.vacated) { a.vacated = true; atc.trafficCall(a, 'vacated'); }
         if (a.s >= a.path.length - 1) { a.state = 'parked'; a.vis = false; a.x = null; }
         break;
@@ -337,6 +341,26 @@ export class Traffic {
       if (ahead > 0 && ahead < 400 && lat < 30) best = Math.min(best, ahead);
     }
     return best;
+  }
+
+  // Head-on on a taxiway: nobody can pass, so the one that gives way (always to us; departures to
+  // arrivals; otherwise by flight number) moves onto the parallel taxiway until the other has passed
+  _giveWay(a, others, dt) {
+    const fx = Math.sin(a.hdg), fz = -Math.cos(a.hdg);
+    let conflict = false;
+    for (const o of others) {
+      if (o === a || o.x == null || !o.onGroundNow) continue;
+      if (o.state === 'scheduled' || o.state === 'ready-push' || o.state === 'parked') continue;
+      const dx = o.x - a.x, dz = o.z - a.z, ahead = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
+      if (!(ahead > 0 && ahead < 350 && lat < 35)) continue;
+      const oh = o.own ? o.hdg : o.hdg, facing = Math.sin(oh) * fx + (-Math.cos(oh)) * fz < -0.5;
+      if (!facing) continue;
+      const yieldTo = o.own || (a.kind === 'dep' && o.kind === 'arr') || (a.kind === o.kind && a.flt > (o.flt || ''));
+      if (yieldTo) conflict = true;
+    }
+    if (conflict) a.giveWayT = 25; else a.giveWayT = Math.max(0, (a.giveWayT || 0) - dt);
+    const latT = a.giveWayT > 0 ? 70 : 0;
+    a.lat = (a.lat || 0) + clamp(latT - (a.lat || 0), -4 * dt, 4 * dt);
   }
 
   // Aircraft on a runway (lined up, rolling, landing roll, or on short final inside 2 NM)

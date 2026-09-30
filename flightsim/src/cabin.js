@@ -706,11 +706,14 @@ export class Cabin {
     }
     // EXIT signs hanging from the ceiling (double-sided)
     const exitTex = TX.exitSignTexture();
-    const exitMat = new THREE.MeshBasicMaterial({ map: exitTex, side: THREE.DoubleSide });
+    const exitMat = new THREE.MeshBasicMaterial({ map: exitTex });
     this.exitMat = exitMat;
+    // two faces back to back, so "EXIT" reads the right way round from both directions
     for (const z of [DOOR_Z.L1 + 0.75, (HATCH_Z[0] + HATCH_Z[1]) / 2, DOOR_Z.L4 - 0.75]) {
-      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.105), exitMat);
-      s.position.set(0, 2.08, z); g.add(s);
+      for (const ry of [0, Math.PI]) {
+        const s = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.105), exitMat);
+        s.position.set(0, 2.08, z + (ry ? -0.002 : 0.002)); s.rotation.y = ry; g.add(s);
+      }
     }
     // life vest placards on seat backs are in texture; "EXIT" placards next to hatches
     for (const side of [-1, 1]) for (const hz of HATCH_Z) {

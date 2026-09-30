@@ -140,6 +140,8 @@ async function boot(o, audio) {
   const post = new PostFX(renderer, { width: size.x, height: size.y, quality: o.quality });
   const extCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
   S = { ui, renderer, route, fm, atmo, wx, atc, world, scenery, cabin, deck, cabinScene, ext, extScene, skyEnv, worldEnv, sun, audio, voice, people, player, dialogue, opts, Q, speed: o.speed, paused: false, fast: false, env: null, maskScene, maskAll, post, vol, extCam, orbit: { yaw: 2.4, pitch: 0.18, dist: 48 }, view: 'cabin', frameNo: 0, flash: 0 };
+  // move the local clock on (skipped boarding): the sun, the timetable of the other flights and the displays follow
+  S.shiftClock = (h) => { opts.startClock += h; atc.startClock = (atc.startClock ?? 0) + h; if (atc.tf) atc.tf.startClock += h; };
   const director = new Director(S);
   S.director = director;
   S.cabinDyn = new CabinDynamics(S);
@@ -285,7 +287,7 @@ function simStep(dt, render = true) {
 }
 
 function fastForward(cond, maxSec = 5400) {
-  S.fast = true; S.voice.skipAll(); S.ui.mute = true; S.dialogue.muted = true;
+  S.fast = true; S.voice.skipAll(); S.ui.clearToasts(); S.ui.mute = true; S.dialogue.muted = true;
   const P = S.player;
   if (S.boarding && !S.boarding.complete && !cond()) S.boarding.skipToSeat();
   let t = 0;
@@ -409,7 +411,7 @@ function loop() {
   S.lastMap -= realDt;
   if (S.lastMap <= 0 && (ui.phoneOpen() || ui.radioOpen())) { S.lastMap = 0.25; if (ui.phoneOpen()) ui.updatePhone(phoneState(localH)); ui.flightDeck(deckState()); }
   // end condition: walk out of the front door
-  if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && !S._deckInvite && !S.deckAccess) { S._deckInvite = true; ui.toast('The captain is saying goodbye at the door — ask at the cockpit door keypad if you would like to see the flight deck', 7); }
+  if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && !S._deckInvite && !S.deckAccess) { S._deckInvite = true; ui.toast('The crew are saying goodbye at the door — ask at the cockpit door keypad if you would like to see the flight deck', 7); }
   if (fm.phase === 'arrived' && cabin.doors.L1.open > 0.9 && player.state === 'standing' && Math.abs(player.pos.z - DOORS.L1.z) < 0.4 && player.pos.x < -0.7 && !S.ended) endFlight();
   if (S.photoPending) takePhoto();
   S.debug?.update(realDt);

@@ -192,6 +192,7 @@ Runways in use: Arlanda ${atc.depRwy} for take-off, Kastrup ${atc.arrRwy} for la
     const lang = c.lang === 'sv' ? 'Svenska' : 'English';
     this.capEl.innerHTML = `<div class="cap"><span class="who">${escapeHtml(c.who)}<span class="tag">${c.pa ? 'PA · ' : ''}${lang}</span></span>${escapeHtml(c.text)}</div>`;
   }
+  clearToasts() { for (const d of [...this.toastsEl.children]) { clearTimeout(d._t); d.remove(); } }
   toast(msg, secs = 3.5) {
     if (this.mute) return;
     // the same message twice: keep the one on screen a little longer instead of stacking a copy
@@ -240,6 +241,7 @@ Runways in use: Arlanda ${atc.depRwy} for take-off, Kastrup ${atc.arrRwy} for la
     const finish = () => { $('pay-screen').textContent = 'Approved ✓'; setTimeout(() => { $('pay').hidden = true; }, 900); this.activeChoices = null; done(); };
     $('pay-tap').onclick = finish; this.activeChoices = { items: [{}], onPick: finish };
   }
+  hidePay() { $('pay').hidden = true; if (this.activeChoices && this.activeChoices.items && this.activeChoices.items.length === 1) this.activeChoices = null; }
   callMenu(show) {
     $('callmenu').hidden = !show;
     if (!show) return;

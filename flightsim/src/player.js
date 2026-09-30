@@ -33,7 +33,9 @@ export class Player {
 
   _buildBody(app) {
     const h = this.body = new Human(app, { detail: 1 });
-    h.setPose(composePose(POSES.stand, POSES.sit, { lShoulder: [-0.25, 0, -0.18], rShoulder: [-0.25, 0, 0.18], lElbow: [-1.0, 0.2, 0], rElbow: [-1.0, -0.2, 0] }));
+    // hands resting on the thighs (solved on this skeleton: fingertips about 10 cm either side of the
+    // seat centre line, on top of the thighs just ahead of the hips)
+    h.setPose(composePose(POSES.stand, POSES.sit, { lShoulder: [0.2, 0, 0.2], rShoulder: [0.2, 0, -0.2], lElbow: [-0.95, 0.7, 0], rElbow: [-0.95, -0.7, 0], lWrist: [0.3, 0, 0], rWrist: [0.3, 0, 0] }));
     h.j.head.visible = false; h.j.neck.visible = false;
     for (const m of h.meshes) m.castShadow = true;
     this.bodyRoot = h.root;
@@ -129,7 +131,9 @@ export class Player {
   startStanding(x, z, yaw) { this.state = 'standing'; this.pos.set(x, 0, z); this.yaw = yaw; this.pitch = -0.05; this.bodyRoot.visible = false; }
   sitDown() {
     if (this.state !== 'standing') return false;
-    if (Math.abs(this.pos.z - (this.seat.z - 0.28)) > 0.6 || Math.abs(this.pos.x) > 0.45) return false;
+    // from the aisle next to the row, or from inside the row in front of your own seat
+    const inRow = Math.sign(this.pos.x) === Math.sign(this.seat.x) && Math.abs(this.pos.x) <= Math.abs(this.seat.x) + 0.2;
+    if (Math.abs(this.pos.z - (this.seat.z - 0.28)) > 0.6 || (Math.abs(this.pos.x) > 0.45 && !inRow)) return false;
     this.state = 'seated'; this.bodyRoot.visible = true; this.yaw = 0; this.pitch = -0.05;
     this.onChange?.('sit', true);
     return true;

@@ -254,7 +254,15 @@ export class Boarding {
     for (const q of this.bridgePath()) act.queue({ type: 'walk', x: q[0], z: q[1], speed: 0.9 });
     // down the aisle to the row, stow the bag, sit
     act.queue({ type: 'walk', x: 0, z: seat.z - 0.3, speed: 0.75 });
-    if (bag) act.queue({ type: 'face', h: seat.x < 0 ? -Math.PI / 2 : Math.PI / 2 }, { type: 'call', fn: () => this._openBin(seat) }, { type: 'gesture', name: 'stow' }, { type: 'wait', dur: 1 + this.r() * 3 });
+    // lifting the bag in, turning it to fit, finding space: the aisle behind waits (field studies put a
+    // whole A320 at 16-23 minutes, about 6-12 passengers a minute through one door)
+    if (bag) act.queue({ type: 'face', h: seat.x < 0 ? -Math.PI / 2 : Math.PI / 2 }, { type: 'call', fn: () => this._openBin(seat) }, { type: 'gesture', name: 'stow' }, { type: 'wait', dur: 1 },
+      { type: 'call', fn: () => { const full = this.S.people.pax.filter((q) => q.boarded).length / Math.max(1, this.S.people.pax.length); act.tasks.unshift({ type: 'wait', dur: this.r.human(7 + 16 * full, 0.5) }); } }); // the fuller the bins, the longer the search for space
+    // a window or middle seat with people already sitting on the aisle side: they get up and step out
+    act.queue({ type: 'call', fn: () => {
+      const inner = this.S.cabin.seats.filter((q) => q.row === seat.row && Math.sign(q.x) === Math.sign(seat.x) && Math.abs(q.x) < Math.abs(seat.x) && q.occupant && this._isSeated(q));
+      if (inner.length) act.tasks.unshift({ type: 'wait', dur: this.r.human(6 + 4 * inner.length, 0.4) });
+    } });
     act.queue({ type: 'walk', x: seat.x * 0.9, z: seat.z - 0.28, speed: 0.5 });
     if (nb) {
       act.queue({ type: 'sit', x: nb.home.x, z: nb.home.z, h: Math.PI, y: nb.home.y, pose: composePose(POSES.stand, POSES.sit) },
@@ -267,6 +275,14 @@ export class Boarding {
       people.walkers.push(act);
     }
     this.active.push(p);
+  }
+  // is whoever belongs in this seat already sitting in it (boarded, or the player)?
+  _isSeated(q) {
+    const S = this.S;
+    if (q.id === S.player.seat.id) return S.player.state === 'seated';
+    const o = q.occupant; if (!o) return false;
+    if (o.neighbor) return !S.people.neighbor?.inLounge && !!S.people.neighbor?.actor?.seated;
+    return !!o.boarded;
   }
   _done(p) { p.boarded = true; this.active.splice(this.active.indexOf(p), 1); if (p.neighbor) p.neighbor.inLounge = false; }
   _openBin(seat) { const z = seat.z - 0.3, b = this.S.cabin.bins.find((q) => q.side === Math.sign(seat.x) && z >= q.z0 - 0.05 && z <= q.z1 + 0.05); if (b && b.target < 0.5) { b.target = 1; if (Math.abs(this.S.player.eye.z - z) < 8) this.S.audio.binOpen?.(); } }
@@ -379,6 +395,9 @@ export class Boarding {
   // the player goes straight to the seat; the rest of the cabin fills up at once
   skipToSeat() {
     const S = this.S, P = S.player;
+    // skipping the boarding skips its time as well: the clock moves on to a few minutes before the
+    // scheduled departure, where everyone would have been aboard (the other flights keep their times)
+    if (!this.everyoneAboard && S.shiftClock) { const now = S.director.clockH, tgt = S.opts.depTime - 6 / 60; if (tgt > now) S.shiftClock(tgt - now); }
     this.playerScanned = true; this.playerAboard = true;
     if (this.called < 4) for (let n = this.called + 1; n <= 4; n++) this.called = n;
     while (this.queue.length) { const p = this.queue.shift(); this._seatNow(p); }

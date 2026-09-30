@@ -72,8 +72,8 @@ export class Dialogue {
       else this.say(`Hi! Doing well, thanks. I'm ${P.name} — first time on SAS actually.`, 'en');
     } else if (id === 'why') { this.topics.add('why'); this.say(`It's ${P.why}.`); }
     else if (id === 'job') { this.topics.add('job'); this.say(`I'm ${P.job}. ${JOBS[this.n.persona] || ''}`); }
-    else if (id === 'from') { this.topics.add('from'); this.say(P.from === 'Boston' ? `Boston, Massachusetts. My grandmother was from Småland, so this trip is a bit of a pilgrimage.` : `${P.from}${P.from === 'Malmö' ? ', in Skåne' : ', just outside Stockholm'}. ${FROM[this.n.persona] || ''}`); }
-    else if (id === 'time') { this.topics.add('time'); this.say(`About an hour gate to gate. If we're on time we'll be at the gate around ${ctx.eta}.`); }
+    else if (id === 'from') { this.topics.add('from'); this.say(P.from === 'Boston' ? `Boston, Massachusetts. My grandmother was from Småland, so this trip is a bit of a pilgrimage.` : `${P.from}${PLACE[P.from] ? ', ' + PLACE[P.from] : ''}. ${FROM[this.n.persona] || ''}`); }
+    else if (id === 'time') { this.topics.add('time'); this.say(`An hour and a quarter gate to gate, a bit under an hour in the air. If we're on time we'll be at the gate around ${ctx.eta}.`); }
     else if (id === 'nervous') { this.say(NERVOUS[this.n.persona] || "I'm fine with it. The take-off is the best part."); }
     else if (id === 'where') {
       const w = this.where(fm);
@@ -110,6 +110,11 @@ export class Dialogue {
   close() { this.open = false; this.ui.closeChat(); }
 }
 
+// where the neighbours' home towns are
+const PLACE = {
+  Uppsala: 'north of Stockholm', 'Södermalm': 'in the middle of Stockholm', 'Västerås': 'an hour west of Stockholm', Solna: 'just north of the city',
+  'Lidingö': 'just outside Stockholm', Djursholm: 'just north of Stockholm', 'Malmö': 'in Skåne',
+};
 const JOBS = {
   erik: 'Bridges and tunnels, mostly — so flying over the Øresund always makes me a bit nerdy.',
   maja: 'Apps for a bank. Very glamorous.',

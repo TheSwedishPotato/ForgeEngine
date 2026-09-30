@@ -225,13 +225,13 @@ export class Incidents {
         break;
       case 'turbulence': if (D.serviceRunning() && this.once('turbPA', 300)) this.say(EMERGENCY_PA.turbModerate); break;
       case 'turbulence-severe': A.scream(1); if (this.once('sevPA', 300)) this.later(60, () => this.say(EMERGENCY_PA.turbApology)); break;
-      case 'crew-seated': this.say(EMERGENCY_PA.seatedNow, { priority: 3 }); S.people.crewToJumpSeats(() => {}); break;
+      case 'crew-seated': this.say(EMERGENCY_PA.seatedNow, { priority: 3 }); S.people.crewToJumpSeats(() => { if (D.times.preparelanding != null) D.mark('crewSeatedLdg'); }, 'turbulence'); break;
       case 'windshear': A.gasp(0.6); break;
       case 'go-around': A.gasp(0.6); S.ui.toast('Go-around: the engines roar up to take-off thrust and the aircraft climbs away', 5); break;
       case 'hard-landing': if (!fm.crashed) this.later(9, () => this.say(EMERGENCY_PA.hardLanding)); break;
       case 'engine-failure-1': case 'engine-failure-2': A.gasp(1); break;
       case 'depressurisation': A.decompression(); A.scream(0.8); S.cabinFog = 1; this.later(3, () => S.ui.toast('The oxygen masks have dropped! Press O to pull one down and put it on.', 8)); break;
-      case 'emergency-descent': this.say(EMERGENCY_PA.depressAuto, { priority: 3 }); this.later(8, () => S.people.crewToJumpSeats(() => {})); this._roar = true; break;
+      case 'emergency-descent': this.say(EMERGENCY_PA.depressAuto, { priority: 3 }); this.later(8, () => S.people.crewToJumpSeats(() => {}, 'emergency')); this._roar = true; break;
       case 'emergency-level': this._roar = false; A.roar(0.1); this.later(20, () => this.say(EMERGENCY_PA.masksOff)); this.later(60, () => A.roar(0)); break;
       default: if (e.startsWith('go-around-')) { const why = e.slice(10); this.later(45, () => this.say(EMERGENCY_PA.goAround(why))); } break;
     }
@@ -267,7 +267,7 @@ export class Incidents {
       case 'lightning': break;
       case 'rto': A.gasp(0.7); this.later(4, () => this.say(EMERGENCY_PA.rto)); this.later(64, () => this._end('rto')); break;
       case 'gear-unsafe': this.later(40, () => this.say(EMERGENCY_PA.gearUnsafe, { priority: 3 })); this.later(90, () => { this.say(EMERGENCY_PA.emergencyLanding, { priority: 3 }); }); break;
-      case 'dual-engine': this.later(12, () => { this.say(EMERGENCY_PA.emergencyLanding, { priority: 3 }); D.setSeatbelt(true); S.people.crewToJumpSeats(() => {}); }); for (const i of [0, 1]) this.later(30, () => S.ext.setEngineFx(i, { smoke: 0.2 })); break;
+      case 'dual-engine': this.later(12, () => { this.say(EMERGENCY_PA.emergencyLanding, { priority: 3 }); D.setSeatbelt(true); S.people.crewToJumpSeats(() => {}, 'emergency'); }); for (const i of [0, 1]) this.later(30, () => S.ext.setEngineFx(i, { smoke: 0.2 })); break;
       case 'brace': this._brace(); break;
       case 'stopped': {
         this.say(EMERGENCY_PA.stayCalm, { priority: 3 });

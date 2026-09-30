@@ -59,6 +59,14 @@ function sampleGesture(g, t) {
   return out;
 }
 
+// part of the way from one pose to another (sitting down, getting up)
+function lerpPose(a, b, k) {
+  const out = { ...a };
+  for (const j in b) { const pa = a[j], pb = b[j]; out[j] = pa ? [lerp(pa[0], pb[0], k), lerp(pa[1], pb[1], k), lerp(pa[2], pb[2], k)] : pb; }
+  return out;
+}
+const SIT_POSE = composePose(POSES.stand, POSES.sit, POSES.jump);
+
 // ---------------- Actor (articulated, can walk) ----------------
 export class Actor {
   constructor(app, scene, { name = '', crew = false, hiFace = false } = {}) {
@@ -80,7 +88,15 @@ export class Actor {
   }
   place(x, z, heading) { this.x = x; this.z = z; if (heading !== undefined) this.heading = this.targetHeading = heading; this._apply(); }
   queue(...tasks) { this.tasks.push(...tasks); return this; }
-  clear() { this.tasks = []; this.task = null; }
+  clear() {
+    const T = this.task;
+    // a half-finished sit or stand completes rather than leaving the body hovering between the two
+    if (T && T.began && T.type === 'sit') this._sat(T);
+    if (T && T.began && T.type === 'stand') this._stood();
+    this.tasks = []; this.task = null;
+  }
+  _sat(T) { this.x = T.x; this.z = T.z; this.heading = this.targetHeading = T.h; this.rise = 0; this.base = T.pose || SIT_POSE; }
+  _stood() { this.seated = false; this.rise = 0; this.base = POSES.stand; }
   busy() { return !!this.task || this.tasks.length > 0; }
   setProp(hand, kind) {
     const slot = hand === 'l' ? this.h.lHandItem : this.h.rHandItem;
@@ -110,7 +126,12 @@ export class Actor {
 
   update(dt, world) {
     // run tasks
-    if (!this.task && this.tasks.length) { this.task = this.tasks.shift(); this.task.t = 0; if (this.task.start) this.task.start(this); }
+    if (!this.task && this.tasks.length) {
+      this.task = this.tasks.shift(); this.task.t = 0;
+      // nobody walks off still sitting down: getting up (belt off, hands on the armrests) comes first
+      if (this.task.type === 'walk' && this.seated) { this.tasks.unshift(this.task); this.task = { type: 'stand', t: 0, dur: 0.9 + Math.random() * 0.8 }; }
+      if (this.task.start) this.task.start(this);
+    }
     let moving = false;
     if (this.task) {
       const T = this.task; T.t += dt;
@@ -119,6 +140,7 @@ export class Actor {
         const tx = T.x ?? this.x, tz = T.z;
         const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz);
         const spd = T.speed || 0.9;
+        if (this.squeezeT > 0) this.squeezeT -= dt;
         let block = world && world.blocked ? world.blocked(this, tz) : false;
         this.blockedT = block ? (this.blockedT || 0) + dt : 0;
         if (d < 0.04) done = true;
@@ -133,9 +155,18 @@ export class Actor {
       else if (T.type === 'call') { T.fn(this); done = true; }
       else if (T.type === 'until') { if (T.cond(this)) done = true; }
       else if (T.type === 'sit') {
-        this.seated = true; this.seatY = T.y ?? 0; this.x = T.x; this.z = T.z; this.targetHeading = T.h; this.heading = T.h;
-        this.base = T.pose || composePose(POSES.stand, POSES.sit, POSES.jump); done = true;
-      } else if (T.type === 'stand') { this.seated = false; this.base = POSES.stand; done = true; }
+        // lowering into the seat takes a second: body, hips and knees together
+        if (!T.began) { T.began = true; T.fx = this.x; T.fz = this.z; T.from = this.base; this.seated = true; this.seatY = T.y ?? 0; this.targetHeading = T.h; }
+        const dur = T.dur ?? 1.1, k = smooth(T.t / dur);
+        this.x = lerp(T.fx, T.x, k); this.z = lerp(T.fz, T.z, k); this.rise = 1 - k;
+        this.base = lerpPose(T.from, T.pose || SIT_POSE, k);
+        if (T.t >= dur) { this._sat(T); done = true; }
+      } else if (T.type === 'stand') {
+        if (!T.began) { T.began = true; T.from = this.base; T.k0 = this.seated ? this.rise || 0 : 1; }
+        const dur = T.dur ?? 1.2, k = T.k0 + (1 - T.k0) * smooth(T.t / dur);
+        this.rise = k; this.base = lerpPose(T.from, POSES.stand, k);
+        if (T.t >= dur) { this._stood(); done = true; }
+      }
       if (done) { if (T.end) T.end(this); this.task = null; }
     }
     this.heading = dampAngle(this.heading, this.targetHeading, 8, dt);
@@ -179,8 +210,8 @@ export class Actor {
     } else { this.headYaw = damp(this.headYaw, 0, 4, dt); this.headPitch = damp(this.headPitch, 0, 4, dt); }
     this.h.j.neck.rotation.y += this.headYaw * 0.4; this.h.j.head.rotation.y = this.headYaw * 0.6; this.h.j.head.rotation.x += this.headPitch;
     const turnOff = this.turnOffset || 0;
-    const floor = !this.seated && world && world.floorAt ? world.floorAt(this.x, this.z) : 0;
-    this.root.position.set(this.x, (this.seated ? this.seatY : floor) + (this.lift || 0) + (this.fallen ? 0.1 - 0.84 * this.h.s : 0), this.z);
+    const floor = world && world.floorAt ? world.floorAt(this.x, this.z) : 0;
+    this.root.position.set(this.x, (this.seated ? lerp(this.seatY, floor, this.rise || 0) : floor) + (this.lift || 0) + (this.fallen ? 0.1 - 0.84 * this.h.s : 0), this.z);
     this.root.rotation.y = this.heading + turnOff;
     if (this.sayT > 0) { this.sayT -= dt; if (this.sayT <= 0) this.say = null; }
     // eyes, mouth and breathing
@@ -237,7 +268,7 @@ export class People {
     this._makeCrew();
     this.carts = [];
     this.serviceLog = [];
-    this.t = 0;
+    this.t = 0; this.timers = [];
   }
 
   // Seat NPC placement (baked static bodies + animated heads)
@@ -353,7 +384,7 @@ export class People {
     const zones = [[fwd, rowZ(1) - 0.5, rowZ(10) + 0.5], [mid, rowZ(11) - 0.2, rowZ(21) + 0.4], [aft, rowZ(22) - 0.2, rowZ(31) + 0.5]];
     let remaining = zones.length;
     for (const [c, z0, z1] of zones) {
-      c.clear();
+      this._reassign(c);
       c.queue({ type: 'walk', z: z0, x: 0, speed: 1.0 }, { type: 'face', h: 0 });
       const rows = ROWS.filter((r) => rowZ(r) >= z0 - 0.1 && rowZ(r) <= z1);
       for (const row of rows) {
@@ -365,20 +396,48 @@ export class People {
     }
   }
 
-  crewToJumpSeats(onSeated) {
+  crewToJumpSeats(onSeated, why = 'phase') {
     const js = this.cabin.jumpSeats;
     const { purser, fwd, mid, aft } = this.byRole;
     const plan = [[purser, js[0]], [fwd, js[1]], [mid, js[2]], [aft, js[3]]];
+    this.crewDown = why;
+    this._holdService();
     let n = plan.length;
+    const one = () => { if (--n === 0 && onSeated) onSeated(); };
     for (const [c, s] of plan) {
-      c.clear(); c.headTarget = null; c.gesture = null;
+      // already strapped in there (a second "be seated" call): stay put
+      if (c.seated && !c.busy() && Math.abs(c.x - s.x) < 0.05 && Math.abs(c.z - s.z) < 0.05) { one(); continue; }
+      this._reassign(c); c.headTarget = null; c.gesture = null; c.setProp('l', null); c.setProp('r', null);
+      if (!c.busy()) c.carrying = false;
       const approachZ = s.face > 0 ? s.z - 0.5 : s.z + 0.5;
       c.queue({ type: 'walk', x: 0, z: approachZ, speed: 1.1 }, { type: 'walk', x: s.x, z: approachZ, speed: 0.7 },
         { type: 'sit', x: s.x, z: s.z, h: s.face > 0 ? Math.PI : 0, y: 0.47 - 0.84 * c.h.s + 0.02 },
-        { type: 'call', fn: () => { if (--n === 0 && onSeated) onSeated(); } });
+        { type: 'call', fn: one });
     }
   }
-  crewStand() { for (const c of this.crew) { if (c.seated) { c.clear(); c.queue({ type: 'stand' }); } } }
+  // new orders for a crew member; a trolley being pulled back to its galley is put away first
+  _reassign(c) {
+    const keep = [c.task, ...c.tasks].filter((k) => k && (k.stow || k.fetch));
+    c.clear();
+    for (const k of keep) { k.t = 0; c.queue(k); }
+  }
+  crewStand() { this.crewDown = null; for (const c of this.crew) { if (c.seated) { c.clear(); c.queue({ type: 'stand', dur: 0.9 + this.r() * 0.9 }); } } }
+  // "Cabin crew, be seated": the trolleys are braked where they stand and the round picks up where it stopped
+  _holdService() {
+    for (const run of this.carts) {
+      if (run.finished || run.held) continue;
+      run.held = true;
+      if (run.state === 'serving') { run.resumeQ = run.seatQ; run.seatQ = []; run.state = 'moving'; }
+    }
+    const b = this.businessRun;
+    if (b && !b.finished && !b.held) { b.held = true; if (b.crew.busy()) b.i = Math.max(0, b.i - 1); }
+    if (this.onServiceHold) this.onServiceHold();
+  }
+  // landing preparation with the trolleys still out: they go back to the galleys unfinished
+  endService() {
+    for (const run of this.carts) if (!run.finished) { run.held = false; run.i = run.rows.length; run.state = 'next'; run.seatQ = []; run.resumeQ = null; }
+    if (this.businessRun && !this.businessRun.finished) { this.businessRun.held = false; this.businessRun.i = this.businessRun.rows.length; }
+  }
 
   // Trolley service: two carts working towards the middle. serveFn(actor, seat) returns choice & duration.
   startService(serveFn, onDone) {
@@ -404,18 +463,35 @@ export class People {
   }
 
   _updateCart(run, dt) {
-    if (run.finished) return;
+    if (run.gone) return;
     const c = run.crew, cart = run.cart;
-    // cart sits in front of the crew member (towards the direction of travel)
     cart.position.x = 0;
+    if (run.finished) {
+      // a braked trolley: the crew member walks back to it first
+      if (run.fetch) { if (c.task?.fetch === run || c.tasks.some((k) => k.fetch === run)) return; run.fetch = false; }
+      // pulled back to the galley and stowed there (or wherever the crew member was called away)
+      cart.position.z = damp(cart.position.z, c.z + run.dir * 0.75, 10, dt);
+      if (c.task?.stow !== run && !c.tasks.some((k) => k.stow === run)) { this.scene.remove(cart); run.gone = true; c.carrying = false; }
+      return;
+    }
+    if (run.held) {
+      // braked in the aisle: back to it once the crew are on their feet again
+      if (this.crewDown || c.seated || c.busy()) return;
+      const at = cart.position.z - run.dir * 0.75;
+      if (Math.abs(c.z - at) > 0.08 || Math.abs(c.x) > 0.08) { c.queue({ type: 'walk', x: 0, z: at, speed: 0.9 }, { type: 'face', h: run.dir > 0 ? Math.PI : 0 }); return; }
+      run.held = false; c.carrying = true;
+    }
+    // cart sits in front of the crew member (towards the direction of travel)
     const cz = c.z + run.dir * 0.75;
     cart.position.z = damp(cart.position.z, cz + (run.rollZ || 0), run.rollZ ? 40 : 10, dt);
     cart.position.y = run.lift || 0;
     if (run.helper) { const h = run.helper; if (!h.task && Math.abs(h.z - (cart.position.z + run.dir * 0.75)) > 0.1) h.queue({ type: 'walk', x: 0, z: cart.position.z + run.dir * 0.75, speed: 0.8 }); h.targetHeading = run.dir > 0 ? Math.PI : 0; }
     if (c.busy()) return;
     if (run.i >= run.rows.length) {
-      run.finished = true; c.carrying = false;
-      c.queue({ type: 'call', fn: () => { this.scene.remove(cart); } }, { type: 'walk', x: 0, z: run.dir > 0 ? rowZ(1) - 0.5 : LAYOUT.aftGalleyZ - 0.35, speed: 1 });
+      run.finished = true; c.carrying = true;
+      const at = cart.position.z - run.dir * 0.75;
+      if (Math.abs(c.z - at) > 0.3 || Math.abs(c.x) > 0.3) { run.fetch = true; c.queue({ type: 'walk', x: 0, z: at, speed: 0.9, fetch: run }); }
+      c.queue({ type: 'walk', x: 0, z: run.dir > 0 ? rowZ(1) - 0.5 : LAYOUT.aftGalleyZ - 0.35, speed: 1, stow: run });
       if (run.helper) run.helper.queue({ type: 'walk', x: 0, z: LAYOUT.aftGalleyZ - 0.35, speed: 1 });
       if (this.carts.every((r) => r.finished)) { this.audio?.cart(false); if (this.serviceDone) this.serviceDone(); }
       return;
@@ -429,7 +505,7 @@ export class People {
     }
     if (run.state !== 'serving') {
       run.state = 'serving';
-      run.seatQ = this.cabin.seats.filter((s) => s.row === row && s.occupant);
+      run.seatQ = run.resumeQ || this.cabin.seats.filter((s) => s.row === row && s.occupant); run.resumeQ = null;
     }
     const s = run.seatQ.shift();
     if (!s) { run.i++; run.state = 'next'; return; }
@@ -442,7 +518,9 @@ export class People {
 
   _updateBusiness(dt) {
     const b = this.businessRun; if (!b || b.finished) return;
-    const c = b.crew; if (c.busy()) return;
+    const c = b.crew;
+    if (b.held) { if (this.crewDown || c.seated || c.busy()) return; b.held = false; }
+    if (c.busy()) return;
     if (b.i >= b.rows.length) { b.finished = true; c.queue({ type: 'walk', x: 0.5, z: LAYOUT.fwdMonAftZ + 0.3 }); return; }
     const row = b.rows[b.i++];
     const seats = this.cabin.seats.filter((s) => s.row === row && s.occupant);
@@ -501,7 +579,11 @@ export class People {
       { type: 'call', fn: () => { this.audio && this.near(act, 8) && this.audio.flush(); lav.target = 1; act.root.visible = true; } }, { type: 'wait', dur: 1.2 },
       { type: 'walk', x: 0, z: doorZ, speed: 0.6 }, { type: 'call', fn: () => { lav.target = 0; lav.occupied = false; } },
       { type: 'walk', x: 0, z: s.z - 0.35, speed: 0.9 }, { type: 'walk', x: s.x, z: s.z - 0.1, speed: 0.5 },
-      { type: 'call', fn: () => { this.scene.remove(act.root); p.group.visible = true; p.away = false; this.walkers.splice(this.walkers.indexOf(act), 1); this.refreshTrays(); } });
+      { type: 'call', fn: () => {
+        this.scene.remove(act.root); p.group.visible = true; p.away = false; this.walkers.splice(this.walkers.indexOf(act), 1); this.refreshTrays();
+        // back from the lavatory after the doors opened: they get their things and leave with the others
+        if (this.deplaning && this.deplaneQueue && !this.deplaneQueue.includes(p)) { p.readyT = this.t + this.r.human(15, 0.5); this.deplaneQueue.push(p); }
+      } });
     this.walkers.push(act);
     return true;
   }
@@ -534,7 +616,8 @@ export class People {
       this.walkers.push(act);
     }
     this.refreshTrays();
-    for (const b of this.cabin.bins) if (this.r() < 0.7) setTimeout(() => { b.target = 1; this.audio?.binOpen(); }, 1000 + this.r() * 9000);
+    // the bins open one by one as people reach up for their bags (simulated time)
+    for (const b of this.cabin.bins) if (this.r() < 0.7) this.timers.push({ at: this.t + 1 + this.r() * 9, fn: () => { b.target = 1; this.audio?.binOpen(); } });
   }
   startDeplaning() {
     this.deplaning = true; this.deplaneT0 = this.t; this.deplaners = this.deplaners || [];
@@ -559,6 +642,7 @@ export class People {
     }
   }
 
+  _openBinAt(side, z) { const b = this.cabin.bins.find((q) => q.side === side && z >= q.z0 - 0.05 && z <= q.z1 + 0.05); if (b && b.target < 0.5) { b.target = 1; if (this.near({ x: 0, z }, 8)) this.audio?.binOpen?.(); } }
   near(actor, d) { return this.listener ? Math.hypot(actor.x - this.listener.x, actor.z - this.listener.z) < d : false; }
 
   blocked(actor, tz) {
@@ -566,7 +650,10 @@ export class People {
     // lifting a bag or a trolley really is in the way)
     if (actor.patience == null) actor.patience = (actor.crew ? 2 : 3) + this.r() * 3;
     const inAisle = Math.abs(actor.x) < 0.4 && actor.z > LAYOUT.aisleZ0 && actor.z < LAYOUT.aisleZ1;
-    if ((actor.blockedT || 0) > actor.patience * (inAisle && !actor.crew ? 3 : 1)) return false;
+    // once someone has decided to squeeze past ("ursäkta"), they keep going until they are through
+    if ((actor.squeezeT || 0) > 0) return false;
+    // in the aisle while boarding everyone waits in line behind the one stowing a bag (nobody squeezes past)
+    if ((actor.blockedT || 0) > actor.patience * (inAisle && !actor.crew ? (actor.boarding ? 15 : 3) : 1)) { actor.squeezeT = 1.6 + this.r() * 0.8; return false; }
     // keep ~0.62 m spacing to anyone ahead in the aisle. Crew only yield to crew
     // (passengers step aside for them); passengers also stop for trolleys.
     if (actor.boarding && actor.task) {
@@ -593,13 +680,13 @@ export class People {
       if (dz > 0 && dz < 0.62) return true;
     }
     if (!actor.crew) {
-      for (const run of this.carts) { if (run.finished) continue; const dz = (run.cart.position.z - actor.z) * dir; if (dz > 0 && dz < 0.75 && Math.abs(actor.x) < 0.4) return true; }
+      for (const run of this.carts) { if (run.gone) continue; const dz = (run.cart.position.z - actor.z) * dir; if (dz > 0 && dz < 0.75 && Math.abs(actor.x) < 0.4) return true; }
       if (this.playerBlock) { const dz = (this.playerBlock.z - actor.z) * dir; if (Math.abs(this.playerBlock.x - actor.x) < 0.35 && dz > 0 && dz < 0.6) return true; }
     }
     return false;
   }
 
-  servicing() { return this.carts.some((r) => !r.finished); }
+  servicing() { return this.carts.some((r) => !r.gone); }
 
   windowFor(seat) {
     let best = null, bd = 9;
@@ -644,9 +731,20 @@ export class People {
   // Idle head motion for seated NPCs & neighbour, plus deplaning shuffle
   update(dt, ctx) {
     this.t += dt;
+    for (let i = 0; i < this.timers.length; i++) { const k = this.timers[i]; if (k.at <= this.t) { this.timers.splice(i--, 1); k.fn(); } }
     const r = this.r;
     this.listener = ctx.player;
     const phase = ctx.phase;
+    // sun shadows only from the passengers around you (the far ones' shadows are not visible, and
+    // every caster is drawn a second time into the shadow map)
+    this._shT = (this._shT || 0) - dt;
+    if (this._shT <= 0 && this.listener) {
+      this._shT = 0.5;
+      for (const p of this.pax) {
+        const near = Math.hypot(p.group.position.x - this.listener.x, p.group.position.z - this.listener.z) < 5.5;
+        if (p._shadow !== near) { p._shadow = near; p.group.traverse((m) => { if (m.isMesh) m.castShadow = near; }); }
+      }
+    }
     for (const p of this.pax) {
       if (p.away) continue;
       const dx = p.seat.x - ctx.player.x, dz = p.seat.z - ctx.player.z;
@@ -686,9 +784,18 @@ export class People {
       for (const d of sorted) {
         if (!d.act.task && !d.act.tasks.length) {
           d.act.headTarget = null;
+          if (!d.stage) {
+            // into the aisle; most get a bag down from the bin first, holding up the people behind
+            // (industry figure about 20 passengers a minute through one door, 14 observed on an A320)
+            d.stage = 'aisle';
+            const side = Math.sign(d.p.seat.x) || 1;
+            d.act.queue({ type: 'walk', x: 0, z: d.act.z, speed: 0.5 });
+            if (this.r() < 0.65) d.act.queue({ type: 'face', h: side < 0 ? -Math.PI / 2 : Math.PI / 2 }, { type: 'call', fn: () => this._openBinAt(side, d.act.z) }, { type: 'gesture', name: 'stow' },
+              { type: 'wait', dur: this.r.human(4, 0.6) }, { type: 'call', fn: () => d.act.setProp('r', 'bag') }, { type: 'face', h: Math.PI });
+            continue;
+          }
           d.act.queue({ type: 'walk', x: 0, z: DOORS.L1.z, speed: 0.7 }, { type: 'walk', x: -1.4, z: DOORS.L1.z, speed: 0.7 },
             { type: 'call', fn: () => { d.out = true; d.act.root.visible = false; this.walkers.splice(this.walkers.indexOf(d.act), 1); } });
-          d.act.setProp('r', this.r() < 0.6 ? 'bag' : null);
         }
       }
     }
