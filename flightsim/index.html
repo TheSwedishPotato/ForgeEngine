@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SK1415 Cabin Simulator</title>
+<meta name="description" content="First-person passenger simulator: an SAS Airbus A320neo from Stockholm Arlanda to Copenhagen Kastrup on 10 May 2026.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<!--APP-->
+<canvas id="view" aria-label="First-person view from inside the aircraft cabin"></canvas>
+
+<section id="start" aria-labelledby="start-title">
+  <div class="card">
+    <div class="stub">
+      <div class="airline"><b>Cabin simulator</b><span class="label">Boarding complete · doors closed</span></div>
+      <div class="route" id="start-title">
+        <div><div class="code">ARN</div><div class="city">Stockholm Arlanda · Terminal 5, pier F</div></div>
+        <div class="plane">— A320neo —</div>
+        <div class="arr"><div class="code">CPH</div><div class="city">Copenhagen Kastrup · Terminal 3</div></div>
+      </div>
+      <div class="facts">
+        <div><span class="label">Flight</span><span class="v" id="f-flight">SK1415</span></div>
+        <div><span class="label">Operator</span><span class="v">SAS</span></div>
+        <div><span class="label">Date</span><span class="v">Sun 10 May 2026</span></div>
+        <div><span class="label">Departs</span><span class="v" id="f-dep">06:00</span></div>
+        <div><span class="label">Aircraft</span><span class="v">A320neo · LEAP-1A26</span></div>
+        <div><span class="label">Registration</span><span class="v">SE-ROX "Roar Viking"</span></div>
+        <div><span class="label">Seat</span><span class="v" id="f-seat">22A</span></div>
+        <div><span class="label">Runway out</span><span class="v" id="f-rwy-out">19R</span></div>
+        <div><span class="label">Runway in</span><span class="v" id="f-rwy-in">22L</span></div>
+      </div>
+      <p class="blurb">You are already in your seat. The aircraft has just been pushed back from the gate and the engines are running. Buckle up, look out of the window, talk to the person next to you, get a coffee from the trolley, and ride the whole flight in real time. Nothing is scripted: two pilots fly the aircraft through its controls, ATC picks the runways from the wind you set, and everything that happens comes out of the flight physics and the weather.</p>
+      <div class="cta">
+        <button class="btn primary" id="go">Take your seat</button>
+        <span class="fine">Desktop PC · mouse + keyboard · headphones recommended</span>
+      </div>
+    </div>
+    <div class="options">
+      <div class="opt">
+        <span class="label">Departure time</span>
+        <div class="seg" id="opt-time" role="group" aria-label="Departure time"></div>
+      </div>
+      <div class="opt">
+        <span class="label">Weather</span>
+        <div class="seg" id="opt-weather" role="group" aria-label="Weather"></div>
+        <div class="wxline"><button class="btn small" id="wx-edit" type="button">Adjust wind, cloud, storms…</button><span class="fine mono" id="wx-sum"></span></div>
+      </div>
+      <div class="opt">
+        <span class="label">Choose your seat</span>
+        <div class="seatmap-wrap"><div class="seatmap" id="seatmap" role="grid" aria-label="Seat map"></div></div>
+        <div class="seat-legend"><span><i style="background:#5a4c30"></i>SAS Business (rows 1–4)</span><span><i style="background:#34405a;box-shadow:inset 0 -3px 0 #4bd08a"></i>Over-wing exit rows</span><span><i style="background:#8fb8ff"></i>Your seat</span></div>
+      </div>
+      <div class="row2">
+        <div class="opt"><label class="label" for="opt-load">Passengers on board</label>
+          <select id="opt-load"><option value="0.62">Quiet — about 110</option><option value="0.85" selected>Busy — about 150</option><option value="1">Full — 174</option></select></div>
+        <div class="opt"><label class="label" for="opt-lang">Announcements</label>
+          <select id="opt-lang"><option value="sv+en" selected>Swedish + English</option><option value="en">English only</option></select></div>
+        <div class="opt"><label class="label" for="opt-quality">Graphics</label>
+          <select id="opt-quality"><option value="low">Low — integrated graphics</option><option value="medium">Medium — bloom, shadows</option><option value="high" selected>High — volumetric clouds, 1.5× render scale</option><option value="ultra">Ultra — 2× render scale, 80-step clouds</option></select></div>
+        <div class="opt"><label class="label" for="opt-events">Real-world events</label>
+          <select id="opt-events"><option value="off">Off: a perfectly normal flight</option><option value="realistic" selected>Realistic: as rare as in real life</option><option value="eventful">Eventful: something will happen</option><option value="chaos">Chaos: anything, including accidents</option></select></div>
+        <div class="opt"><label class="label" for="opt-speed">Time</label>
+          <select id="opt-speed"><option value="1" selected>Real time (about 62 min)</option><option value="2">2× faster</option><option value="4">4× faster</option></select></div>
+      </div>
+      <div class="opt"><label class="label"><input type="checkbox" id="opt-boarding" checked> Start at the gate: board with everyone else, then pushback and engine start (about 25 minutes before take-off)</label></div>
+      <div class="opt"><label class="label"><input type="checkbox" id="opt-deck"> What-if: ride on the flight-deck observer seat (the cockpit door is unlocked; not allowed for passengers on real flights)</label></div>
+      <div class="opt"><label class="label"><input type="checkbox" id="opt-voice" checked> Spoken announcements and voices (browser text-to-speech)</label></div>
+    </div>
+  </div>
+  <p class="disclaimer">Fan-made simulation, not affiliated with SAS, Airbus, CFM, Swedavia or Copenhagen Airports. Coastlines and lakes from Natural Earth; runway coordinates from OurAirports. SK1415's 06:00 departure matches the published schedule; other departure times use representative flight numbers.</p>
+</section>
+
+<div id="loading" hidden><div style="text-align:center"><div class="label">Preparing the cabin</div><div class="bar"><i id="loadbar"></i></div><p id="loadmsg">Building the world…</p></div></div>
+
+<div id="hud" hidden>
+  <div class="strip"><span class="flt" id="h-flight">SK1415</span><span class="sep"></span><span class="mono" id="h-clock">06:04</span><span class="sep"></span><span id="h-phase">Taxiing</span></div>
+  <div class="signs" aria-label="Cabin signs">
+    <div class="sign on" id="sign-belt" title="Fasten seatbelt"><svg viewBox="0 0 60 30" fill="none" stroke="#fff" stroke-width="3"><rect x="20" y="9" width="20" height="12" rx="3"/><path d="M4 15h16M40 15h16"/><rect x="26" y="12" width="8" height="6" fill="#fff"/></svg></div>
+    <div class="sign on" id="sign-smoke" title="No smoking"><svg viewBox="0 0 60 30" fill="none" stroke="#fff" stroke-width="2.5"><circle cx="30" cy="15" r="12"/><rect x="18" y="13" width="18" height="4" fill="#fff"/><path d="M21 5l18 20"/></svg></div>
+  </div>
+  <div class="speed mono" id="h-speed">1×</div>
+  <div id="crosshair"></div>
+  <div id="prompt" hidden></div>
+  <div id="toasts"></div>
+  <div id="captions"></div>
+</div>
+
+<div id="chat" class="panel" hidden><h3 id="chat-title">Talk</h3><div class="choices" id="chat-choices"></div></div>
+<div id="service" class="panel" hidden><h3 id="svc-title">The trolley is at your row</h3><div class="choices" id="svc-choices"></div></div>
+<div id="callmenu" class="panel" hidden><h3>Cabin crew</h3><div class="choices" id="call-choices"></div></div>
+<div id="pay" class="panel" hidden><h3>Card payment</h3><div id="pay-item"></div><div class="terminal"><div class="scr" id="pay-screen">Tap card</div></div><button class="btn primary" id="pay-tap">Tap your card</button></div>
+
+<div id="phone" class="panel" hidden>
+  <div class="status"><span id="ph-clock">06:10</span><span id="ph-net">✈ Flight mode · Wi-Fi</span></div>
+  <canvas id="map" width="640" height="672"></canvas>
+  <div class="fi">
+    <div><span class="label">Altitude</span><span class="v" id="fi-alt">0 ft</span></div>
+    <div><span class="label">Ground speed</span><span class="v" id="fi-gs">0 kt</span></div>
+    <div><span class="label">Arrive</span><span class="v" id="fi-eta">07:15</span></div>
+    <div><span class="label">Heading</span><span class="v" id="fi-hdg">190°</span></div>
+    <div><span class="label">Outside</span><span class="v" id="fi-oat">14 °C</span></div>
+    <div><span class="label">To go</span><span class="v" id="fi-dist">546 km</span></div>
+  </div>
+</div>
+
+<div id="card" class="panel" hidden role="dialog" aria-label="Safety card"></div>
+<div id="menucard" class="panel" hidden role="dialog" aria-label="Onboard menu"></div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="dialog">
+    <h2>Paused</h2>
+    <div class="keys" id="keys"></div>
+    <div class="opt"><span class="label">Time</span><div class="seg" id="pause-speed"></div></div>
+    <div class="opt"><span class="label">Jump ahead</span><div class="skip" id="skip"></div></div>
+    <div class="row2">
+      <div class="opt"><label class="label" for="vol">Volume</label><input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></div>
+      <div class="opt"><label class="label" for="sens">Mouse sensitivity</label><input type="range" id="sens" min="0.3" max="2.5" step="0.1" value="1"></div>
+      <div class="opt"><label class="label" for="fov">Field of view</label><input type="range" id="fov" min="50" max="95" step="1" value="68"></div>
+      <div class="opt"><label class="label"><input type="checkbox" id="pause-voice" checked> Spoken voices</label></div>
+    </div>
+    <div class="opt"><label class="label" for="pause-event">Make something happen</label>
+      <div class="evrow"><select id="pause-event"></select><button class="btn small" id="pause-event-go" type="button">Go</button></div></div>
+    <div class="cta"><button class="btn primary" id="resume">Back to the flight</button><button class="btn" id="pause-wx" type="button">Weather…</button><button class="btn" id="fullscreen">Fullscreen</button></div>
+  </div>
+</div>
+
+<div id="wxedit" class="overlay" hidden>
+  <div class="dialog wide" role="dialog" aria-labelledby="wx-title">
+    <h2 id="wx-title">Weather</h2>
+    <p class="fine" id="wx-note" style="margin:0">Set the conditions at Arlanda and Kastrup; between them they blend along the route. The pilots read the METARs below, ATC picks the runways from the wind, and the atmosphere turns it all into physics: wind shear near the ground, gusts and turbulence, storm updrafts, downdrafts, lightning and microbursts.</p>
+    <div class="seg" id="wx-presets" role="group" aria-label="Start from"></div>
+    <div id="wx-body"></div>
+    <pre class="metar mono" id="wx-metar"></pre>
+    <div class="cta"><button class="btn primary" id="wx-apply" type="button">Use this weather</button><button class="btn" id="wx-cancel" type="button">Cancel</button></div>
+  </div>
+</div>
+
+<div id="radio" class="panel" hidden>
+  <h3>Flight deck · <span id="radio-unit">Arlanda Ground</span></h3>
+  <div class="fma mono" id="fma"></div>
+  <div class="pfd mono" id="pfd"></div>
+  <div class="rlog" id="radio-log" aria-live="polite"></div>
+  <div class="fine">Press C to close. The radio and the pilots' calls, as on an airline's "channel 9".</div>
+</div>
+
+<div id="maskoverlay" hidden></div>
+<div id="endscreen" class="overlay" hidden>
+  <div class="dialog">
+    <span class="label" id="end-label">Copenhagen Kastrup · Terminal 3</span>
+    <div class="big" id="end-title">Velkommen til København</div>
+    <p id="end-text" style="margin:0;color:var(--muted)"></p>
+    <div class="stats" id="end-stats"></div>
+    <div class="cta"><button class="btn primary" id="again">Fly again</button><button class="btn" id="stay">Stay on board</button></div>
+  </div>
+</div>
+
+<!--/APP-->
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

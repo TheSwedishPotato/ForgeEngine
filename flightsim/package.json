@@ -1,0 +1,16 @@
+{
+  "name": "sas-a320-flight-sim",
+  "version": "1.0.0",
+  "description": "First-person SAS A320neo passenger flight simulator, Stockholm Arlanda to Copenhagen Kastrup",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "serve": "npx http-server -p 8080 -c-1 ."
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "three": "^0.170.0"
+  },
+  "type": "module"
+}
