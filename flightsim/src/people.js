@@ -120,6 +120,7 @@ export class Actor {
         const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz);
         const spd = T.speed || 0.9;
         let block = world && world.blocked ? world.blocked(this, tz) : false;
+        this.blockedT = block ? (this.blockedT || 0) + dt : 0;
         if (d < 0.04) done = true;
         else if (!block) {
           const step = Math.min(d, spd * dt);
@@ -536,21 +537,36 @@ export class People {
     for (const b of this.cabin.bins) if (this.r() < 0.7) setTimeout(() => { b.target = 1; this.audio?.binOpen(); }, 1000 + this.r() * 9000);
   }
   startDeplaning() {
-    this.deplaning = true;
-    // later waves: middle and window passengers stand up row by row, front to back
-    const rest = this.pax.filter((p) => !p.away).sort((a, b) => a.seat.z - b.seat.z);
-    rest.forEach((p, i) => setTimeout(() => {
-      if (p.away || !this.deplaning) return;
+    this.deplaning = true; this.deplaneT0 = this.t; this.deplaners = this.deplaners || [];
+    // later waves: the rest stand up and step into the aisle when there is a gap next to their row
+    this.deplaneQueue = this.pax.filter((p) => !p.away).sort((a, b) => a.seat.z - b.seat.z);
+    for (const p of this.deplaneQueue) p.readyT = this.t + this.r.human(20 + Math.max(0, p.seat.z) * 1.5, 0.5);
+  }
+  _deplaneNext() {
+    if (!this.deplaneQueue || !this.deplaneQueue.length) return;
+    for (let i = 0; i < Math.min(8, this.deplaneQueue.length); i++) {
+      const p = this.deplaneQueue[i];
+      if (p.away) { this.deplaneQueue.splice(i--, 1); continue; }
+      if (this.t < p.readyT) continue;
+      const z = p.seat.z - 0.2;
+      if (this.walkers.some((w) => Math.abs(w.z - z) < 0.9 && Math.abs(w.x) < 0.5)) continue; // no gap yet
       const act = new Actor(p.app, this.scene, {});
-      act.place(Math.sign(p.seat.x) * 0.12, p.seat.z - 0.2, Math.PI);
+      act.place(Math.sign(p.seat.x) * 0.12, z, Math.PI);
       p.group.visible = false; p.away = true; this.refreshTrays();
       this.deplaners.push({ act, p, out: false }); this.walkers.push(act);
-    }, 25000 + i * 3500));
+      this.deplaneQueue.splice(i, 1);
+      return;
+    }
   }
 
   near(actor, d) { return this.listener ? Math.hypot(actor.x - this.listener.x, actor.z - this.listener.z) < d : false; }
 
   blocked(actor, tz) {
+    // nobody waits for ever: after a while people squeeze past (longer in the aisle, where someone
+    // lifting a bag or a trolley really is in the way)
+    if (actor.patience == null) actor.patience = (actor.crew ? 2 : 3) + this.r() * 3;
+    const inAisle = Math.abs(actor.x) < 0.4 && actor.z > LAYOUT.aisleZ0 && actor.z < LAYOUT.aisleZ1;
+    if ((actor.blockedT || 0) > actor.patience * (inAisle && !actor.crew ? 3 : 1)) return false;
     // keep ~0.62 m spacing to anyone ahead in the aisle. Crew only yield to crew
     // (passengers step aside for them); passengers also stop for trolleys.
     if (actor.boarding && actor.task) {
@@ -594,11 +610,28 @@ export class People {
   cruiseHabits(night, playerSeat) {
     for (const p of this.pax) {
       if (p.away) continue;
-      if (this.r() < 0.16 && !p.seat.business) { p.seat.recline = 1; this.cabin.updateSeat(p.seat); }
+      // each one in their own time, and only when their hand gets to the button, blind or light
+      if (this.r() < 0.16 && !p.seat.business) this._paxDo(p, 'arm', () => { p.seat.recline = 1; this.cabin.updateSeat(p.seat); });
       const win = p.seat.letter === 'A' || p.seat.letter === 'F';
-      if (win && (p.sleep || this.r() < 0.28)) { const w = this.windowFor(p.seat); if (w && Math.abs(w.z - playerSeat.z) > 0.8) w.shadeTarget = 1; }
-      if (night && (p.act === 'read' || this.r() < 0.12)) this.cabin.setReadingLight(p.seat, true);
+      if (win && (p.sleep || this.r() < 0.28)) { const w = this.windowFor(p.seat); if (w && Math.abs(w.z - playerSeat.z) > 0.8) this._paxDo(p, 'window', () => { w.shadeTarget = 1; }); }
+      if (night && (p.act === 'read' || this.r() < 0.12)) this._paxDo(p, 'up', () => this.cabin.setReadingLight(p.seat, true));
     }
+  }
+  // A seated passenger doing something with their hands: when they get round to it (human delay), a
+  // look at it, the reach, and the thing happens when the hand arrives
+  _paxDo(p, where, fn) {
+    const at = this.t + this.r.human(40, 1.0);
+    (p.jobs || (p.jobs = [])).push({ at, where, fn, t: 0 });
+    p.jobs.sort((a, b) => a.at - b.at);
+  }
+  _paxJobs(p, dt) {
+    const j = p.jobs && p.jobs[0];
+    if (!j || this.t < j.at) return null;
+    j.t += dt;
+    const reach = 0.5 + 0.14 * Math.log2(0.5 / 0.02 + 1);   // Fitts' law, ~1.1 s for 50 cm
+    if (!j.done && j.t >= reach) { j.done = true; j.fn(); }
+    if (j.t >= reach + 0.6) p.jobs.shift();
+    return j.where;
   }
   // Crew check before landing: upright seats and open blinds in a row.
   secureRow(row) {
@@ -618,6 +651,7 @@ export class People {
       if (p.away) continue;
       const dx = p.seat.x - ctx.player.x, dz = p.seat.z - ctx.player.z;
       const near = dx * dx + dz * dz < 64;
+      const job = this._paxJobs(p, dt);
       if (!near && !ctx.force) continue; // skip far heads for performance
       p.lookT -= dt;
       if (p.lookT <= 0) {
@@ -633,6 +667,7 @@ export class People {
       if (p.look === 'window') yaw = side * -0.7 * (p.seat.letter === 'A' || p.seat.letter === 'F' ? 1 : 0.5);
       if (p.look === 'aisle') yaw = side * 0.5;
       if (p.sleep) { pitch = 0.3; yaw = side * 0.2; }
+      if (job === 'up') { pitch = -0.6; yaw = 0; } else if (job === 'window') { yaw = side * -0.9; pitch = 0; } else if (job === 'arm') { pitch = 0.5; yaw = side * 0.4; }
       if (ctx.bump) pitch += ctx.bump * 0.05;
       p.yaw = damp(p.yaw, yaw, 3, dt); p.pitch = damp(p.pitch, pitch, 3, dt);
       p.head.quaternion.copy(p.head.userData.rest);
@@ -645,6 +680,7 @@ export class People {
     for (const run of this.carts) this._updateCart(run, dt);
     this._updateBusiness(dt);
     // deplaning shuffle towards L1
+    if (this.deplaning) this._deplaneNext();
     if (this.deplaning && this.deplaners) {
       const sorted = this.deplaners.filter((d) => !d.out).sort((a, b) => a.act.z - b.act.z);
       for (const d of sorted) {

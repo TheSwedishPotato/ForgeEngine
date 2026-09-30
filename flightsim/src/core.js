@@ -63,6 +63,8 @@ export function rng(seed) {
   f.int = (a0, b0) => Math.floor(a0 + (b0 - a0 + 1) * f());
   f.pick = (arr) => arr[Math.floor(f() * arr.length)];
   f.chance = (p) => f() < p;
+  // a human's time to do something: log-normal around the typical time (never the same twice)
+  f.human = (mean, cv = 0.35) => { if (mean <= 0) return 0; const sg = Math.sqrt(Math.log(1 + cv * cv)); let n = 0; for (let i = 0; i < 6; i++) n += f(); n = (n - 3) * Math.SQRT2; return mean * Math.exp(sg * n - sg * sg / 2); };
   f.gauss = () => { let s = 0; for (let i = 0; i < 4; i++) s += f(); return (s - 2) * 1.73; };
   return f;
 }

@@ -9,6 +9,7 @@ import { canvasTex, glowTex, rr } from './textures.js';
 import { colorize } from './geom.js';
 import { REGION } from './world.js';
 import { Human, randomAppearance, POSES, composePose } from './humans.js';
+import { TRAFFIC_STANDS_F } from './traffic.js';
 import { MAIN_GEAR, NOSE_GEAR, DOOR_Z } from './airframe.js';
 
 const V2 = (x, y) => new THREE.Vector2(x, y);
@@ -114,6 +115,9 @@ export const LIVERIES = {
   finnair: { body: '#f5f5f5', belly: '#f5f5f5', tail: '#0b1560', engine: '#f5f5f5', nose: null, title: '#0b1560' },
   airfrance: { body: '#f7f7f7', belly: '#f7f7f7', tail: '#f7f7f7', engine: '#f7f7f7', nose: null, title: '#0b2a6b', tailStripes: ['#0b2a6b', '#e1262d'] },
   ryanair: { body: '#f5f5f5', belly: '#073590', tail: '#073590', engine: '#073590', nose: null, title: '#073590' },
+  swiss: { body: '#f6f6f6', belly: '#f6f6f6', tail: '#e2231a', engine: '#f6f6f6', nose: null, title: '#1a1a1a' },
+  airbaltic: { body: '#f6f6f6', belly: '#f6f6f6', tail: '#c7d300', engine: '#c7d300', nose: null, title: '#58595b' },
+  airserbia: { body: '#f6f6f6', belly: '#f6f6f6', tail: '#0b2d6b', engine: '#f6f6f6', nose: null, title: '#0b2d6b', tailStripes: ['#0b2d6b', '#c8102e'] },
   braathens: { body: '#f7f7f7', belly: '#f7f7f7', tail: '#d6d6d6', engine: '#f7f7f7', nose: null, title: '#e7bd4a' },
   // LN-RKR, the all-blue 80th-anniversary A330 with the Scandinavian flag band (2026)
   anniversary: { body: '#1d3a86', belly: '#1d3a86', tail: '#1d3a86', engine: '#1d3a86', nose: null, title: '#ffffff', band: true },
@@ -560,7 +564,8 @@ export class Scenery {
     for (let v = pf.v0 - 40; v > pf.v1 + 30; v -= 55) {
       const skipOurs = Math.abs(v - L.gateStand.v) < 30;
       if (skipOurs) this.ourJetway = this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); // pulled back from our stand
-      if (!skipOurs) { this._parked(f, pf.u0 - 10 - 26, v, f.heading, livs[k % livs.length]); this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); }
+      const liveStand = TRAFFIC_STANDS_F.some((sv) => Math.abs(sv - v) < 10); // a scheduled departure parks here and flies its own flight
+      if (!skipOurs) { if (!liveStand) this._parked(f, pf.u0 - 10 - 26, v, f.heading, livs[k % livs.length]); this._jetway(f, pf.u0 - 10, v - 8, pf.u0 - 10 - 12, v - 2.5, 1); }
       this._parked(f, pf.u0 + 10 + 26, v + 20, (f.heading + 180) % 360, livs[(k + 3) % livs.length]);
       this._jetway(f, pf.u0 + 10, v + 28, pf.u0 + 10 + 12, v + 22.5, -1);
       k++;
@@ -591,13 +596,6 @@ export class Scenery {
       if (v > 450 && v < 700 && u > -2000 && u < 4000 && r() < 0.6) return null;
       return f.to(u, v);
     }, n, 11);
-    // traffic departing ahead of us on 19R
-    const dep = makeAirliner(LIVERIES.norwegian, { len: 39.5, span: 35.8 });
-    this.scene.add(dep); dep.visible = false;
-    this.traffic.push({ obj: dep, kind: 'arn-departure', frame: f });
-    // arrival on 01R/19L... landing southbound on 19L
-    const arr = makeAirliner(LIVERIES.sas, { len: 44.5, span: 35.8 }); this.scene.add(arr); arr.visible = false;
-    this.traffic.push({ obj: arr, kind: 'arn-arrival', rw: runwayGeom(RUNWAYS.ESSA[1]) });
   }
 
   _airportCPH() {
@@ -692,12 +690,6 @@ export class Scenery {
     const pierB = L.piers.find((p) => p.name === 'B');
     // the route ends at the main-gear point: door L1 is (main gear z - door z) ahead of it
     this._dockedJetBridge(f, L.standU + (MAIN_GEAR.z - DOOR_Z.L1), L.standV - 2.02, pierB.u - 11);
-    // departing traffic on 22R during our approach
-    const dep = makeAirliner(LIVERIES.klm, { len: 37.6 }); this.scene.add(dep); dep.visible = false;
-    this.traffic.push({ obj: dep, kind: 'cph-departure', rw: runwayGeom(RUNWAYS.EKCH[0]) });
-    // the arrival ahead of us on the final
-    const arrA = makeAirliner(LIVERIES.lufthansa, { len: 37.6 }); this.scene.add(arrA); arrA.visible = false;
-    this.traffic.push({ obj: arrA, kind: 'cph-arrival' });
   }
 
   _landmarks() {
@@ -795,15 +787,40 @@ export class Scenery {
     im.count = k; im.frustumCulled = false; this.scene.add(im);
   }
 
+  // The other flights (atc.traffic): each drawn where its own flight model has it, built on first sight
   _traffic() {
-    // high-altitude opposite-direction traffic with contrail
-    const t = makeAirliner(LIVERIES.finnair, { len: 44.5 });
-    t.scale.setScalar(1); this.scene.add(t); t.visible = false;
     const trailG = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true); trailG.rotateX(Math.PI / 2); trailG.translate(0, 0, 0.5);
-    const trailM = curveMaterial(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false }));
-    const trails = [new THREE.Mesh(trailG, trailM), new THREE.Mesh(trailG, trailM)];
-    trails.forEach((m) => { this.scene.add(m); m.visible = false; });
-    this.traffic.push({ obj: t, kind: 'cruise-crossing', trails });
+    this._trailG = trailG;
+    this._trailM = curveMaterial(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false }));
+    this.trafficObjs = new Map();
+  }
+  _updateTraffic(atc, fm) {
+    if (!atc || !atc.traffic) return;
+    for (const a of atc.traffic) {
+      let o = this.trafficObjs.get(a);
+      const show = a.vis && a.x != null && Math.hypot(a.x - fm.pos.x, a.z - fm.pos.z) < 160000;
+      if (!show) { if (o) { o.obj.visible = false; o.trails.forEach((m) => (m.visible = false)); } continue; }
+      if (!o) {
+        const T = a.T;
+        const obj = makeAirliner(LIVERIES[a.al] || LIVERIES.sas, { len: T.len, span: T.span, seed: a.flt.length });
+        this.scene.add(obj);
+        const trails = [new THREE.Mesh(this._trailG, this._trailM), new THREE.Mesh(this._trailG, this._trailM)];
+        trails.forEach((m) => { m.visible = false; this.scene.add(m); });
+        o = { obj, trails }; this.trafficObjs.set(a, o);
+      }
+      const ob = o.obj; ob.visible = true;
+      ob.position.set(a.x, a.h, a.z);
+      ob.rotation.set(0, -a.hdg, 0); ob.rotateX(a.pitch || 0); ob.rotateZ(-(a.bank || 0));
+      // contrails in the cold, moist air above about 8 km
+      const con = a.h > 8000;
+      o.trails.forEach((m, i) => {
+        m.visible = con; if (!con) return;
+        const fx = Math.sin(a.hdg), fz = -Math.cos(a.hdg), off = (i ? 1 : -1) * a.T.span * 0.16;
+        m.position.set(a.x - fx * 30 - fz * off, a.h - 1, a.z - fz * 30 + fx * off);
+        m.rotation.set(0, -a.hdg + Math.PI, 0);
+        m.scale.set(2.2, 2.2, 2500);
+      });
+    }
   }
 
   showOurJetway(v) { if (this.ourJetway) for (const m of this.ourJetway) m.visible = v; }
@@ -867,7 +884,7 @@ export class Scenery {
       const p = this.tug.start.clone().addScaledVector(this.tug.dir, k * 160);
       this.tug.mesh.position.set(p.x, 0.8, p.y);
     }
-    for (const tr of this.traffic) this._updateTraffic(tr, simT, fm, director);
+    this._updateTraffic(atc, fm);
     // apron vehicles and walking ground crew
     for (const a of this.animated) {
       const T = simT - a.start; if (T < 0) continue;
@@ -889,65 +906,4 @@ export class Scenery {
     }
   }
 
-  _updateTraffic(tr, simT, fm, director) {
-    const o = tr.obj;
-    // the other aircraft are where ATC has them (they fly their own departures and approaches)
-    const id = { 'arn-departure': 'arn-dep', 'arn-arrival': 'arn-arr', 'cph-departure': 'cph-dep', 'cph-arrival': 'cph-arr' }[tr.kind];
-    const e = id && this.atc ? this.atc.tr(id) : null;
-    if (e) {
-      o.visible = !!e.vis && e.x != null;
-      if (o.visible) { o.position.set(e.x, e.y, e.z); o.rotation.set(0, -e.hdg * DEG, 0); o.rotateX(e.pitch || 0); }
-      return;
-    }
-    if (tr.kind === 'cph-arrival') { o.visible = false; return; }
-    if (tr.kind === 'arn-departure') {
-      const t0 = director?.times?.arnTrafficRoll; // departure roll start (sim seconds)
-      if (t0 == null) { // waiting on the runway (lined up)
-        const p = ARN.frame.to(40, 0); o.visible = fm.phase === 'taxi-out' || fm.phase === 'hold'; o.position.set(p.x, 0, p.y); o.rotation.set(0, -ARN.frame.heading * DEG, 0); return;
-      }
-      const t = simT - t0; if (t > 150) { o.visible = false; return; }
-      o.visible = true;
-      const s = 0.5 * 2.0 * Math.min(t, 36) ** 2 + (t > 36 ? 72 * (t - 36) : 0);
-      const p = ARN.frame.to(40 + s, 0);
-      const air = Math.max(0, s - 1500);
-      const h = air > 0 ? Math.min(air * 0.14, 2000) : 0;
-      o.position.set(p.x, h, p.y); o.rotation.set(0, -ARN.frame.heading * DEG, 0);
-      o.rotateX(air > 0 ? Math.min(0.26, air / 700) : 0);
-    } else if (tr.kind === 'arn-arrival') {
-      // lands on 19L around the time we taxi north
-      const t = simT - 150; if (t < -60 || t > 60) { o.visible = false; return; }
-      o.visible = true; const rw = tr.rw;
-      const thr = rw.b, dir = rw.a.clone().sub(rw.b).normalize();
-      const v = t < 0 ? 72 : Math.max(15, 72 - t * 2.2);
-      const s = t < 0 ? t * 72 : 72 * t - 1.1 * t * t;
-      const p = thr.clone().addScaledVector(dir, s + 350);
-      const h = t < 0 ? -s * Math.tan(3 * DEG) : 0;
-      o.position.set(p.x, h, p.y); o.rotation.set(0, -Math.atan2(dir.x, -dir.y), 0); o.rotateX(t < 0 ? 0.04 : 0);
-    } else if (tr.kind === 'cph-departure') {
-      const t0 = director?.times?.cphTraffic; if (t0 == null) { o.visible = false; return; }
-      const t = simT - t0; if (t < 0 || t > 110) { o.visible = false; return; }
-      o.visible = true; const rw = tr.rw; const dir = rw.a.clone().sub(rw.b).normalize();
-      const s = t * t * 1.0; const p = rw.b.clone().addScaledVector(dir, 100 + s);
-      const air = Math.max(0, s - 1600); const h = Math.min(air * 0.13, 1500);
-      o.position.set(p.x, h, p.y); o.rotation.set(0, -Math.atan2(dir.x, -dir.y), 0); o.rotateX(air > 0 ? 0.25 : 0);
-    } else if (tr.kind === 'cruise-crossing') {
-      const t0 = director?.times?.crossing; if (t0 == null) { o.visible = false; tr.trails.forEach((m) => (m.visible = false)); return; }
-      const t = simT - t0; if (t < -40 || t > 60) { o.visible = false; tr.trails.forEach((m) => (m.visible = false)); return; }
-      // passes on the left, 1000 ft above, opposite direction
-      const hd = fm.heading;
-      const fwd = V2(Math.sin(hd), -Math.cos(hd)), left = V2(-fwd.y, fwd.x).negate();
-      const rel = 230 + 230; // closing speed m/s
-      const along = -t * rel;
-      const p = V2(fm.pos.x, fm.pos.z).addScaledVector(fwd, along).addScaledVector(left, 1800);
-      o.visible = true; o.position.set(p.x, fm.pos.y + 305 - 3.4, p.y); o.rotation.set(0, -hd + Math.PI, 0);
-      tr.trails.forEach((m, i) => {
-        m.visible = true;
-        const off = (i ? 1 : -1) * 5.8;
-        const side = V2(-Math.cos(hd + Math.PI), -Math.sin(hd + Math.PI));
-        m.position.set(p.x + fwd.x * 20 + side.x * off, fm.pos.y + 305 - 1.5, p.y + fwd.y * 20 + side.y * off);
-        m.rotation.set(0, -hd, 0);
-        m.scale.set(2.2, 2.2, 2500);
-      });
-    }
-  }
 }

@@ -23,6 +23,7 @@ if (opt('vis')) w.cph.vis = +opt('vis');
 const wx = new Weather(w, { seed });
 const atc = new ATC(wx, { seed, events: opt('events') || 'realistic' });
 const route = buildRoute(atc.depRwy, atc.arrRwy);
+atc.initTraffic(route, 6 + (flag('boarding') ? -2 : 4) / 60, 6); // boarding itself is skipped here
 const atmo = new Atmosphere(wx, { seed });
 atmo.sunHeat = 0.8;
 const fm = new FlightModel(route, { atmosphere: atmo, ...(flag('boarding') ? { coldStart: true, stand: route.gate } : {}) });
@@ -59,6 +60,7 @@ while (t < maxT && fm.phase !== 'arrived' && fm.phase !== 'rto-stop' && fm.phase
   if (!fm.onGround && fm.phase !== 'climb') { nzMin = Math.min(nzMin, fm.nz); nzMax = Math.max(nzMax, fm.nz); }
   if (flag('trace') && t - lastTrace >= (fm.onGround ? 10 : 30)) { lastTrace = t; console.log(row('')); }
   if (opt('win') && Math.abs(fm.t - +opt('win').split(':')[0]) < +(opt('win').split(':')[1] || 5)) console.log(`${f(fm.t, 2)} bk=${f(fm.bank / DEG, 2)} p=${f(fm.p / DEG, 1)} th=${f(fm.pitch / DEG, 2)} wow=${fm.wow.map(Number).join('')} str=${fm.strutC.map((x) => f(x, 3)).join('/')} sx=${f(fm.ctl.stickX, 2)} da=${f(fm.da / DEG, 1)} sp=${f(fm.groundSpoiler, 2)} gs=${f(fm.gs / KT, 0)} law=${fm.fbwMode}`);
+  if (flag('traffic') && Math.round(t * 4) % 120 === 0) for (const a of atc.traffic) if (a.state !== 'scheduled' && a.state !== 'gone' && a.state !== 'parked') console.log(`      ${f(t, 0)} ${a.flt.padEnd(7)} ${a.state.padEnd(10)} s=${f(a.s, 0)} hold=${f(a.holdS, 0)} line=${f(a.lineS, 0)} v=${f(a.v, 1)} h=${f(a.h, 0)} ${JSON.stringify(a.cleared)}`);
   if (flag('final') && !fm.onGround && fm.agl < 200 && fm.phase !== 'climb') console.log(row('F'));
   if (!isFinite(fm.P.x) || !isFinite(fm.P.y)) { console.log('NaN!', row('')); break; }
 }

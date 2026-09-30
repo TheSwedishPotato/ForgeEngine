@@ -221,7 +221,10 @@ export class Player {
         const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
         const dx = (fx * cy + fz * sy) * sp * dt, dz = (-fx * sy + fz * cy) * sp * dt;
         const nx = this.pos.x + dx, nz = this.pos.z + dz;
-        const blocked = ctx.blocked ? ctx.blocked(nx, nz) : false;
+        // someone in the way: after a moment you squeeze past ("ursäkta")
+        let blocked = ctx.blocked ? ctx.blocked(nx, nz) : false;
+        this.pushT = blocked ? (this.pushT || 0) + dt : 0;
+        if (this.pushT > 1.2) blocked = false;
         if (!blocked) {
           if (this._walkable(nx, nz)) { this.pos.x = nx; this.pos.z = nz; moving = true; }
           else if (this._walkable(nx, this.pos.z)) { this.pos.x = nx; moving = true; }

@@ -83,6 +83,7 @@ async function boot(o, audio) {
 
   ui.loading(0.12, `Planning the route ARN ${atc.depRwy} → CPH ${atc.arrRwy}…`); await frame();
   const route = buildRoute(atc.depRwy, atc.arrRwy);
+  atc.initTraffic(route, opts.startClock, dep.time);
   // the air and the aircraft: a rigid-body flight model flown through a turbulent atmosphere
   const atmo = new Atmosphere(wx, { seed });
   const fm = new FlightModel(route, { atmosphere: atmo, ...(boarding ? { coldStart: true, stand: route.gate } : {}) });
@@ -121,7 +122,7 @@ async function boot(o, audio) {
 
   ui.loading(0.75, 'Boarding the passengers…'); await frame();
   const voice = new Voice(ui, { voice: o.voice, lang: o.lang });
-  const people = new People(cabin, cabinScene, { load: o.load, seed: 1000 + o.depIndex * 7 + o.seat.length, playerSeat: o.seat, audio, quality: o.quality });
+  const people = new People(cabin, cabinScene, { load: o.load, seed: (seed * 31 + o.depIndex * 7 + o.seat.length) >>> 0, playerSeat: o.seat, audio, quality: o.quality });
   const pr = rng(4242);
   const player = new Player(cabin, cabinScene, o.seat, audio, randomAppearance(pr, { female: pr() < 0.5, jacket: true, glasses: false, headphones: null }));
   player.sensitivity = o.sensitivity ?? 1; player.camera.fov = o.fov ?? 68;
@@ -354,7 +355,9 @@ function loop() {
   S.skyEnv.t += realDt;
   if (S.skyEnv.t > 2.5) { S.skyEnv.t = 0; S.skyEnv.update(env, sunLocal); S.extScene.environment = S.skyEnv.texture; S.worldEnv.update(env, env.sunDir); S.world.scene.environment = S.worldEnv.texture; const gm = S.scenery.mats.glass; gm.envMap = S.worldEnv.texture; gm.envMapIntensity = 1.8; }
   const humidity = S.atmo.rain > 0.3 || S.atmo.inCloud ? 1 : S.world.weather.cumulus > 0.5 ? 0.6 : S.world.weather.fog ? 0.7 : 0;
-  ext.update(dt, fm.t, fm, { nightK: env.nightK, strobes: !fm.onGround || fm.phase === 'takeoff' || fm.phase === 'rollout', beacon: !ext.beaconOff, scan: env.nightK > 0.3 && (fm.onGround || fm.h < 3048), landing: llOn, outside, humidity: fm.h < 2500 ? humidity : 0, sunLocal, direct: sunUp ? clamp(sunI * 1.2, 0, 1) : 0, cabinLight: director.lightLevel, doorL1: cabin.doors.L1.open });
+  const beacon = S.crew ? S.crew.sys.beacon : !ext.beaconOff;
+  S.lights = { beacon, landing: llOn, taxi: fm.onGround && fm.gs > 1 && fm.phase !== 'pushback', nose: fm.phase === 'takeoff' || fm.phase === 'lineup' ? 'TO' : fm.onGround && fm.gs > 1 && fm.phase !== 'pushback' ? 'TAXI' : 'OFF' };
+  ext.update(dt, fm.t, fm, { nightK: env.nightK, strobes: !fm.onGround || fm.phase === 'takeoff' || fm.phase === 'rollout', beacon, scan: env.nightK > 0.3 && (fm.onGround || fm.h < 3048), landing: llOn, outside, humidity: fm.h < 2500 ? humidity : 0, sunLocal, direct: sunUp ? clamp(sunI * 1.2, 0, 1) : 0, cabinLight: director.lightLevel, doorL1: cabin.doors.L1.open });
   cabin.updateDust(fm.t, sunI, sunLocal);
   // cabin sun & lights
   const sun = S.sun;

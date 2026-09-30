@@ -26,7 +26,7 @@ const GATE = { x: -7.0, z: FACADE_Z - 1.6 };       // the self-boarding gates, j
 const GROUPS = { 1: 'Group 1 · SkyPriority (Business, EuroBonus Gold and Diamond)', 2: 'Group 2 · Premium and EuroBonus Silver', 3: 'Group 3', 4: 'Group 4 · Economy Light' };
 
 export class Boarding {
-  constructor(S, { seed = 11, gate = 'F36' } = {}) {
+  constructor(S, { seed = Math.floor(Math.random() * 1e9), gate = 'F36' } = {}) {
     this.S = S; this.r = rng(seed); this.gate = gate;
     this.group = new THREE.Group(); this.group.name = 'boarding'; S.cabinScene.add(this.group);
     this.maskMeshes = []; this.interactables = [];
@@ -242,7 +242,7 @@ export class Boarding {
   _walkIn(p) {
     const S = this.S, people = S.people;
     const nb = p.neighbor;
-    const act = nb ? nb.actor : new Actor(p.app, S.cabinScene, {});
+    const act = nb ? nb.actor : new Actor(p.app, S.cabinScene, {}); p._act = act;
     if (!nb) { act.place(p.group.position.x, p.group.position.z + 0.3, 0); p.group.visible = false; }
     act.seated = false; act.base = POSES.stand; act.boarding = true;
     const seat = p.seat, bag = nb ? true : p.bag;
@@ -310,16 +310,20 @@ export class Boarding {
     const S = this.S, P = S.player;
     this.t += dt;
     const t = this.t;
-    // group calls: boarding opens a minute in, a new group every few minutes (or when the gate queue runs dry)
+    // Boarding opens when the purser tells the gate the cabin is ready (her pre-boarding checks take
+    // as long as they take); the agent calls the next group once the last one has mostly gone through.
+    if (this._crewReadyT == null) this._crewReadyT = this.r.human(80, 0.4);
     const next = this.called + 1;
-    const due = next === 1 ? 50 : next === 2 ? 170 : next === 3 ? 260 : 620;
-    if (next <= 4 && t > due) this.callGroup(next);
-    // passengers leave their chairs for the gate, about one every 5-7 s (scanning and the queue in the bridge set the pace)
-    this._nextPax = (this._nextPax ?? 55) - dt;
-    if (this._nextPax <= 0 && this.queue.length && this.queue[0].boardGroup <= this.called && this.active.length < 40) {
-      this._nextPax = 4 + this.r() * 4;
-      this._walkIn(this.queue.shift());
+    if (next <= 4) {
+      const waitingCalled = this.queue.filter((p) => p.boardGroup <= this.called).length;
+      const atGate = this.active.filter((p) => { const a = p.neighbor ? p.neighbor.actor : p._act; return a && a.z < FACADE_Z - 0.5; }).length;
+      const ready = next === 1 ? t > this._crewReadyT : waitingCalled <= 3 && atGate < 6;
+      if (ready && this._callAt == null) this._callAt = t + this.r.human(next === 1 ? 5 : 25, 0.5);
+      if (this._callAt != null && t >= this._callAt) { this._callAt = null; this.callGroup(next); }
     }
+    // passengers get up when their group is called - some at once, some wait for the queue to shrink
+    for (const p of this.queue) if (p.boardGroup <= this.called && p.leaveT == null) p.leaveT = t + this.r.human(35, 0.9);
+    if (this.active.length < 40) { const i = this.queue.findIndex((p) => p.leaveT != null && t >= p.leaveT); if (i >= 0) this._walkIn(this.queue.splice(i, 1)[0]); }
     // gate flaps
     for (const f of this.flaps) { const tgt = t < f.until ? 1 : 0; f.open += clamp(tgt - f.open, -dt * 3, dt * 3); for (const q of f.flaps) q.p.rotation.y = q.s * f.open * 1.45; if (t > f.until) f.glow.material.color.set('#2a6cff'); }
     // the player on board
@@ -331,10 +335,12 @@ export class Boarding {
       this.pa(`This is the final call for passenger in seat ${P.seat.id} travelling to Copenhagen on SK1415. Please proceed to gate ${this.gate} immediately.`, `Sista utrop för resenär på plats ${P.seat.id} till Köpenhamn med SK1415. Vänligen gå omedelbart till gate ${this.gate}.`);
     }
     if (this._finalCall && !this.playerAboard && t - this._finalCall > 150) { S.ui.toast('The gate agent walks you down the jet bridge to the aircraft.', 5); this.skipToSeat(); }
-    // doors close once everyone including the player is seated
-    // (A-CDM: the doors close in time for the target start-up approval time, a few minutes before departure)
-    const clock = S.opts.startClock + S.director.t / 3600, tsat = (S.opts.depTime ?? 6) - 7 / 60;
-    if (this.everyoneAboard && P.state === 'seated' && !this.doorClosed && !this._closeT && clock >= tsat) { this._closeT = t + (S.fast ? 5 : 25); }
+    // doors close once everyone, you included, is seated, the passenger count agrees and the final
+    // load sheet (made from those figures) has reached the flight deck
+    if (this.everyoneAboard && P.state === 'seated' && this._loadsheetT == null) { this._loadsheetT = t + this.r.human(S.fast ? 20 : 150, 0.4); this._headcountT = t + this.r.human(S.fast ? 10 : 60, 0.3); }
+    if (this._headcountT != null && t > this._headcountT && !this._headcount) { this._headcount = true; S.ui.radio?.({ kind: 'cabin', who: 'Purser', text: 'Head count done, passenger figures agree with the load sheet office.' }); }
+    if (this._loadsheetT != null && t > this._loadsheetT && !this._loadsheet) { this._loadsheet = true; S.ui.radio?.({ kind: 'cockpit', who: 'Captain', text: 'Final load sheet received, checked and signed.' }); }
+    if (this._headcount && this._loadsheet && !this.doorClosed && !this._closeT) this._closeT = t + this.r.human(S.fast ? 3 : 15, 0.4);
     if (this._closeT && t > this._closeT && !this.doorClosed) this._closeDoors();
     if (this.doorClosed) {
       this.retract = Math.min(1, this.retract + dt / 30);
@@ -355,14 +361,19 @@ export class Boarding {
   _closeDoors() {
     const S = this.S;
     this.doorClosed = true; this.complete = true;
-    S.cabin.doors.L1.target = 0; S.audio.doorThud?.();
-    for (const b of S.cabin.bins) b.target = 0;
+    // the purser closes L1 by hand (the bins are closed by the crew during the cabin check)
+    const P1 = S.people.crewNamed('purser');
+    P1.clear(); P1.queue({ type: 'walk', x: 0, z: DOORS.L1.z + 0.95 }, { type: 'walk', x: -1.0, z: DOORS.L1.z + 0.95 }, { type: 'face', h: Math.PI * 0.85 }, { type: 'gesture', name: 'offer' },
+      { type: 'call', fn: () => { S.cabin.doors.L1.target = 0; S.audio.doorThud?.(); this._doorShut(); } });
     this._fidsStatus?.({ text: 'Gate closed', col: '#ff5a4a' }); this.fidsTex.needsUpdate = true;
     const pur = S.people.crewNamed('purser');
     S.director.crewLine(pur, 'Boarding completed, doors closing.');
+  }
+  _doorShut() {
+    const S = this.S;
+    S.director.boardingDone();
     S.ui.radio?.({ kind: 'cabin', who: 'Purser', text: 'Cockpit, cabin: boarding completed, all passengers on board, doors closed.' });
     if (S.crew) S.crew.boardingDone = true;
-    S.director.boardingDone();
   }
 
   // the player goes straight to the seat; the rest of the cabin fills up at once

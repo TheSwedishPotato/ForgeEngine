@@ -1,41 +1,67 @@
-// Air traffic control and the other traffic. The controllers pick the runways from the wind you
-// set (the runway with the most headwind; at Arlanda 19R/01L, at Kastrup 22L/04L as the landing
-// runway, with the parallel for departures), give the taxi, take-off, climb, descent, approach
-// and landing clearances, keep the spacing to the traffic ahead and send a go-around when the
-// runway is still occupied. Nothing is timed: a clearance comes when the situation allows it.
+// Air traffic control and the other traffic. The controllers pick the runways from the wind you set
+// (the runway with the most headwind; at Arlanda 19R/01L with arrivals on the parallel, at Kastrup
+// 22L/04L for landing and the parallel for departures) and work every flight on their frequency,
+// ours and the others alike. Nothing is timed: a pushback is approved when the taxilane behind the
+// stand is clear and the departure queue is short enough (A-CDM), take-off when the aircraft ahead is
+// airborne and far enough away, a landing when the runway is free; otherwise it is "stand by", "hold
+// position" or "go around". Each frequency carries one voice at a time, so a busy controller answers
+// later, and the radio log only has what is said on the frequency the crew is listening to.
 //
-// Frequencies used: Arlanda Ground 121.705, Arlanda Tower 118.500, Copenhagen Approach 119.800,
-// Kastrup Tower 118.100. Transition altitude 5000 ft in Sweden and Denmark.
+// Units and frequencies (MHz): Arlanda Ground 121.705 (push-back and taxi), Arlanda Tower 118.500
+// (runway 01L/19R), Stockholm Control 123.750, Sweden Control 134.980 (sector L, Malmö), Copenhagen
+// Approach 119.805, Kastrup Tower 118.105, Kastrup Apron 121.630. Transition altitude 5000 ft.
 import { DEG, KT, FT, clamp, lerp, rng } from './core.js';
-import { windComponents, STATIONS } from './weather.js';
+import { windComponents } from './weather.js';
 import { runwayInfo } from './flight.js';
+import { ARN, ARN_LAYOUT } from './places.js';
+import { Traffic } from './traffic.js';
 
 const NATO = { 0: 'zero', 1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'niner' };
-export const spellNum = (n) => String(n).split('').map((c) => NATO[c] ?? c).join(' ');
+export const spellNum = (n) => String(n).split('').map((c) => (c === '.' ? 'decimal' : NATO[c] ?? c)).join(' ');
 const spellStand = (s) => `${{ F: 'Foxtrot', B: 'Bravo', E: 'Echo' }[s[0]] || s[0]} ${spellNum(s.slice(1))}`;
 export const spellRwy = (id) => `${spellNum(id.replace(/[LRC]/, ''))}${id.endsWith('L') ? ' left' : id.endsWith('R') ? ' right' : id.endsWith('C') ? ' centre' : ''}`;
 const CALL = 'Scandinavian one four one five';
 const CALL_SHORT = 'Scandinavian one five';
 
-export const FREQ = { arnGround: '121.705', arnTower: '118.500', cphApproach: '119.800', cphTower: '118.100' };
+export const UNITS = {
+  'Arlanda Ground': '121.705', 'Arlanda Tower': '118.500', 'Stockholm Control': '123.750', 'Sweden Control': '134.980',
+  'Copenhagen Approach': '119.805', 'Kastrup Tower': '118.105', 'Kastrup Apron': '121.630',
+};
+// how a frequency is spoken: trailing zeros dropped after the decimal
+const spellFreq = (f) => spellNum(f.replace(/0+$/, '').replace(/\.$/, ''));
+export const FREQ = { arnGround: UNITS['Arlanda Ground'], arnTower: UNITS['Arlanda Tower'], cphApproach: UNITS['Copenhagen Approach'], cphTower: UNITS['Kastrup Tower'] };
 
 export class ATC {
   constructor(wx, opts = {}) {
-    this.wx = wx; this.r = rng(opts.seed ?? 77); this.t = 0;
+    this.wx = wx; this.r = rng(opts.seed ?? Math.floor(Math.random() * 1e9)); this.t = 0;
     this.mode = opts.events || 'realistic';
-    this.msgs = []; this.queue = []; this.listeners = [];
+    this.msgs = []; this.queue = []; this.listeners = []; this.chan = {};
     this.unit = 'Arlanda Ground';
     this.depRwy = this.selectRunway('ARN');
     this.arrRwy = this.selectRunway('CPH');
+    this.arrApt = 'CPH';
     this.cl = { push: false, taxi: false, lineup: false, takeoff: false, altFt: 0, approach: false, landing: false, vacated: false, taxiIn: false, spd: null, descent: false };
     this.traffic = [];
-    this._makeTraffic();
+    // a transponder code from the departure clearance (never 2000, 7500, 7600 or 7700)
+    this.squawk = String(1000 + Math.floor(this.r() * 4000)).split('').map((c) => String(Math.min(7, +c))).join('');
+    this.pushQ = []; this.taxiQ = []; this.depQ = []; this.ldgQ = [];
+    this._tick = 0;
   }
 
+  // The flights around us, from the timetable, once the route (runways, stands) is known
+  initTraffic(route, startClock, depTime = 6) { this.tf = new Traffic(this, route, startClock, this.r, depTime); this.traffic = this.tf.list; this.startClock = startClock; }
+
   on(fn) { this.listeners.push(fn); }
-  // a radio call: who is speaking, text; `fn` runs when it has been said (the clearance takes effect)
-  say(who, text, delay = 0, fn = null, unit = this.unit) { this.queue.push({ at: this.t + delay, who, text, fn, unit }); }
+  // A transmission: who, text, the earliest time from now, what happens when it has been said, and
+  // on which frequency. Transmissions on one frequency never overlap.
+  say(who, text, delay = 0, fn = null, unit = this.unit) {
+    if (!text) { this.queue.push({ at: this.t + delay, fn, silent: true }); return; }
+    const words = text.split(/\s+/).length;
+    this.queue.push({ at: this.t + delay, who, text, fn, unit, dur: words / 2.7 + 0.5 });
+  }
   _emit(m) { this.msgs.push(m); if (this.msgs.length > 200) this.msgs.shift(); for (const f of this.listeners) f(m); }
+  // a controller's or a pilot's reaction time before they key the microphone
+  resp(mean = 2.5) { return this.r.human(mean, 0.45); }
 
   // ---------- runway selection from the wind ----------
   selectRunway(apt) {
@@ -51,210 +77,364 @@ export class ATC {
     }
     return best.id;
   }
-  // Runway change at the destination while we are still far out
   reviewArrivalRunway(distToGo) {
     if (distToGo < 90000 || this.cl.approach) return null;
     const r = this.selectRunway('CPH');
     if (r !== this.arrRwy) { this.arrRwy = r; return r; }
     return null;
   }
-  windReport(apt, rwy) {
+  windReport(apt) {
     const st = apt === 'ARN' ? this.wx.s.arn : this.wx.s.cph;
     if (st.wspd < 1) return 'wind calm';
     const dir = Math.round(st.wdir / 10) * 10 || 360, spd = Math.round(st.wspd), g = Math.round(st.gust);
     return `wind ${spellNum(String(dir).padStart(3, '0'))} degrees ${spellNum(spd)} knots${g >= spd + 10 ? ` gusting ${spellNum(g)}` : ''}`;
   }
+  qnh(apt) { return Math.round(apt === 'ARN' ? this.wx.s.arn.qnh : this.wx.s.cph.qnh); }
 
-  // ---------- traffic ----------
-  _makeTraffic() {
-    const r = this.r;
-    const eventful = this.mode === 'eventful' ? 1 : this.mode === 'chaos' ? 2 : 0;
-    // the departure ahead of us at Arlanda
-    this.traffic.push({ id: 'arn-dep', kind: 'dep', apt: 'ARN', rwy: this.depRwy, state: 'waiting', t0: null, livery: 'norwegian', vis: false });
-    // an arrival on the parallel runway at Arlanda
-    this.traffic.push({ id: 'arn-arr', kind: 'arr-parallel', apt: 'ARN', rwy: this.depRwy === '19R' ? '19L' : '01R', state: 'far', t0: 150 + r() * 120, livery: 'sas', vis: false });
-    // the arrival ahead of us at Kastrup: spacing 5-8 km, runway occupancy about 50 s with a long tail
-    // spacing on final ~3.7-5 NM; runway occupancy ~50 s with a long tail (a slow exit now and then)
-    const sep = lerp(6800, 9300, r()) - eventful * 1400;
-    const rotMed = 46 + r() * 8, rot = rotMed * Math.exp(0.13 * (eventful ? 2.4 : 1) * gaussish(r));
-    this.traffic.push({ id: 'cph-arr', kind: 'arr-ahead', apt: 'CPH', sep, rot, state: 'far', livery: 'lufthansa', vis: false });
-    // departures from the other runway at Kastrup
-    this.traffic.push({ id: 'cph-dep', kind: 'dep-other', apt: 'CPH', state: 'waiting', t0: null, livery: 'klm', vis: false });
-    // opposite-direction traffic 1000 ft above in cruise
-    this.traffic.push({ id: 'cruise', kind: 'crossing', state: 'far', t0: null, livery: 'finnair', vis: false });
-  }
-  tr(id) { return this.traffic.find((x) => x.id === id); }
-
-  // ---------- per frame ----------
+  // ---------- per step ----------
   update(dt, fm, crew) {
-    this.t += dt;
+    this.t += dt; this.fm = fm; this.crew = crew;
+    if (this.tf) this.tf.update(dt, fm, this.t);
+    // one voice at a time on each frequency
     for (let i = 0; i < this.queue.length; i++) {
       const m = this.queue[i];
-      if (m.at <= this.t) { this.queue.splice(i--, 1); if (m.text) this._emit({ t: this.t, who: m.who, text: m.text, unit: m.unit }); if (m.fn) m.fn(); }
+      if (m.at > this.t) continue;
+      if (m.silent) { this.queue.splice(i--, 1); if (m.fn) m.fn(); continue; }
+      const ch = this.chan[m.unit] || (this.chan[m.unit] = { busy: 0 });
+      if (this.t < ch.busy) continue;
+      this.queue.splice(i--, 1);
+      ch.busy = this.t + m.dur + 0.4 + this.r() * 0.9;
+      if (m.unit === this.unit || m.who === 'SK1415') this._emit({ t: this.t, who: m.who, text: m.text, unit: m.unit });
+      if (m.fn) this.queue.push({ at: this.t + m.dur, fn: m.fn, silent: true });
     }
-    this._trafficUpdate(dt, fm);
+    this._tick -= dt;
+    if (this._tick <= 0) { this._tick = 1; this._controllers(fm, crew); }
   }
 
-  // Positions of the other aircraft (world x, y, z, heading) for the renderer and for the rules.
-  _trafficUpdate(dt, fm) {
-    const t = this.t;
-    const dep = this.tr('arn-dep');
-    const R = runwayInfo('ESSA', this.depRwy);
-    if (dep.state === 'waiting') { const p = R.frame.to(40, 0); Object.assign(dep, { x: p.x, y: 0, z: p.y, hdg: R.hdg, pitch: 0, vis: fm.phase === 'taxi-out' || fm.phase === 'hold' || fm.phase === 'parked' }); }
-    if (dep.state === 'rolling') {
-      const tt = t - dep.t0;
-      const s = 0.5 * 2.0 * Math.min(tt, 36) ** 2 + (tt > 36 ? 72 * (tt - 36) : 0);
-      const air = Math.max(0, s - 1500);
-      const p = R.frame.to(40 + s, 0);
-      Object.assign(dep, { x: p.x, y: air > 0 ? Math.min(air * 0.14, 2000) : 0, z: p.y, hdg: R.hdg, pitch: air > 0 ? Math.min(0.26, air / 700) : 0, vis: tt < 150 });
-      dep.airborne = air > 0; dep.dist = s;
-      if (tt > 150) dep.state = 'gone';
-    }
-    const arr = this.tr('arn-arr');
-    { const Rp = runwayInfo('ESSA', arr.rwy); const tt = t - arr.t0;
-      if (tt < -60 || tt > 60) arr.vis = false;
-      else { const s = tt < 0 ? tt * 72 : 72 * tt - 1.1 * tt * tt; const p = Rp.frame.to(Math.max(s, -9000) + 350, 0); Object.assign(arr, { x: p.x, y: tt < 0 ? -s * Math.tan(3 * DEG) : 0, z: p.y, hdg: Rp.hdg, pitch: tt < 0 ? 0.04 : 0, vis: true }); } }
-    // the arrival ahead of us: it flies the same final, touches down, rolls out and vacates
-    const a = this.tr('cph-arr');
-    const A = runwayInfo('EKCH', this.arrRwy);
-    if (!fm.airport && !fm.onGround) {
-      const d2 = fm.m.touchdown - fm.s; // our distance to touchdown
-      if (a.state === 'far' && d2 < 30000) { a.state = 'final'; a.d = d2 - a.sep; }
-      if (a.state === 'final') {
-        // it stays its spacing ahead of us down the final and touches down as we pass that distance
-        a.d = d2 - a.sep;
-        if (a.d <= 0) { a.state = 'landed'; a.tdT = t; a.roll = 0; a.v = 68; }
-        const p = A.frame.to(300 - a.d, 0);
-        Object.assign(a, { x: p.x, y: Math.max(0, a.d) * Math.tan(3 * DEG) + 15, z: p.y, hdg: A.hdg, pitch: 0.05, vis: a.d < 25000 });
+  // ---------- the controllers' decisions, once a second ----------
+  _controllers(fm, crew) {
+    this._ground(fm, crew); this._tower(fm, crew); this._radar(fm, crew); this._kastrup(fm, crew);
+  }
+  _arnUV(x, z) { const f = ARN.frame, dx = x - f.o.x, dz = z - f.o.y; return [dx * f.u.x + dz * f.u.y, dx * f.v.x + dz * f.v.y]; }
+  _departing() { // departures already moving towards the runway (the A-CDM queue)
+    let n = 0; for (const a of this.traffic) if (a.apt === 'ARN' && ['pushback', 'starting', 'wait-taxi', 'taxi', 'holding', 'lineup'].includes(a.state)) n++;
+    return n;
+  }
+  // Arlanda Ground: pushbacks one at a time on the pier F taxilane, not while someone taxis past
+  // behind the stand, and only when the runway queue can take another departure
+  _ground(fm, crew) {
+    const q = this.pushQ;
+    if (q.length && !this._pushBusy) {
+      const req = q[0];
+      const standV = req.own ? ARN_LAYOUT.gateStand.v : req.a.standV;
+      const pushing = this.traffic.some((a) => a.state === 'pushback' && a !== req.a) || (fm.phase === 'pushback' && !req.own) || (fm.tug && fm.tug.state === 'push' && !req.own);
+      let passing = false;
+      for (const a of this.traffic) { if (a === req.a || a.x == null || a.state !== 'taxi') continue; const [u, v] = this._arnUV(a.x, a.z); if (u > 1540 && u < 1640 && Math.abs(v - standV) < 160) passing = true; }
+      if (!req.own && fm.onGround && !fm.airport && ['taxi-out'].includes(fm.phase)) { const [u, v] = this._arnUV(fm.pos.x, fm.pos.z); if (u > 1540 && u < 1640 && Math.abs(v - standV) < 160) passing = true; }
+      const queueOk = this._departing() < 5;
+      if (!pushing && !passing && queueOk) {
+        q.shift(); this._pushBusy = true;
+        const tel = req.own ? CALL : req.a.tel;
+        this.say('ATC', `${tel}, push-back and start-up approved, facing west${req.own ? `, QNH ${spellNum(this.qnh('ARN'))}` : ''}.`, this.resp(), () => {
+          this._pushBusy = false;
+          if (req.own) { this.cl.push = true; crew.readback(`Push-back and start-up approved, facing west${`, QNH ${spellNum(this.qnh('ARN'))}`}, ${CALL_SHORT}.`); }
+          else { this.say(req.a.flt, `Push and start approved, ${req.a.tel}.`, this.resp(1.5), () => { req.a.state = req.a.push ? 'pushback' : 'starting'; req.a.startT = req.a.startT ?? this.r.human(60, 0.3); }, 'Arlanda Ground'); }
+        }, 'Arlanda Ground');
+      } else if (!req.standbySaid) {
+        req.standbySaid = true;
+        const why = passing ? 'traffic passing behind' : pushing ? 'one pushing on the taxilane' : 'the departure queue is full';
+        this.say('ATC', `${req.own ? CALL : req.a.tel}, stand by, ${why}.`, this.resp(), null, 'Arlanda Ground');
       }
     }
-    if (a.state === 'landed') {
-      const tt = t - a.tdT;
-      a.v = Math.max(9, a.v - 2.0 * dt); a.roll += a.v * dt;
-      const p = A.frame.to(300 + Math.min(a.roll, 1500), 0);
-      Object.assign(a, { x: p.x, y: 0, z: p.y, hdg: A.hdg, pitch: 0, vis: true });
-      if (tt > a.rot) { a.state = 'vacated'; a.vacT = t; }
+    const tq = this.taxiQ;
+    if (tq.length && !this._taxiBusy) {
+      const req = tq.shift(); this._taxiBusy = true;
+      const rw = spellRwy(this.depRwy);
+      // name the aircraft to follow if someone is already taxiing out ahead
+      const ahead = this.traffic.filter((a) => a.apt === 'ARN' && a.kind === 'dep' && ['taxi', 'holding', 'lineup'].includes(a.state) && a !== req.a);
+      const follow = ahead.length ? `, follow the ${ahead[ahead.length - 1].al === 'sas' ? 'SAS' : ahead[ahead.length - 1].T.name.split(' ')[0]}` : '';
+      const tel = req.own ? CALL : req.a.tel;
+      this.say('ATC', `${tel}, taxi to holding point runway ${rw}${follow}.`, this.resp(), () => {
+        this._taxiBusy = false;
+        if (req.own) { this.cl.taxi = true; crew.readback(`Taxi to holding point runway ${rw}${follow}, ${CALL_SHORT}.`); }
+        else this.say(req.a.flt, `Holding point ${rw}, ${req.a.tel}.`, this.resp(1.5), () => { req.a.state = 'taxi'; req.a.s = 0; req.a._place(); }, 'Arlanda Ground');
+      }, 'Arlanda Ground');
     }
-    if (a.state === 'vacated') { a.vis = t - a.vacT < 30; if (a.vis) { const p = A.frame.to(300 + Math.min(a.roll, 1500) + (t - a.vacT) * 6, 180); Object.assign(a, { x: p.x, y: 0, z: p.y }); } }
-    const cd = this.tr('cph-dep');
-    if (cd.t0 != null) {
-      const other = runwayInfo('EKCH', this.arrRwy === '22L' ? '22R' : '04R');
-      const tt = t - cd.t0;
-      if (tt < 0 || tt > 110) cd.vis = false;
-      else { const s = tt * tt * 1.0; const air = Math.max(0, s - 1600); const p = other.frame.to(100 + s, 0); Object.assign(cd, { x: p.x, y: Math.min(air * 0.13, 1500), z: p.y, hdg: other.hdg, pitch: air > 0 ? 0.25 : 0, vis: true }); }
+  }
+  // Arlanda Tower: departures in the order they reported ready; line up when the runway is free of
+  // everything but the one rolling ahead, take off when that one is airborne and 3 NM away (or two
+  // minutes on the same route); arrivals on the parallel land when their runway is free
+  _tower(fm, crew) {
+    const rw = this.depRwy, R = runwayInfo('ESSA', rw);
+    const occ = this.tf ? this.tf.runwayOccupants('ARN', rw) : [];
+    const ownOnRwy = !fm.airport && ['lineup', 'takeoff'].includes(fm.phase) || (fm.phase === 'climb' && fm.agl < 150);
+    const dq = this.depQ;
+    if (dq.length) {
+      const req = dq[0];
+      const prev = this._lastDep;
+      const prevRolling = prev && !prev.airborneFar && (prev.own ? fm.phase === 'takeoff' : prev.a.state === 'takeoff');
+      const others = occ.filter((a) => a !== req.a && !a.cleared.takeoff).length + (ownOnRwy && !req.own && !(prev && prev.own) ? 1 : 0);
+      // separation from the departure ahead
+      let sepOk = true;
+      if (prev) {
+        const p = prev.own ? { airborne: !fm.onGround, x: fm.pos.x, z: fm.pos.z } : prev.a;
+        const dist = p.x != null ? Math.hypot(p.x - R.thr.x, p.z - R.thr.y) : 1e9;
+        sepOk = (p.airborne && dist > 3 * 1852 + R.len) || (this.t - prev.rollT > 120) || p.state === 'gone';
+      }
+      if (!req.lineup && others === 0 && (!prev || prevRolling || sepOk)) {
+        req.lineup = true;
+        const tel = req.own ? CALL : req.a.tel;
+        this.say('ATC', `${tel}, line up and wait runway ${spellRwy(rw)}.`, this.resp(), () => {
+          if (req.own) { this.cl.lineup = true; crew.readback(`Line up and wait runway ${spellRwy(rw)}, ${CALL_SHORT}.`); }
+          else this.say(req.a.flt, `Lining up ${spellRwy(rw)}, ${req.a.tel}.`, this.resp(1.5), () => { req.a.state = 'lineup'; req.a.cleared.lineup = true; }, 'Arlanda Tower');
+        }, 'Arlanda Tower');
+      } else if (!req.lineup && !req.holdSaid && dq.length > 0) {
+        req.holdSaid = true;
+        const tel = req.own ? CALL : req.a.tel;
+        const pos = dq.indexOf(req) + 1 + (prev && prevRolling ? 1 : 0);
+        this.say('ATC', `${tel}, hold position, ${pos > 1 ? `number ${spellNum(pos)} for departure` : 'traffic on the runway'}.`, this.resp(), () => { if (req.own) crew.readback(`Holding position, ${CALL_SHORT}.`); }, 'Arlanda Tower');
+      }
+      const ready = req.own ? crew.readyForTakeoff() && this.cl.lineup : req.a.state === 'lineup' && req.a.s > req.a.lineS - 30;
+      if (req.lineup && ready && sepOk && !req.toSaid && occ.filter((a) => a !== req.a).length === 0) {
+        req.toSaid = true;
+        const tel = req.own ? CALL : req.a.tel;
+        this.say('ATC', `${tel}, ${this.windReport('ARN')}, runway ${spellRwy(rw)}, cleared for take-off.`, this.resp(2), () => {
+          dq.shift(); req.rollT = this.t; this._lastDep = req;
+          if (req.own) { this.cl.takeoff = true; crew.readback(`Cleared for take-off runway ${spellRwy(rw)}, ${CALL_SHORT}.`); }
+          else this.say(req.a.flt, `Cleared for take-off ${spellRwy(rw)}, ${req.a.tel}.`, this.resp(1.5), () => { req.a.cleared.takeoff = true; }, 'Arlanda Tower');
+        }, 'Arlanda Tower');
+      }
+    }
+    // the parallel runway's arrivals
+    for (const a of this.traffic) {
+      if (a.apt !== 'ARN' || a.kind !== 'arr' || a.unit !== 'Arlanda Tower' || a.cleared.landing || !a.towerCalled) continue;
+      const busy = this.tf.runwayOccupants('ARN', a.rwy).filter((o) => o !== a).length;
+      if (!busy && !a.ldgSaid) { a.ldgSaid = true; this.say('ATC', `${a.tel}, runway ${spellRwy(a.rwy)}, cleared to land, ${this.windReport('ARN')}.`, this.resp(), () => this.say(a.flt, `Cleared to land ${spellRwy(a.rwy)}, ${a.tel}.`, this.resp(1.5), () => { a.cleared.landing = true; }, 'Arlanda Tower'), 'Arlanda Tower'); }
+    }
+    // our own hand-off to departure control once airborne
+    if (!fm.onGround && !fm.airport && this.unit === 'Arlanda Tower' && fm.agl > 200 && !this._toStockholm) {
+      this._toStockholm = true;
+      this.say('ATC', `${CALL}, contact Stockholm Control ${spellFreq(UNITS['Stockholm Control'])}, good bye.`, this.resp(3), () => crew.readback(`Stockholm Control ${spellFreq(UNITS['Stockholm Control'])}, ${CALL_SHORT}, good bye.`), 'Arlanda Tower');
+      this.say(null, null, 8, () => { this.unit = 'Stockholm Control'; });
+    }
+  }
+  // Stockholm, Sweden and Copenhagen radar: hand-offs as we climb out, cross Sweden and near Kastrup;
+  // on the Kastrup arrival the aircraft behind are slowed to keep at least 4 NM
+  _radar(fm, crew) {
+    const altFt = fm.altInd / FT;
+    if (this.unit === 'Stockholm Control' && !fm.onGround && (altFt > 14500 || (this.cl.altFt >= 20000 && altFt > 11000)) && !this._toSweden) {
+      this._toSweden = true;
+      this.say('ATC', `${CALL}, contact Sweden Control ${spellFreq(UNITS['Sweden Control'])}.`, this.resp(), () => {
+        crew.readback(`Sweden Control ${spellFreq(UNITS['Sweden Control'])}, ${CALL_SHORT}.`);
+        this.say(null, null, 6, () => { this.unit = 'Sweden Control'; this.say('SK1415', `Sweden Control, ${CALL}, passing flight level ${spellNum(Math.round(fm.altInd / FT / 1000) * 10)}, climbing flight level ${spellNum(Math.round((this.cl.altFt || 36000) / 100))}.`, this.resp(2), () => this.say('ATC', `${CALL}, Sweden Control, radar contact.`, this.resp(), null, 'Sweden Control'), 'Sweden Control'); });
+      }, 'Stockholm Control');
+    }
+    const d2td = fm.m.touchdown - fm.s;
+    if (this.unit === 'Sweden Control' && !fm.onGround && !fm.airport && d2td < 110000 && this.cl.descent && !this._toCph) {
+      this._toCph = true;
+      this.say('ATC', `${CALL}, contact Copenhagen Approach ${spellFreq(UNITS['Copenhagen Approach'])}.`, this.resp(), () => {
+        crew.readback(`Copenhagen Approach ${spellFreq(UNITS['Copenhagen Approach'])}, ${CALL_SHORT}.`);
+        this.say(null, null, 6, () => { this.unit = 'Copenhagen Approach'; this.say('SK1415', `Copenhagen Approach, ${CALL}, descending flight level ${spellNum(Math.max(50, Math.round((this.cl.altFt || 10000) / 1000) * 10))}.`, this.resp(2), () => this.say('ATC', `${CALL}, Copenhagen Approach, radar contact, expect ILS runway ${spellRwy(this.arrRwy)}.`, this.resp(), null, 'Copenhagen Approach'), 'Copenhagen Approach'); });
+      }, 'Sweden Control');
+    }
+    // sequencing on the Kastrup arrival: aircraft in distance order to the threshold
+    if (!this.tf) return;
+    const seq = [];
+    for (const a of this.traffic) if (a.apt === 'CPH' && a.kind === 'arr' && ['arrival', 'final'].includes(a.state)) seq.push({ a, d: a.thrS - a.s, v: a.v });
+    if (!fm.onGround && !fm.airport && d2td < 90000) seq.push({ own: true, d: d2td, v: fm.gs });
+    seq.sort((p, q) => p.d - q.d);
+    for (let i = 1; i < seq.length; i++) {
+      const lead = seq[i - 1], f = seq[i], gap = f.d - lead.d;
+      if (gap < 4.5 * 1852) {
+        if (f.own) { if (!this._slowSaid && d2td > 12000) { this._slowSaid = true; this.call('speed', crew, { kt: 160, until: 'four miles' }); } }
+        else if (!f.a.spdPending) {
+          // the next standard speed at least 10 kt below the one ahead (controllers use round figures)
+          const leadIas = lead.own ? fm.ias : lead.a.v / KT * Math.sqrt(Math.pow(Math.max(0.2, 1 - 2.2558e-5 * lead.a.h), 4.2559));
+          const want = [250, 220, 210, 200, 190, 180, 170, 160].find((k) => k <= leadIas - 10) ?? 160;
+          const kt = Math.max(want, Math.ceil((f.a.T.vapp + 20) / 10) * 10);
+          if (kt <= (f.a.spdLimit ?? 999) - 10) {
+            const a = f.a; a.spdPending = true;
+            this.say('ATC', `${a.tel}, reduce speed ${spellNum(kt)} knots.`, this.resp(), () => this.say(a.flt, `Speed ${spellNum(kt)}, ${a.tel}.`, this.resp(1.5), () => { a.spdLimit = kt; a.spdPending = false; }, 'Copenhagen Approach'), 'Copenhagen Approach');
+          }
+        }
+      }
+    }
+  }
+  // Kastrup Tower: landing clearances on 22L when the runway is free; departures from the parallel
+  _kastrup(fm, crew) {
+    if (!this.tf) return;
+    for (const a of this.traffic) {
+      if (a.apt !== 'CPH' || a.kind !== 'arr' || a.unit !== 'Kastrup Tower' || a.cleared.landing || !a.towerCalled) continue;
+      const busy = this.tf.runwayOccupants('CPH', a.rwy).filter((o) => o !== a).length + (this._ownOnRunway(fm) ? 1 : 0);
+      if (!busy && !a.ldgSaid) { a.ldgSaid = true; this.say('ATC', `${a.tel}, runway ${spellRwy(a.rwy)}, cleared to land, ${this.windReport('CPH')}.`, this.resp(), () => this.say(a.flt, `Cleared to land ${spellRwy(a.rwy)}, ${a.tel}.`, this.resp(1.5), () => { a.cleared.landing = true; }, 'Kastrup Tower'), 'Kastrup Tower'); }
+      if (busy && a.ldgSaid && !a.cleared.landing) a.ldgSaid = false;
+    }
+    // Kastrup departures: taxi requests go straight to a taxi clearance; line-up and take-off like Arlanda's
+    for (const a of this.traffic) {
+      if (a.apt !== 'CPH' || a.kind !== 'dep') continue;
+      if (a.state === 'holding' && !a.cleared.lineup && !a.luSaid) {
+        const occ = this.tf.runwayOccupants('CPH', a.rwy).filter((o) => o !== a).length;
+        const prevOk = !this._cphLastDep || this._cphLastDep.airborne && Math.hypot(this._cphLastDep.x - a.rwyInfo.thr.x, this._cphLastDep.z - a.rwyInfo.thr.y) > a.rwyInfo.len + 3 * 1852 || this._cphLastDep.state === 'gone';
+        if (!occ && prevOk) { a.luSaid = true; this.say('ATC', `${a.tel}, ${this.windReport('CPH')}, runway ${spellRwy(a.rwy)}, cleared for take-off.`, this.resp(), () => this.say(a.flt, `Cleared for take-off ${spellRwy(a.rwy)}, ${a.tel}.`, this.resp(1.5), () => { a.cleared.lineup = true; a.cleared.takeoff = true; a.state = 'lineup'; this._cphLastDep = a; }, 'Kastrup Tower'), 'Kastrup Tower'); }
+      }
+    }
+  }
+  _ownOnRunway(fm) { return fm.airport !== 'ARN' && (['flare', 'rollout'].includes(fm.phase) || (fm.phase === 'taxi-in' && !this.cl.vacated)); }
+
+  // ---------- the other flights' calls ----------
+  trafficCall(a, kind) {
+    const r = this.resp.bind(this);
+    switch (kind) {
+      case 'startup': {
+        a.unit = a.apt === 'ARN' ? 'Arlanda Ground' : 'Kastrup Apron';
+        const stand = a.apt === 'ARN' ? `stand Foxtrot ${spellNum(30 + TRAFFIC_STAND_NO(a.standV))}` : 'stand Charlie two';
+        this.say(a.flt, `${a.unit}, ${a.tel}, ${stand}, request push and start.`, r(3), () => { if (a.apt === 'ARN') this.pushQ.push({ a }); else this.say('ATC', `${a.tel}, start-up approved.`, r(), () => { a.state = 'starting'; a.startT = this.r.human(90, 0.3); }, a.unit); }, a.unit);
+        break;
+      }
+      case 'taxi':
+        this.say(a.flt, `${a.unit}, ${a.tel}, request taxi.`, r(3), () => {
+          if (a.apt === 'ARN') this.taxiQ.push({ a });
+          else this.say('ATC', `${a.tel}, taxi to holding point runway ${spellRwy(a.rwy)}.`, r(), () => this.say(a.flt, `Holding point ${spellRwy(a.rwy)}, ${a.tel}.`, r(1.5), () => { a.state = 'taxi'; a.s = 0; a._place(); }, a.unit), a.unit);
+        }, a.unit);
+        break;
+      case 'ready':
+        if (a.apt === 'ARN') { a.unit = 'Arlanda Tower'; this.say(a.flt, `Arlanda Tower, ${a.tel}, holding point runway ${spellRwy(a.rwy)}, ready.`, r(4), () => this.depQ.push({ a }), a.unit); }
+        else { a.unit = 'Kastrup Tower'; this.say(a.flt, `Kastrup Tower, ${a.tel}, holding point ${spellRwy(a.rwy)}, ready.`, r(4), null, a.unit); }
+        break;
+      case 'airborne': {
+        const from = a.unit, next = a.apt === 'ARN' ? 'Stockholm Control' : 'Copenhagen Approach';
+        this.say('ATC', `${a.tel}, contact ${next === 'Stockholm Control' ? 'Stockholm Control' : 'Copenhagen Departure'} ${spellFreq(UNITS[next])}, good bye.`, r(4), () => this.say(a.flt, `${spellFreq(UNITS[next])}, ${a.tel}, good bye.`, r(1.5), () => {
+          a.unit = next;
+          this.say(a.flt, `${next}, ${a.tel}, passing ${spellNum(Math.round(a.h / FT / 100) * 100)} feet, climbing altitude five thousand feet.`, r(5), () => this.say('ATC', `${a.tel}, radar contact, climb flight level one hundred.`, r(), () => this.say(a.flt, `Climb flight level one hundred, ${a.tel}.`, r(1.5), null, next), next), next);
+        }, from), from);
+        break;
+      }
+      case 'checkin': {
+        a.unit = a.kind === 'enroute' ? 'Sweden Control' : a.apt === 'ARN' ? 'Stockholm Control' : 'Copenhagen Approach';
+        const lvl = a.h / FT > 5500 ? `flight level ${spellNum(Math.round(a.h / FT / 1000) * 10)}` : `${spellNum(Math.round(a.h / FT / 100) * 100)} feet`;
+        const what = a.kind === 'enroute' ? `climbing flight level ${spellNum(a.fl)}` : `descending, ${lvl}`;
+        this.say(a.flt, `${a.unit}, ${a.tel}, ${a.kind === 'enroute' ? lvl + ', ' : ''}${what}.`, r(4), () => {
+          const apt = a.apt, rw = a.rwy;
+          const reply = a.kind === 'enroute' ? `${a.tel}, radar contact, climb flight level ${spellNum(a.fl)}.` : `${a.tel}, radar contact, descend altitude four thousand feet, QNH ${spellNum(this.qnh(apt))}, expect ILS runway ${spellRwy(rw)}.`;
+          this.say('ATC', reply, r(), () => this.say(a.flt, a.kind === 'enroute' ? `Flight level ${spellNum(a.fl)}, ${a.tel}.` : `Four thousand feet, QNH ${spellNum(this.qnh(apt))}, ${a.tel}.`, r(1.5), null, a.unit), a.unit);
+        }, a.unit);
+        break;
+      }
+      case 'tower': {
+        const from = a.unit, twr = a.apt === 'ARN' ? 'Arlanda Tower' : 'Kastrup Tower';
+        this.say('ATC', `${a.tel}, cleared ILS runway ${spellRwy(a.rwy)}, contact ${twr} ${spellFreq(twr === 'Arlanda Tower' ? '118.500' : UNITS[twr])}.`, r(), () => this.say(a.flt, `Cleared ILS ${spellRwy(a.rwy)}, ${twr}, ${a.tel}.`, r(1.5), () => {
+          a.unit = twr;
+          this.say(a.flt, `${twr}, ${a.tel}, established ILS ${spellRwy(a.rwy)}.`, r(5), () => { a.towerCalled = true; }, twr);
+        }, from), from);
+        break;
+      }
+      case 'going-around':
+        this.say(a.flt, `${a.tel}, going around.`, r(1), () => this.say('ATC', `${a.tel}, roger, climb altitude three thousand feet, contact ${a.apt === 'ARN' ? 'Stockholm Control' : 'Copenhagen Approach'}.`, r(), () => { a.unit = a.apt === 'ARN' ? 'Stockholm Control' : 'Copenhagen Approach'; a.towerCalled = false; a.ldgSaid = false; }, a.unit), a.unit);
+        break;
+      case 'vacated': {
+        const gnd = a.apt === 'ARN' ? 'Arlanda Ground' : 'Kastrup Apron';
+        this.say('ATC', `${a.tel}, contact ${gnd === 'Arlanda Ground' ? 'Ground' : 'Apron'} ${spellFreq(UNITS[gnd])}.`, r(3), () => this.say(a.flt, `${spellFreq(UNITS[gnd])}, ${a.tel}.`, r(1.5), () => { a.unit = gnd; }, a.unit), a.unit);
+        break;
+      }
+      default: break;
     }
   }
 
-  // ---------- dialogues with our flight (the crew calls these; replies come after a realistic delay) ----------
-  // Each reply sets a clearance in `cl` when it is transmitted and tells the crew.
+  // ---------- our flight's calls (the crew call these) ----------
   call(kind, crew, data = {}) {
-    const r = this.r, d = 2.5 + r() * 3.5, c = this.cl;
-    const us = CALL;
+    const c = this.cl, us = CALL, d = this.resp();
     switch (kind) {
       case 'startup': {
-        // A-CDM at Arlanda: the ground controller approves start-up and pushback at the TSAT
         this.unit = 'Arlanda Ground';
         const f = crew.fm.route.gate;
-        this.say('SK1415', `Arlanda Ground, ${us}, stand ${spellStand(f.name)}, request pushback and start-up.`, 0);
-        this.say('ATC', `${us}, pushback and start-up approved, facing ${f.facing}, QNH ${spellNum(Math.round(this.wx.s.arn.qnh))}.`, d, () => { c.push = true; crew.readback(`Pushback and start-up approved, facing ${f.facing}, QNH ${spellNum(Math.round(this.wx.s.arn.qnh))}, ${CALL_SHORT}.`); });
+        this.say('SK1415', `Arlanda Ground, ${us}, stand ${spellStand(f.name)}, request push-back and start-up.`, 0, () => this.pushQ.push({ own: true }));
         break;
       }
       case 'taxi':
         this.unit = 'Arlanda Ground';
-        this.say('SK1415', `Arlanda Ground, ${us}, request taxi.`, 0);
-        this.say('ATC', `${us}, taxi to holding point runway ${spellRwy(this.depRwy)}.`, d, () => { c.taxi = true; crew.readback(`Taxi to holding point runway ${spellRwy(this.depRwy)}, ${CALL_SHORT}.`); });
+        this.say('SK1415', `Arlanda Ground, ${us}, request taxi.`, 0, () => this.taxiQ.push({ own: true }));
         break;
-      case 'ready': {
-        // at the holding point: the departure ahead goes first; we line up behind it
+      case 'ready':
         this.unit = 'Arlanda Tower';
-        this.say('SK1415', `Arlanda Tower, ${us}, holding point runway ${spellRwy(this.depRwy)}, ready for departure.`, 0);
-        const dep = this.tr('arn-dep');
-        if (dep.state === 'waiting') {
-          this.say('ATC', `${us}, hold position, traffic departing.`, d, () => { crew.readback(`Holding position, ${CALL_SHORT}.`); });
-          this.say('ATC', null, d + 2, () => { dep.state = 'rolling'; dep.t0 = this.t; });
-          this._lineupAfter = true;
-        } else this._clearLineup(crew, d);
+        this.say('SK1415', `Arlanda Tower, ${us}, holding point runway ${spellRwy(this.depRwy)}, ready for departure.`, 0, () => this.depQ.push({ own: true }));
         break;
-      }
       case 'airborne':
         this.unit = 'Stockholm Control';
         this.say('SK1415', `Stockholm Control, ${us}, passing ${data.alt} feet climbing ${data.cleared}.`, 0);
-        this.say('ATC', `${us}, radar contact, climb flight level one hundred.`, d, () => { c.altFt = 10000; crew.onClearance('alt', 10000); crew.readback(`Climb flight level one hundred, ${CALL_SHORT}.`); });
+        this.say('ATC', `${us}, radar contact, climb flight level one hundred.`, d + 3, () => { c.altFt = 10000; crew.onClearance('alt', 10000); crew.readback(`Climb flight level one hundred, ${CALL_SHORT}.`); });
         break;
       case 'climb-high':
-        this.say('ATC', `${us}, climb flight level ${spellNum(data.fl)}.`, 0, () => { c.altFt = data.fl * 100; crew.onClearance('alt', data.fl * 100); crew.readback(`Climb flight level ${spellNum(data.fl)}, ${CALL_SHORT}.`); });
+        this.say('ATC', `${us}, climb flight level ${spellNum(data.fl)}.`, d, () => { c.altFt = data.fl * 100; crew.onClearance('alt', data.fl * 100); crew.readback(`Climb flight level ${spellNum(data.fl)}, ${CALL_SHORT}.`); });
         break;
       case 'handoff':
-        this.unit = data.unit;
-        this.say('ATC', `${us}, contact ${data.unit}${data.freq ? ' ' + data.freq : ''}.`, d, () => crew.readback(`${data.unit}${data.freq ? ' ' + data.freq : ''}, ${CALL_SHORT}.`));
-        this.say('SK1415', `${data.unit}, ${us}, ${data.report || 'good morning'}.`, d + 5);
+        this.say('ATC', `${us}, contact ${data.unit}${data.freq ? ' ' + data.freq : ''}.`, d, () => { crew.readback(`${data.unit}${data.freq ? ' ' + data.freq : ''}, ${CALL_SHORT}.`); this.unit = data.unit; });
         break;
       case 'descent':
         this.say('SK1415', `${this.unit}, ${us}, request descent.`, 0);
-        this.say('ATC', `${us}, descend flight level ${spellNum(data.fl)}${data.rwy ? `, expect ILS runway ${spellRwy(data.rwy)}` : ''}.`, d, () => { c.altFt = data.fl * 100; c.descent = true; crew.onClearance('alt', data.fl * 100); crew.readback(`Descend flight level ${spellNum(data.fl)}, ${CALL_SHORT}.`); });
+        this.say('ATC', `${us}, descend flight level ${spellNum(data.fl)}${data.rwy ? `, expect ILS runway ${spellRwy(data.rwy)}` : ''}.`, d + 3, () => { c.altFt = data.fl * 100; c.descent = true; crew.onClearance('alt', data.fl * 100); crew.readback(`Descend flight level ${spellNum(data.fl)}, ${CALL_SHORT}.`); });
         break;
       case 'descend-alt': {
-        const q = Math.round(this.arrApt === 'ARN' ? this.wx.s.arn.qnh : this.wx.s.cph.qnh);
-        this.say('ATC', `${us}, descend altitude ${spellNum(data.ft / 1000)} thousand feet, QNH ${spellNum(q)}.`, 0, () => { c.altFt = data.ft; crew.onClearance('alt', data.ft, q); crew.readback(`Descend altitude ${spellNum(data.ft / 1000)} thousand feet, QNH ${spellNum(q)}, ${CALL_SHORT}.`); });
+        const q = this.qnh(this.arrApt);
+        this.say('ATC', `${us}, descend altitude ${spellNum(data.ft / 1000)} thousand feet, QNH ${spellNum(q)}.`, d, () => { c.altFt = data.ft; crew.onClearance('alt', data.ft, q); crew.readback(`Descend altitude ${spellNum(data.ft / 1000)} thousand feet, QNH ${spellNum(q)}, ${CALL_SHORT}.`); });
         break;
       }
       case 'speed':
-        this.say('ATC', `${us}, reduce speed ${spellNum(data.kt)} knots${data.until ? ` until ${data.until}` : ''}.`, 0, () => { c.spd = data.kt; crew.onClearance('spd', data.kt); crew.readback(`Speed ${spellNum(data.kt)}, ${CALL_SHORT}.`); });
+        if (c.spd != null && c.spd <= data.kt) break;
+        this.say('ATC', `${us}, reduce speed ${spellNum(data.kt)} knots${data.until ? ` until ${data.until}` : ''}.`, d, () => { c.spd = data.kt; crew.onClearance('spd', data.kt); crew.readback(`Speed ${spellNum(data.kt)}, ${CALL_SHORT}.`); });
         break;
       case 'approach':
-        this.say('ATC', `${us}, cleared ILS approach runway ${spellRwy(this.arrRwy)}.`, 0, () => { c.approach = true; crew.onClearance('approach', this.arrRwy); crew.readback(`Cleared ILS approach runway ${spellRwy(this.arrRwy)}, ${CALL_SHORT}.`); });
+        this.say('ATC', `${us}, cleared ILS approach runway ${spellRwy(this.arrRwy)}.`, d, () => { c.approach = true; crew.onClearance('approach', this.arrRwy); crew.readback(`Cleared ILS approach runway ${spellRwy(this.arrRwy)}, ${CALL_SHORT}.`); });
         break;
       case 'tower': {
-        const arn = this.arrApt === 'ARN';
-        this.unit = arn ? 'Arlanda Tower' : 'Kastrup Tower';
-        this.say('ATC', `${us}, contact ${this.unit} ${arn ? 'one one eight decimal five' : 'one one eight decimal one'}.`, 0, () => crew.readback(`Tower ${arn ? 'one one eight five' : 'one one eight one'}, ${CALL_SHORT}.`));
-        this.say('SK1415', `${this.unit}, ${us}, established ILS ${spellRwy(this.arrRwy)}.`, 4);
-        if (arn) this.say('ATC', `${us}, runway ${spellRwy(this.arrRwy)}, cleared to land, ${this.windReport('ARN', this.arrRwy)}, emergency services are standing by.`, 7 + r() * 2, () => { this.cl.landing = true; });
-        else { this.say('ATC', `${us}, Kastrup Tower, ${this.runwayFreeForLanding() ? 'continue approach' : 'continue approach, one ahead'}, ${this.windReport('CPH', this.arrRwy)}.`, 7 + r() * 2); this._landingPending = true; }
+        const arn = this.arrApt === 'ARN', twr = arn ? 'Arlanda Tower' : 'Kastrup Tower';
+        this.say('ATC', `${us}, contact ${twr} ${spellFreq(arn ? '118.500' : UNITS['Kastrup Tower'])}.`, d, () => {
+          crew.readback(`Tower ${spellFreq(arn ? '118.500' : UNITS['Kastrup Tower'])}, ${CALL_SHORT}.`);
+          this.say(null, null, 3, () => {
+            this.unit = twr;
+            this.say('SK1415', `${twr}, ${us}, established ILS ${spellRwy(this.arrRwy)}.`, this.resp(2), () => {
+              if (arn) this.say('ATC', `${us}, runway ${spellRwy(this.arrRwy)}, cleared to land, ${this.windReport('ARN')}, emergency services are standing by.`, this.resp(), () => { this.cl.landing = true; });
+              else if (this.runwayFreeForLanding() && !this._ldgSaid) { this._landingPending = true; this._ldgSaid = true; this.say('ATC', `${us}, Kastrup Tower, runway ${spellRwy(this.arrRwy)}, cleared to land, ${this.windReport('CPH')}.`, this.resp(), () => { this.cl.landing = true; crew.readback(`Cleared to land runway ${spellRwy(this.arrRwy)}, ${CALL_SHORT}.`); }); }
+              else { const ahead = this.tf ? this.tf.list.filter((a) => a.apt === this.arrApt && a.rwy === this.arrRwy && ['final', 'flare', 'rollout', 'arrival'].includes(a.state)).length : 0; this.say('ATC', `${us}, Kastrup Tower, continue approach${ahead ? `, number ${spellNum(ahead + 1)}` : ''}, ${this.windReport('CPH')}.`, this.resp(), () => { this._landingPending = true; }); }
+            });
+          });
+        });
         break;
       }
       case 'going-around':
         this.say('SK1415', `${us}, going around.`, 0);
-        this.say('ATC', `${us}, roger, climb three thousand feet, fly runway heading, I will vector you back.`, d, () => { crew.onClearance('alt', 3000); crew.readback(`Three thousand feet, runway heading, ${CALL_SHORT}.`); this.cl.landing = false; this._landingPending = false; });
+        this.say('ATC', `${us}, roger, climb three thousand feet, fly runway heading, I will vector you back.`, d + 2, () => { crew.onClearance('alt', 3000); crew.readback(`Three thousand feet, runway heading, ${CALL_SHORT}.`); this.cl.landing = false; this._landingPending = false; });
         break;
       case 'mayday': case 'pan':
         this.say('SK1415', `${kind === 'mayday' ? 'Mayday, mayday, mayday' : 'Pan-pan, pan-pan, pan-pan'}, ${us}, ${data.what}, ${data.intent}.`, 0);
-        this.say('ATC', `${us}, roger ${kind === 'mayday' ? 'mayday' : 'pan-pan'}, ${data.reply || 'cleared as requested, advise intentions'}.`, d, () => { if (data.onAck) data.onAck(); });
+        this.say('ATC', `${us}, roger ${kind === 'mayday' ? 'mayday' : 'pan-pan'}, ${data.reply || 'cleared as requested, advise intentions'}.`, d + 4, () => { if (data.onAck) data.onAck(); });
         break;
-      case 'vacated':
-        this.say('ATC', `${us}, vacate when able, contact ${this.arrApt === 'ARN' ? 'Arlanda Ground' : 'Apron'}.`, 1.5 + r(), () => { c.vacated = true; });
-        this.say('SK1415', `${this.arrApt === 'ARN' ? 'Arlanda Ground' : 'Kastrup Apron'}, ${us}, runway vacated.`, 8);
-        this.say('ATC', `${us}, taxi to your stand${this.arrApt === 'ARN' ? ' at pier F' : ' at pier B'}.`, 11, () => { c.taxiIn = true; crew.readback(`Taxi to the stand, ${CALL_SHORT}.`); });
+      case 'vacated': {
+        const gnd = this.arrApt === 'ARN' ? 'Arlanda Ground' : 'Kastrup Apron';
+        this.say('ATC', `${us}, vacate when able, contact ${gnd === 'Arlanda Ground' ? 'Ground' : 'Apron'} ${spellFreq(UNITS[gnd])}.`, this.resp(1.5), () => { c.vacated = true; crew.readback(`${spellFreq(UNITS[gnd])}, ${CALL_SHORT}.`); this.say(null, null, 4, () => {
+          this.unit = gnd;
+          this.say('SK1415', `${gnd}, ${us}, runway vacated.`, this.resp(2), () => this.say('ATC', `${us}, taxi to your stand${this.arrApt === 'ARN' ? ' at pier F' : ' at pier B'}.`, this.resp(), () => { c.taxiIn = true; crew.readback(`Taxi to the stand, ${CALL_SHORT}.`); }));
+        }); });
         break;
+      }
       case 'deviate':
         this.say('SK1415', `${this.unit}, ${us}, request ${data.nm} miles ${data.side} of track due weather.`, 0);
-        this.say('ATC', `${us}, ${data.nm > 20 ? 'approved' : 'deviation approved'}, ${data.nm} miles ${data.side} of track, report back on track.`, d, () => { crew.onClearance('offset', data.offsetM); crew.readback(`Approved, ${data.nm} miles ${data.side}, ${CALL_SHORT}.`); });
+        this.say('ATC', `${us}, ${data.nm > 20 ? 'approved' : 'deviation approved'}, ${data.nm} miles ${data.side} of track, report back on track.`, d + 3, () => { crew.onClearance('offset', data.offsetM); crew.readback(`Approved, ${data.nm} miles ${data.side}, ${CALL_SHORT}.`); });
         break;
       case 'level-change':
         this.say('SK1415', `${this.unit}, ${us}, experiencing ${data.what} turbulence, request flight level ${spellNum(data.fl)}.`, 0);
-        this.say('ATC', `${us}, ${data.fl * 100 > (this.cl.altFt || 0) ? 'climb' : 'descend'} flight level ${spellNum(data.fl)}.`, d, () => { c.altFt = data.fl * 100; crew.onClearance('alt', data.fl * 100); crew.readback(`Flight level ${spellNum(data.fl)}, ${CALL_SHORT}.`); });
+        this.say('ATC', `${us}, ${data.fl * 100 > (this.cl.altFt || 0) ? 'climb' : 'descend'} flight level ${spellNum(data.fl)}.`, d + 3, () => { c.altFt = data.fl * 100; crew.onClearance('alt', data.fl * 100); crew.readback(`Flight level ${spellNum(data.fl)}, ${CALL_SHORT}.`); });
         break;
       default: break;
     }
   }
-  _clearLineup(crew, d = 3) {
-    const us = CALL;
-    this.say('ATC', `${us}, line up and wait runway ${spellRwy(this.depRwy)}.`, d, () => { this.cl.lineup = true; crew.readback(`Line up and wait runway ${spellRwy(this.depRwy)}, ${CALL_SHORT}.`); });
-  }
-  // called every frame by the crew while waiting for the next clearance
+
+  // called every step by the crew while waiting for the next clearance
   poll(fm, crew) {
-    const dep = this.tr('arn-dep'), us = CALL;
-    if (this._lineupAfter && dep.state === 'rolling' && this.t - dep.t0 > 12 && !this.cl.lineup) { this._lineupAfter = false; this._clearLineup(crew, 1); }
-    // take-off clearance: preceding departure airborne and a minute ahead, our crew ready
-    if (this.cl.lineup && !this.cl.takeoff && crew.readyForTakeoff() && !this._toPending && (dep.state !== 'rolling' || (dep.airborne && this.t - dep.t0 > 60) || dep.state === 'gone')) {
-      this._toPending = true;
-      this.say('ATC', `${us}, ${this.windReport('ARN', this.depRwy)}, runway ${spellRwy(this.depRwy)}, cleared for take-off.`, 2 + this.r() * 2, () => { this.cl.takeoff = true; crew.readback(`Cleared for take-off runway ${spellRwy(this.depRwy)}, ${CALL_SHORT}.`); });
-    }
+    const us = CALL;
     // landing clearance at Kastrup once the runway is free; a go-around if it is still occupied close in
     if (this._landingPending && !this.cl.landing && this.runwayFreeForLanding() && !this._ldgSaid) {
       this._ldgSaid = true;
-      this.say('ATC', `${us}, runway ${spellRwy(this.arrRwy)}, cleared to land, ${this.windReport('CPH', this.arrRwy)}.`, 1.5, () => { this.cl.landing = true; crew.readback(`Cleared to land runway ${spellRwy(this.arrRwy)}, ${CALL_SHORT}.`); });
-      const cd = this.tr('cph-dep'); if (cd.t0 == null) cd.t0 = this.t + 8;
+      this.say('ATC', `${us}, runway ${spellRwy(this.arrRwy)}, cleared to land, ${this.windReport('CPH')}.`, this.resp(1.2), () => { this.cl.landing = true; crew.readback(`Cleared to land runway ${spellRwy(this.arrRwy)}, ${CALL_SHORT}.`); });
     }
     const blockedNow = this.t < (this._blockedUntil ?? -1) && this.cl.landing && !fm.airport;
     if ((this._landingPending && !this.cl.landing || blockedNow) && !this.runwayFreeForLanding() && fm.agl < 70 && !fm.onGround && !this._gaSaid) {
@@ -264,18 +444,17 @@ export class ATC {
   }
   // Something is on the runway (a slow vacating aircraft, a vehicle): no landing clearance, or a
   // go-around if one was already given, until it is clear.
-  blockRunway(sec) { this._blockedUntil = this.t + sec; const a = this.tr('cph-arr'); if (a.state === 'landed') a.rot = Math.max(a.rot, this.t - a.tdT + sec); }
-  resetLanding() { this._landingPending = false; this._ldgSaid = false; this._gaSaid = false; this.cl.landing = false; const a = this.tr('cph-arr'); if (a.state !== 'vacated') { a.state = 'vacated'; a.vacT = this.t - 100; } }
-
-  // We are going somewhere else now (a return to Arlanda): the approach and tower calls follow
+  blockRunway(sec) { this._blockedUntil = this.t + sec; }
+  resetLanding() { this._landingPending = false; this._ldgSaid = false; this._gaSaid = false; this.cl.landing = false; }
   divert(apt, rwy) { this.arrApt = apt; this.arrRwy = rwy; this.cl.approach = false; this.cl.landing = true; this._landingPending = false; }
-  // Is the runway free for us? (at Kastrup: the arrival ahead has vacated)
+  // Is the runway free for us? Nothing landing, rolling or lined up on it
   runwayFreeForLanding() {
-    const a = this.tr('cph-arr');
     if (this.t < (this._blockedUntil ?? -1)) return false;
-    return a.state === 'vacated' || a.state === 'far';
+    if (!this.tf) return true;
+    return this.tf.runwayOccupants(this.arrApt, this.arrRwy).length === 0;
   }
 }
 
-function gaussish(r) { let s = 0; for (let i = 0; i < 4; i++) s += r(); return (s - 2) * 1.73; }
+// stand numbers along pier F's west side, from the north
+const TRAFFIC_STAND_NO = (v) => 6 + Math.round((-v - 565) / 55) * 2; // our F36 is at v = -565
 export { CALL, CALL_SHORT };

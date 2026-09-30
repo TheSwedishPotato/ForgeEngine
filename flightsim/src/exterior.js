@@ -10,7 +10,7 @@ import { DEG, clamp, lerp, exposeMaterial, sharedUniforms } from './core.js';
 import {
   NOSE_Z, TAIL_Z, fusSection, fusPoint, fusHalfWidthAt, WING, wingLE, wingTE, wingChord, wingYqc, wingInc, wingTC,
   SLATS, FLAPS, SPOILERS, AILERON, CANOES, flapChord, SHARKLET, HTP, htpLE, htpTE, htpY, HTP_PIVOT, FIN, RUDDER_XC,
-  ENGINE, NACELLE, REVERSER_Z, CORE, PLUG, PYLON, NOSE_GEAR, MAIN_GEAR, COCKPIT_PANES,
+  ENGINE, NACELLE, REVERSER_Z, CORE, PLUG, PYLON, NOSE_GEAR, MAIN_GEAR, COCKPIT_PANES, paneOutline,
 } from './airframe.js';
 
 const FUS_L = TAIL_Z - NOSE_Z;
@@ -530,7 +530,7 @@ export class Exterior {
       holes.push({ z0: d.z - DOOR_W / 2 + 0.02, z1: d.z + DOOR_W / 2 - 0.02, v0: vOf(d.z, 0.0), v1: vOf(d.z, DOOR_H + 0.02), r: 12 });
     }
     // the six flight-deck windows, so the world shows through them from inside
-    for (const pane of COCKPIT_PANES) holes.push({ poly: pane.pts.map(([z, y]) => [z, vOf(z, y)]) });
+    for (const pane of COCKPIT_PANES) holes.push({ poly: paneOutline(pane, 1).pts.map(([z, u]) => [z, (u + 1) / 2]) });
     // stations: fine at the nose and tail
     const zs = [];
     for (let z = NOSE_Z; z < -3.4; z += 0.08) zs.push(z);

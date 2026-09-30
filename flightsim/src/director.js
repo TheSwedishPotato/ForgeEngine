@@ -23,7 +23,7 @@ export class Director {
   constructor(sim) {
     this.sim = sim; // { fm, people, cabin, voice, audio, ui, player, dialogue, scenery, opts }
     this.t = 0; this.times = {}; this.flags = {};
-    this.r = rng(99);
+    this.r = rng(Math.floor(Math.random() * 1e9));
     this.seatbelt = true; this.lightLevel = 1; this.mood = '#fff4e6'; this.scene = 'sweden';
     this.crewSeated = false; this.demoDone = false; this.checkDone = false;
     this.nextLav = 400;
@@ -35,7 +35,13 @@ export class Director {
 
   get clockH() { return this.sim.opts.startClock + this.t / 3600; }
   flag(name) { if (this.flags[name]) return false; this.flags[name] = true; return true; }
-  after(name, delay) { const t0 = this.times[name]; return t0 != null && this.t >= t0 + delay; }
+  // how long after something the cabin crew get round to the next thing: variable, as people are
+  after(name, delay) {
+    const t0 = this.times[name]; if (t0 == null) return false;
+    const key = `${name}/${delay}`; this._jit = this._jit || {};
+    if (this._jit[key] == null) this._jit[key] = this.r.human(delay, 0.35);
+    return this.t >= t0 + this._jit[key];
+  }
   mark(name) { if (this.times[name] == null) this.times[name] = this.t; }
 
   say(script, opts = {}) {
@@ -102,6 +108,9 @@ export class Director {
     const S = this.sim, P = S.player;
     const key = `chk-${this.phaseTag}-${row}`;
     if (this.phaseTag === 'ldg') this.sim.people.secureRow(row);
+    // the crew member closes any bin still open over this row as they pass (by hand, one at a time)
+    const seatZ = S.cabin.seats.find((st) => st.row === row)?.z;
+    if (seatZ != null) for (const b of S.cabin.bins) if (b.target > 0 && seatZ > b.z0 - 0.4 && seatZ < b.z1 + 0.4) { b.target = 0; actor.playGesture?.('stow'); }
     if (row === P.seat.row) {
       const issues = this.playerIssues();
       if (!issues.length) { if (this.flags[key + '-asked']) { this.crewLine(actor, 'Tack! Thank you.'); } return true; }
@@ -271,7 +280,6 @@ export class Director {
     }
     if (this.after('serviceDone', 150) && this.flag('trash')) people.collectTrash(() => this.mark('trashDone'));
     if (this.after('beltOffAir', 100) && this.flag('habits')) people.cruiseHabits(this.nightish(), P.seat);
-    if (this.times.topofclimb != null && this.times.crossing == null) this.times.crossing = this.times.topofclimb + 150;
     // lavatory visits while the belt sign is off
     if (!this.seatbelt && fm.phase !== 'descent' && fm.phase !== 'boarding' && fm.phase !== 'pushback' && t > this.nextLav && people.walkers.length < 2 && !people.servicing()) {
       this.nextLav = t + 70 + this.r() * 120;
@@ -302,14 +310,16 @@ export class Director {
     }
     if (this.times.beltOffGate != null && this.flag('arrBelt')) {
       this.setSeatbelt(false); S.audio.clicks(40, 4);
-      people.crewStand(); people.standUpAtGate(); S.ext.beaconOff = true;
+      people.crewStand(); people.standUpAtGate();
       this.say(SCRIPTS.disarm, { chime: 'hilo' });
       this.flickerLights();
     }
     if (this.after('parked', 40) && this.flag('dayScene')) this.scene = 'warm';
-    if (this.after('parked', 55) && this.flag('doorOpen')) {
-      S.cabin.doors.L1.target = 1; S.audio.doorThud();
-      const pur = people.crewNamed('purser'); pur.clear(); pur.queue({ type: 'walk', x: 0, z: DOORS.L1.z + 0.95 }, { type: 'walk', x: -1.0, z: DOORS.L1.z + 0.95 }, { type: 'face', h: Math.PI * 0.85 }, { type: 'gesture', name: 'wave' });
+    if (fm.phase === 'arrived' && S.crew && S.crew.sys.beacon === false && this.flag('beaconOffCond')) { S.ext.beaconOff = true; this.mark('beaconOff'); }
+    if (this.after('beaconOff', 25) && this.times.beltOffGate != null && this.flag('doorOpen')) {
+      // the purser goes to L1, checks the slide is disarmed, and opens the door by hand
+      const pur = people.crewNamed('purser'); pur.clear(); pur.queue({ type: 'walk', x: 0, z: DOORS.L1.z + 0.95 }, { type: 'walk', x: -1.0, z: DOORS.L1.z + 0.95 }, { type: 'face', h: Math.PI * 0.85 }, { type: 'gesture', name: 'offer' },
+        { type: 'call', fn: () => { S.cabin.doors.L1.target = 1; S.audio.doorThud(); } }, { type: 'wait', dur: 2 }, { type: 'gesture', name: 'wave' });
       const fw = people.crewNamed('fwd'); fw.clear(); fw.queue({ type: 'walk', x: 0, z: DOORS.L1.z + 0.6 }, { type: 'walk', x: 0.85, z: LAYOUT.fwdMonAftZ + 0.3 }, { type: 'face', h: -Math.PI / 2 - 0.4 });
       people.startDeplaning(); this.mark('doorOpen');
     }
@@ -369,7 +379,7 @@ export class Director {
       case 'go-around': S.dialogue?.event('go-around', {}); break;
       case 'touchdown': if (!S.fast) S.audio.touchdown(fm.thump); S.dialogue?.event('touchdown', {}); S.ui.toast(fm.airport === 'ARN' ? `Touchdown, runway ${arr}, Stockholm Arlanda` : `Touchdown, runway ${arr}, Copenhagen Kastrup`); break;
       case 'parked': S.dialogue?.event('parked', {}); S.ui.toast('Arrived at the gate'); break;
-      case 'engines-off': setTimeout(() => { S.ext.beaconOff = true; }, S.fast ? 0 : 6000); break;
+      case 'engines-off': break; // the beacon goes off once the engines have spooled down (see update)
       default: break;
     }
   }

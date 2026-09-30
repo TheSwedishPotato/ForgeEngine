@@ -22,6 +22,7 @@ import { Path, buildRoute, buildReturnRoute, runwayInfo } from './flight.js';
 import { WHEELBASE } from './physics.js';
 import { spellRwy, spellNum, CALL_SHORT } from './atc.js';
 import { STATIONS } from './weather.js';
+import { CONTROLS, reachTime, handFor } from './hands.js';
 import * as THREE from 'three';
 
 const NAMES = { capt: ['Captain Lars Holmberg', 'Captain Karin Ek', 'Captain Anders Nygaard', 'Captain Maria Lindqvist'], fo: ['First Officer Johan Berg', 'First Officer Sofie Dahl', 'First Officer Mikkel Sørensen', 'First Officer Emma Strand'] };
@@ -35,6 +36,8 @@ class Pilot {
     this.gain = 0.85 + r() * 0.3;         // how firmly they track
     this.noise = 0.01 + r() * 0.015;      // remnant (never perfectly smooth)
     this.react = 0.5 + r() * 0.7;         // reaction to an expected cue (s)
+    this.x = role === 'capt' ? -0.54 : 0.54; // seat: captain left, first officer right
+    this.handQ = []; this.hand = null; this.handAt = null; // one free hand, working through its jobs
     this.flareH = (30 + r() * 9) * FT;    // where they start the flare
     this.flareTau = 3.2 + r() * 1.3;      // how firmly they flare
     this.apAgl = r() < 0.6 ? (400 + r() * 1400) * FT : r() < 0.75 ? (2000 + r() * 3000) * FT : 9000 * FT;
@@ -54,6 +57,9 @@ export class Crew {
     this.mode = 'none';               // what the hands are doing: none, taxi, takeoff, air, landing, rollout
     this.st = {};                     // procedure memory
     this.belt = true;
+    // switches the pilots operate that the physics does not need: APU, anti-ice
+    const cold = fm.phase === 'boarding';
+    this.sys = { apuMaster: cold, apuAvail: cold, apuBleed: cold, engAI: false, wingAI: false, beacon: !cold };
     this.goArounds = 0; this.diverting = null;
     this.dl = new Float32Array(4 * 128); this.dlI = 0; this.hand = { sx: 0, sy: 0, ped: 0, til: 0 };
     this.lev = [0, 0];                // where the pilot's hand puts the thrust levers
@@ -61,7 +67,7 @@ export class Crew {
     this._nz = 0; this._nzT = 0;
     this.xfeed = 0;
     fm.crew = this;
-    atc.on((m) => this.hooks.log({ kind: 'atc', who: m.who === 'ATC' ? m.unit : 'SK1415', text: m.text }));
+    atc.on((m) => this.hooks.log({ kind: 'atc', who: m.who === 'ATC' ? m.unit : m.who, text: m.text }));
     const f = fm.afs;
     f.takeoffData(fm.mass);
     f.crzFt = opts.cruiseFt ?? 36000;
@@ -72,24 +78,83 @@ export class Crew {
 
   // ---------- speaking ----------
   say(who, text) { const p = who === 'pf' ? this.pf : who === 'pm' ? this.pm : who === 'capt' ? this.capt : this.fo; this.hooks.log({ kind: 'cockpit', who: p.role === 'capt' ? 'Captain' : 'First officer', text }); }
+  // APU and anti-ice, as the SOPs have them: APU bleed off after start, APU off once taxiing; APU
+  // started again after landing; engine anti-ice on in icing conditions (OAT 10 °C or below with
+  // visible moisture), wing anti-ice in flight.
+  _systemsFlow(dt) {
+    const fm = this.fm, st = this.st, y = this.sys;
+    if (fm.phase === 'parked' && y.apuBleed && !st.apuBleedOff) { st.apuBleedOff = true; this.later(3, () => this.press('pm', 'ovhBleed', () => { y.apuBleed = false; })); }
+    if (fm.phase === 'taxi-out' && y.apuMaster && !st.apuOffT) { st.apuOffT = true; this.later(90, () => this.press('pm', 'ovhApu', () => { y.apuMaster = false; y.apuAvail = false; this.say('pm', 'APU off.'); })); }
+    if (fm.phase === 'taxi-in' && !y.apuMaster && !st.apuOn) { st.apuOn = true; this.later(10, () => this.press('pm', 'ovhApu', () => { y.apuMaster = true; this.say('pm', 'APU start.'); this.press('pm', 'ovhApu', () => { this.later(55, () => { y.apuAvail = true; }); }); })); }
+    const a = this.fm.atmo, oat = a ? a.oat : 15, wet = a && (a.inCloud || a.rain > 0.5);
+    const icing = oat <= 10 && oat > -40 && wet && fm.h < 7000;
+    if (icing && !y.engAI) { this._aiT = (this._aiT || 0) + dt; if (this._aiT > 4 && !this._aiPress) { this._aiPress = true; this.press('pm', 'ovhAntiIce', () => { this._aiPress = false; y.engAI = true; if (!fm.onGround) y.wingAI = true; this.say('pm', `Icing conditions, engine anti-ice on${y.wingAI ? ', wing anti-ice on' : ''}.`); }, 0.8); } }
+    else if (icing && y.engAI) this._aiT = 0;
+    else if (!icing && y.engAI) { this._aiT = (this._aiT || 0) - dt; if (this._aiT < -60 && !this._aiPress) { this._aiPress = true; this.press('pm', 'ovhAntiIce', () => { this._aiPress = false; y.engAI = false; y.wingAI = false; this._aiT = 0; this.say('pm', 'Anti-ice off.'); }, 0.8); } }
+    else if (icing) this._aiT = 4; else this._aiT = 0;
+    if (fm.onGround && y.wingAI && !this._aiPress) { this._aiPress = true; this.press('pm', 'ovhAntiIce', () => { this._aiPress = false; y.wingAI = false; }); }
+  }
   ground(text) { this.hooks.log({ kind: 'cockpit', who: 'Ground crew (headset)', text }); }
   readback(text) { this.later(0.8 + this.r() * 1.5, () => this.atc.say('SK1415', text, 0)); }
-  later(sec, fn) { this.tasks.push({ at: this.t + sec, fn }); }
+  // everything a pilot does takes a human, variable amount of time
+  later(sec, fn) { this.tasks.push({ at: this.t + (sec < 0.6 ? sec * (0.8 + this.r() * 0.4) : this.r.human(sec, 0.3)), fn }); }
+  // ---------- hands: a switch moves only when a pilot's hand gets to it ----------
+  _who(role) { return role === 'pf' ? this.pf : role === 'pm' ? this.pm : role === 'capt' ? this.capt : role === 'fo' ? this.fo : role; }
+  press(role, ctrl, fn, hold = 0.3) {
+    // flying by hand, the pilot flying keeps both hands on stick and levers: the FCU is the other pilot's (FCTM golden rules)
+    if (role === 'pf' && ctrl.startsWith('fcu') && ctrl !== 'fcuAp' && !this.afs.ap && !this.fm.onGround) role = 'pm';
+    const p = this._who(role);
+    const side = p.role === 'capt' ? 'C' : 'F';
+    const id = ['mcdu', 'efis', 'rmp'].includes(ctrl) ? ctrl + side : ctrl;
+    p.handQ.push({ ctrl: id, fn, hold: this.r.human(hold, 0.3) });
+  }
+  // set a control to a value by hand, once (nothing if it is already there or a hand is on its way)
+  setCtl(role, key, val, idx = null, ctrl = null) {
+    const c = this.fm.ctl, cur = idx == null ? c[key] : c[key][idx];
+    const id = key + (idx ?? '');
+    this._pend = this._pend || new Map();
+    if (this._pend.has(id)) { if (this._pend.get(id) === val) return; }
+    else if (cur === val) return;
+    this._pend.set(id, val);
+    const where = ctrl || { parkBrake: 'parkBrake', engMaster: 'engMaster' + (idx ?? 0), engMode: 'engMode', flapLever: 'flaps', speedbrake: 'speedbrake', spoilersArmed: 'speedbrake', gearLever: 'gear', autobrake: 'autobrake' }[key] || key;
+    this.press(role, where, () => { this._pend.delete(id); if (idx == null) c[key] = val; else c[key][idx] = val; });
+  }
+  _hands(dt) {
+    for (const p of [this.capt, this.fo]) {
+      const h = p.hand;
+      if (!h) {
+        if (!p.handQ.length) continue;
+        const job = p.handQ.shift(), to = CONTROLS[job.ctrl];
+        const from = p.handAt || [p.x + (p.x < 0 ? 0.2 : -0.2), 0.62, -4.8];
+        const d = to ? Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]) : 0.03;
+        p.hand = { ...job, to, ph: 'reach', t: 0, dur: reachTime(d, this.r), side: handFor(p.x, to) };
+        continue;
+      }
+      h.t += dt;
+      if (h.ph === 'reach' && h.t >= h.dur) { h.ph = 'hold'; h.t = 0; if (h.fn) h.fn(); }
+      else if (h.ph === 'hold' && h.t >= h.hold) {
+        if (p.handQ.length) { p.handAt = h.to; p.hand = null; }     // straight on to the next switch
+        else { h.ph = 'return'; h.t = 0; h.dur = reachTime(0.35, this.r) * 0.9; }
+      } else if (h.ph === 'return' && h.t >= h.dur) { p.hand = null; p.handAt = null; }
+    }
+  }
+  handsBusy(role) { const p = this._who(role); return !!p.hand || p.handQ.length > 0; }
+
   onClearance(kind, v, qnh) {
     const a = this.afs;
     if (kind === 'alt') {
-      this.later(this.pf.react + 0.5, () => {
+      this.later(this.pf.react + 0.5, () => this.press('pf', 'fcuAlt', () => {
         a.setAlt(v);
         if (qnh) this.st.qnhPending = qnh;
         if (this.fm.phase === 'go-around' || this.st.emerDes) return;
         const cur = this.fm.altInd / FT;
         if (v > cur + 100 && !['SRS'].includes(a.vert)) a.pushAlt();
         else if (v < cur - 100) { if (this.fm.phase === 'descent' || this.fm.phase === 'approach' || this.fm.phase === 'cruise') a.pushAlt(); }
-      });
+      }, 0.8));
     }
-    if (kind === 'spd') { a.atcSpd = v; }
-    if (kind === 'approach') { this.st.cleared = true; this.later(this.pm.react, () => { a.armAppr(this.approachRwy); this.say('pf', 'Approach mode armed.'); }); }
-    if (kind === 'offset') { a.offset = v; }
+    if (kind === 'spd') { this.later(this.pf.react, () => this.press('pf', 'fcuSpd', () => { a.atcSpd = v; }, 0.6)); }
+    if (kind === 'approach') { this.st.cleared = true; this.later(this.pm.react, () => this.press('pf', 'fcuAppr', () => { a.armAppr(this.approachRwy); this.say('pf', 'Approach mode armed.'); })); }
+    if (kind === 'offset') { this.press('pm', 'mcdu', () => { a.offset = v; }, 3); }
   }
   readyForTakeoff() { return this.fm.phase === 'lineup' && this.fm.gs < 3 && this.st.lineupDone && this.hooks.cabinReady(); }
 
@@ -126,6 +191,7 @@ export class Crew {
   // ---------- the hands: called every physics step ----------
   control(dt) {
     this.t += dt;
+    this._hands(dt);
     const fm = this.fm, c = fm.ctl, p = this.pf;
     // high-level procedures ten times a second
     this._think += dt;
@@ -279,6 +345,9 @@ export class Crew {
     let vT = Math.min(this.st.taxiMax ?? 9.5, Math.max(3.2, vTurn));
     const stopS = this.st.stopS;
     if (stopS != null) { const d = Math.max(0, stopS - fm.s); vT = Math.min(vT, Math.sqrt(2 * 0.5 * d)); if (d < 0.8) vT = 0; }
+    // the captain keeps a safe distance behind aircraft taxiing or holding ahead (look out, not a script)
+    const gap = this._trafficAhead();
+    if (gap < 400) { const d = Math.max(0, gap - 62); vT = Math.min(vT, Math.sqrt(2 * 0.45 * d)); if (d < 1) vT = 0; }
     const dv = vT - gs;
     this._taxiI = clamp((this._taxiI || 0) + (dv > 0 ? dv : dv * 3) * dt * 0.02, 0, 0.12);
     const need = vT < 0.05 ? 0 : clamp(0.02 + 0.06 * dv + this._taxiI + (gs < 0.6 && vT > 1.5 ? 0.18 : 0), 0, 0.3);
@@ -289,58 +358,75 @@ export class Crew {
     this.brkL = this.brkR = null;
   }
 
+  // distance (m) to the nearest aircraft on the ground ahead of our nose within the taxiway width
+  _trafficAhead() {
+    const fm = this.fm, tf = this.atc.tf; if (!tf || !fm.onGround) return 1e9;
+    const h = fm.heading, fx = Math.sin(h), fz = -Math.cos(h);
+    let best = 1e9;
+    for (const a of tf.list) {
+      if (a.x == null || a.airborne || ['scheduled', 'ready-push', 'parked', 'gone'].includes(a.state)) continue;
+      const dx = a.x - fm.pos.x, dz = a.z - fm.pos.z, ahead = dx * fx + dz * fz, lat = Math.abs(dx * fz - dz * fx);
+      if (ahead > 0 && ahead < 400 && lat < 30) best = Math.min(best, ahead);
+    }
+    return best;
+  }
+
   // ---------- procedures: ten times a second ----------
   think(dt) {
     const fm = this.fm, afs = this.afs, atc = this.atc, st = this.st;
     for (let i = 0; i < this.tasks.length; i++) { const tk = this.tasks[i]; if (tk.at <= this.t) { this.tasks.splice(i--, 1); tk.fn(); } }
     atc.update(dt, fm, this);
     atc.poll(fm, this);
-    if (fm.crashed) { this.mode = 'none'; this.lev = [0, 0]; this.brk = 1; if (!st.crashDone) { st.crashDone = true; fm.ctl.engMaster = [false, false]; } return; }
+    this._systemsFlow(dt);
+    if (fm.crashed) { this.mode = 'none'; this.lev = [0, 0]; this.brk = 1; if (!st.crashDone) { st.crashDone = true; this.setCtl('capt', 'engMaster', false, 0); this.setCtl('capt', 'engMaster', false, 1); } return; }
     this._monitor(dt);
     if (!fm.onGround && !afs.ap && this.mode === 'none' && fm.phase !== 'forced') this.mode = fm.phase === 'approach' || fm.phase === 'flare' ? 'landing' : 'air';
     const agl = fm.agl, ias = fm.ias, altFt = fm.altInd / FT;
     switch (fm.phase) {
       case 'boarding': {
         // at the gate: the pilots wait for the load sheet and the purser's "boarding complete"
-        fm.ctl.parkBrake = true; this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
-        if (this.boardingDone && !st.pushReq) { st.pushReq = true; this.later(10, () => { this.say('capt', 'Doors closed, beacon on. Before start checklist complete.'); atc.call('startup', this); }); }
+        if (!st.pushGo) this.setCtl('capt', 'parkBrake', true); this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
+        if (this.boardingDone && !st.pushReq) { st.pushReq = true; this.later(8, () => this.press('capt', 'ovhExtLt', () => { this.sys.beacon = true; this.say('capt', 'Doors closed, beacon on. Before start checklist complete.'); this.later(2, () => atc.call('startup', this)); })); }
         if (atc.cl.push && !st.pushGo) {
           st.pushGo = true;
-          this.later(4, () => this.say('capt', `Ground from cockpit, cleared for pushback facing ${fm.route.gate.facing}. Brakes released.`));
-          this.later(6, () => { fm.ctl.parkBrake = false; });
-          this.later(10, () => { this.ground('Brakes released, pushback commencing. Cleared to start the engines.'); fm.startPushback(fm.route.pushPts); fm.phase = 'pushback'; st.pushT = this.t; });
+          // parking brake off by hand, then the report to the headset man, who starts the push
+          this.later(3, () => this.press('capt', 'parkBrake', () => {
+            fm.ctl.parkBrake = false;
+            this.later(1.5, () => this.say('capt', `Ground from cockpit, cleared for pushback facing ${fm.route.gate.facing}. Brakes released.`));
+            this.later(6, () => { this.ground('Brakes released, pushback commencing. Cleared to start the engines.'); fm.startPushback(fm.route.pushPts); fm.phase = 'pushback'; st.pushT = this.t; });
+          }));
         }
         break;
       }
       case 'pushback': {
-        fm.ctl.parkBrake = fm.tug?.state === 'stopped' ? fm.ctl.parkBrake : false; this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
+        this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
         // engine 2 first (it drives the yellow hydraulics for the brakes and steering), then engine 1
-        if (!st.eng2 && this.t - st.pushT > 15) { st.eng2 = true; fm.ctl.engMode = 'IGN/START'; this.say('capt', 'Starting engine two.'); this.later(3, () => { fm.ctl.engMaster[1] = true; }); }
-        if (st.eng2 && fm.engineRunning[1] && !st.eng1) { st.eng1 = true; this.later(8, () => { this.say('capt', 'Starting engine one.'); fm.ctl.engMaster[0] = true; }); }
+        if (!st.eng2 && this.t - st.pushT > 15) { st.eng2 = true; this.setCtl('capt', 'engMode', 'IGN/START'); this.press('capt', 'engMode', () => this.say('capt', 'Starting engine two.')); this.later(3, () => this.setCtl('capt', 'engMaster', true, 1)); }
+        if (st.eng2 && fm.engineRunning[1] && !st.eng1) { st.eng1 = true; this.later(8, () => { this.say('capt', 'Starting engine one.'); this.setCtl('capt', 'engMaster', true, 0); }); }
         if (fm.tug?.state === 'stopped' && !st.pushStop) {
           st.pushStop = true;
           this.ground('Pushback complete, set parking brake.');
-          this.later(2.5, () => { fm.ctl.parkBrake = true; this.say('capt', 'Parking brake set.'); });
+          this.later(1.5, () => this.press('capt', 'parkBrake', () => { fm.ctl.parkBrake = true; this.say('capt', 'Parking brake set.'); }));
           this.later(9, () => this.ground('Parking brake set. Disconnecting, bypass pin removed. Stand by for visual signals on the left.'));
           this.later(16, () => { fm.tug.state = 'off'; fm.emit('tug-disconnected'); });
         }
         if (st.pushStop && fm.tug?.state === 'off' && fm.engineRunning[0] && fm.engineRunning[1] && !st.afterStart) {
           st.afterStart = true;
-          this.later(4, () => { fm.ctl.engMode = 'NORM'; this.say('pf', 'After start checklist: APU bleed off, engine mode normal, ground spoilers armed, rudder trim zero.'); fm.phase = 'parked'; fm.emit('pushback-complete'); });
+          this.later(4, () => this.press('capt', 'engMode', () => { fm.ctl.engMode = 'NORM'; this.say('pf', 'After start checklist: APU bleed off, engine mode normal, ground spoilers armed, rudder trim zero.'); fm.phase = 'parked'; fm.emit('pushback-complete'); }, 0.5));
         }
         break;
       }
       case 'parked': {
-        fm.ctl.parkBrake = true; this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
+        this.brk = 0; this.lev = [0, 0]; this.mode = 'none';
         if (!st.clr) { st.clr = true; this.later(6, () => { atc.call('taxi', this); }); }
         if (atc.cl.taxi && !st.taxiGo) {
           st.taxiGo = true;
-          this.later(this.capt.react + 2, () => {
+          this.later(this.capt.react + 2, () => this.press('capt', 'parkBrake', () => {
             fm.ctl.parkBrake = false; this.brk = 0; this.st.stopS = fm.m.hold; this.mode = 'taxi'; fm.phase = 'taxi-out'; fm.emit('taxi-start');
             this.say('capt', 'Clear left? — Clear right. Taxiing.');
-          });
+          }));
           // before-taxi items: flaps for take-off, spoilers armed, autobrake MAX, trim
-          this.later(14, () => { fm.ctl.flapLever = 1; fm.ctl.spoilersArmed = true; fm.ctl.autobrake = 'MAX'; this.say('pf', 'Flaps one. Before take-off checklist down to the line.'); });
+          this.later(14, () => { this.say('pf', 'Flaps one.'); this.setCtl('pm', 'flapLever', 1); this.setCtl('pm', 'spoilersArmed', true); this.setCtl('pm', 'autobrake', 'MAX'); this.press('pm', 'ecp', () => this.say('pm', 'Before take-off checklist down to the line.'), 1.5); });
         }
         break;
       }
@@ -373,24 +459,26 @@ export class Crew {
       case 'flare': this._airThink(dt); break;
       case 'forced': this._forcedThink(); break;
       case 'rollout': this._rolloutThink(); break;
-      case 'rto-stop': case 'runway-stop': this.mode = 'none'; this.lev = [0, 0]; this.brk = 1; fm.ctl.parkBrake = fm.gs < 0.3; break;
+      case 'rto-stop': case 'runway-stop': this.mode = 'none'; this.lev = [0, 0]; this.brk = 1; if (fm.gs < 0.3) this.setCtl('capt', 'parkBrake', true); break;
       case 'taxi-in': {
         this.st.stopS = fm.m.stand - 0.3; this.st.taxiMax = 9;
         if (atc.cl.taxiIn || fm.airport) this.mode = 'taxi';
         else { this.mode = 'taxi'; this.st.stopS = Math.min(this.st.stopS, fm.m.exit + 180); }
-        if (!st.eng2Off && this.t - (st.tdT ?? this.t) > 170 && !fm.engFail.some(Boolean) && fm.m.stand - fm.s > 400) { st.eng2Off = true; fm.ctl.engMaster[1] = false; this.singleEngine = true; fm.emit('engine2-shutdown'); this.say('capt', 'Engine two shut down, single-engine taxi.'); }
-        if (fm.s >= fm.m.stand - 0.8 && fm.gs < 0.15) { fm.phase = 'arrived'; fm.ctl.parkBrake = true; this.mode = 'none'; this.lev = [0, 0]; fm.emit('parked'); this.say('capt', 'Parking brake set.'); }
+        if (!st.eng2Off && this.t - (st.tdT ?? this.t) > 170 && !fm.engFail.some(Boolean) && fm.m.stand - fm.s > 400) { st.eng2Off = true; this.press('capt', 'engMaster1', () => { fm.ctl.engMaster[1] = false; this.singleEngine = true; fm.emit('engine2-shutdown'); this.say('capt', 'Engine two shut down, single-engine taxi.'); }); }
+        if (fm.s >= fm.m.stand - 0.8 && fm.gs < 0.15) { fm.phase = 'arrived'; this.brk = 1; this.mode = 'none'; this.lev = [0, 0]; fm.emit('parked'); this.press('capt', 'parkBrake', () => { fm.ctl.parkBrake = true; this.say('capt', 'Parking brake set.'); }); }
         break;
       }
       case 'arrived': {
-        this.mode = 'none'; this.lev = [0, 0]; fm.ctl.parkBrake = true;
+        this.mode = 'none'; this.lev = [0, 0]; if (!fm.ctl.parkBrake) this.brk = 1;
         // at the stand: engines off once the ground crew have the chocks in, then the seatbelt sign off
         if (!st.engOff) {
           st.engOff = true;
-          this.later(12, () => { fm.ctl.engMaster = [false, false]; this.say('capt', 'Engines off. Beacon off when they have spooled down.'); fm.emit('engines-off'); });
+          this.later(12, () => { this.setCtl('capt', 'engMaster', false, 0); this.press('capt', 'engMaster1', () => { fm.ctl.engMaster[1] = false; this.say('capt', 'Engines off. Beacon off when they have spooled down.'); fm.emit('engines-off'); }); });
           this.later(22, () => { this._belt(false); this.say('pm', 'Seatbelt sign off.'); });
         }
-        if (fm._flags.shutdown) fm.ctl.engMaster = [false, false];
+        // beacon off once the engines have spooled down (the ground crew wait for it before approaching)
+        if (st.engOff && Math.max(...fm.n1) < 0.08 && this.sys.beacon && !st.beaconOffP) { st.beaconOffP = true; this.later(3, () => this.press('capt', 'ovhExtLt', () => { this.sys.beacon = false; fm.emit('beacon-off'); })); }
+        if (fm._flags.shutdown) { this.setCtl('capt', 'engMaster', false, 0); this.setCtl('capt', 'engMaster', false, 1); }
         break;
       }
       default: break;
@@ -400,7 +488,7 @@ export class Crew {
   // ---------- take-off ----------
   _takeoffRoll() {
     const fm = this.fm;
-    fm.phase = 'takeoff'; this.mode = 'takeoff'; this.brk = 0; fm.ctl.parkBrake = false; this.brkL = this.brkR = null;
+    fm.phase = 'takeoff'; this.mode = 'takeoff'; this.brk = 0; this.brkL = this.brkR = null;
     const wx = this.atc.wx.s.arn;
     // TOGA on a wet runway, in gusts or with windshear about; otherwise the reduced FLX thrust
     this.toga = wx.precip > 0.5 || wx.gust > wx.wspd + 12 || this.atc.wx.stormNear('ARN', 1);
@@ -428,7 +516,6 @@ export class Crew {
       this.say('capt', 'Stop!');
       this.lev = [0, 0];
       this.later(0.8, () => { this.lev = [this.revMaxOK() ? -1 : 0, this.revMaxOK() ? -1 : 0]; });
-      fm.ctl.autobrake = 'MAX';
       this.later(1.2, () => { if (!fm.abActive) this.brk = 1; });
       fm.emit('rto'); fm._rtoV = fm.ias;
       this.mode = 'rollout'; fm.phase = 'rollout';
@@ -445,21 +532,21 @@ export class Crew {
     const phase = fm.phase;
     // --- after take-off ---
     if (phase === 'climb' || phase === 'go-around') {
-      if (!st.posClimb && fm.vs > 1.2 && agl > 8 * FT && tAir > 1.5) { st.posClimb = true; this.say('pm', 'Positive climb.'); this.later(0.5, () => this.say('pf', 'Gear up.')); this.later(1.2 + pm.react * 0.5, () => { fm.ctl.gearLever = 0; fm.emit(phase === 'go-around' ? 'ga-gear-up' : 'gear-up'); }); }
-      if (!afs.ap && !st.apOn && agl > Math.max(100 * FT, pf.apAgl) && tAir > 5 && !this._handFlyWanted()) { st.apOn = true; afs.engageAP(); this.mode = 'none'; this.say('pf', 'Autopilot one.'); }
+      if (!st.posClimb && fm.vs > 1.2 && agl > 8 * FT && tAir > 1.5) { st.posClimb = true; this.say('pm', 'Positive climb.'); this.later(0.5, () => this.say('pf', 'Gear up.')); this.later(0.6 + pm.react * 0.4, () => this.press('pm', 'gear', () => { fm.ctl.gearLever = 0; fm.emit(phase === 'go-around' ? 'ga-gear-up' : 'gear-up'); }, 0.4)); }
+      if (!afs.ap && !st.apOn && agl > Math.max(100 * FT, pf.apAgl) && tAir > 5 && !this._handFlyWanted()) { st.apOn = true; this._apOn(); }
       if (!st.lvrClb && agl > afs.thrRedAgl && (phase === 'climb' ? tAir > 10 : true)) { st.lvrClb = true; this.later(pf.react, () => { this.lev = [DETENT.CL, DETENT.CL]; this.say('pf', 'Climb thrust.'); fm.emit(phase === 'go-around' ? 'ga-thrust-reduction' : 'thrust-reduction'); }); }
       // clean up: flaps 1 at F speed, flaps up at S speed
       const eo = fm.engFail[0] || fm.engFail[1];
       const accel = agl > (eo ? 1500 * FT : afs.accAgl * 0.33);
       if (accel && fm.ctl.flapLever >= 2 && ias > afs.fSpeed() - 5 && !st.fl1) { st.fl1 = true; this._flaps(1, 'Flaps one.'); }
-      if (accel && fm.ctl.flapLever === 1 && ias > afs.sSpeed() && !st.fl0 && (phase !== 'go-around' || agl > 1500 * FT)) { st.fl0 = true; this._flaps(0, 'Flaps up.'); this.later(3, () => { fm.ctl.spoilersArmed = false; this.say('pf', 'Disarm spoilers. After take-off checklist.'); }); }
-      if (phase === 'climb' && !st.atcAir && agl > 1500 * FT) { st.atcAir = true; atc.call('airborne', this, { alt: spellNum(Math.round(altFt / 100) * 100), cleared: 'five thousand feet' }); afs.setAlt(5000); afs.pushAlt(); }
+      if (accel && fm.ctl.flapLever === 1 && ias > afs.sSpeed() && !st.fl0 && (phase !== 'go-around' || agl > 1500 * FT)) { st.fl0 = true; this._flaps(0, 'Flaps up.'); this.later(3, () => { this.say('pf', 'Disarm spoilers. After take-off checklist.'); this.setCtl('pm', 'spoilersArmed', false); }); }
+      if (phase === 'climb' && !st.atcAir && agl > 1500 * FT) { st.atcAir = true; atc.call('airborne', this, { alt: spellNum(Math.round(altFt / 100) * 100), cleared: 'five thousand feet' }); this.press('pf', 'fcuAlt', () => { afs.setAlt(5000); afs.pushAlt(); }); }
       if (phase === 'climb' && !st.std && altFt > 5000 - 50 && afs.fcu.alt > 5000) { st.std = true; fm.baro = null; this.say('pm', 'Transition altitude, standard.'); }
       if (phase === 'climb' && !st.fl360 && altFt > 7500) { st.fl360 = true; atc.call('climb-high', this, { fl: afs.crzFt / 100 }); }
       if (phase === 'climb' && altFt > 10000 && !st.p10k) { st.p10k = true; fm.emit('passing-10000-climb'); }
       if (phase === 'climb' && (afs.vert === 'ALT CRZ' || (afs.vert === 'ALT' && Math.abs(afs.fcu.alt - afs.crzFt) < 60)) && !st.toc) { st.toc = true; fm.phase = 'cruise'; afs.phase = 'CRUISE'; fm.emit('top-of-climb'); }
       // hand-flying pilots engage the autopilot passing FL100 at the latest
-      if (!afs.ap && altFt > 10000 && !st.apLate && phase === 'climb') { st.apLate = true; afs.engageAP(); this.mode = 'none'; this.say('pf', 'Autopilot one.'); }
+      if (!afs.ap && altFt > 10000 && !st.apLate && phase === 'climb') { st.apLate = true; this._apOn(); }
     }
     if (phase === 'go-around') this._goAroundThink();
     // --- cruise: weather, turbulence, top of descent ---
@@ -472,7 +559,7 @@ export class Crew {
       if (rc) { this._planApproach(); this._rebuildArrival(rc); this.later(3, () => this.say('pm', `ATIS changed, runway ${spellRwy(rc)} for landing. I'll set it up.`)); }
     }
     if (phase === 'cruise' && st.desReq && afs.fcu.alt < afs.crzFt - 500 && !st.tod) {
-      st.tod = true; fm.phase = 'descent'; afs.phase = 'DESCENT'; afs.pushAlt(); fm.emit('top-of-descent');
+      st.tod = true; fm.phase = 'descent'; afs.phase = 'DESCENT'; fm.emit('top-of-descent'); this.press('pf', 'fcuAlt', () => afs.pushAlt());
     }
     // --- descent & approach ---
     if (phase === 'descent' || phase === 'approach') this._descentThink(dt);
@@ -493,7 +580,7 @@ export class Crew {
   _flaps(lever, call) {
     const fm = this.fm;
     this.say('pf', call === 'Flaps up.' ? 'Flaps up.' : call);
-    this.later(0.7 + this.pm.react * 0.4, () => { fm.ctl.flapLever = lever; this.say('pm', lever === 0 ? 'Flaps zero.' : `Flaps ${['zero', 'one', 'two', 'three', 'full'][lever]}.`); });
+    this.later(0.3 + this.pm.react * 0.3, () => this.press('pm', 'flaps', () => { fm.ctl.flapLever = lever; this.say('pm', lever === 0 ? 'Flaps zero.' : `Flaps ${['zero', 'one', 'two', 'three', 'full'][lever]}.`); }, 0.5));
   }
 
   // cruise monitoring: turbulence -> seatbelt sign, level change; storms -> deviation
@@ -532,7 +619,8 @@ export class Crew {
     if (!fm.pressurised && !st.depress) { st.depress = true; this._depressurised(); }
     if (!fm.hyd.green && !st.hydG) { st.hydG = true; this.later(this.pm.react + 2, () => { this.say('pm', 'ECAM: hydraulic green system low pressure.'); this.hooks.emergency('hydraulic', {}); this._planApproach(); }); }
   }
-  _belt(on) { if (this.belt === on) return; this.belt = on; this.st.beltT = this.t; this.hooks.seatbelt(on); }
+  _belt(on) { if ((this._beltWant ?? this.belt) === on) return; this._beltWant = on; this.press('pm', 'ovhSigns', () => { this.belt = on; this.st.beltT = this.t; this.hooks.seatbelt(on); }); }
+  _apOn(quiet = false) { this.press('pf', 'fcuAp', () => { if (!this.afs.ap) this.afs.engageAP(); this.mode = 'none'; if (!quiet) this.say('pf', 'Autopilot one.'); }, 0.3); }
 
   // Thunderstorm cells seen on the weather radar: keep 20 NM from the strong echoes (FAA AC 00-24C)
   _weatherAvoid(dt) {
@@ -592,7 +680,7 @@ export class Crew {
     if (!st.appClr && d2td < 30000 && altFt < 6000) { st.appClr = true; atc.call('approach', this); }
     if (!st.twr && d2td < 17000 && st.cleared) { st.twr = true; atc.call('tower', this); }
     // approach phase and the configuration schedule, respecting the flap limits
-    if (fm.phase === 'descent' && d2td < 40000) { fm.phase = 'approach'; afs.phase = 'APPROACH'; afs.managedSpd(); fm.emit('approach'); }
+    if (fm.phase === 'descent' && d2td < 40000) { fm.phase = 'approach'; fm.emit('approach'); this.press('pm', 'mcdu', () => { afs.phase = 'APPROACH'; afs.managedSpd(); }, 2); }
     if (fm.phase === 'approach') {
       const lev = fm.ctl.flapLever;
       if (lev < 1 && d2td < 32000 && ias < 226 && !st.a1) { st.a1 = true; this._flaps(1, 'Speed checked. Flaps one.'); }
@@ -602,7 +690,7 @@ export class Crew {
         st.gearDn = true; this.say('pf', 'Gear down.');
         // with a gear leg unsafe (Airbus LDG WITH ABNORMAL L/G): ground spoilers and autobrake not armed,
         // so the wing keeps its lift and can be held up with aileron after touchdown
-        this.later(0.8, () => { const abn = !!st.gearUnsafe; fm.ctl.gearLever = 1; fm.ctl.spoilersArmed = !abn; fm.ctl.autobrake = abn ? 'OFF' : this.abSetting; fm.emit('gear-down'); this.say('pm', abn ? 'Gear down. Spoilers not armed. Autobrake off.' : `Gear down. Spoilers armed. Autobrake ${this.abSetting}.`); });
+        this.later(0.5, () => this.press('pm', 'gear', () => { const abn = !!st.gearUnsafe; fm.ctl.gearLever = 1; this.setCtl('pm', 'spoilersArmed', !abn); this.setCtl('pm', 'autobrake', abn ? 'OFF' : this.abSetting); fm.emit('gear-down'); this.say('pm', abn ? 'Gear down. Spoilers not armed. Autobrake off.' : `Gear down. Spoilers armed. Autobrake ${this.abSetting}.`); }, 0.4));
         this.later(8, () => { fm.emit('seats-landing'); });
       }
       if (lev === 2 && st.gearDn && fm.gear > 0.9 && ias < 181 && d2td < 12500 && !st.a3) { st.a3 = true; this._flaps(3, 'Flaps three.'); }
@@ -618,7 +706,7 @@ export class Crew {
     const cur = fm.ctl.speedbrake;
     const next = sbWant > 0 ? sbWant : (cur > 0 && sbOk && (fm.altInd > (afs.profileAlt ?? 0) + 120 || ias > afs.spdTarget + 5) ? cur : 0);
     if (next > 0 && !(cur > 0) && !st.emerDes && this.t - (st.sbSaid ?? -99) > 60) { st.sbSaid = this.t; this.say('pf', 'Speed brakes.'); }
-    fm.ctl.speedbrake = next;
+    if (Math.abs(next - (cur || 0)) > 0.01) this.setCtl('pf', 'speedbrake', next);
   }
 
   _approachThink(dt) {
@@ -642,7 +730,7 @@ export class Crew {
     }
     // autopilot off for a manual landing when visual (autoland stays on)
     if (afs.ap && !this.appr.autoland && (agl < pf.apOffAgl && visual || agl < this.appr.dh + 80 * FT && agl < 400 * FT) && !st.apOff) {
-      st.apOff = true; afs.disconnectAP('pilot'); this.mode = 'landing'; this.say('pf', 'Autopilot off.');
+      st.apOff = true; this.press('pf', 'stick', () => { afs.disconnectAP('pilot'); this.mode = 'landing'; this.say('pf', 'Autopilot off.'); }, 0.2);
     }
     if (!afs.ap && fm.phase === 'approach' && this.mode !== 'landing' && agl < 3000 * FT) this.mode = 'landing';
     // minimums: runway in sight or go around
@@ -655,7 +743,7 @@ export class Crew {
       if (dh > 0) this.say('pf', 'Continue.');
     }
     // above the glide slope with LOC captured: V/S down to capture it from above; still not captured by 1500 ft: go around
-    if (afs.vertArmed === 'G/S' && afs.lat.startsWith('LOC') && afs.gsValid && afs.gsErrM > 60 && !st.gsAbove) { st.gsAbove = true; afs.setAlt(0); afs.setVS(-1500); this.say('pf', 'Above the glide slope. V/S minus one thousand five hundred.'); }
+    if (afs.vertArmed === 'G/S' && afs.lat.startsWith('LOC') && afs.gsValid && afs.gsErrM > 60 && !st.gsAbove) { st.gsAbove = true; this.say('pf', 'Above the glide slope. V/S minus one thousand five hundred.'); this.press('pf', 'fcuAlt', () => afs.setAlt(0)); this.press('pf', 'fcuVs', () => afs.setVS(-1500), 0.6); }
     if (st.gsAbove && afs.vert === 'V/S' && afs.gsErrM < 25) { afs.vert = 'G/S*'; afs.vertArmed = ''; }
     if (afs.vertArmed === 'G/S' && agl < 1500 * FT && !st.noGS) { st.noGS = true; this.say('pm', 'Glide slope not captured.'); this.goAround('unstable'); return; }
     // no landing clearance close in: go around
@@ -686,9 +774,9 @@ export class Crew {
       fm.phase = 'rollout'; this._flareEndSy = fm.ctl.stickY; this.mode = 'rollout'; st.tdT = this.t;
       this.lev = [0, 0];
       if (!st.gearUnsafe) this.later(0.4 + this.pf.react * 0.5, () => { const r = this.revMax ? DETENT.REV_MAX : DETENT.REV_IDLE; this.lev = [r, r]; });
-      else { this.brk = 0.3; this.later(4, () => { fm.ctl.engMaster = [false, false]; this.say('pf', 'Engine masters off.'); }); }
+      else { this.brk = 0.3; this.later(3, () => { this.setCtl('capt', 'engMaster', false, 0); this.press('capt', 'engMaster1', () => { fm.ctl.engMaster[1] = false; this.say('pf', 'Engine masters off.'); }); }); }
       this.later(1.5, () => this.say('pm', `Spoilers. Reverse green.${fm.abActive ? ' Decel.' : ''}`));
-      if (this.afs.ap && !this.appr.autoland) this.afs.disconnectAP('pilot');
+      if (this.afs.ap && !this.appr.autoland) this.press('pf', 'stick', () => this.afs.disconnectAP('pilot'), 0.2);
     }
     if (e === 'bounce' && fm.phase === 'rollout' && fm.agl > 1.5) { this.say('pf', 'Go around!'); fm.phase = 'flare'; this.goAround('bounce'); }
     if (e === 'windshear') this._windshearEscape();
@@ -696,14 +784,14 @@ export class Crew {
     if (e === 'ap-off-auto' && !fm.onGround) {
       this.mode = fm.phase === 'approach' && fm.agl < 1000 * FT ? 'landing' : 'air';
       this.say('pf', 'I have control.');
-      this.later(8, () => { if (!this.afs.ap && !fm.onGround && fm.agl > 700 * FT && fm.phase !== 'forced' && this.mode === 'air') { this.afs.engageAP(); this.mode = 'none'; this.say('pf', 'Autopilot one.'); } });
+      this.later(8, () => { if (!this.afs.ap && !fm.onGround && fm.agl > 700 * FT && fm.phase !== 'forced' && this.mode === 'air') this._apOn(); });
     }
   }
   _rolloutThink() {
     const fm = this.fm, st = this.st, afs = this.afs;
     const kt = fm.gs / KT;
     if (st.rtoWatch) {
-      if (kt < 1) { fm.phase = 'rto-stop'; this.lev = [0, 0]; this.brk = 1; fm.ctl.parkBrake = true; fm.emit('rto-stopped'); this.say('capt', 'Attention, crew at stations. Attention, crew at stations.'); this.hooks.emergency('rto', {}); }
+      if (kt < 1) { fm.phase = 'rto-stop'; this.lev = [0, 0]; this.brk = 1; this.setCtl('capt', 'parkBrake', true); fm.emit('rto-stopped'); this.say('capt', 'Attention, crew at stations. Attention, crew at stations.'); this.hooks.emergency('rto', {}); }
       else if (kt < 30 && this.lev[0] < 0) this.lev = [0, 0];
       return;
     }
@@ -715,7 +803,7 @@ export class Crew {
       const noseDown = fm.wow[0] && this.t - (st.tdT ?? 0) > 1.5;
       if (noseDown && st.brkOnT == null) st.brkOnT = this.t;
       this.brk = !noseDown ? 0 : kt > 2 ? clamp((kt - 5) / 30, 0.4, 1) * clamp((this.t - st.brkOnT) / 2, 0.2, 1) : 1;
-      if (kt < 0.5) { fm.phase = 'runway-stop'; fm.ctl.parkBrake = true; fm.emit('stopped-on-runway'); this.hooks.emergency('stopped', { forced: !!this.st.forcedStop, fire: fm.engFire.some(Boolean) }); if (this.st.forcedStop) { this.say('capt', 'Evacuate, evacuate, evacuate!'); fm.evacuating = true; } }
+      if (kt < 0.5) { fm.phase = 'runway-stop'; this.setCtl('capt', 'parkBrake', true); fm.emit('stopped-on-runway'); this.hooks.emergency('stopped', { forced: !!this.st.forcedStop, fire: fm.engFire.some(Boolean) }); if (this.st.forcedStop) { this.say('capt', 'Evacuate, evacuate, evacuate!'); fm.evacuating = true; } }
       return;
     }
     // take over from the autobrake around 40 kt and slow down for the exit
@@ -723,13 +811,13 @@ export class Crew {
     const vExit = 12, need = Math.sqrt(Math.max(0, vExit * vExit + 2 * 1.6 * Math.max(0, dExit - 60)));
     if (kt < 45 && fm.abActive) { this.brk = 0.4; }
     if (!fm.abActive) this.brk = fm.gs > need + 0.5 ? clamp((fm.gs - need) * 0.25, 0.15, 0.8) : 0;
-    if (this.afs.ap && kt < 40) this.afs.disconnectAP('pilot');
+    if (this.afs.ap && kt < 40 && !st.apRoll) { st.apRoll = true; this.press('pf', 'stick', () => this.afs.disconnectAP('pilot'), 0.2); }
     if (fm.s > fm.m.exit - 25 || (kt < 25 && dExit < 200)) {
       // vacate: the hands go to the tiller and taxi along the exit
       this.mode = 'taxi'; this.st.stopS = fm.m.exit + 150; this.st.taxiMax = 10;
       if (fm.s > fm.m.exit + 40 && !st.vac) {
         st.vac = true; fm.phase = 'taxi-in'; fm.emit('vacated');
-        fm.ctl.flapLever = 0; fm.ctl.spoilersArmed = false; fm.ctl.autobrake = 'OFF'; fm.ctl.speedbrake = 0;
+        this.setCtl('pm', 'speedbrake', 0); this.setCtl('pm', 'spoilersArmed', false); this.setCtl('pm', 'flapLever', 0); this.setCtl('pm', 'autobrake', 'OFF');
         this.say('pf', 'After landing checklist.');
         if (!fm.airport) this.atc.call('vacated', this); else this.atc.cl.taxiIn = true;
       }
@@ -749,9 +837,9 @@ export class Crew {
     afs.toga(true); afs.setAlt(3000); afs.atcSpd = null;
     this.mode = afs.ap ? 'none' : 'air';
     // one step of flaps up; positive climb gear up; LVR CLB at the thrust reduction altitude
-    this.later(0.6 + this.pm.react * 0.5, () => { fm.ctl.flapLever = Math.max(0, fm.ctl.flapLever - 1); this.say('pm', `Flaps ${['zero', 'one', 'two', 'three', 'full'][fm.ctl.flapLever]}.`); });
+    this.later(0.3 + this.pm.react * 0.4, () => this.press('pm', 'flaps', () => { fm.ctl.flapLever = Math.max(0, fm.ctl.flapLever - 1); this.say('pm', `Flaps ${['zero', 'one', 'two', 'three', 'full'][fm.ctl.flapLever]}.`); }, 0.4));
     Object.assign(st, { gsAbove: false, noGS: false, a1: false, a2: false, a3: false, a4: false, posClimb: false, lvrClb: false, fl1: false, fl0: false, gate: false, apOff: false, mins: false, min100: false, flare: false, noClr: false, twr: false, appClr: false, cleared: false, spdClr: false, gaLevel: false, gearDn: false, rc50: false, rc40: false, rc30: false, rc20: false, rc10: false, autoRet: false });
-    if (!afs.ap) this.later(8, () => { if (fm.phase === 'go-around' && !afs.ap) { afs.engageAP(); this.mode = 'none'; this.say('pf', 'Autopilot one.'); } });
+    if (!afs.ap) this.later(8, () => { if (fm.phase === 'go-around' && !afs.ap) this._apOn(); });
     fm.emit('go-around'); fm.emit(`go-around-${reason}`);
     this.atc.resetLanding();
     this.later(3, () => this.atc.call('going-around', this));
@@ -839,15 +927,15 @@ export class Crew {
     this.later(8 + this.pm.react, () => {
       this.say('pf', 'I have control, ECAM actions.');
       this.say('pm', `Thrust lever ${i + 1}, idle. Engine master ${i + 1}, off.${fire ? ` Engine ${i + 1} fire pushbutton, push. Agent one, discharge.` : ''}`);
-      this.lev[i] = 0; fm.ctl.engMaster[i] = false;
+      this.lev[i] = 0; this.press('pm', 'engMaster' + i, () => { fm.ctl.engMaster[i] = false; });
       if (!fm.engFail[i]) fm.engFail[i] = 1; // shut down: from here on it is an engine-out
       this.hooks.emergency('engine-drill', { i, fire });
     });
     this.later(15, () => {
       this.lev[1 - i] = DETENT.FLX; // MCT on the remaining engine
       const low = fm.altInd < 12000 * FT && (fm.phase === 'climb' || fm.phase === 'go-around');
-      if (low) afs.setAlt(4000), afs.pullAlt();
-      else { afs.setAlt(Math.min(afs.fcu.alt, 22000)); afs.pullAlt(); afs.setSpd(Math.round(afs.greenDot())); }
+      if (low) this.press('pf', 'fcuAlt', () => { afs.setAlt(4000); afs.pullAlt(); }, 0.8);
+      else { this.press('pf', 'fcuAlt', () => { afs.setAlt(Math.min(afs.fcu.alt, 22000)); afs.pullAlt(); }, 0.8); this.press('pf', 'fcuSpd', () => afs.setSpd(Math.round(afs.greenDot())), 0.6); }
       this._decideDiversion(fire ? 'engine fire' : 'engine failure', fire);
     });
   }
@@ -917,9 +1005,10 @@ export class Crew {
     const fm = this.fm, afs = this.afs, st = this.st;
     if (fm.onGround || st.emerDes) return false;
     st.emerDes = true; fm.phase = 'emergency';
-    afs.setAlt(10000); afs.pullAlt(); afs.setSpd(Math.round(Math.min(330, afs._iasForMach(0.8, fm.air))));
-    if (afs.ap === false) { afs.engageAP(); this.mode = 'none'; }
-    fm.ctl.speedbrake = 1; this._belt(true);
+    if (afs.ap === false) this._apOn(true);
+    this.press('pf', 'fcuAlt', () => { afs.setAlt(10000); afs.pullAlt(); }, 0.8);
+    this.press('pf', 'fcuSpd', () => afs.setSpd(Math.round(Math.min(330, afs._iasForMach(0.8, fm.air)))), 0.6);
+    this.setCtl('pf', 'speedbrake', 1); this._belt(true);
     fm.emit('emergency-descent');
     this.atc.call('mayday', this, { what: 'emergency descent due to loss of cabin pressure', intent: 'descending to flight level one hundred' });
     return true;
@@ -927,7 +1016,7 @@ export class Crew {
   _emergencyThink() {
     const fm = this.fm, afs = this.afs, st = this.st;
     if (fm.altInd < 10600 * FT && st.emerDes && !st.emerLevel) {
-      st.emerLevel = true; fm.ctl.speedbrake = 0; afs.managedSpd(); fm.emit('emergency-level');
+      st.emerLevel = true; this.setCtl('pf', 'speedbrake', 0); this.press('pf', 'fcuSpd', () => afs.managedSpd()); fm.emit('emergency-level');
       this.later(20, () => { st.emerDes = false; fm.phase = 'descent'; afs.phase = 'DESCENT'; this._decideDiversion('loss of cabin pressure', false); });
     }
   }
@@ -935,9 +1024,9 @@ export class Crew {
     const fm = this.fm, afs = this.afs;
     if (fm.phase === 'forced') return;
     fm.phase = 'forced'; fm.emit('forced-landing');
-    fm.ctl.autobrake = 'OFF'; // the take-off MAX setting must not fire at touchdown: the pilots brake by hand once the nose is down
+    this.setCtl('pm', 'autobrake', 'OFF'); // the take-off MAX setting must not fire at touchdown: the pilots brake by hand once the nose is down
     this.say('capt', 'I have control. Engine dual failure. Mayday.');
-    afs.disconnectAP('pilot'); this.mode = 'air';
+    this.mode = 'air'; if (afs.ap) this.press('pf', 'stick', () => afs.disconnectAP('pilot'), 0.2);
     this.atc.call('mayday', this, { what: 'both engines failed', intent: 'forced landing' });
     this.hooks.emergency('dual-engine', {});
     this.st.brace = false;
@@ -947,8 +1036,8 @@ export class Crew {
     this.mode = 'air';
     // glide at green dot, flaps late, gear down over land, a flare at the end
     afs.lat = 'HDG'; afs.fcu.hdg = afs.fcu.hdg ?? (fm.heading / DEG); afs.vert = 'OP DES'; afs.setSpd(fm.agl > 600 ? Math.round(afs.greenDot()) : Math.round(afs.vls(3) + 10));
-    if (fm.agl < 600 && fm.ctl.flapLever < 2 && fm.ias < 195) fm.ctl.flapLever = Math.min(3, fm.ctl.flapLever + 1);
-    fm.ctl.gearLever = fm.ditch ? 0 : 1;
+    if (fm.agl < 600 && fm.ctl.flapLever < 2 && fm.ias < 195) this.setCtl('pm', 'flapLever', Math.min(3, fm.ctl.flapLever + 1));
+    this.setCtl('pm', 'gearLever', fm.ditch ? 0 : 1);
     if (fm.agl < 500 * FT && !st.brace) { st.brace = true; this.hooks.emergency('brace', {}); }
     if (fm.agl < Math.max(16, -fm.vs * 5)) { this.mode = 'landing'; this.st.flare = true; }
   }

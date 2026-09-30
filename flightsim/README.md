@@ -92,6 +92,38 @@ thrust, flap and speed-brake levers, sidesticks and pedals that move with the pi
 overhead panel and both pilots in their seats. A start-screen *what-if* option unlocks the door for
 the whole flight so you can ride on the observer (jump) seat; that is not allowed on a real flight.
 
+**Other traffic and air traffic control.** The aircraft around you are real flights from the
+timetables around SK1415: Arlanda's first-wave departures (Air France AF1463 to Paris at 05:55, Swiss
+LX1255 to Zürich 06:05, Lufthansa LH811 to Frankfurt 06:10, Finnair AY826 to Helsinki 06:20, then
+Ryanair and SAS), arrivals on the parallel runway, the Kastrup arrivals and departures around our
+landing and an SAS flight the other way on the airway at an odd flight level. Each has its own delay
+for the day (most a minute or two, a long tail of later ones) and from then on nothing is timed: every
+one is a point-mass aircraft with its type's mass, wing area, drag polar and thrust, pushed back from
+a pier F stand, starting its engines, taxiing behind whoever is ahead, lining up, rolling, rotating at
+its VR and climbing on excess thrust; arrivals fly a speed schedule down a 3° path and go around if
+the runway is not free. The controllers are rules, not a script: Ground approves one pushback at a
+time on the taxilane and not with traffic passing behind, gives taxi clearances ("follow the
+Airbus"); Tower lines departures up in the order they reported ready and clears each one for take-off
+only when the one ahead is airborne and 3 NM away (or two minutes on the same route), clears landings
+only on a free runway; Copenhagen Approach keeps 4 NM between arrivals with standard speed
+reductions. Everyone shares each frequency: one transmission at a time, with human reaction times
+before each call and readback, and you hear only the frequency the pilots have tuned (Arlanda
+Delivery 121.825, Ground 121.705, Tower 118.500, Stockholm Control 123.750, Sweden Control 134.980,
+Copenhagen Approach 119.805, Kastrup Tower 118.105, Kastrup Apron 121.630; 8.33 kHz channel names).
+The flight deck's TCAS shows them; you see them taxi past the window, at the holding point and in the
+sky, with contrails at cruise levels.
+
+**Hands on the controls.** Nothing in the cockpit changes by itself. Every switch, lever and knob the
+pilots use — parking brake, engine masters and ENG MODE, flap and speed-brake levers, gear lever,
+autobrake, FCU knobs and the AP push-button, EFIS, MCDU, the overhead's APU, bleed, anti-ice, signs
+and beacon — is a job for one pilot's hand: the hand reaches the control in a time given by Fitts' law
+(about 0.8–1.2 s for a switch half a metre away, with human spread), the change happens at the moment
+of contact, and the arm (solved on the pilot's own skeleton) and the eyes go there. One hand does one
+thing at a time; flying by hand, the pilot flying keeps the stick and levers and the other pilot works
+the FCU. In the cabin the purser walks to L1 and closes and opens the door herself, bins are closed
+by the crew checking the rows, and passengers reach up for their reading lights and blinds when they
+get round to it.
+
 **Debug mode (F3).** Live readouts of everything under the hood: position, air data, attitude,
 angle of attack and its protections, CL/CD and forces, engines (N1, N2, EGT, fuel flow, thrust,
 start state), gear struts and brakes, the tug; pilot inputs, control surfaces, fly-by-wire law,
@@ -302,8 +334,11 @@ start) or after pushback, and the what-if flight-deck observer seat.
 * In-flight medical emergencies: 1 in 604 flights (Peterson et al., *NEJM* 2013).
 * Abnormal gear landing: ground spoilers, anti-skid and autobrake not used with the A320 LDG WITH
   ABNORMAL L/G procedure (Airbus *Safety First* magazine, August 2010).
-* ATC: Arlanda Tower 118.500 and Ground 121.705 (OurAirports, VATSIM Scandinavia ESSA page), Kastrup Tower 118.100 and Copenhagen
-  Approach 119.800; ICAO phraseology. Pilot model: McRuer crossover / human-operator model. Airbus
+* ATC: Arlanda Delivery 121.825, Ground 121.700 (channel 121.705), Tower 118.500, Stockholm Control
+  123.75 (OurAirports / Flight Plan Database ESSA frequency lists); Sweden Control sector L 134.980
+  (LiveATC ESMS listing); Kastrup Tower (arrivals) 118.105, Copenhagen Approach West 119.805, Kastrup
+  Apron (arrivals) 121.630 (VATSIM Scandinavia EKDK frequencies, OurAirports EKCH); ICAO Doc 4444 /
+  Doc 9432 phraseology. Pilot model: McRuer crossover / human-operator model. Airbus
   normal law, protections and FMA modes: FlyByWire A32NX documentation.
 * Wing and fuselage bending: Airbus publishes no A320 figures, so the mode frequencies (about 2 Hz and
   3.2 Hz) and the tip deflection (about 0.85 m per g) are engineering estimates.
@@ -333,6 +368,21 @@ start) or after pushback, and the what-if flight-deck observer seat.
   Business from October 2025 (Live and Let's Fly). SAS A320neo seat pitch per row: seatmaps.com.
 * Admission to the flight crew compartment: EU Regulation 965/2012 Part-CAT CAT.GEN.MPA.135
   (UK CAA regulatory library).
+* Traffic timetable: Arlanda departures AF1463 05:55, LX1255 06:05, LH811 06:10, AY826 06:20
+  (Arlanda departure boards, airportarlanda.com / flight.info); the Ryanair and SAS departures, the
+  Arlanda arrivals and the Kastrup arrivals and departures around 07:00 (SK1202 from Aalborg, airBaltic
+  BT131 from Riga — which in reality runs Tuesdays, Thursdays and Saturdays — SK454, D83220) are
+  representative of the bank rather than the exact Sunday 10 May 2026 list. Aircraft performance
+  (mass, wing area, CD0/k, static thrust) from published type data and OpenAP-style drag polars
+  (numbers only).
+* Separation and sequencing: 3 NM radar / 2 minutes between departures on the same route, 4 NM on
+  final for medium-medium wake pairs, standard speed control (ICAO Doc 4444 §5.8, §8.7, RECAT-EU).
+* Flight-deck layout for the controls the pilots reach: FCOM flight-deck description as summarised in
+  Airbus A320 cockpit guides (glareshield with FCU and EFIS panels; centre panel with the gear lever
+  right of the lower ECAM and the autobrake panel beside it; pedestal with MCDUs, ECAM control panel,
+  RMP/ACP, thrust levers with speed brake left and flaps right, pitch trim wheels, engine masters,
+  parking brake and transponder aft). Reach time: Fitts' law (Fitts 1954; MacKenzie 1992 pointing
+  constants). FCTM golden rule: the PF flying manually asks the PM for FCU selections.
 * Runways: OurAirports `runways.csv` (ESSA 01L/19R, 01R/19L, 08/26; EKCH 04L/22R,
   04R/22L, 12/30). Terrain: Natural Earth 1:10m (public domain), rebuilt with
   `tools/build_geodata.py`.
@@ -352,7 +402,10 @@ or Copenhagen Airports.
 | `src/physics.js` | Rigid-body flight dynamics, engines, gear, fly-by-wire laws, wing and fuselage bending |
 | `src/autoflight.js` | FMGC/FCU: autopilot, flight director and autothrust modes, managed speeds, ILS |
 | `src/crew.js` | The two pilots: human operator model, SOPs, callouts, decisions, abnormal drills |
-| `src/atc.js` | Controllers, runway selection from the wind, clearances, the other traffic |
+| `src/atc.js` | Controllers as rules: frequencies with one voice at a time, pushback/taxi/runway sequencing, separation, clearances, runway selection |
+| `src/traffic.js` | The other flights: real timetable, delays, point-mass performance, pushback, taxi, take-off, arrival, go-around |
+| `src/hands.js` | Where each flight-deck control is, and Fitts'-law reach times for the pilots' hands |
+| `src/cockpitdisplays.js` | PFD, ND, E/WD, SD pages, MCDU, ISIS, clock, FCU, overhead and pedestal panels drawn live |
 | `src/weather.js` | The weather you set: stations, cloud layers, storms with life cycles, lightning, METARs |
 | `src/atmosphere.js` | Wind profile, Dryden turbulence, clear-air turbulence, storm flows, microbursts, wake vortices |
 | `src/cabinphysics.js` | What the accelerations do to people and things in the cabin |
@@ -385,7 +438,8 @@ node tools/flight-test.mjs gale 6000 --wind=270/30/45 --sc=efato
 ```
 
 Scenarios: `efato rto engcruise fire fire2 depress dual hyd cat shear shearto gear medical medical2 ga`.
-`--boarding` starts at the gate with the engines off (pushback and engine start); `--win=<t>:<s>`
+`--boarding` starts at the gate with the engines off (pushback and engine start); `--traffic` prints
+the other flights' states every 30 s; `--win=<t>:<s>`
 prints the gear and roll state every step within `s` seconds of time `t`.
 
 Rebuild `dist/SK1415.html` after changing the source:

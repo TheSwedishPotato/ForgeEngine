@@ -194,6 +194,31 @@ export const COCKPIT_PANES = [
   { name: 'rear', pts: [[-4.68, 0.82, -1.41], [-4.66, 1.388, -1.042], [-4.25, 1.388, -1.20], [-4.111, 1.25, -1.341], [-4.13, 0.81, -1.605]] },
 ];
 
+// Surface parameter u (see fusPoint) of a cockpit-window corner [z, y, x]. The windshields sit on
+// the crown, where the height hardly changes across the width, so they are mapped by their x; the
+// side windows by their height.
+export function paneU(pane, [z, y, x]) {
+  const s = fusSection(z, _fs);
+  if (pane.name === 'windshield') {
+    const c = Math.pow(clamp(Math.abs(x) / Math.max(s.hw, 1e-3), 0, 1), s.nU / 2);
+    return Math.acos(c) / (Math.PI / 2);
+  }
+  const up = y >= s.yw, n = up ? s.nU : s.nL, b = up ? s.top - s.yw : s.yw - s.bot;
+  const d = clamp(Math.abs(y - s.yw) / Math.max(b, 1e-3), 0, 1);
+  return (up ? 1 : -1) * Math.asin(Math.pow(d, n / 2)) / (Math.PI / 2);
+}
+// A pane's outline in surface coordinates [z, u], each edge subdivided, scaled about its centre.
+export function paneOutline(pane, scale = 1, sub = 8) {
+  const q = pane.pts.map((p) => [p[0], paneU(pane, p)]);
+  const cz = q.reduce((a, p) => a + p[0], 0) / q.length, cu = q.reduce((a, p) => a + p[1], 0) / q.length;
+  const out = [];
+  for (let k = 0; k < q.length; k++) {
+    const A = q[k], B = q[(k + 1) % q.length];
+    for (let i = 0; i < sub; i++) { const t = i / sub; out.push([cz + (lerp(A[0], B[0], t) - cz) * scale, cu + (lerp(A[1], B[1], t) - cu) * scale]); }
+  }
+  return { pts: out, cz, cu };
+}
+
 // ---------------- mass properties ----------------
 // Mean aerodynamic chord of the planform (computed once) and the CG at a typical 27 % MAC.
 export const MAC = (() => {
