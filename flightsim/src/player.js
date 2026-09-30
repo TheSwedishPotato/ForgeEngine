@@ -225,7 +225,9 @@ export class Player {
         let blocked = ctx.blocked ? ctx.blocked(nx, nz) : false;
         this.pushT = blocked ? (this.pushT || 0) + dt : 0;
         if (this.pushT > 1.2) blocked = false;
-        if (!blocked) {
+        // never trapped: from a spot that is not walkable (a teleport, a closing door) any step is allowed
+        if (!blocked && !this._walkable(this.pos.x, this.pos.z)) { this.pos.x = nx; this.pos.z = nz; moving = true; }
+        else if (!blocked) {
           if (this._walkable(nx, nz)) { this.pos.x = nx; this.pos.z = nz; moving = true; }
           else if (this._walkable(nx, this.pos.z)) { this.pos.x = nx; moving = true; }
           else if (this._walkable(this.pos.x, nz)) { this.pos.z = nz; moving = true; }
