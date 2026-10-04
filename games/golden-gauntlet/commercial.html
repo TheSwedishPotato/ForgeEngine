@@ -1,0 +1,2001 @@
+<title>The Golden Gauntlet</title>
+<meta name="description" content="A television commercial for Master Oldřich's armoury on Platnéřská street, Prague, anno 1403 — painted like an Early Netherlandish panel." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Grenze+Gotisch:wght@500;700;900&family=Alegreya:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&display=swap" rel="stylesheet" />
+<style>
+  /* Layout: one gilded panel holding the broadcast, controls beneath it, a short historical colophon. */
+  :root {
+    color-scheme: dark;
+    --ground: #17140f;          /* walnut-black of an altarpiece shrine */
+    --ground-2: #221d15;
+    --gilt: #c9a24a;            /* water-gilding */
+    --gilt-deep: #7d5f22;
+    --vermilion: #b5281c;       /* the brocade of the panel */
+    --parchment: #ecdfc0;
+    --ink-soft: #b9a983;
+    --display: "Grenze Gotisch", "UnifrakturMaguntia", "Old English Text MT", serif;
+    --text: "Alegreya", "Iowan Old Style", Palatino, Georgia, serif;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: radial-gradient(ellipse at 50% 0%, var(--ground-2), var(--ground) 70%); color: var(--parchment); font-family: var(--text); }
+  .wrap { box-sizing: border-box; width: min(1180px, 100%); margin: 0 auto; padding-inline: 16px; padding-block: 18px 40px; display: grid; gap: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 18px; }
+  h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 48px); line-height: 1; margin: 0; color: var(--gilt); text-wrap: balance; letter-spacing: 0.01em; }
+  header p { margin: 0; font-style: italic; color: var(--ink-soft); font-size: 17px; max-width: 60ch; }
+  .frame {
+    position: relative; margin: 0; padding: clamp(8px, 1.6vw, 18px);
+    background:
+      linear-gradient(135deg, #f3d98a 0%, var(--gilt) 18%, var(--gilt-deep) 45%, #e6c66f 62%, var(--gilt-deep) 85%, #b48d3a 100%);
+    box-shadow: 0 0 0 2px #3a2a10, 0 24px 60px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,240,200,0.6), inset 0 0 0 7px rgba(90,60,20,0.35);
+    border-radius: 3px;
+  }
+  .screen { position: relative; aspect-ratio: 16 / 9; width: 100%; max-width: 100%; background: #0b0906; overflow: hidden; box-shadow: inset 0 0 0 2px rgba(60,40,10,0.9); }
+  canvas#tv { display: block; width: 100%; height: 100%; }
+  .play {
+    position: absolute; inset: 0; display: grid; place-items: center; background: rgba(12,9,5,0.38);
+    border: 0; padding: 0; cursor: pointer; color: var(--parchment); font: inherit;
+  }
+  .play span { display: grid; place-items: center; gap: 6px; padding: 18px 28px; background: rgba(23,20,15,0.82); border: 2px solid var(--gilt); box-shadow: 0 0 0 4px rgba(23,20,15,0.6); }
+  .play b { font-family: var(--display); font-size: clamp(22px, 3.4vw, 34px); color: var(--gilt); font-weight: 700; }
+  .play small { font-size: 15px; color: var(--ink-soft); font-style: italic; }
+  .play:focus-visible { outline: 3px solid var(--gilt); outline-offset: -6px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .controls button {
+    font: 600 15px var(--text); color: var(--parchment); background: var(--ground-2); border: 1px solid var(--gilt-deep);
+    padding: 7px 13px; border-radius: 2px; cursor: pointer; letter-spacing: 0.02em;
+  }
+  .controls button[aria-pressed="false"] { color: var(--ink-soft); border-color: #4a3a1c; text-decoration: line-through; text-decoration-color: rgba(185,169,131,0.6); }
+  .controls button:hover { border-color: var(--gilt); }
+  .controls button:focus-visible { outline: 2px solid var(--gilt); outline-offset: 2px; }
+  .scrub { flex: 1 1 220px; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .scrub input { flex: 1; min-width: 0; accent-color: var(--vermilion); }
+  .scrub output { font-variant-numeric: tabular-nums; color: var(--ink-soft); font-size: 15px; min-width: 7.5ch; text-align: right; }
+  .colophon { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 28px; border-top: 1px solid rgba(201,162,74,0.35); padding-top: 14px; }
+  .colophon h2 { grid-column: 1 / -1; font-family: var(--display); font-weight: 500; font-size: 26px; color: var(--gilt); margin: 0; }
+  .colophon p { margin: 0; line-height: 1.5; font-size: 16px; color: #ddd0b0; min-width: 0; }
+  .colophon b { color: var(--parchment); }
+  .note { font-size: 14px; color: var(--ink-soft); font-style: italic; }
+  @media (prefers-reduced-motion: reduce) { .play span { transition: none; } }
+</style>
+
+<main class="wrap">
+  <header>
+    <h1>The Golden Gauntlet</h1>
+    <p>A television commercial for Master Oldřich, armourer of Platnéřská street, Prague — broadcast in the autumn of 1403 and painted in the manner of the Netherlandish masters.</p>
+  </header>
+  <figure class="frame">
+    <div class="screen">
+      <canvas id="tv" width="1280" height="720" aria-label="The commercial"></canvas>
+      <button class="play" id="play" type="button"><span><b>▶ Play the commercial</b><small>66 seconds · with sound and narration</small></span></button>
+    </div>
+  </figure>
+  <div class="controls" role="group" aria-label="Playback">
+    <button id="pp" type="button">Play</button>
+    <button id="restart" type="button">From the start</button>
+    <button id="sound" type="button" aria-pressed="true">Music &amp; effects</button>
+    <button id="voice" type="button" aria-pressed="true">Narrator voice</button>
+    <button id="subs" type="button" aria-pressed="true">Captions</button>
+    <label class="scrub"><input id="seek" type="range" min="0" max="66" step="0.1" value="0" aria-label="Position" /><output id="clock">0:00 / 1:06</output></label>
+  </div>
+  <section class="colophon">
+    <h2>What is true in it</h2>
+    <p><b>Platnéřská street</b> in Prague's Old Town is named after the <i>platnéři</i>, the plate-armourers who worked there. Master Oldřich and his shop are invented.</p>
+    <p><b>Prices</b> are given in <i>kopy</i> — a "threescore", the Bohemian unit of account of 60 Prague groschen. The figures in the commercial are for comedy, not from a price list.</p>
+    <p><b>The hounskull bascinet</b>, with its pointed "pig-faced" visor, was the knightly helmet across Europe c. 1380–1420; the great helm was by then a tournament piece.</p>
+    <p><b>Passau</b> blades were famous, and marked with the running wolf. Armour was tried against the crossbow before it was sold as proof.</p>
+    <p><b>1403</b>: King Wenceslas IV was a prisoner in Vienna, and King Sigismund's Hungarian army, with Cuman horsemen, had campaigned around Kutná Hora that winter.</p>
+    <p class="note">The narrator speaks with your browser's own voice; if it stays silent, read the captions. Sound starts only after you press play.</p>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const W = 1280, H = 720, DURATION = 66;
+  const cv = document.getElementById('tv');
+  const ctx = cv.getContext('2d');
+  const params = new URLSearchParams(location.search);
+
+  // ---------------------------------------------------------------------------
+  // Palette of the panel (lead white, vermilion, madder, azurite, verdigris, gold)
+  const C = {
+    skyTop: '#6e8e9d', skyMid: '#9fbcbf', skyLow: '#c9d7c2', hazeHill: '#8fa48a',
+    hill: '#5d7a43', hillDark: '#3e5a2c', leaf: '#2c4423', leafLight: '#4f6e34',
+    stone: '#cbbf9f', stoneShade: '#9c8f72', roof: '#7a5a48', slate: '#556070', water: '#a8c2c0',
+    vermilion: '#b5281c', madder: '#7c1414', brocadeGold: '#d39a3a', ermine: '#f1eadb',
+    fur: '#6e4b2e', furLight: '#9a7350', gold: '#c9a24a', goldDeep: '#7d5f22', goldLight: '#f2d88a',
+    velvet: '#2f5a4a', velvetDark: '#1b3a30', azurite: '#2f4f7a',
+    flesh: '#f0cfb4', fleshShade: '#cf9c80', fleshDeep: '#a56d55', lips: '#b5574a', hair: '#7a5634', beard: '#6a4a2c',
+    steel: '#c7ccd0', steelDark: '#5d656c', steelMid: '#949ca3', ink: '#2a1d12', parchment: '#efe2c2', rubric: '#a4241c',
+  };
+
+  // Seeded randomness: the same painting every frame.
+  function rng(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+  const easeOut = (t) => 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+  const off = (w = W, h = H) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+
+  // Painterly texture: many short, translucent strokes of related colours.
+  function strokes(g, r, n, x0, y0, x1, y1, colors, { len = [5, 16], wid = [1, 2.5], alpha = [0.05, 0.18], angle = 0, spread = 0.5 } = {}) {
+    g.save();
+    g.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const x = x0 + r() * (x1 - x0), y = y0 + r() * (y1 - y0);
+      const l = len[0] + r() * (len[1] - len[0]);
+      const a = angle + (r() - 0.5) * spread * 2;
+      g.strokeStyle = colors[Math.floor(r() * colors.length)];
+      g.globalAlpha = alpha[0] + r() * (alpha[1] - alpha[0]);
+      g.lineWidth = wid[0] + r() * (wid[1] - wid[0]);
+      g.beginPath();
+      g.moveTo(x - Math.cos(a) * l / 2, y - Math.sin(a) * l / 2);
+      g.lineTo(x + Math.cos(a) * l / 2, y + Math.sin(a) * l / 2);
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Surface of an old panel: varnish, grain, and the craquelure of five centuries.
+  const surface = (() => {
+    const c = off();
+    const g = c.getContext('2d');
+    const r = rng(1403);
+    // Cracks on an oak panel: a net of small, roughly rectangular islands, the
+    // long cracks running across the grain. Jittered lattice, edges wobbled, some
+    // edges missing so islands merge irregularly.
+    const sx = 26, sy = 18, cols = Math.ceil(W / sx) + 2, rows = Math.ceil(H / sy) + 2;
+    const pt = [];
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) pt.push([(i - 1) * sx + (r() - 0.5) * sx * 0.8, (j - 1) * sy + (r() - 0.5) * sy * 0.7]);
+    const P = (i, j) => pt[j * cols + i];
+    // Density varies across the panel, as it does on real paintings.
+    const dens = (x, y) => 0.55 + 0.35 * Math.sin(x * 0.006 + 1.3) * Math.sin(y * 0.009 + 0.4);
+    const keepV = pt.map((p) => r() < 0.92 * dens(p[0], p[1]));
+    const keepH = pt.map((p) => r() < 0.6 * dens(p[0], p[1]));
+    const wob = pt.map(() => [(r() - 0.5) * 4, (r() - 0.5) * 4, (r() - 0.5) * 4, (r() - 0.5) * 4]);
+    const edge = (a, b, w0, w1) => {
+      g.moveTo(a[0], a[1]); g.lineTo((a[0] + b[0]) / 2 + w0, (a[1] + b[1]) / 2 + w1); g.lineTo(b[0], b[1]);
+    };
+    // The same net twice: the dark crack and the lit lip of the paint beside it.
+    const pass = (style, width, dx) => {
+      g.save(); g.translate(dx, dx);
+      g.strokeStyle = style; g.lineWidth = width; g.lineJoin = 'round';
+      g.beginPath();
+      for (let j = 0; j < rows - 1; j++) for (let i = 0; i < cols - 1; i++) {
+        const k = j * cols + i, a = P(i, j), w = wob[k];
+        if (keepH[k]) edge(a, P(i + 1, j), w[0], w[1]);
+        if (keepV[k]) edge(a, P(i, j + 1), w[2], w[3]);
+      }
+      g.stroke(); g.restore();
+    };
+    const seedAfter = Math.floor(r() * 1e9);
+    pass('rgba(255,244,214,0.09)', 0.6, 0.7);
+    pass('rgba(38,24,10,0.2)', 0.7, 0);
+    // A few long, older cracks following the grain.
+    const r2 = rng(seedAfter);
+    g.strokeStyle = 'rgba(38,24,10,0.22)'; g.lineWidth = 0.9;
+    for (let k = 0; k < 7; k++) {
+      let x = r2() * W, y = 0;
+      g.beginPath(); g.moveTo(x, y);
+      while (y < H) { y += 8 + r2() * 14; x += (r2() - 0.5) * 5; g.lineTo(x, y); }
+      g.stroke();
+    }
+    return c;
+  })();
+  const grain = (() => {
+    const c = off(256, 256);
+    const g = c.getContext('2d');
+    const img = g.createImageData(256, 256);
+    const r = rng(7);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = 128 + (r() - 0.5) * 70;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 22;
+    }
+    g.putImageData(img, 0, 0);
+    return c;
+  })();
+
+  function varnish(g) {
+    // Yellowed varnish and the darkened edges of an old panel.
+    g.save();
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = 'rgba(236, 206, 150, 0.32)';
+    g.fillRect(0, 0, W, H);
+    const v = g.createRadialGradient(W * 0.5, H * 0.45, H * 0.35, W * 0.5, H * 0.5, W * 0.72);
+    v.addColorStop(0, 'rgba(255,255,255,0)');
+    v.addColorStop(1, 'rgba(70,45,20,0.62)');
+    g.fillStyle = v;
+    g.fillRect(0, 0, W, H);
+    g.restore();
+    g.save();
+    g.globalAlpha = 0.85;
+    g.drawImage(surface, 0, 0);
+    g.globalAlpha = 1;
+    g.fillStyle = g.createPattern(grain, 'repeat');
+    g.fillRect(0, 0, W, H);
+    g.restore();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Backgrounds, painted once.
+
+  function towerSpire(g, x, base, w, h, roofH, r, col = C.stone) {
+    g.fillStyle = col;
+    g.fillRect(x - w / 2, base - h, w, h);
+    g.fillStyle = C.stoneShade;
+    g.fillRect(x + w * 0.15, base - h, w * 0.35, h);
+    g.fillStyle = C.slate;
+    g.beginPath();
+    g.moveTo(x - w / 2 - 2, base - h);
+    g.lineTo(x, base - h - roofH);
+    g.lineTo(x + w / 2 + 2, base - h);
+    g.closePath();
+    g.fill();
+    // windows
+    g.fillStyle = 'rgba(40,30,25,0.65)';
+    for (let k = 0; k < Math.floor(h / 22); k++) g.fillRect(x - 1.5, base - h + 8 + k * 20, 3, 7);
+    void r;
+  }
+
+  function paintLandscape({ gloom = 0, seed = 11 } = {}) {
+    const c = off();
+    const g = c.getContext('2d');
+    const r = rng(seed);
+    // Sky: cool above, pale and greenish at the horizon, as in the panel.
+    const sky = g.createLinearGradient(0, 0, 0, H * 0.55);
+    sky.addColorStop(0, C.skyTop);
+    sky.addColorStop(0.6, C.skyMid);
+    sky.addColorStop(1, C.skyLow);
+    g.fillStyle = sky;
+    g.fillRect(0, 0, W, H);
+    strokes(g, r, 900, 0, 0, W, H * 0.5, ['#b8cccc', '#8aa7b0', '#d6e0d0'], { len: [20, 60], wid: [2, 6], alpha: [0.03, 0.08], angle: 0, spread: 0.08 });
+    // Distant blue hills (aerial perspective).
+    g.fillStyle = '#9db3b0';
+    g.beginPath();
+    g.moveTo(0, 330);
+    for (let x = 0; x <= W; x += 40) g.lineTo(x, 315 + Math.sin(x * 0.006 + 1) * 18 + Math.sin(x * 0.021) * 6);
+    g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+    // Green hills on the left with paths and small round trees.
+    g.fillStyle = C.hill;
+    g.beginPath();
+    g.moveTo(0, 250);
+    g.bezierCurveTo(160, 220, 330, 300, 520, 360);
+    g.lineTo(520, H); g.lineTo(0, H); g.closePath(); g.fill();
+    strokes(g, r, 2600, 0, 230, 540, 520, [C.hill, C.hillDark, '#6f8a4a', '#7c955a'], { len: [4, 12], wid: [1, 2.5], alpha: [0.1, 0.28], angle: -0.3, spread: 0.5 });
+    g.strokeStyle = 'rgba(214,196,150,0.55)';
+    g.lineWidth = 3;
+    g.beginPath(); g.moveTo(40, 300); g.bezierCurveTo(140, 330, 240, 300, 360, 352); g.stroke();
+    for (let i = 0; i < 60; i++) {
+      const x = r() * 500, y = 250 + (x / 520) * 100 + r() * 120;
+      const rr = 6 + r() * 10 * (y / 360);
+      g.fillStyle = 'rgba(20,30,15,0.35)';
+      g.beginPath(); g.ellipse(x + 3, y + rr * 0.9, rr * 0.9, rr * 0.3, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = r() < 0.5 ? '#2f4a24' : '#3d5a2c';
+      g.beginPath(); g.arc(x, y, rr, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(160,190,110,0.5)';
+      g.beginPath(); g.arc(x - rr * 0.3, y - rr * 0.35, rr * 0.45, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#4a3420';
+      g.fillRect(x - 1, y + rr * 0.8, 2, rr * 0.6);
+    }
+    // The river, catching the sky.
+    const wat = g.createLinearGradient(0, 360, 0, 470);
+    wat.addColorStop(0, '#b9cfca'); wat.addColorStop(1, '#8eaaa6');
+    g.fillStyle = wat;
+    g.beginPath();
+    g.moveTo(420, 372); g.bezierCurveTo(700, 360, 900, 372, W, 368);
+    g.lineTo(W, 470); g.bezierCurveTo(900, 470, 700, 455, 480, 470); g.closePath(); g.fill();
+    strokes(g, r, 700, 450, 365, W, 465, ['#dfe9e2', '#9cb6b2', '#c8d8d2'], { len: [10, 34], wid: [1, 2], alpha: [0.08, 0.2], angle: 0, spread: 0.04 });
+    // The towered city on the far bank.
+    const base = 372;
+    g.fillStyle = C.stone;
+    g.fillRect(560, base - 34, W - 560, 34);
+    for (let x = 560; x < W; x += 14) g.fillRect(x, base - 42, 8, 8);
+    const towers = [];
+    for (let i = 0; i < 16; i++) towers.push([600 + i * 44 + r() * 20, 20 + r() * 26, 40 + r() * 70, 14 + r() * 28]);
+    for (const [x, w, h, rh] of towers) towerSpire(g, x, base - 30, w * 0.6, h * 0.8, rh, r);
+    // Great church: tall west tower and a needle spire, like the panel's.
+    towerSpire(g, 1040, base - 30, 56, 210, 30, r, '#cdbf9c');
+    g.fillStyle = '#3d4450';
+    g.fillRect(1022, base - 280, 36, 40);
+    g.fillStyle = '#b7aa86';
+    g.fillRect(860, base - 120, 150, 90);
+    g.fillStyle = C.roof;
+    g.beginPath(); g.moveTo(850, base - 120); g.lineTo(935, base - 170); g.lineTo(1020, base - 120); g.fill();
+    towerSpire(g, 760, base - 30, 22, 120, 120, r, '#d2c6a6');
+    // Roofs and gables.
+    for (let i = 0; i < 26; i++) {
+      const x = 580 + r() * 680, w = 18 + r() * 30, h = 14 + r() * 26;
+      g.fillStyle = r() < 0.5 ? '#d8ccad' : '#c4b48f';
+      g.fillRect(x, base - 30 - h, w, h);
+      g.fillStyle = r() < 0.6 ? C.roof : C.slate;
+      g.beginPath(); g.moveTo(x - 2, base - 30 - h); g.lineTo(x + w / 2, base - 30 - h - w * 0.7); g.lineTo(x + w + 2, base - 30 - h); g.fill();
+    }
+    strokes(g, r, 900, 560, 150, W, base, ['#e3d8bc', '#a99c7e', '#8a8f98'], { len: [3, 9], wid: [1, 2], alpha: [0.08, 0.2], angle: Math.PI / 2, spread: 0.2 });
+    // Reflections of the city.
+    g.save();
+    g.globalAlpha = 0.18;
+    g.translate(0, base * 2 + 2);
+    g.scale(1, -1);
+    g.drawImage(c, 560, base - 300, W - 560, 300, 560, base - 300, W - 560, 300);
+    g.restore();
+    // A ferryman poling his punt, and birds over the water.
+    g.save(); g.translate(720, 432);
+    g.fillStyle = 'rgba(60,70,70,0.25)'; g.beginPath(); g.ellipse(0, 8, 46, 4, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#4a3322'; g.beginPath(); g.moveTo(-44, 0); g.lineTo(44, 0); g.lineTo(36, 7); g.lineTo(-38, 7); g.closePath(); g.fill();
+    g.fillStyle = '#7c1414'; g.fillRect(14, -20, 7, 20);
+    g.fillStyle = '#e8cdb0'; g.beginPath(); g.arc(17.5, -24, 4, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#2f4f7a'; g.beginPath(); g.ellipse(17.5, -27, 5, 2.4, 0, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#3a2a1a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(4, 10); g.lineTo(30, -40); g.stroke();
+    g.fillStyle = '#b38a52'; g.fillRect(-30, -8, 18, 8); g.fillRect(-12, -6, 12, 6);
+    g.restore();
+    g.strokeStyle = 'rgba(40,40,45,0.7)'; g.lineWidth = 1.6;
+    for (const [bx, by, bs] of [[300, 96, 7], [326, 110, 5], [352, 88, 6], [860, 70, 5], [884, 82, 4]]) {
+      g.beginPath(); g.moveTo(bx - bs, by - bs * 0.4); g.quadraticCurveTo(bx - bs * 0.4, by - bs * 0.7, bx, by); g.quadraticCurveTo(bx + bs * 0.4, by - bs * 0.7, bx + bs, by - bs * 0.4); g.stroke();
+    }
+    // A rocky bank on the right, below the city.
+    g.fillStyle = '#a99472';
+    g.beginPath(); g.moveTo(1010, 470); g.bezierCurveTo(1060, 410, 1180, 400, W, 420); g.lineTo(W, 520); g.lineTo(980, 520); g.closePath(); g.fill();
+    strokes(g, r, 500, 980, 405, W, 520, ['#c4ae88', '#7f6a4c', '#d6c49e'], { len: [6, 16], wid: [1, 3], alpha: [0.1, 0.25], angle: -0.6, spread: 0.6 });
+    // The garden: green lawn and rose bushes in front.
+    g.fillStyle = '#3f5b2c';
+    g.fillRect(0, 470, W, H - 470);
+    strokes(g, r, 5200, 0, 470, W, H, [C.leaf, C.leafLight, '#5b7a3c', '#263b1d'], { len: [5, 14], wid: [1, 3], alpha: [0.18, 0.4], angle: -Math.PI / 2, spread: 0.6 });
+    for (let i = 0; i < 46; i++) {
+      const x = r() < 0.5 ? r() * 360 : 920 + r() * 360;
+      const y = 430 + r() * 260;
+      roseBush(g, r, x, y, 26 + r() * 30);
+    }
+    if (gloom) {
+      g.fillStyle = `rgba(70,74,80,${0.45 * gloom})`;
+      g.globalCompositeOperation = 'saturation';
+      g.fillRect(0, 0, W, H);
+      g.globalCompositeOperation = 'source-over';
+      g.fillStyle = `rgba(60,64,70,${0.3 * gloom})`;
+      g.fillRect(0, 0, W, H);
+    }
+    return c;
+  }
+
+  function roseBush(g, r, x, y, s) {
+    for (let k = 0; k < 18; k++) {
+      const a = r() * Math.PI * 2, d = r() * s;
+      const lx = x + Math.cos(a) * d, ly = y + Math.sin(a) * d * 0.7;
+      g.fillStyle = r() < 0.5 ? '#2a4120' : '#3c5a2b';
+      g.save(); g.translate(lx, ly); g.rotate(r() * 6);
+      g.beginPath(); g.ellipse(0, 0, 7, 3.6, 0, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(160,190,120,0.35)'; g.lineWidth = 0.8;
+      g.beginPath(); g.moveTo(-6, 0); g.lineTo(6, 0); g.stroke();
+      g.restore();
+    }
+    for (let k = 0; k < 3 + Math.floor(r() * 3); k++) {
+      const rx = x + (r() - 0.5) * s * 1.4, ry = y + (r() - 0.5) * s * 0.8;
+      rose(g, rx, ry, 5 + r() * 4, r);
+    }
+  }
+
+  function rose(g, x, y, rr, r) {
+    g.fillStyle = '#7c1414';
+    g.beginPath(); g.arc(x, y, rr, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#b5332a';
+    for (let i = 0; i < 5; i++) {
+      const a = i * 1.2566 + r() * 0.3;
+      g.beginPath(); g.arc(x + Math.cos(a) * rr * 0.45, y + Math.sin(a) * rr * 0.45, rr * 0.55, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = '#e06a55';
+    g.beginPath(); g.arc(x - rr * 0.2, y - rr * 0.25, rr * 0.3, 0, Math.PI * 2); g.fill();
+  }
+
+  /** Tooled gold ground (as behind saints) over a green velvet cushion: the product shot. */
+  function paintGoldGround(seed = 5) {
+    const c = off();
+    const g = c.getContext('2d');
+    const r = rng(seed);
+    const gr = g.createLinearGradient(0, 0, W, H);
+    gr.addColorStop(0, '#e9cd7c'); gr.addColorStop(0.45, '#c9a24a'); gr.addColorStop(0.7, '#a8822f'); gr.addColorStop(1, '#d9b764');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, W, H);
+    // Punched (pounced) pattern: rows of small dots in an ogival lattice.
+    for (let y = 18; y < H; y += 36) {
+      for (let x = 18 + ((y / 36) % 2) * 18; x < W; x += 36) {
+        g.fillStyle = 'rgba(110,80,25,0.35)';
+        g.beginPath(); g.arc(x, y, 2.2, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,240,190,0.35)';
+        g.beginPath(); g.arc(x - 0.8, y - 0.8, 1, 0, Math.PI * 2); g.fill();
+      }
+    }
+    g.strokeStyle = 'rgba(110,80,25,0.28)';
+    g.lineWidth = 1.5;
+    for (let x = -H; x < W; x += 72) {
+      g.beginPath();
+      for (let y = 0; y <= H; y += 6) g.lineTo(x + y * 0.5 + Math.sin(y * 0.0435) * 18, y);
+      g.stroke();
+    }
+    strokes(g, r, 1200, 0, 0, W, H, ['#fff2c0', '#8a6a24'], { len: [4, 14], wid: [1, 2], alpha: [0.03, 0.08] });
+    // Cushion / cloth of green velvet.
+    const vel = g.createLinearGradient(0, 460, 0, H);
+    vel.addColorStop(0, '#3d6b58'); vel.addColorStop(0.3, C.velvet); vel.addColorStop(1, C.velvetDark);
+    g.fillStyle = vel;
+    g.beginPath(); g.moveTo(0, 500); g.bezierCurveTo(300, 470, 900, 480, W, 495); g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
+    strokes(g, r, 2600, 0, 470, W, H, ['#4b7c66', '#1c3a2f', '#2a5141'], { len: [6, 20], wid: [1, 3], alpha: [0.06, 0.18], angle: 0.1, spread: 0.4 });
+    // Gold fringe.
+    g.strokeStyle = '#b8913e';
+    g.lineWidth = 2;
+    for (let x = 0; x < W; x += 6) { g.beginPath(); g.moveTo(x, 505 + Math.sin(x * 0.01) * 6); g.lineTo(x + 1, 525 + Math.sin(x * 0.01) * 6); g.stroke(); }
+    return c;
+  }
+
+  /** Oldřich's house on Platnéřská street, square-on: an arcaded ground floor with the shop
+   *  and forge behind the arches, hall windows above, a stepped gable. */
+  const SHOP = { x0: 400, x1: 880, top: 236, apex: 52, arches: [[426, 628], [652, 854]], spring: 482, ground: 652 };
+  function archPath(ax0, ax1, spring = SHOP.spring, ground = SHOP.ground) {
+    const p = new Path2D(), mid = (ax0 + ax1) / 2;
+    p.moveTo(ax0, ground); p.lineTo(ax0, spring);
+    p.bezierCurveTo(ax0, spring - 48, mid - 42, spring - 70, mid, spring - 80);
+    p.bezierCurveTo(mid + 42, spring - 70, ax1, spring - 48, ax1, spring);
+    p.lineTo(ax1, ground); p.closePath();
+    return p;
+  }
+  function paintStreet(seed = 9) {
+    const c = off();
+    const g = c.getContext('2d');
+    const r = rng(seed);
+    const sky = g.createLinearGradient(0, 0, 0, 420);
+    sky.addColorStop(0, C.skyTop); sky.addColorStop(0.7, C.skyMid); sky.addColorStop(1, C.skyLow);
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    strokes(g, r, 500, 0, 0, W, 400, ['#b8cccc', '#8aa7b0', '#d6e0d0'], { len: [20, 60], wid: [2, 6], alpha: [0.03, 0.08], spread: 0.08 });
+    // A tower of the Old Town beyond the roofs.
+    towerSpire(g, 1030, 250, 44, 160, 80, r, '#cdbf9c');
+    // Neighbours: plastered houses, gable to the street, red tile at the verges.
+    const house = (x0, x1, top, apex, wall, roof, shutter) => {
+      const mid = (x0 + x1) / 2;
+      g.fillStyle = wall;
+      g.beginPath(); g.moveTo(x0, SHOP.ground); g.lineTo(x0, top); g.lineTo(mid, apex); g.lineTo(x1, top); g.lineTo(x1, SHOP.ground); g.closePath(); g.fill();
+      strokes(g, r, 700, x0, apex, x1, SHOP.ground, [wall, '#ffffff', '#9c8f72'], { len: [4, 12], wid: [1, 3], alpha: [0.05, 0.14], angle: Math.PI / 2, spread: 0.5 });
+      g.strokeStyle = roof; g.lineWidth = 16; g.lineJoin = 'round';
+      g.beginPath(); g.moveTo(x0 - 6, top + 4); g.lineTo(mid, apex - 6); g.lineTo(x1 + 6, top + 4); g.stroke();
+      g.strokeStyle = 'rgba(40,10,5,0.4)'; g.lineWidth = 2;
+      for (let k = 0; k < 12; k++) {
+        const u = k / 12;
+        for (const [ax, ay] of [[lerp(x0, mid, u), lerp(top, apex, u)], [lerp(x1, mid, u), lerp(top, apex, u)]]) { g.beginPath(); g.moveTo(ax, ay - 7); g.lineTo(ax, ay + 7); g.stroke(); }
+      }
+      for (let y = top + 34; y < SHOP.ground - 150; y += 120) {
+        for (let x = x0 + 50; x < x1 - 60; x += 110) {
+          g.fillStyle = '#e8ddc2'; g.fillRect(x - 6, y - 6, 52, 74);
+          g.fillStyle = '#2e2620'; g.fillRect(x, y, 40, 62);
+          g.fillStyle = shutter; g.fillRect(x - 24, y, 18, 62); g.fillRect(x + 46, y, 18, 62);
+          g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 1; g.strokeRect(x - 24, y, 18, 62); g.strokeRect(x + 46, y, 18, 62);
+        }
+      }
+      const dx = x0 + (x1 - x0) * 0.3;
+      g.fillStyle = '#3a2a1c';
+      g.beginPath(); g.moveTo(dx - 34, SHOP.ground); g.lineTo(dx - 34, SHOP.ground - 110); g.quadraticCurveTo(dx, SHOP.ground - 150, dx + 34, SHOP.ground - 110); g.lineTo(dx + 34, SHOP.ground); g.fill();
+    };
+    house(-40, 400, 214, 64, '#dcb7a0', '#8a3b28', '#3f5a3a');
+    house(880, 1320, 256, 116, '#d2cdb0', '#7a3a26', '#7c2a1c');
+    // The armourer's house.
+    const { x0, x1, top, apex, spring, ground } = SHOP;
+    const sh = g.createLinearGradient(x0 - 40, 0, x0, 0);
+    sh.addColorStop(0, 'rgba(40,30,20,0)'); sh.addColorStop(1, 'rgba(40,30,20,0.35)');
+    g.fillStyle = sh; g.fillRect(x0 - 40, top, 40, ground - top);
+    const n = 5, half = (x1 - x0) / 2, stepW = half / (n + 0.5), rise = (top - apex) / n;
+    const gable = new Path2D();
+    gable.moveTo(x0, ground); gable.lineTo(x0, top);
+    for (let i = 0; i < n; i++) { gable.lineTo(x0 + i * stepW, top - (i + 1) * rise); gable.lineTo(x0 + (i + 1) * stepW, top - (i + 1) * rise); }
+    for (let i = n - 1; i >= 0; i--) { gable.lineTo(x1 - (i + 1) * stepW, top - (i + 1) * rise); gable.lineTo(x1 - i * stepW, top - (i + 1) * rise); }
+    gable.lineTo(x1, top); gable.lineTo(x1, ground); gable.closePath();
+    g.fillStyle = '#dcc590'; g.fill(gable);
+    g.save(); g.clip(gable);
+    strokes(g, r, 1600, x0, apex, x1, ground, ['#e9d6a2', '#b9a06a', '#f3e6c0'], { len: [4, 12], wid: [1, 3], alpha: [0.06, 0.16], angle: Math.PI / 2, spread: 0.5 });
+    // Ashlar ground floor.
+    g.fillStyle = '#cbb98f'; g.fillRect(x0, 402, x1 - x0, ground - 402);
+    g.strokeStyle = 'rgba(90,70,45,0.45)'; g.lineWidth = 1.2;
+    for (let y = 402, row = 0; y < ground; y += 27, row++) {
+      g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); g.stroke();
+      for (let x = x0 + (row % 2) * 30; x < x1; x += 60) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 27); g.stroke(); }
+    }
+    // Quoins up the corners.
+    for (let y = top, k = 0; y < 402; y += 28, k++) for (const [qx, dir] of [[x0, 1], [x1, -1]]) {
+      g.fillStyle = '#d6c8a2'; g.fillRect(dir > 0 ? qx : qx - (k % 2 ? 26 : 40), y, k % 2 ? 26 : 40, 26);
+      g.strokeStyle = 'rgba(90,70,45,0.4)'; g.strokeRect(dir > 0 ? qx : qx - (k % 2 ? 26 : 40), y, k % 2 ? 26 : 40, 26);
+    }
+    g.restore();
+    // Coping on the steps.
+    g.strokeStyle = '#ece0bf'; g.lineWidth = 6; g.lineCap = 'butt';
+    for (let i = 0; i < n; i++) for (const sx of [x0 + i * stepW, x1 - (i + 1) * stepW]) { g.beginPath(); g.moveTo(sx - 3, top - (i + 1) * rise); g.lineTo(sx + stepW + 3, top - (i + 1) * rise); g.stroke(); }
+    g.beginPath(); g.moveTo(x0 + n * stepW - 3, apex); g.lineTo(x1 - n * stepW + 3, apex); g.stroke();
+    // Gable: an oculus with quatrefoil tracery and the hoist door of the loft.
+    const ox = (x0 + x1) / 2;
+    g.fillStyle = '#e3d6b4'; g.beginPath(); g.arc(ox, 112, 26, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#2b2622'; g.beginPath(); g.arc(ox, 112, 19, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#e3d6b4'; g.lineWidth = 3;
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; g.beginPath(); g.arc(ox + Math.cos(a) * 8, 112 + Math.sin(a) * 8, 8, 0, Math.PI * 2); g.stroke(); }
+    g.fillStyle = '#5a3a22'; g.fillRect(ox - 26, 162, 52, 62);
+    g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 2; g.beginPath(); g.moveTo(ox, 162); g.lineTo(ox, 224); g.stroke();
+    g.fillStyle = '#3a2416'; g.fillRect(ox - 6, 146, 12, 16); g.fillRect(ox - 4, 140, 60, 8);
+    g.strokeStyle = '#3a2a1a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(ox + 50, 148); g.lineTo(ox + 50, 200); g.stroke();
+    // Hall windows: two-light, pointed, glazed with roundels.
+    for (const wx of [490, 640, 790]) {
+      g.fillStyle = '#e8dcbc';
+      g.beginPath(); g.moveTo(wx - 44, 372); g.lineTo(wx - 44, 290); g.quadraticCurveTo(wx - 44, 262, wx, 250); g.quadraticCurveTo(wx + 44, 262, wx + 44, 290); g.lineTo(wx + 44, 372); g.closePath(); g.fill();
+      for (const lx of [wx - 18, wx + 18]) {
+        const lp = new Path2D();
+        lp.moveTo(lx - 13, 362); lp.lineTo(lx - 13, 294); lp.quadraticCurveTo(lx - 13, 278, lx, 268); lp.quadraticCurveTo(lx + 13, 278, lx + 13, 294); lp.lineTo(lx + 13, 362); lp.closePath();
+        const gl = g.createLinearGradient(0, 268, 0, 362); gl.addColorStop(0, '#5d6f78'); gl.addColorStop(1, '#2b3238');
+        g.fillStyle = gl; g.fill(lp);
+        g.save(); g.clip(lp); g.strokeStyle = 'rgba(200,215,215,0.35)'; g.lineWidth = 1;
+        for (let yy = 272; yy < 362; yy += 9) for (let xx = lx - 13 + ((yy / 9) % 2) * 4.5; xx < lx + 14; xx += 9) { g.beginPath(); g.arc(xx, yy, 4, 0, Math.PI * 2); g.stroke(); }
+        g.fillStyle = 'rgba(255,255,255,0.25)'; g.fillRect(lx - 9, 290, 3, 60);
+        g.restore();
+      }
+      g.fillStyle = '#d2c39c'; g.fillRect(wx - 50, 372, 100, 8);
+    }
+    // String course over the arcade.
+    g.fillStyle = '#e6d9b6'; g.fillRect(x0 - 4, 394, x1 - x0 + 8, 10);
+    g.fillStyle = 'rgba(60,45,30,0.35)'; g.fillRect(x0, 404, x1 - x0, 5);
+    // The arcade: dark depth, the shop on the left, the forge on the right.
+    for (const [ax0, ax1] of SHOP.arches) {
+      const ap = archPath(ax0, ax1);
+      const ig = g.createLinearGradient(0, spring - 80, 0, ground);
+      ig.addColorStop(0, '#1e140c'); ig.addColorStop(1, '#4a3220');
+      g.fillStyle = ig; g.fill(ap);
+      g.strokeStyle = '#e1d3ad'; g.lineWidth = 14; g.stroke(ap);
+      g.strokeStyle = 'rgba(70,50,30,0.6)'; g.lineWidth = 2; g.stroke(ap);
+    }
+    {
+      // Shop: swords racked on the back wall, a breastplate and a helm hung up, the counter.
+      const [ax0, ax1] = SHOP.arches[0];
+      g.save(); g.clip(archPath(ax0, ax1));
+      const lw = g.createRadialGradient(ax0 + 90, 520, 10, ax0 + 90, 540, 160);
+      lw.addColorStop(0, 'rgba(150,105,60,0.55)'); lw.addColorStop(1, 'rgba(150,105,60,0)');
+      g.fillStyle = lw; g.fillRect(ax0, spring - 90, ax1 - ax0, ground - spring + 90);
+      g.fillStyle = '#3a2416'; g.fillRect(ax0 + 18, 470, 70, 8);
+      for (let k = 0; k < 4; k++) {
+        const sx = ax0 + 28 + k * 16;
+        g.fillStyle = '#b9c0c5'; g.fillRect(sx - 2, 478, 4, 92);
+        g.fillStyle = '#8f969c'; g.fillRect(sx - 9, 474, 18, 4);
+        g.fillStyle = '#3a2416'; g.fillRect(sx - 2, 452, 4, 22);
+        g.fillStyle = '#9aa1a7'; g.beginPath(); g.arc(sx, 450, 4.5, 0, Math.PI * 2); g.fill();
+      }
+      const bp = g.createRadialGradient(ax0 + 128, 492, 2, ax0 + 136, 505, 34);
+      bp.addColorStop(0, '#f3f6f7'); bp.addColorStop(1, '#5d656c');
+      g.fillStyle = bp; g.beginPath(); g.ellipse(ax0 + 138, 506, 26, 34, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#3a2416'; g.fillRect(ax0 + 136, 462, 4, 12);
+      drawHounskull(g, ax0 + 150, 556, 0.13, 0.3, 0);
+      g.fillStyle = '#6a4a2c'; g.fillRect(ax0 - 4, 586, ax1 - ax0 + 8, 14);
+      g.fillStyle = '#4a3220'; g.fillRect(ax0, 600, ax1 - ax0, ground - 600);
+      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2;
+      for (let x = ax0 + 34; x < ax1; x += 34) { g.beginPath(); g.moveTo(x, 600); g.lineTo(x, ground); g.stroke(); }
+      drawGauntlet(g, ax0 + 60, 566, 0.17, -1.45, 'steel');
+      g.restore();
+    }
+    {
+      // Forge: brick hearth with its hood, anvil on its block, tools on the wall.
+      const [ax0, ax1] = SHOP.arches[1];
+      g.save(); g.clip(archPath(ax0, ax1));
+      g.fillStyle = '#5a2e1e'; g.fillRect(ax1 - 86, 556, 90, ground - 556);
+      g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;
+      for (let y = 556; y < ground; y += 12) { g.beginPath(); g.moveTo(ax1 - 86, y); g.lineTo(ax1 + 4, y); g.stroke(); }
+      g.fillStyle = '#2a1c14'; g.beginPath(); g.moveTo(ax1 - 96, 470); g.lineTo(ax1 + 6, 470); g.lineTo(ax1 + 6, 520); g.lineTo(ax1 - 86, 530); g.closePath(); g.fill();
+      for (let k = 0; k < 3; k++) { g.fillStyle = '#20160f'; g.fillRect(ax0 + 22 + k * 14, 470, 3, 50); g.fillRect(ax0 + 16 + k * 14, 470, 14, 6); }
+      g.fillStyle = '#3a2416'; g.fillRect(ax0 + 52, 618, 40, ground - 618);
+      g.fillStyle = '#2a2d31';
+      g.beginPath(); g.moveTo(ax0 + 30, 600); g.lineTo(ax0 + 118, 600); g.quadraticCurveTo(ax0 + 112, 608, ax0 + 100, 610); g.lineTo(ax0 + 96, 620); g.lineTo(ax0 + 48, 620); g.lineTo(ax0 + 44, 610); g.quadraticCurveTo(ax0 + 22, 606, ax0 + 30, 600); g.fill();
+      g.fillStyle = 'rgba(255,200,140,0.35)'; g.fillRect(ax0 + 34, 600, 80, 2);
+      g.restore();
+    }
+    // Pier and step at the street.
+    g.fillStyle = '#a89a78'; g.fillRect(x0 - 10, ground, x1 - x0 + 20, 10);
+    // Cobbles.
+    g.fillStyle = '#7d705a'; g.fillRect(0, ground + 10, W, H - ground - 10);
+    g.fillStyle = '#6d6250'; g.fillRect(0, ground, x0 - 10, 10); g.fillRect(x1 + 10, ground, W - x1, 10);
+    for (let y = ground + 14, row = 0; y < H + 10; y += 13 + row * 1.5, row++) {
+      for (let x = (row % 2) * 12; x < W + 20; x += 22 + row * 2) {
+        g.fillStyle = r() < 0.5 ? 'rgba(170,155,125,0.7)' : 'rgba(120,108,88,0.75)';
+        g.beginPath(); g.ellipse(x + (r() - 0.5) * 4, y, 9 + row, 5 + row * 0.5, 0, 0, Math.PI * 2); g.fill();
+      }
+    }
+    strokes(g, r, 2400, 0, 0, W, H, ['#e8dcc0', '#9d8c6c', '#bfae8a'], { len: [3, 10], wid: [1, 2], alpha: [0.03, 0.09], angle: Math.PI / 2, spread: 0.3 });
+    return c;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Figures and goods.
+
+  function brocade(g, path, x0, y0, x1, y1, ground = C.vermilion, motif = C.brocadeGold, seed = 3) {
+    // Italian-style damask: pomegranates in an ogival lattice, as on the panel's gown.
+    g.save();
+    g.clip(path);
+    g.fillStyle = ground;
+    g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    const r = rng(seed);
+    for (let y = y0 - 40; y < y1 + 40; y += 64) {
+      for (let x = x0 - 40 + ((Math.round((y - y0) / 64) % 2) * 36); x < x1 + 40; x += 72) {
+        g.strokeStyle = motif; g.globalAlpha = 0.55; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(x, y - 30); g.bezierCurveTo(x + 26, y - 14, x + 26, y + 14, x, y + 30); g.bezierCurveTo(x - 26, y + 14, x - 26, y - 14, x, y - 30); g.stroke();
+        g.fillStyle = motif; g.globalAlpha = 0.65;
+        g.beginPath(); g.ellipse(x, y + 2, 9, 11, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = C.madder; g.globalAlpha = 0.7;
+        for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(x - 4 + (k % 2) * 8, y - 2 + Math.floor(k / 2) * 7, 2, 0, Math.PI * 2); g.fill(); }
+        g.globalAlpha = 0.5; g.strokeStyle = motif;
+        g.beginPath(); g.moveTo(x, y - 9); g.lineTo(x - 7, y - 17); g.moveTo(x, y - 9); g.lineTo(x + 7, y - 17); g.stroke();
+      }
+    }
+    g.globalAlpha = 1;
+    strokes(g, r, 900, x0, y0, x1, y1, ['#e2502e', '#5a0c0c', '#f0b860'], { len: [3, 9], wid: [1, 2], alpha: [0.05, 0.14] });
+    g.restore();
+  }
+
+  function shade(g, path, x0, y0, x1, y1, from = 'rgba(0,0,0,0)', to = 'rgba(40,5,5,0.55)', vertical = false) {
+    g.save();
+    g.clip(path);
+    const gr = vertical ? g.createLinearGradient(0, y0, 0, y1) : g.createLinearGradient(x0, 0, x1, 0);
+    gr.addColorStop(0, to); gr.addColorStop(0.35, from); gr.addColorStop(0.65, from); gr.addColorStop(1, to);
+    g.fillStyle = gr;
+    g.fillRect(x0, y0, x1 - x0, y1 - y0);
+    g.restore();
+  }
+
+  function furTrim(g, path, light = C.furLight, dark = C.fur, seed = 2, ermine = false) {
+    g.save();
+    g.clip(path);
+    const b = path.bounds;
+    g.fillStyle = ermine ? C.ermine : dark;
+    g.fillRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+    const r = rng(seed);
+    strokes(g, r, 900, b[0], b[1], b[2], b[3], ermine ? ['#ffffff', '#d8cfbf'] : [light, dark, '#b48a60'], { len: [3, 8], wid: [1, 2], alpha: [0.2, 0.5], angle: Math.PI / 2, spread: 0.6 });
+    if (ermine) {
+      for (let y = b[1] + 8; y < b[3]; y += 20) for (let x = b[0] + ((y / 20) % 2) * 10; x < b[2]; x += 20) {
+        g.fillStyle = '#1b1612';
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x - 2.5, y + 7); g.lineTo(x + 2.5, y + 7); g.closePath(); g.fill();
+      }
+    }
+    g.restore();
+  }
+
+  function pathOf(fn, bounds) {
+    const p = new Path2D();
+    fn(p);
+    p.bounds = bounds;
+    return p;
+  }
+
+  /** Master Oldřich, armourer: houppelande of brocade with marten fur, chaperon, forked beard. */
+  function drawArmourer(g, x, y, s, st) {
+    // st: { talk 0..1, armR (viewer's left arm) angle, armL angle, blink, look, hold }
+    g.save();
+    g.translate(x, y);
+    g.scale(s, s);
+    const t = st.time ?? 0;
+    const sway = Math.sin(t * 1.3) * 2;
+    g.translate(sway, 0);
+    // Body (gown) under everything.
+    const gown = pathOf((p) => {
+      p.moveTo(-60, 70); p.bezierCurveTo(-120, 90, -170, 130, -190, 210);
+      p.bezierCurveTo(-215, 330, -230, 420, -250, 520);
+      p.lineTo(250, 520); p.bezierCurveTo(232, 420, 215, 330, 192, 210);
+      p.bezierCurveTo(172, 130, 120, 90, 60, 70); p.closePath();
+    }, [-260, 60, 260, 530]);
+    brocade(g, gown, -260, 60, 260, 530, C.vermilion, C.brocadeGold, 4);
+    shade(g, gown, -260, 60, 260, 530, 'rgba(0,0,0,0)', 'rgba(50,5,5,0.6)');
+    // Folds: soft dark stripes.
+    g.save(); g.clip(gown);
+    for (const fx of [-130, -60, 30, 110, 175]) {
+      const gr = g.createLinearGradient(fx - 18, 0, fx + 18, 0);
+      gr.addColorStop(0, 'rgba(60,5,5,0)'); gr.addColorStop(0.5, 'rgba(60,5,5,0.35)'); gr.addColorStop(1, 'rgba(60,5,5,0)');
+      g.fillStyle = gr; g.fillRect(fx - 18, 200, 36, 330);
+    }
+    g.restore();
+    // Belt with purse and baselard.
+    g.fillStyle = '#2b1c12';
+    g.fillRect(-205, 330, 410, 16);
+    for (let bx = -190; bx < 200; bx += 28) { g.fillStyle = C.gold; g.fillRect(bx, 333, 8, 10); }
+    g.fillStyle = '#4a2c1a';
+    g.beginPath(); g.ellipse(-90, 375, 26, 34, 0.1, 0, Math.PI * 2); g.fill();
+    g.fillStyle = C.gold; g.beginPath(); g.arc(-90, 352, 5, 0, Math.PI * 2); g.fill();
+    g.save(); g.translate(120, 345); g.rotate(-0.25);
+    g.fillStyle = '#3a2416'; g.fillRect(-5, 0, 10, 46);
+    g.fillStyle = C.goldDeep; g.fillRect(-18, -4, 36, 6); g.fillRect(-14, 46, 28, 6);
+    g.fillStyle = '#5a3a24'; g.fillRect(-7, 52, 14, 90);
+    g.restore();
+    // High collar of marten fur, standing round the neck.
+    const collar = pathOf((p) => {
+      p.moveTo(-75, 120); p.bezierCurveTo(-80, 80, -66, 46, -44, 40); p.lineTo(44, 40);
+      p.bezierCurveTo(66, 46, 82, 80, 76, 120); p.bezierCurveTo(40, 136, -40, 136, -75, 120); p.closePath();
+    }, [-90, 30, 90, 140]);
+    furTrim(g, collar, C.furLight, C.fur, 6);
+    // Neck.
+    g.fillStyle = C.fleshShade;
+    g.beginPath(); g.moveTo(-24, 20); g.lineTo(26, 20); g.lineTo(30, 52); g.lineTo(-30, 52); g.closePath(); g.fill();
+    // Head.
+    drawHead(g, 0, -40, st, t);
+    // Arms: big bell sleeves pivoting at the shoulders.
+    drawArm(g, -150, 150, st.armR ?? 0.25, -1, st, t);
+    drawArm(g, 150, 150, st.armL ?? -0.25, 1, st, t);
+    g.restore();
+  }
+
+  function drawArm(g, sx, sy, angle, side, st, t) {
+    g.save();
+    g.translate(sx, sy);
+    g.rotate(angle);
+    const L = 175;
+    const sleeve = pathOf((p) => {
+      p.moveTo(-36, -20); p.bezierCurveTo(-48, 60, -70, 120, -95, L);
+      p.bezierCurveTo(-40, L + 26, 40, L + 26, 95, L);
+      p.bezierCurveTo(70, 120, 48, 60, 36, -20); p.closePath();
+    }, [-100, -30, 100, L + 30]);
+    brocade(g, sleeve, -100, -30, 100, L + 30, C.vermilion, C.brocadeGold, 7 + side);
+    shade(g, sleeve, -100, -30, 100, L + 30, 'rgba(0,0,0,0)', 'rgba(50,5,5,0.55)');
+    const cuff = pathOf((p) => {
+      p.moveTo(-95, L - 6); p.bezierCurveTo(-40, L + 18, 40, L + 18, 95, L - 6);
+      p.lineTo(98, L + 10); p.bezierCurveTo(40, L + 38, -40, L + 38, -98, L + 10); p.closePath();
+    }, [-100, L - 10, 100, L + 40]);
+    furTrim(g, cuff, C.furLight, C.fur, 9 + side);
+    // Hand: open palm, fingers up when gesturing.
+    g.translate(0, L + 30);
+    const open = st.open ?? 1;
+    g.fillStyle = C.flesh;
+    g.strokeStyle = 'rgba(150,90,70,0.6)';
+    g.lineWidth = 1.5;
+    g.beginPath(); g.ellipse(0, 18, 22, 26, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    for (let f = 0; f < 4; f++) {
+      const fx = -14 + f * 9.5;
+      const fl = (f === 0 || f === 3 ? 26 : 32) * (0.55 + 0.45 * open);
+      g.beginPath(); g.ellipse(fx, 40 + fl / 2, 4.6, fl / 2, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    }
+    g.beginPath(); g.ellipse(side * 22, 20, 5, 15, side * -0.7, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(160,90,70,0.25)';
+    g.beginPath(); g.ellipse(0, 22, 14, 14, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+    void t;
+  }
+
+  function drawHead(g, x, y, st, t) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(-0.05 + Math.sin(t * 0.9) * 0.03);
+    // Face: soft modelling, cool shadows, warm cheeks.
+    const fg = g.createRadialGradient(-12, -10, 8, 0, 0, 70);
+    fg.addColorStop(0, '#f6dcc4'); fg.addColorStop(0.6, C.flesh); fg.addColorStop(1, C.fleshShade);
+    g.fillStyle = fg;
+    g.beginPath(); g.ellipse(0, 0, 44, 58, 0, 0, Math.PI * 2); g.fill();
+    // Cheek bloom.
+    for (const cx of [-22, 20]) {
+      const cg = g.createRadialGradient(cx, 12, 1, cx, 12, 16);
+      cg.addColorStop(0, 'rgba(210,110,95,0.35)'); cg.addColorStop(1, 'rgba(210,110,95,0)');
+      g.fillStyle = cg; g.beginPath(); g.arc(cx, 12, 16, 0, Math.PI * 2); g.fill();
+    }
+    // Hair at the temples under the chaperon.
+    g.fillStyle = C.hair;
+    g.beginPath(); g.ellipse(-40, -16, 9, 22, 0.2, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(40, -16, 9, 22, -0.2, 0, Math.PI * 2); g.fill();
+    // Eyes: almond lids, looking out at the viewer; blinking.
+    const blink = st.blink ?? 0;
+    for (const ex of [-17, 17]) {
+      g.fillStyle = '#f5ece0';
+      g.beginPath(); g.ellipse(ex, -6, 10, 5 * (1 - blink), 0, 0, Math.PI * 2); g.fill();
+      if (blink < 0.8) {
+        g.fillStyle = '#4a3a2a';
+        g.beginPath(); g.arc(ex + (st.look ?? 0) * 3, -6, 3.8, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#111'; g.beginPath(); g.arc(ex + (st.look ?? 0) * 3, -6, 1.8, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.8)'; g.beginPath(); g.arc(ex + (st.look ?? 0) * 3 - 1.2, -7.4, 1, 0, Math.PI * 2); g.fill();
+      }
+      g.strokeStyle = 'rgba(110,60,40,0.75)'; g.lineWidth = 1.6;
+      g.beginPath(); g.ellipse(ex, -6, 10.5, 5.5 * (1 - blink) + 0.5, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+      g.strokeStyle = 'rgba(120,80,50,0.6)'; g.lineWidth = 2.2;
+      g.beginPath(); g.moveTo(ex - 11, -17 - (st.brow ?? 0) * 4); g.quadraticCurveTo(ex, -22 - (st.brow ?? 0) * 5, ex + 11, -17 - (st.brow ?? 0) * 4); g.stroke();
+    }
+    // Nose.
+    g.strokeStyle = 'rgba(150,90,70,0.7)'; g.lineWidth = 1.8;
+    g.beginPath(); g.moveTo(2, -4); g.quadraticCurveTo(7, 12, 4, 20); g.quadraticCurveTo(0, 23, -5, 20); g.stroke();
+    g.fillStyle = 'rgba(160,95,75,0.35)'; g.beginPath(); g.ellipse(6, 10, 5, 9, 0.1, 0, Math.PI * 2); g.fill();
+    // Moustache and forked beard (the Bohemian fashion of the time).
+    g.fillStyle = C.beard;
+    g.beginPath(); g.moveTo(-16, 30); g.quadraticCurveTo(0, 22, 16, 30); g.quadraticCurveTo(0, 28, -16, 30); g.fill();
+    const talk = st.talk ?? 0;
+    g.beginPath();
+    g.moveTo(-28, 26); g.bezierCurveTo(-30, 50, -18, 72, -10, 86); g.lineTo(-3, 70); g.lineTo(3, 70); g.lineTo(10, 86);
+    g.bezierCurveTo(18, 72, 30, 50, 28, 26); g.bezierCurveTo(14, 44 + talk * 8, -14, 44 + talk * 8, -28, 26); g.fill();
+    strokes(g, rng(31), 120, -28, 30, 28, 86, ['#8a6440', '#3e2a18'], { len: [5, 12], wid: [1, 1.6], alpha: [0.2, 0.5], angle: Math.PI / 2, spread: 0.2 });
+    // Mouth.
+    g.fillStyle = '#4a1a14';
+    g.beginPath(); g.ellipse(0, 36 + talk * 3, 9, 1.5 + talk * 6, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = C.lips;
+    g.beginPath(); g.ellipse(0, 33, 9, 2.2, 0, 0, Math.PI); g.fill();
+    // Chaperon: a padded roll (bourrelet) worn like a turban, the cornette falling to one side.
+    g.fillStyle = C.madder;
+    g.beginPath(); g.ellipse(0, -52, 60, 26, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#9a1c18';
+    g.beginPath(); g.ellipse(-4, -62, 52, 20, -0.05, Math.PI, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(40,0,0,0.45)'; g.lineWidth = 3;
+    for (let k = -3; k <= 3; k++) { g.beginPath(); g.moveTo(k * 15, -76); g.quadraticCurveTo(k * 15 + 8, -52, k * 15 - 2, -30); g.stroke(); }
+    g.fillStyle = '#6a0f0e';
+    g.beginPath(); g.moveTo(40, -48); g.bezierCurveTo(88, -36, 96, 30, 70, 96); g.lineTo(52, 92); g.bezierCurveTo(70, 30, 60, -20, 30, -36); g.closePath(); g.fill();
+    g.restore();
+  }
+
+  /** The hounskull bascinet with its aventail, turning slowly on a cushion. */
+  function drawHounskull(g, x, y, s, a, t, dent = 0) {
+    g.save();
+    g.translate(x, y);
+    g.scale(s, s);
+    const k = Math.cos(a);            // facing: 1 = snout to the right
+    // Aventail of mail.
+    const av = new Path2D();
+    av.moveTo(-120, 30); av.bezierCurveTo(-150, 120, -170, 170, -190, 210); av.lineTo(190, 210);
+    av.bezierCurveTo(170, 170, 150, 120, 120, 30); av.closePath();
+    g.save(); g.clip(av);
+    g.fillStyle = '#6a7076'; g.fillRect(-200, 20, 400, 200);
+    for (let yy = 26; yy < 220; yy += 7) for (let xx = -200 + ((yy / 7) % 2) * 3.5; xx < 200; xx += 7) {
+      g.strokeStyle = 'rgba(210,215,220,0.55)'; g.lineWidth = 1.2;
+      g.beginPath(); g.arc(xx, yy, 3, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
+      g.strokeStyle = 'rgba(30,32,36,0.6)';
+      g.beginPath(); g.arc(xx, yy, 3, 0.1, Math.PI * 0.9); g.stroke();
+    }
+    shade(g, av, -200, 20, 200, 220, 'rgba(0,0,0,0)', 'rgba(10,10,15,0.6)');
+    g.restore();
+    // Skull: rising to a point behind the crown.
+    const skull = new Path2D();
+    skull.moveTo(-118, 40); skull.bezierCurveTo(-130, -60, -80, -150, -20 * k, -190);
+    skull.bezierCurveTo(60 * k, -150, 120, -60, 118, 40); skull.closePath();
+    const sg = g.createLinearGradient(-120, -190, 120, 40);
+    sg.addColorStop(0, '#eef2f4'); sg.addColorStop(0.35, C.steel); sg.addColorStop(0.7, C.steelMid); sg.addColorStop(1, C.steelDark);
+    g.fillStyle = sg; g.fill(skull);
+    // Reflections: the window and the garden, as the Netherlandish painters put them.
+    g.save(); g.clip(skull);
+    g.fillStyle = 'rgba(255,255,255,0.75)';
+    g.beginPath(); g.ellipse(-45 * k, -95, 10, 40, 0.3 * k, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(70,110,60,0.35)';
+    g.fillRect(-120, 0, 240, 40);
+    g.fillStyle = 'rgba(150,40,30,0.15)';
+    g.fillRect(-120, 20, 240, 20);
+    g.restore();
+    // The snout visor, pivoting at the temples.
+    const vis = new Path2D();
+    const sx = 230 * k;
+    vis.moveTo(-100 * Math.abs(k) - 10, -40); vis.bezierCurveTo(-40 * k, -70, sx * 0.6, -55, sx, 5);
+    vis.bezierCurveTo(sx * 0.6, 60, -40 * k, 80, -100 * Math.abs(k) - 10, 50); vis.closePath();
+    const vg = g.createLinearGradient(0, -60, 0, 70);
+    vg.addColorStop(0, '#f4f6f7'); vg.addColorStop(0.45, C.steel); vg.addColorStop(1, '#4e555b');
+    g.fillStyle = vg; g.fill(vis);
+    g.strokeStyle = 'rgba(30,30,35,0.6)'; g.lineWidth = 2; g.stroke(vis);
+    // Sights and breaths.
+    g.strokeStyle = '#0d0d0f'; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(-60 * k, -16); g.quadraticCurveTo(40 * k, -26, sx * 0.62, -10); g.stroke();
+    g.fillStyle = '#0d0d0f';
+    for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(sx * 0.35 + (i % 3) * 14 * k, 18 + Math.floor(i / 3) * 12, 2.6, 0, Math.PI * 2); g.fill(); }
+    // Pivot rivet.
+    g.fillStyle = C.goldDeep; g.beginPath(); g.arc(-70 * k, 0, 9, 0, Math.PI * 2); g.fill();
+    g.fillStyle = C.goldLight; g.beginPath(); g.arc(-72 * k, -2, 3, 0, Math.PI * 2); g.fill();
+    // Glint.
+    const gl = (t * 0.6) % 1;
+    if (gl < 0.3) {
+      const gx = lerp(-80, 120, gl / 0.3) * k, gy = lerp(-120, -20, gl / 0.3);
+      sparkle(g, gx, gy, 22 * Math.sin((gl / 0.3) * Math.PI));
+    }
+    if (dent) { g.strokeStyle = 'rgba(20,20,25,0.6)'; g.lineWidth = 3; g.beginPath(); g.arc(40, -110, 14, 0.2, 2.6); g.stroke(); }
+    g.restore();
+  }
+
+  function sparkle(g, x, y, r) {
+    if (r <= 0) return;
+    g.save();
+    g.translate(x, y);
+    g.globalCompositeOperation = 'lighter';
+    const rg = g.createRadialGradient(0, 0, 0, 0, 0, r);
+    rg.addColorStop(0, 'rgba(255,255,240,0.95)'); rg.addColorStop(1, 'rgba(255,240,200,0)');
+    g.fillStyle = rg;
+    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,245,0.9)';
+    for (let i = 0; i < 4; i++) {
+      g.rotate(Math.PI / 4);
+      g.beginPath(); g.moveTo(-r * 1.6, 0); g.lineTo(0, -1.2); g.lineTo(r * 1.6, 0); g.lineTo(0, 1.2); g.fill();
+    }
+    g.restore();
+  }
+
+  /** A long sword lying on velvet, the running wolf of Passau inlaid at the forte. */
+  function drawSword(g, x, y, s, t, rot = -0.08) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(rot);
+    g.scale(s, s);
+    // Blade
+    const L = 760;
+    const bg = g.createLinearGradient(0, -16, 0, 16);
+    bg.addColorStop(0, '#f2f4f5'); bg.addColorStop(0.48, '#aab2b8'); bg.addColorStop(0.52, '#7d868e'); bg.addColorStop(1, '#d9dee1');
+    g.fillStyle = bg;
+    g.beginPath(); g.moveTo(0, -18); g.lineTo(L - 70, -9); g.lineTo(L, 0); g.lineTo(L - 70, 9); g.lineTo(0, 18); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(40,45,50,0.5)'; g.lineWidth = 1; g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.moveTo(0, -1); g.lineTo(L - 4, 0); g.stroke();
+    // The running wolf, inlaid in latten.
+    g.save(); g.translate(70, 0); g.strokeStyle = '#c9a24a'; g.lineWidth = 2.2; g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(-14, 6); g.lineTo(-6, 0); g.lineTo(6, 0); g.lineTo(14, -6); g.moveTo(14, -6); g.lineTo(18, -4);
+    g.moveTo(-6, 0); g.lineTo(-10, 8); g.moveTo(-2, 0); g.lineTo(-4, 8); g.moveTo(4, 0); g.lineTo(6, 8); g.moveTo(8, 0); g.lineTo(12, 8);
+    g.moveTo(-14, 6); g.lineTo(-20, 2);
+    g.stroke(); g.restore();
+    // Cross, grip, pommel.
+    g.fillStyle = '#8f969c';
+    g.beginPath(); g.roundRect(-14, -120, 16, 240, 6); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(-11, -116, 4, 232);
+    g.fillStyle = '#3a2416';
+    g.beginPath(); g.roundRect(-190, -14, 178, 28, 8); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 2;
+    for (let k = -180; k < -20; k += 12) { g.beginPath(); g.moveTo(k, -14); g.lineTo(k + 8, 14); g.stroke(); }
+    const pg = g.createRadialGradient(-215, -8, 4, -210, 0, 34);
+    pg.addColorStop(0, '#e9eef0'); pg.addColorStop(1, '#5d656c');
+    g.fillStyle = pg; g.beginPath(); g.ellipse(-212, 0, 22, 34, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#7d868e'; g.beginPath(); g.ellipse(-212, 0, 9, 14, 0, 0, Math.PI * 2); g.fill();
+    // Light running along the blade.
+    const gl = (t * 0.45) % 1;
+    sparkle(g, lerp(40, L - 40, gl), -2, 18 * Math.sin(gl * Math.PI));
+    g.restore();
+  }
+
+  /** The scabbard: wood covered in red-brown leather, latten locket and chape, belt straps. */
+  function drawScabbard(g, x, y, s, rot) {
+    g.save();
+    g.translate(x, y); g.rotate(rot); g.scale(s, s);
+    const L = 720;
+    const lg = g.createLinearGradient(0, -18, 0, 18);
+    lg.addColorStop(0, '#9a4a32'); lg.addColorStop(0.4, '#6e2a1c'); lg.addColorStop(1, '#3a140c');
+    g.fillStyle = lg; g.strokeStyle = 'rgba(30,10,5,0.8)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, -17); g.lineTo(L - 40, -9); g.quadraticCurveTo(L, -4, L + 6, 0); g.quadraticCurveTo(L, 4, L - 40, 9); g.lineTo(0, 17); g.closePath(); g.fill(); g.stroke();
+    // tooled lines along the leather
+    g.strokeStyle = 'rgba(30,10,5,0.45)'; g.lineWidth = 1.2;
+    g.beginPath(); g.moveTo(60, -6); g.lineTo(L - 60, -3); g.moveTo(60, 6); g.lineTo(L - 60, 3); g.stroke();
+    const latten = (x0, w, h) => {
+      const bg = g.createLinearGradient(0, -h, 0, h); bg.addColorStop(0, C.goldLight); bg.addColorStop(0.5, C.gold); bg.addColorStop(1, C.goldDeep);
+      g.fillStyle = bg; g.beginPath(); g.roundRect(x0, -h, w, h * 2, 3); g.fill(); g.strokeStyle = '#5a3f12'; g.lineWidth = 1.5; g.stroke();
+    };
+    // belt straps hanging from the locket and a band below it
+    g.strokeStyle = '#3a2416'; g.lineWidth = 7; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(40, 14); g.bezierCurveTo(30, 60, -10, 70, -40, 64); g.moveTo(150, 12); g.bezierCurveTo(150, 60, 110, 74, 70, 70); g.stroke();
+    g.fillStyle = C.gold; g.fillRect(-46, 58, 10, 12); g.fillRect(64, 64, 10, 12);
+    latten(-6, 66, 19); latten(140, 18, 16);
+    // chape at the point
+    const cg = g.createLinearGradient(0, -10, 0, 10); cg.addColorStop(0, C.goldLight); cg.addColorStop(1, C.goldDeep);
+    g.fillStyle = cg; g.beginPath(); g.moveTo(L - 90, -8); g.lineTo(L - 40, -9); g.quadraticCurveTo(L, -4, L + 6, 0); g.quadraticCurveTo(L, 4, L - 40, 9); g.lineTo(L - 90, 8); g.closePath(); g.fill(); g.stroke();
+    g.restore();
+  }
+
+  /** A harness on its stand: breastplate, fauld, bascinet; dentable. */
+  function drawHarness(g, x, y, s, t, dent = 0, shake = 0) {
+    g.save();
+    g.translate(x + Math.sin(t * 60) * shake * 6, y);
+    g.scale(s, s);
+    // Stand
+    g.fillStyle = '#5a3a22';
+    g.fillRect(-12, -60, 24, 440);
+    g.fillRect(-140, 370, 280, 24);
+    g.fillRect(-150, 40, 300, 18);
+    // Mail skirt
+    g.fillStyle = '#6a7076';
+    g.beginPath(); g.moveTo(-120, 190); g.lineTo(120, 190); g.lineTo(140, 290); g.lineTo(-140, 290); g.closePath(); g.fill();
+    for (let yy = 196; yy < 290; yy += 7) { g.strokeStyle = 'rgba(210,215,220,0.4)'; g.beginPath(); for (let xx = -140; xx < 140; xx += 7) { g.moveTo(xx + 3, yy); g.arc(xx, yy, 3, 0, Math.PI, true); } g.stroke(); }
+    // Fauld lames
+    for (let i = 0; i < 4; i++) {
+      const yy = 150 + i * 28;
+      const lg = g.createLinearGradient(-150, 0, 150, 0);
+      lg.addColorStop(0, '#5d656c'); lg.addColorStop(0.35, '#eef2f4'); lg.addColorStop(0.6, C.steel); lg.addColorStop(1, '#5d656c');
+      g.fillStyle = lg;
+      g.beginPath(); g.moveTo(-118 - i * 6, yy); g.quadraticCurveTo(0, yy + 14, 118 + i * 6, yy); g.lineTo(122 + i * 6, yy + 26); g.quadraticCurveTo(0, yy + 40, -122 - i * 6, yy + 26); g.closePath(); g.fill();
+      g.fillStyle = C.goldDeep; for (const rx of [-90, 0, 90]) { g.beginPath(); g.arc(rx, yy + 12, 3, 0, Math.PI * 2); g.fill(); }
+    }
+    // Globose breastplate
+    const br = new Path2D();
+    br.moveTo(-130, 160); br.bezierCurveTo(-150, 40, -120, -40, -60, -60); br.quadraticCurveTo(0, -40, 60, -60);
+    br.bezierCurveTo(120, -40, 150, 40, 130, 160); br.quadraticCurveTo(0, 190, -130, 160); br.closePath();
+    const bg = g.createRadialGradient(-30, 30, 10, 0, 50, 190);
+    bg.addColorStop(0, '#f7f9fa'); bg.addColorStop(0.35, C.steel); bg.addColorStop(0.8, '#7f878e'); bg.addColorStop(1, '#41474d');
+    g.fillStyle = bg; g.fill(br);
+    g.strokeStyle = 'rgba(30,30,35,0.5)'; g.lineWidth = 2; g.stroke(br);
+    g.save(); g.clip(br);
+    g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.ellipse(-50, 20, 14, 60, 0.15, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(70,110,60,0.3)'; g.fillRect(-150, 120, 300, 70);
+    if (dent > 0) {
+      const dg = g.createRadialGradient(36, 58, 1, 36, 58, 26 * dent);
+      dg.addColorStop(0, 'rgba(20,22,25,0.75)'); dg.addColorStop(0.6, 'rgba(40,44,48,0.35)'); dg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = dg; g.beginPath(); g.arc(36, 58, 26 * dent, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = `rgba(255,255,255,${0.7 * dent})`; g.lineWidth = 2; g.beginPath(); g.arc(36, 58, 16 * dent, 3.6, 5.4); g.stroke();
+    }
+    g.restore();
+    // Arm openings and the lance rest.
+    g.fillStyle = '#3a3f44';
+    g.fillRect(96, 40, 26, 10);
+    g.restore();
+    g.save();
+    g.translate(x, y);
+    drawHounskull(g, 0, -150 * s, 0.6 * s, 0.4, t);
+    g.restore();
+  }
+
+  function drawBolt(g, x, y, a) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(a);
+    g.fillStyle = '#6a4a2c'; g.fillRect(-70, -3.5, 70, 7);
+    g.fillStyle = '#5a6066'; g.beginPath(); g.moveTo(0, -6); g.lineTo(26, 0); g.lineTo(0, 6); g.closePath(); g.fill();
+    g.fillStyle = '#e8e2d2'; g.beginPath(); g.moveTo(-70, -3); g.lineTo(-58, -14); g.lineTo(-48, -3); g.fill(); g.beginPath(); g.moveTo(-70, 3); g.lineTo(-58, 14); g.lineTo(-48, 3); g.fill();
+    g.restore();
+  }
+
+  /** The poor customer: grandfather's great helm, a coat of plates, a rain cloud. */
+  function drawSadKnight(g, x, y, s, t) {
+    g.save();
+    g.translate(x, y);
+    g.scale(s, s);
+    const droop = Math.sin(t * 1.4) * 3;
+    // Coat of plates: faded cloth with rivets.
+    const coat = new Path2D();
+    coat.moveTo(-150, 80); coat.bezierCurveTo(-180, 200, -200, 320, -210, 460); coat.lineTo(210, 460);
+    coat.bezierCurveTo(200, 320, 180, 200, 150, 80); coat.quadraticCurveTo(0, 60, -150, 80); coat.closePath();
+    g.fillStyle = '#5f5a3e'; g.fill(coat);
+    g.save(); g.clip(coat);
+    for (let yy = 100; yy < 460; yy += 26) for (let xx = -200; xx < 210; xx += 24) { g.fillStyle = '#a99a64'; g.beginPath(); g.arc(xx + ((yy / 26) % 2) * 12, yy, 3.5, 0, Math.PI * 2); g.fill(); }
+    shade(g, coat, -210, 60, 210, 460, 'rgba(0,0,0,0)', 'rgba(20,20,10,0.55)');
+    g.restore();
+    // Mail sleeves hanging.
+    for (const sx of [-1, 1]) {
+      g.fillStyle = '#5f656a';
+      g.beginPath(); g.moveTo(sx * 150, 90); g.quadraticCurveTo(sx * 200, 250, sx * 190, 420); g.lineTo(sx * 140, 420); g.quadraticCurveTo(sx * 150, 250, sx * 120, 110); g.closePath(); g.fill();
+    }
+    // Great helm, a little dented, head bowed.
+    g.save(); g.translate(0, 10 + droop); g.rotate(0.12);
+    const hg = g.createLinearGradient(-90, 0, 90, 0);
+    hg.addColorStop(0, '#4c5257'); hg.addColorStop(0.4, '#b8bec2'); hg.addColorStop(1, '#4c5257');
+    g.fillStyle = hg;
+    g.beginPath(); g.moveTo(-86, 70); g.lineTo(-90, -110); g.quadraticCurveTo(0, -125, 90, -110); g.lineTo(86, 70); g.quadraticCurveTo(0, 85, -86, 70); g.fill();
+    g.fillStyle = '#0d0d0f'; g.fillRect(-70, -40, 60, 8); g.fillRect(10, -40, 60, 8);
+    g.fillStyle = '#9a7a34'; g.fillRect(-6, -60, 12, 120); g.fillRect(-50, -12, 100, 10);
+    // breaths on the right cheek, rivets along the crown seam, and an old dent
+    g.fillStyle = '#0d0d0f';
+    for (let i = 0; i < 8; i++) { g.beginPath(); g.arc(30 + (i % 4) * 12, 10 + Math.floor(i / 4) * 14, 2.6, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#e6eaec';
+    for (let i = -4; i <= 4; i++) { g.beginPath(); g.arc(i * 20, -100 - Math.cos(i * 0.18) * 4, 2.4, 0, Math.PI * 2); g.fill(); }
+    const dg = g.createRadialGradient(-44, -76, 1, -44, -76, 22);
+    dg.addColorStop(0, 'rgba(20,22,25,0.6)'); dg.addColorStop(0.7, 'rgba(30,34,38,0.25)'); dg.addColorStop(1, 'rgba(30,34,38,0)');
+    g.fillStyle = dg; g.beginPath(); g.ellipse(-44, -76, 24, 16, 0.3, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 2; g.beginPath(); g.ellipse(-44, -76, 14, 9, 0.3, 0.4, 2.2); g.stroke();
+    g.restore();
+    // Rain cloud.
+    g.save(); g.translate(Math.sin(t * 0.7) * 12, -220);
+    g.fillStyle = '#5c6066';
+    for (const [cx, cy, r] of [[-60, 0, 46], [0, -20, 58], [60, 0, 44], [0, 18, 50]]) { g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill(); }
+    g.strokeStyle = 'rgba(160,180,200,0.7)'; g.lineWidth = 2.5;
+    for (let i = 0; i < 16; i++) { const rx = -80 + (i * 37) % 170, ry = 60 + ((t * 300 + i * 53) % 220); g.beginPath(); g.moveTo(rx, ry); g.lineTo(rx - 4, ry + 16); g.stroke(); }
+    g.restore();
+    g.restore();
+  }
+
+  /** Sir Ješek, a satisfied customer: hounskull with visor raised, jupon, gauntlet raised. */
+  function drawJesek(g, x, y, s, st) {
+    g.save();
+    g.translate(x, y);
+    g.scale(s, s);
+    const t = st.time;
+    // Jupon with arms: azure, a golden bend (invented arms for an invented man).
+    const jup = new Path2D();
+    jup.moveTo(-150, 90); jup.bezierCurveTo(-190, 220, -205, 340, -215, 470); jup.lineTo(215, 470);
+    jup.bezierCurveTo(205, 340, 190, 220, 150, 90); jup.quadraticCurveTo(0, 70, -150, 90); jup.closePath();
+    g.fillStyle = C.azurite; g.fill(jup);
+    g.save(); g.clip(jup);
+    g.fillStyle = C.gold; g.beginPath(); g.moveTo(-220, 140); g.lineTo(-140, 90); g.lineTo(230, 420); g.lineTo(150, 470); g.closePath(); g.fill();
+    strokes(g, rng(44), 700, -220, 80, 220, 470, ['#3d6296', '#1f3554', '#e2c070'], { len: [4, 10], wid: [1, 2], alpha: [0.06, 0.16] });
+    shade(g, jup, -220, 70, 220, 470, 'rgba(0,0,0,0)', 'rgba(5,10,30,0.55)');
+    g.restore();
+    // Right arm (left of picture) at rest, in its vambrace.
+    const limb = (ax, ay, bx, by, w) => {
+      const a = Math.atan2(by - ay, bx - ax), l = Math.hypot(bx - ax, by - ay);
+      g.save(); g.translate(ax, ay); g.rotate(a);
+      const lg = g.createLinearGradient(0, -w / 2, 0, w / 2);
+      lg.addColorStop(0, '#4e555b'); lg.addColorStop(0.35, '#f1f4f5'); lg.addColorStop(0.6, C.steel); lg.addColorStop(1, '#4e555b');
+      g.fillStyle = lg; g.strokeStyle = 'rgba(25,28,32,0.7)'; g.lineWidth = 2;
+      g.beginPath(); g.roundRect(0, -w / 2, l, w, w / 2); g.fill(); g.stroke();
+      g.restore();
+    };
+    const couter = (x, y, r) => {
+      const cg = g.createRadialGradient(x - r * 0.3, y - r * 0.3, 2, x, y, r);
+      cg.addColorStop(0, '#f6f8f9'); cg.addColorStop(1, '#5d656c');
+      g.fillStyle = cg; g.strokeStyle = 'rgba(25,28,32,0.7)'; g.lineWidth = 2;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); g.stroke();
+    };
+    limb(-165, 130, -200, 290, 56); couter(-200, 290, 34); limb(-200, 290, -170, 420, 50);
+    // Left arm raised: the gauntlet lifted in greeting.
+    const lift = easeOut(clamp(((st.local ?? 1) - 0.2) * 1.4, 0, 1));
+    const ex = 255, ey = 240, th = lerp(1.45, -1.32, lift), fl = 150;
+    const wx = ex + Math.cos(th) * fl, wy = ey + Math.sin(th) * fl;
+    limb(165, 125, ex, ey, 58); couter(ex, ey, 36); limb(ex, ey, wx, wy, 50);
+    const wave = lift > 0.95 ? Math.sin((st.time ?? 0) * 7) * 0.12 : 0;
+    g.save(); g.translate(wx, wy); g.rotate(th + Math.PI / 2 + wave);
+    drawGauntlet(g, 0, -60 * 0.8, 0.8, 0, 'steel');
+    g.restore();
+    // Spaulders
+    for (const sx of [-1, 1]) {
+      const sg = g.createRadialGradient(sx * 150, 90, 5, sx * 150, 110, 80);
+      sg.addColorStop(0, '#f1f4f5'); sg.addColorStop(1, '#5d656c');
+      g.fillStyle = sg; g.beginPath(); g.ellipse(sx * 150, 115, 70, 52, sx * 0.3, 0, Math.PI * 2); g.fill();
+    }
+    // Aventail, falling from the bascinet over the shoulders.
+    g.fillStyle = '#6a7076';
+    g.beginPath(); g.moveTo(-74, -30); g.bezierCurveTo(-120, 40, -160, 90, -150, 120); g.lineTo(150, 120); g.bezierCurveTo(160, 90, 120, 40, 74, -30); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(210,215,220,0.4)'; g.lineWidth = 1;
+    for (let yy = -26; yy < 120; yy += 7) { g.beginPath(); for (let xx = -150; xx < 150; xx += 7) { g.moveTo(xx + 3, yy); g.arc(xx, yy, 3, 0, Math.PI, true); } g.stroke(); }
+    // Face in the opening.
+    g.save(); g.translate(0, -50);
+    const fg = g.createRadialGradient(-10, -10, 5, 0, 0, 60);
+    fg.addColorStop(0, '#f2d2b6'); fg.addColorStop(1, C.fleshShade);
+    g.fillStyle = fg; g.beginPath(); g.ellipse(0, 0, 44, 54, 0, 0, Math.PI * 2); g.fill();
+    for (const ex of [-16, 16]) {
+      g.fillStyle = '#f5ece0'; g.beginPath(); g.ellipse(ex, -6, 9, 4.5 * (1 - (st.blink ?? 0)), 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#3d5a7a'; g.beginPath(); g.arc(ex, -6, 3.3, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(100,70,40,0.7)'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(ex - 10, -18); g.quadraticCurveTo(ex, -23, ex + 10, -18); g.stroke();
+    }
+    g.strokeStyle = 'rgba(150,90,70,0.7)'; g.lineWidth = 1.8; g.beginPath(); g.moveTo(1, -4); g.quadraticCurveTo(6, 12, 3, 18); g.stroke();
+    g.fillStyle = '#c9a35a'; g.beginPath(); g.moveTo(-22, 26); g.quadraticCurveTo(0, 16, 22, 26); g.quadraticCurveTo(10, 30, 0, 26); g.quadraticCurveTo(-10, 30, -22, 26); g.fill();
+    g.fillStyle = '#4a1a14'; g.beginPath(); g.ellipse(0, 36, 9, 1.5 + (st.talk ?? 0) * 6, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+    // The bascinet around it: pointed skull, open face.
+    const sk = new Path2D();
+    sk.moveTo(-74, -24); sk.bezierCurveTo(-86, -130, -46, -196, 0, -226); sk.bezierCurveTo(46, -196, 86, -130, 74, -24);
+    sk.lineTo(56, -24); sk.bezierCurveTo(58, -98, 34, -126, 0, -126); sk.bezierCurveTo(-34, -126, -58, -98, -56, -24); sk.closePath();
+    const kg = g.createLinearGradient(-80, -220, 80, -30); kg.addColorStop(0, '#f1f4f5'); kg.addColorStop(0.5, C.steel); kg.addColorStop(1, '#4e555b');
+    g.fillStyle = kg; g.fill(sk);
+    g.strokeStyle = 'rgba(25,28,32,0.7)'; g.lineWidth = 2; g.stroke(sk);
+    // The snout visor, swung up on its pivots: seen from below, sights and breaths showing.
+    const nod = Math.sin((st.time ?? 0) * 2.1) * 0.03;
+    g.save(); g.translate(0, -88); g.rotate(nod);
+    const vz = new Path2D();
+    vz.moveTo(-68, 2); vz.bezierCurveTo(-74, -64, -34, -120, 0, -178); vz.bezierCurveTo(34, -120, 74, -64, 68, 2);
+    vz.bezierCurveTo(40, -26, -40, -26, -68, 2); vz.closePath();
+    const vgr = g.createLinearGradient(-70, 0, 70, 0); vgr.addColorStop(0, '#5d656c'); vgr.addColorStop(0.3, '#f4f6f7'); vgr.addColorStop(0.55, C.steel); vgr.addColorStop(1, '#41474d');
+    g.fillStyle = vgr; g.fill(vz); g.stroke(vz);
+    g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(-3, -30); g.quadraticCurveTo(-4, -110, -2, -172); g.stroke();
+    g.strokeStyle = '#0d0d0f'; g.lineWidth = 5; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-46, -40); g.lineTo(-8, -44); g.moveTo(8, -44); g.lineTo(46, -40); g.stroke();
+    g.fillStyle = '#0d0d0f';
+    for (const sxn of [-1, 1]) for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(sxn * (16 + (i % 2) * 10), -76 - Math.floor(i / 2) * 14, 2.6, 0, Math.PI * 2); g.fill(); }
+    for (const sxn of [-1, 1]) {
+      g.fillStyle = C.goldDeep; g.beginPath(); g.arc(sxn * 64, 0, 8, 0, Math.PI * 2); g.fill();
+      g.fillStyle = C.goldLight; g.beginPath(); g.arc(sxn * 64 - 2, -2, 2.6, 0, Math.PI * 2); g.fill();
+    }
+    g.restore();
+    g.restore();
+    void t;
+  }
+
+  /** Emblem: a golden gauntlet on a red quatrefoil. */
+  function drawEmblem(g, x, y, s, t) {
+    g.save();
+    g.translate(x, y);
+    g.scale(s, s);
+    const q = new Path2D();
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; q.moveTo(Math.cos(a) * 70 + 62, Math.sin(a) * 70); q.arc(Math.cos(a) * 70, Math.sin(a) * 70, 62, 0, Math.PI * 2); }
+    g.fillStyle = C.goldDeep; g.save(); g.scale(1.08, 1.08); g.fill(q); g.restore();
+    g.fillStyle = C.rubric; g.fill(q);
+    g.fillStyle = 'rgba(255,255,255,0.08)'; for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(Math.cos(i) * 90, Math.sin(i * 1.7) * 90, 3, 0, Math.PI * 2); g.fill(); }
+    drawGauntlet(g, 0, 0, 1, 0, 'gold');
+    sparkle(g, -20, -80, 16 * Math.max(0, Math.sin(t * 2.2)));
+    g.restore();
+  }
+
+  /**
+   * An hourglass gauntlet, back of the hand to the viewer, fingers up: flared cuff,
+   * wrist lame, metacarpal plate with a knuckle ridge, fingers of overlapping scales.
+   * Local origin at the middle of the hand; the cuff's mouth is at y ≈ +112.
+   */
+  function drawGauntlet(g, x, y, s, rot, metal = 'steel') {
+    const gold = metal === 'gold';
+    const hi = gold ? C.goldLight : '#f3f6f7', mid = gold ? C.gold : C.steel, lo = gold ? C.goldDeep : '#4e555b';
+    const line = gold ? '#5a3f12' : 'rgba(25,28,32,0.85)';
+    g.save();
+    g.translate(x, y); g.rotate(rot); g.scale(s, s);
+    g.lineWidth = 2.5; g.strokeStyle = line; g.lineJoin = 'round';
+    const across = (x0, x1) => { const gr = g.createLinearGradient(x0, 0, x1, 0); gr.addColorStop(0, hi); gr.addColorStop(0.45, mid); gr.addColorStop(1, lo); return gr; };
+    // Cuff, flaring to the forearm, with a turned edge.
+    g.fillStyle = across(-58, 58);
+    g.beginPath(); g.moveTo(-28, 38); g.bezierCurveTo(-34, 70, -48, 96, -58, 112); g.quadraticCurveTo(0, 126, 58, 112);
+    g.bezierCurveTo(48, 96, 34, 70, 28, 38); g.quadraticCurveTo(0, 44, -28, 38); g.closePath(); g.fill(); g.stroke();
+    g.strokeStyle = gold ? C.goldLight : '#dfe4e7'; g.lineWidth = 4;
+    g.beginPath(); g.moveTo(-54, 108); g.quadraticCurveTo(0, 121, 54, 108); g.stroke();
+    g.strokeStyle = line; g.lineWidth = 2.5;
+    g.fillStyle = gold ? '#fff3c4' : '#ffffff';
+    for (const rx of [-30, 30]) { g.beginPath(); g.arc(rx, 92, 3, 0, Math.PI * 2); g.fill(); }
+    // Wrist lame.
+    g.fillStyle = across(-32, 32);
+    g.beginPath(); g.moveTo(-31, 28); g.quadraticCurveTo(0, 22, 31, 28); g.lineTo(29, 42); g.quadraticCurveTo(0, 48, -29, 42); g.closePath(); g.fill(); g.stroke();
+    // Metacarpal plate, domed.
+    g.fillStyle = across(-42, 42);
+    g.beginPath(); g.moveTo(-29, 28); g.bezierCurveTo(-40, 8, -43, -18, -40, -34); g.lineTo(38, -34); g.bezierCurveTo(42, -16, 40, 8, 29, 28); g.quadraticCurveTo(0, 22, -29, 28); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.45)'; g.beginPath(); g.ellipse(-16, -6, 7, 20, 0.15, 0, Math.PI * 2); g.fill();
+    // Thumb, angled out, in three scales.
+    g.save(); g.translate(36, 6); g.rotate(0.62);
+    for (let k = 0; k < 3; k++) {
+      g.fillStyle = across(-9, 9);
+      g.beginPath(); g.roundRect(-9 + k, -16 - k * 16, 18 - k * 2, 20, k === 2 ? [9, 9, 4, 4] : 4); g.fill(); g.stroke();
+    }
+    g.restore();
+    // Fingers: three overlapping scales and a tip each.
+    const fingers = [[-29, 54, 16.5], [-10, 64, 17], [9, 60, 17], [27, 48, 15.5]];
+    for (const [fx, len, fw] of fingers) {
+      const seg = len / 4;
+      for (let k = 3; k >= 0; k--) {
+        const y0 = -44 - (k + 1) * seg, wk = fw - k * 0.8;
+        g.fillStyle = across(fx - wk / 2, fx + wk / 2);
+        g.beginPath(); g.roundRect(fx - wk / 2, y0 - 3, wk, seg + 6, k === 3 ? [wk / 2, wk / 2, 3, 3] : 3); g.fill(); g.stroke();
+      }
+    }
+    // Knuckle plate with its ridge of bosses.
+    g.fillStyle = across(-42, 42);
+    g.beginPath(); g.roundRect(-42, -48, 82, 16, 7); g.fill(); g.stroke();
+    for (const [fx] of fingers) { g.fillStyle = hi; g.beginPath(); g.ellipse(fx - 1, -42, 6, 3.2, 0, 0, Math.PI * 2); g.fill(); }
+    g.restore();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Television graphics, in the manner of the illuminators.
+
+  function text(g, str, x, y, { font = '700 40px Alegreya', color = C.ink, align = 'center', base = 'middle', stroke = null, sw = 0, maxW = 0 } = {}) {
+    g.font = font;
+    g.textAlign = align;
+    g.textBaseline = base;
+    if (maxW) {
+      let size = parseFloat(font.match(/(\d+(\.\d+)?)px/)[1]);
+      while (g.measureText(str).width > maxW && size > 10) { size -= 1; g.font = font.replace(/\d+(\.\d+)?px/, size + 'px'); }
+    }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = sw; g.lineJoin = 'round'; g.strokeText(str, x, y); }
+    g.fillStyle = color;
+    g.fillText(str, x, y);
+  }
+
+  function wrapLines(g, str, font, maxW) {
+    g.font = font;
+    const words = str.split(' ');
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      const test = cur ? cur + ' ' + w : w;
+      if (g.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; } else cur = test;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  /** A banderole: the painted speech scroll of medieval pictures, used as caption and lower third. */
+  function banderole(g, x, y, w, lines, { font = '600 30px Alegreya', ink = C.ink, rubric = C.rubric, appear = 1, tail = null } = {}) {
+    if (appear <= 0) return;
+    g.save();
+    const lh = parseFloat(font.match(/(\d+)px/)[1]) * 1.18;
+    const h = lines.length * lh + 26;
+    const ww = w * easeOut(appear);
+    g.translate(x, y);
+    // ribbon body
+    g.fillStyle = C.parchment;
+    g.strokeStyle = 'rgba(90,60,25,0.85)';
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(0, 0); g.bezierCurveTo(ww * 0.3, -8, ww * 0.7, 8, ww, 0);
+    g.lineTo(ww, h); g.bezierCurveTo(ww * 0.7, h + 8, ww * 0.3, h - 8, 0, h);
+    g.closePath(); g.fill(); g.stroke();
+    // curled ends
+    for (const [ex, dir] of [[0, -1], [ww, 1]]) {
+      g.fillStyle = '#d9c79e';
+      g.beginPath(); g.moveTo(ex, 6); g.bezierCurveTo(ex + dir * 34, 4, ex + dir * 38, h * 0.5, ex + dir * 18, h * 0.62);
+      g.bezierCurveTo(ex + dir * 6, h * 0.7, ex + dir * 10, h * 0.5, ex + dir * 22, h * 0.48); g.lineTo(ex, h - 6); g.closePath(); g.fill(); g.stroke();
+    }
+    if (tail) {
+      g.fillStyle = C.parchment;
+      g.beginPath(); g.moveTo(tail[0] - 14, h - 2); g.lineTo(tail[1], tail[2]); g.lineTo(tail[0] + 14, h - 2); g.closePath(); g.fill(); g.stroke();
+    }
+    g.save();
+    g.beginPath(); g.rect(0, -10, ww, h + 20); g.clip();
+    lines.forEach((ln, i) => {
+      const first = i === 0;
+      g.font = font;
+      const y0 = 13 + lh * (i + 0.5);
+      if (first && ln.length > 1) {
+        // rubricated initial
+        g.textAlign = 'left'; g.textBaseline = 'middle';
+        const cap = ln[0];
+        g.fillStyle = rubric;
+        g.font = font.replace(/(\d+)px/, (m, n) => `${Math.round(n * 1.2)}px`);
+        const cw = g.measureText(cap).width;
+        const total = cw + (g.font = font, g.measureText(ln.slice(1)).width);
+        const sx = (w - total) / 2;
+        g.font = font.replace(/(\d+)px/, (m, n) => `${Math.round(n * 1.2)}px`);
+        g.fillText(cap, sx, y0);
+        g.font = font; g.fillStyle = ink;
+        g.fillText(ln.slice(1), sx + cw, y0);
+      } else {
+        text(g, ln, w / 2, y0, { font, color: ink });
+      }
+    });
+    g.restore();
+    g.restore();
+  }
+
+  function starburst(g, x, y, r, t, top, big, small) {
+    g.save();
+    g.translate(x, y);
+    const pop = easeOut(clamp(t * 3, 0, 1));
+    g.scale(pop * (1 + Math.sin(t * 6) * 0.03), pop * (1 + Math.sin(t * 6) * 0.03));
+    g.rotate(Math.sin(t * 1.5) * 0.06);
+    const n = 18;
+    g.beginPath();
+    for (let i = 0; i < n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2; const rr = i % 2 ? r * 0.78 : r; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+    g.closePath();
+    const gg = g.createRadialGradient(-r * 0.3, -r * 0.3, 4, 0, 0, r);
+    gg.addColorStop(0, C.goldLight); gg.addColorStop(0.6, C.gold); gg.addColorStop(1, C.goldDeep);
+    g.fillStyle = gg; g.fill();
+    g.strokeStyle = '#5a3f12'; g.lineWidth = 3; g.stroke();
+    g.fillStyle = 'rgba(110,80,25,0.4)';
+    for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; g.beginPath(); g.arc(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, 2, 0, Math.PI * 2); g.fill(); }
+    text(g, top, 0, -r * 0.36, { font: `italic 600 ${Math.round(r * 0.2)}px Alegreya`, color: C.ink });
+    text(g, big, 0, r * 0.02, { font: `900 ${Math.round(r * 0.46)}px "Grenze Gotisch"`, color: C.rubric, maxW: r * 1.35 });
+    text(g, small, 0, r * 0.4, { font: `700 ${Math.round(r * 0.19)}px Alegreya`, color: C.ink, maxW: r * 1.3 });
+    g.restore();
+  }
+
+  function channelBug(g, t) {
+    g.save();
+    g.globalAlpha = 0.9;
+    g.translate(W - 92, 70);
+    g.fillStyle = 'rgba(30,20,10,0.55)';
+    g.beginPath(); g.arc(0, 0, 44, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = C.gold; g.lineWidth = 3; g.stroke();
+    g.beginPath(); g.arc(0, 0, 37, 0, Math.PI * 2); g.lineWidth = 1; g.stroke();
+    text(g, '✠', 0, -12, { font: '700 22px Alegreya', color: C.goldLight });
+    text(g, 'MCCCCIII', 0, 14, { font: '700 13px Alegreya', color: C.goldLight });
+    g.restore();
+    // "live" tablet
+    g.save();
+    g.translate(W - 196, 52);
+    g.fillStyle = C.rubric; g.beginPath(); g.roundRect(0, 0, 66, 26, 4); g.fill();
+    g.fillStyle = `rgba(255,240,210,${0.5 + 0.5 * Math.sin(t * 5)})`; g.beginPath(); g.arc(13, 13, 5, 0, Math.PI * 2); g.fill();
+    text(g, 'ŽIVĚ', 42, 14, { font: '700 14px Alegreya', color: '#fff2d6' });
+    g.restore();
+  }
+
+  // ---------------------------------------------------------------------------
+  // The script: who says what, and when (seconds).
+
+  const LINES = [
+    { t: 0.8, d: 3.6, who: 'vo', text: 'From the Old Town of Prague — the Golden Gauntlet!' },
+    { t: 5.4, d: 3.0, who: 'oldrich', text: 'Good people of Prague! Lords, squires, burghers!' },
+    { t: 8.6, d: 2.6, who: 'oldrich', text: 'Are you tired of being run through?' },
+    { t: 11.4, d: 3.2, who: 'oldrich', text: 'I am Master Oldřich, armourer. And I can help.' },
+    { t: 14.6, d: 4.4, who: 'vo', text: 'Still wearing your grandfather\'s great helm? And a coat of plates from the last century?' },
+    { t: 19.2, d: 3.6, who: 'vo', text: 'With Sigismund\'s Cumans in the land, that is no way to live!' },
+    { t: 23.4, d: 3.4, who: 'vo', text: 'Introducing the hounskull bascinet! The snout glances every blow.' },
+    { t: 27.2, d: 3.0, who: 'vo', text: 'Visor down to fight. Visor up to breathe!' },
+    { t: 31.3, d: 3.4, who: 'vo', text: 'Blades of Passau steel, marked with the running wolf.' },
+    { t: 34.9, d: 3.2, who: 'vo', text: 'Stiff enough to find the gaps in any harness!' },
+    { t: 38.8, d: 2.2, who: 'oldrich', text: 'Watch closely. One crossbow bolt…' },
+    { t: 42.6, d: 2.8, who: 'vo', text: 'Every breastplate tried against the crossbow!' },
+    { t: 47.2, d: 1.8, who: 'vo', text: 'But wait — there is more!' },
+    { t: 49.2, d: 4.0, who: 'oldrich', text: 'Buy a full harness before Michaelmas, and the arming doublet is free!' },
+    { t: 53.6, d: 4.6, who: 'jesek', text: 'A Hungarian mace rang my bascinet at Kutná Hora. And here I am!' },
+    { t: 58.8, d: 3.4, who: 'vo', text: 'The Golden Gauntlet. Platnéřská street, in the Old Town.' },
+    { t: 62.4, d: 3.2, who: 'oldrich', text: 'Send your page today! My apprentices are standing by!' },
+  ];
+  const SCENES = [
+    { id: 'logo', a: 0, b: 5 },
+    { id: 'intro', a: 5, b: 14.2 },
+    { id: 'problem', a: 14.2, b: 23 },
+    { id: 'helm', a: 23, b: 31 },
+    { id: 'sword', a: 31, b: 38.5 },
+    { id: 'demo', a: 38.5, b: 47 },
+    { id: 'more', a: 47, b: 53.4 },
+    { id: 'testimonial', a: 53.4, b: 58.6 },
+    { id: 'street', a: 58.6, b: 63 },
+    { id: 'end', a: 63, b: DURATION },
+  ];
+
+  const speaking = (who, t) => {
+    for (const l of LINES) if (l.who === who && t >= l.t && t < l.t + l.d) return Math.max(0, Math.sin(t * 17) * 0.5 + Math.sin(t * 11.3) * 0.5);
+    return 0;
+  };
+  const blinkAt = (t, seed) => { const p = (t + seed) % 3.7; return p < 0.12 ? Math.sin(p / 0.12 * Math.PI) : 0; };
+
+  let BG = null;
+  function backgrounds() {
+    if (BG) return BG;
+    BG = { land: paintLandscape(), grey: paintLandscape({ gloom: 1, seed: 11 }), gold: paintGoldGround(), street: paintStreet() };
+    return BG;
+  }
+
+  function ken(g, img, t, z0 = 1, z1 = 1.06, x0 = 0, x1 = -20) {
+    // Pan never further than the zoom allows, so the panel's edge stays out of shot.
+    const z = lerp(z0, z1, t), m = (W / 2) * (z - 1), dx = clamp(lerp(x0, x1, t), -m, m);
+    g.save();
+    g.translate(W / 2 + dx, H / 2);
+    g.scale(z, z);
+    g.drawImage(img, -W / 2, -H / 2);
+    g.restore();
+  }
+
+  function drawScene(g, id, t, L) {
+    const B = backgrounds();
+    switch (id) {
+      case 'logo': {
+        ken(g, B.gold, L / 5, 1.0, 1.04, 0, 0);
+        const ap = easeOut(L / 1.2);
+        g.save(); g.globalAlpha = ap;
+        drawEmblem(g, W / 2, 205, 0.9 * (0.85 + 0.15 * ap), t);
+        g.restore();
+        text(g, 'The Golden Gauntlet', W / 2, 398, { font: '900 92px "Grenze Gotisch"', color: C.rubric, stroke: 'rgba(255,240,200,0.7)', sw: 6 });
+        text(g, 'Mistr Oldřich, platnéř · Platnéřská ulice · Staré Město pražské', W / 2, 462, { font: 'italic 500 30px Alegreya', color: C.ink });
+        break;
+      }
+      case 'intro': {
+        ken(g, B.land, L / 9.2, 1.04, 1.0, -20, 10);
+        const gesture = L < 3.2 ? Math.sin(L * 2) * 0.15 : L < 6 ? -0.9 + Math.sin(L * 3) * 0.08 : 0.2;
+        drawArmourer(g, 470, 300, 0.95, {
+          time: t, talk: speaking('oldrich', t), blink: blinkAt(t, 0.3), look: Math.sin(t * 0.7) * 0.4,
+          armR: 0.35 + gesture * (L < 3.2 ? 1 : 0.2), armL: L < 3.2 ? -0.35 - gesture : L < 6 ? -1.75 + Math.sin(L * 4) * 0.08 : -0.5,
+          brow: L > 3 && L < 6 ? 1 : 0, open: 1,
+        });
+        break;
+      }
+      case 'problem': {
+        ken(g, B.grey, L / 8.8, 1.0, 1.05, 0, 0);
+        drawSadKnight(g, 640, 300, 0.9, t);
+        break;
+      }
+      case 'helm': {
+        ken(g, B.gold, L / 8, 1.02, 1.08, 0, -30);
+        const a = Math.sin(L * 0.9) * 0.35;
+        drawHounskull(g, 560, 360, 1.15, a, t);
+        break;
+      }
+      case 'sword': {
+        ken(g, B.gold, L / 7.5, 1.06, 1.0, 20, -10);
+        const slide = easeOut(L / 1.2), slide2 = easeOut((L - 2.4) / 1.0);
+        if (L > 2.4) drawScabbard(g, lerp(1500, 350, slide2), 536, 1.0, -0.035);
+        drawSword(g, lerp(1400, 330, slide), 450, 1.0, t, -0.05);
+        break;
+      }
+      case 'demo': {
+        ken(g, B.land, L / 8.5, 1.14, 1.18, 80, 100);
+        const fire = 2.4, hit = 2.75;
+        const dentT = clamp((L - hit) * 4, 0, 1);
+        const shake = L > hit && L < hit + 0.4 ? (1 - (L - hit) / 0.4) : 0;
+        drawHarness(g, 760, 360, 0.85, t, dentT, shake);
+        if (L > fire && L < hit) {
+          const u = (L - fire) / (hit - fire);
+          drawBolt(g, lerp(-80, 760 + 24, u), lerp(330, 412, u), 0.08);
+        } else if (L >= hit && L < hit + 1.6) {
+          const u = (L - hit) / 1.6;
+          drawBolt(g, 790 - 260 * u, 412 - 300 * u + 400 * u * u, -1.2 - u * 9);
+        }
+        if (L >= hit && L < hit + 0.35) sparkle(g, 790, 412, 60 * (1 - (L - hit) / 0.35));
+        if (L > 6.2) {
+          // The test seal, pressed in red wax.
+          const u = easeOut((L - 6.2) * 3);
+          g.save(); g.translate(330, 260); g.rotate(-0.18); g.scale(u * 1.3 - 0.3 * u * u, u * 1.3 - 0.3 * u * u);
+          g.fillStyle = '#8e1a14'; g.beginPath(); for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; const rr = 95 + (i % 2 ? 6 : -4); g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } g.closePath(); g.fill();
+          g.strokeStyle = 'rgba(255,200,180,0.5)'; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 76, 0, Math.PI * 2); g.stroke();
+          text(g, 'TRIED', 0, -10, { font: '900 44px "Grenze Gotisch"', color: '#f6dccc' });
+          text(g, 'against the crossbow', 0, 30, { font: 'italic 600 18px Alegreya', color: '#f6dccc' });
+          g.restore();
+        }
+        break;
+      }
+      case 'more': {
+        ken(g, B.land, L / 6.4, 1.0, 1.03, 0, 0);
+        const shk = L < 1.6 ? Math.sin(L * 50) * 8 * (1 - L / 1.6) : 0;
+        drawArmourer(g, 300, 330, 0.85, { time: t, talk: speaking('oldrich', t), blink: blinkAt(t, 1.1), look: -0.3, armR: L < 2 ? 2.25 + Math.sin(L * 9) * 0.06 : 0.2 + Math.sin(t * 3) * 0.1, armL: -0.6, brow: 1 });
+        if (L < 2.4) {
+          g.save(); g.translate(820 + shk, 260); g.rotate(-0.06);
+          const u = easeOut(L * 4);
+          g.scale(u, u);
+          text(g, 'But wait!', 0, -40, { font: '900 110px "Grenze Gotisch"', color: C.rubric, stroke: C.parchment, sw: 10 });
+          text(g, 'There is more!', 0, 70, { font: '900 74px "Grenze Gotisch"', color: C.ink, stroke: C.parchment, sw: 8 });
+          g.restore();
+        } else {
+          starburst(g, 900, 300, 190, L - 2.4, 'with every harness', 'FREE', 'arming doublet!');
+        }
+        break;
+      }
+      case 'testimonial': {
+        ken(g, B.land, L / 5.2, 1.05, 1.0, -30, 0);
+        drawJesek(g, 560, 330, 0.95, { time: t, local: L, talk: speaking('jesek', t), blink: blinkAt(t, 2.2) });
+        break;
+      }
+      case 'street': {
+        const u = ease(L / 4.4), z = lerp(1.0, 1.08, u);
+        ken(g, B.street, u, 1.0, 1.08, 0, 0);
+        g.save(); g.translate(W / 2, H / 2); g.scale(z, z); g.translate(-W / 2, -H / 2);
+        const [fx0, fx1] = SHOP.arches[1];
+        g.save(); g.clip(archPath(fx0, fx1));
+        // The forge breathing.
+        const glow = 0.5 + 0.12 * Math.sin(t * 13) + 0.08 * Math.sin(t * 29 + 1);
+        g.globalCompositeOperation = 'lighter';
+        const fg = g.createRadialGradient(fx1 - 40, 560, 4, fx1 - 40, 560, 170);
+        fg.addColorStop(0, `rgba(255,150,50,${glow})`); fg.addColorStop(0.4, `rgba(200,80,20,${glow * 0.45})`); fg.addColorStop(1, 'rgba(120,40,10,0)');
+        g.fillStyle = fg; g.fillRect(fx0, 380, fx1 - fx0, 300);
+        g.globalCompositeOperation = 'source-over';
+        // An apprentice at the anvil, striking in time.
+        const cyc = (t % 0.6) / 0.6, raise = cyc < 0.65 ? easeOut(cyc / 0.65) : 1 - ease((cyc - 0.65) / 0.12);
+        const ax = fx0 + 150, ay = 548;
+        g.fillStyle = '#5a2a1c'; g.beginPath(); g.moveTo(ax - 22, 560); g.lineTo(ax + 22, 560); g.lineTo(ax + 28, 640); g.lineTo(ax - 28, 640); g.closePath(); g.fill();
+        g.fillStyle = '#2a1c14'; g.fillRect(ax - 18, 640, 12, 12); g.fillRect(ax + 6, 640, 12, 12);
+        g.fillStyle = '#e0b898'; g.beginPath(); g.arc(ax, 532, 13, 0, Math.PI * 2); g.fill();
+        g.fillStyle = '#6e4b2e'; g.beginPath(); g.arc(ax, 528, 13.5, Math.PI, Math.PI * 2); g.fill();
+        g.fillStyle = '#c8a070'; g.fillRect(ax - 20, 572, 40, 50);
+        const aa = lerp(2.35, 4.15, raise);
+        const hx = ax + Math.cos(aa) * 58, hy = ay + Math.sin(aa) * 58;
+        g.strokeStyle = '#5a2a1c'; g.lineWidth = 10; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(ax - 8, ay + 4); g.lineTo(ax + Math.cos(aa) * 34, ay + Math.sin(aa) * 34); g.stroke();
+        g.strokeStyle = '#4a3220'; g.lineWidth = 4;
+        g.beginPath(); g.moveTo(ax + Math.cos(aa) * 30, ay + Math.sin(aa) * 30); g.lineTo(hx, hy); g.stroke();
+        g.save(); g.translate(hx, hy); g.rotate(aa + Math.PI / 2); g.fillStyle = '#2a2d31'; g.fillRect(-12, -6, 24, 12); g.restore();
+        if (cyc > 0.76 && cyc < 0.95) {
+          const k = (cyc - 0.76) / 0.19;
+          g.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 9; i++) {
+            const a = -Math.PI / 2 + (i - 4) * 0.32, d = 8 + k * (26 + (i % 3) * 10);
+            g.fillStyle = `rgba(255,${190 + i * 6},90,${1 - k})`;
+            g.beginPath(); g.arc(fx0 + 104 + Math.cos(a) * d, 598 + Math.sin(a) * d + k * k * 20, 2, 0, Math.PI * 2); g.fill();
+          }
+          g.globalCompositeOperation = 'source-over';
+        }
+        g.restore();
+        // The sign of the shop, swinging from its bracket.
+        const sw = Math.sin(t * 1.6) * 0.06;
+        g.save(); g.translate(SHOP.x0, 168);
+        g.strokeStyle = '#2b1c12'; g.lineWidth = 8; g.lineCap = 'round';
+        g.beginPath(); g.moveTo(8, 0); g.lineTo(-240, 0); g.moveTo(4, 40); g.quadraticCurveTo(-40, 6, -110, 2); g.stroke();
+        g.lineWidth = 3; g.beginPath(); g.arc(-240, -6, 6, 0, Math.PI * 2); g.stroke();
+        g.translate(-150, 0); g.rotate(sw);
+        g.lineWidth = 3; g.beginPath(); g.moveTo(-36, 0); g.lineTo(-36, 54); g.moveTo(36, 0); g.lineTo(36, 54); g.stroke();
+        drawEmblem(g, 0, 122, 0.55, t);
+        g.restore();
+        g.restore();
+        break;
+      }
+      case 'end': {
+        ken(g, B.gold, L / 3, 1.0, 1.02, 0, 0);
+        drawEmblem(g, W / 2, 196, 0.82, t);
+        text(g, 'The Golden Gauntlet', W / 2, 376, { font: '900 84px "Grenze Gotisch"', color: C.rubric, stroke: 'rgba(255,240,200,0.7)', sw: 6 });
+        text(g, 'Steel you can trust your life to', W / 2, 440, { font: 'italic 600 34px Alegreya', color: C.ink });
+        text(g, 'Platnéřská street · Old Town · open from Prime to Vespers · closed on feast days', W / 2, 652, { font: '600 22px Alegreya', color: '#f2e6c8', maxW: 1100 });
+        break;
+      }
+      default: break;
+    }
+  }
+
+  // Captions and TV furniture on top of the picture.
+  function drawOverlay(g, t, subs) {
+    channelBug(g, t);
+    // Lower third in the intro.
+    if (t > 6.2 && t < 13.8) {
+      const ap = clamp((t - 6.2) * 3, 0, 1) * clamp((13.8 - t) * 3, 0, 1);
+      g.save(); g.globalAlpha = ap;
+      g.fillStyle = 'rgba(124,20,20,0.92)'; g.fillRect(60, 560, 520, 66);
+      g.fillStyle = C.gold; g.fillRect(60, 556, 520, 4); g.fillRect(60, 626, 520, 4);
+      text(g, 'Mistr Oldřich', 80, 584, { font: '900 38px "Grenze Gotisch"', color: '#fff0d0', align: 'left' });
+      text(g, 'platnéř — armourer of Platnéřská street', 82, 612, { font: 'italic 500 20px Alegreya', color: '#f2d88a', align: 'left' });
+      g.restore();
+    }
+    if (t > 15 && t < 22.8) {
+      const ap = clamp((t - 15) * 3, 0, 1) * clamp((22.8 - t) * 3, 0, 1);
+      g.save(); g.globalAlpha = ap; g.translate(640, 112); g.rotate(-0.02);
+      text(g, 'Last century\'s armour?', 0, 0, { font: '900 66px "Grenze Gotisch"', color: '#f2e6c8', stroke: 'rgba(30,25,20,0.85)', sw: 8 });
+      g.restore();
+    }
+    if (t > 25) {
+      if (t < 30.8) starburst(g, 1030, 285, 150, t - 25, 'only', '6 kop', 'groschen the threescore');
+    }
+    if (t > 33.2 && t < 38.3) starburst(g, 1070, 262, 140, t - 33.2, 'only', '2 kopy', 'scabbard included');
+    if (t > 23.2 && t < 30.8) labelPlate(g, 'Hounskull bascinet', 'with mail aventail · c. 4 kg', t - 23.2, 30.8 - t);
+    if (t > 31.2 && t < 38.3) labelPlate(g, 'Long sword of Passau', 'stiff, sharp-pointed · 1.4 kg', t - 31.2, 38.3 - t);
+    if (t > 53.8 && t < 58.4) {
+      const ap = clamp((t - 53.8) * 3, 0, 1) * clamp((58.4 - t) * 3, 0, 1);
+      g.save(); g.globalAlpha = ap;
+      g.fillStyle = 'rgba(30,45,80,0.92)'; g.fillRect(820, 470, 400, 76);
+      g.fillStyle = C.gold; g.fillRect(820, 466, 400, 4); g.fillRect(820, 546, 400, 4);
+      text(g, 'Sir Ješek of Lomnice', 840, 497, { font: '900 32px "Grenze Gotisch"', color: '#fff0d0', align: 'left' });
+      text(g, 'satisfied customer*', 842, 527, { font: 'italic 500 20px Alegreya', color: '#f2d88a', align: 'left' });
+      text(g, '*Results not typical. Hungarian maces vary.', 1210, 690, { font: 'italic 500 16px Alegreya', color: '#f2e6c8', align: 'right' });
+      g.restore();
+    }
+    if (t > 58.6) {
+      // Fine print, crawling as the law requires.
+      const fp = 'Prices in kopy of Prague groschen, sixty groschen to the kopa · Harness fitted to the buyer; bring your own squire · Not proof against cannon · The guild of armourers is not answerable for thrusts through the sight of the visor · Gauntlets sold in pairs · Michaelmas offer while doublets last ·';
+      g.save();
+      g.fillStyle = 'rgba(25,18,10,0.82)'; g.fillRect(0, 682, W, 38);
+      g.font = '500 18px Alegreya'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = '#efe2c2';
+      const wdt = g.measureText(fp).width;
+      const x = W - ((t - 58.6) * 190) % (wdt + W);
+      g.fillText(fp, x, 701);
+      g.restore();
+      if (t > 59.2 && t < 63) {
+        const ap = clamp((t - 59.2) * 3, 0, 1) * clamp((63 - t) * 3, 0, 1);
+        g.save(); g.globalAlpha = ap;
+        banderole(g, 920, 262, 330, ['Platnéřská street', 'Old Town of Prague'], { font: '600 30px Alegreya' });
+        g.restore();
+      }
+    }
+    if (!subs) return;
+    // Captions: speech scrolls for people in the picture, a scroll at the foot for the narrator.
+    for (const l of LINES) {
+      if (t < l.t - 0.05 || t > l.t + l.d + 0.4) continue;
+      const ap = clamp((t - l.t + 0.05) * 5, 0, 1) * clamp((l.t + l.d + 0.4 - t) * 5, 0, 1);
+      const sc = SCENES.find((s) => t >= s.a && t < s.b)?.id;
+      g.save(); g.globalAlpha = ap;
+      if (l.who === 'oldrich' && (sc === 'intro' || sc === 'more')) {
+        const lines = wrapLines(g, l.text, '600 30px Alegreya', 500);
+        if (sc === 'intro') banderole(g, 700, 126, 520, lines, { tail: [40, -110, 150] });
+        else banderole(g, 560, 470, 560, lines, { tail: [30, -170, 60] });
+      } else if (l.who === 'jesek') {
+        const lines = wrapLines(g, l.text, '600 30px Alegreya', 470);
+        banderole(g, 60, 60, 480, lines, { tail: [400, 440, 232] });
+      } else {
+        const label = l.who === 'vo' ? '' : l.who === 'oldrich' ? 'Oldřich: ' : '';
+        const lines = wrapLines(g, label + l.text, 'italic 600 30px Alegreya', 980);
+        const y = t > 58.6 ? 560 : 590;
+        banderole(g, 140, y - (lines.length - 1) * 36, 1000, lines, { font: 'italic 600 30px Alegreya' });
+      }
+      g.restore();
+    }
+  }
+
+  function labelPlate(g, title, sub, a, b) {
+    const ap = clamp(a * 3, 0, 1) * clamp(b * 3, 0, 1);
+    g.save(); g.globalAlpha = ap;
+    g.fillStyle = 'rgba(124,20,20,0.92)'; g.fillRect(60, 80, 470, 72);
+    g.fillStyle = C.gold; g.fillRect(60, 76, 470, 4); g.fillRect(60, 152, 470, 4);
+    text(g, title, 80, 108, { font: '900 34px "Grenze Gotisch"', color: '#fff0d0', align: 'left', maxW: 430 });
+    text(g, sub, 82, 136, { font: 'italic 500 19px Alegreya', color: '#f2d88a', align: 'left' });
+    g.restore();
+  }
+
+  /** Renders the frame at time t (seconds). Pure function of t. */
+  function render(t, subs = true) {
+    const g = ctx;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, W, H);
+    const i = SCENES.findIndex((s) => t >= s.a && t < s.b);
+    const sc = SCENES[Math.max(0, i === -1 ? SCENES.length - 1 : i)];
+    drawScene(g, sc.id, t, t - sc.a);
+    // Dissolve into the next scene over its first 0.35 s.
+    const prev = SCENES[SCENES.indexOf(sc) - 1];
+    const fadeIn = t - sc.a;
+    if (prev && fadeIn < 0.35) {
+      const tmp = scratch();
+      const tg = tmp.getContext('2d');
+      tg.setTransform(1, 0, 0, 1, 0, 0);
+      tg.clearRect(0, 0, W, H);
+      drawScene(tg, prev.id, t, t - prev.a);
+      g.globalAlpha = 1 - fadeIn / 0.35;
+      g.drawImage(tmp, 0, 0);
+      g.globalAlpha = 1;
+    }
+    varnish(g);
+    drawOverlay(g, t, subs);
+    // The set: a faint glow and scanline of the broadcast over the panel.
+    g.save();
+    g.globalAlpha = 0.05;
+    g.fillStyle = '#000';
+    for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+    g.restore();
+    if (t > DURATION - 0.6) { g.fillStyle = `rgba(0,0,0,${(t - (DURATION - 0.6)) / 0.6})`; g.fillRect(0, 0, W, H); }
+  }
+  let _scratch = null;
+  const scratch = () => (_scratch ??= off());
+
+  // ---------------------------------------------------------------------------
+  // Sound: a shawm and drone estampie, tabor, anvil, bells — all synthesised.
+
+  const NOTE = (n) => 440 * Math.pow(2, (n - 69) / 12);
+  // D dorian tune (MIDI numbers, duration in eighths)
+  const TUNE = [
+    [74, 1], [76, 1], [77, 1], [76, 1], [74, 1], [72, 1], [74, 2],
+    [72, 1], [74, 1], [76, 1], [72, 1], [74, 4],
+    [77, 1], [79, 1], [81, 1], [79, 1], [77, 1], [76, 1], [74, 1], [76, 1],
+    [77, 1], [76, 1], [74, 1], [72, 1], [74, 4],
+  ];
+
+  function scheduleAudio(ac, out, from = 0, opts = {}) {
+    const t0 = ac.currentTime + 0.05 - from;   // timeline zero in context time
+    const at = (tt) => t0 + tt;
+    const noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    const r = rng(99);
+    for (let i = 0; i < nd.length; i++) nd[i] = r() * 2 - 1;
+    const music = ac.createGain();
+    const level = opts.music ?? 0.55;
+    music.gain.value = level;
+    music.connect(out);
+    // duck music under speech (not in the exported film, which has no voice to make room for)
+    if (opts.duck !== false) for (const l of LINES) {
+      if (l.t + l.d < from) continue;
+      const a = Math.max(at(l.t) - 0.1, ac.currentTime), b = at(l.t + l.d);
+      music.gain.setTargetAtTime(level * 0.58, a, 0.08);
+      music.gain.setTargetAtTime(level, b, 0.2);
+    }
+    const env = (node, tt, peak, a, d, dest = out) => {
+      const gn = ac.createGain();
+      gn.gain.setValueAtTime(0.0001, tt);
+      gn.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), tt + a);
+      gn.gain.exponentialRampToValueAtTime(0.0001, tt + a + d);
+      node.connect(gn); gn.connect(dest);
+      return gn;
+    };
+    const noise = (tt, dur) => { const s = ac.createBufferSource(); s.buffer = noiseBuf; s.start(tt, r() * 1.5, dur + 0.05); return s; };
+    const ok = (tt) => tt >= from - 0.02;
+
+    // Music: drone on D and A (hurdy-gurdy), tune on a shawm, tabor beat. 132 bpm, eighth = 0.227 s.
+    const e8 = 60 / 132 / 2;
+    const musicEnd = DURATION - 3.2;
+    // drone
+    for (const f of [NOTE(50), NOTE(57)]) {
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+      const gn = ac.createGain(); gn.gain.value = 0;
+      o.connect(lp).connect(gn).connect(music);
+      // swells in under the ident, so the tune enters over a sounding drone
+      const s = Math.max(at(2.4), ac.currentTime);
+      gn.gain.setValueAtTime(0, s); gn.gain.linearRampToValueAtTime(0.035, Math.max(s + 0.3, at(4.2)));
+      gn.gain.setValueAtTime(0.035, at(musicEnd)); gn.gain.linearRampToValueAtTime(0, at(musicEnd + 1));
+      o.start(s); o.stop(at(musicEnd + 1.2));
+    }
+    // tune, repeated
+    let tt = 5.0;
+    while (tt < musicEnd) {
+      for (const [n, d] of TUNE) {
+        if (tt >= musicEnd) break;
+        if (ok(tt)) {
+          const st = at(tt), dur = d * e8 * 0.92;
+          const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = NOTE(n);
+          const vib = ac.createOscillator(); vib.frequency.value = 5.5; const vg = ac.createGain(); vg.gain.value = NOTE(n) * 0.008;
+          vib.connect(vg).connect(o.frequency);
+          const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.9;
+          o.connect(bp);
+          env(bp, st, 0.09, 0.02, dur, music);
+          o.start(st); o.stop(st + dur + 0.1); vib.start(st); vib.stop(st + dur + 0.1);
+        }
+        tt += d * e8;
+      }
+    }
+    // tabor: boom on the beat, tick on the off-beat
+    for (let b = 5.0; b < musicEnd; b += e8 * 2) {
+      if (!ok(b)) continue;
+      const o = ac.createOscillator(); o.frequency.setValueAtTime(140, at(b)); o.frequency.exponentialRampToValueAtTime(60, at(b) + 0.12);
+      env(o, at(b), 0.22, 0.003, 0.15, music); o.start(at(b)); o.stop(at(b) + 0.2);
+      const n = noise(at(b + e8), 0.05); const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500; n.connect(hp);
+      env(hp, at(b + e8), 0.05, 0.002, 0.04, music);
+    }
+
+    // Effects.
+    const anvil = (tm, k = 1) => {
+      if (!ok(tm)) return;
+      for (const [rr, a, d] of [[1, 0.3, 1.2], [2.76, 0.2, 0.8], [5.4, 0.12, 0.5], [8.9, 0.08, 0.3]]) {
+        const o = ac.createOscillator(); o.frequency.value = 880 * rr; env(o, at(tm), a * k, 0.001, d); o.start(at(tm)); o.stop(at(tm) + d + 0.1);
+      }
+    };
+    const bell = (tm, f = 1320, k = 1) => {
+      if (!ok(tm)) return;
+      for (const [rr, a, d] of [[1, 0.18, 1.4], [2.0, 0.08, 0.9], [3.01, 0.05, 0.6]]) {
+        const o = ac.createOscillator(); o.frequency.value = f * rr; env(o, at(tm), a * k, 0.002, d); o.start(at(tm)); o.stop(at(tm) + d + 0.1);
+      }
+    };
+    const whoosh = (tm) => {
+      if (!ok(tm)) return;
+      const n = noise(at(tm), 0.5); const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.5;
+      bp.frequency.setValueAtTime(300, at(tm)); bp.frequency.exponentialRampToValueAtTime(2400, at(tm) + 0.25); n.connect(bp); env(bp, at(tm), 0.18, 0.08, 0.3);
+    };
+    const thud = (tm, k = 1) => {
+      if (!ok(tm)) return;
+      const o = ac.createOscillator(); o.frequency.setValueAtTime(120, at(tm)); o.frequency.exponentialRampToValueAtTime(40, at(tm) + 0.2);
+      env(o, at(tm), 0.6 * k, 0.003, 0.25); o.start(at(tm)); o.stop(at(tm) + 0.35);
+    };
+    const coins = (tm) => {
+      for (let i = 0; i < 9; i++) { const c = tm + i * 0.06 + r() * 0.03; bell(c, 2600 + r() * 1800, 0.35); }
+    };
+    // logo
+    anvil(0.25, 1); anvil(0.62, 0.7);
+    // fanfare on the shawm
+    [[0.9, 74, 0.2], [1.12, 74, 0.2], [1.34, 81, 0.5], [1.9, 79, 0.25], [2.15, 81, 0.9]].forEach(([tm, n, d]) => {
+      if (!ok(tm)) return;
+      for (const h of [1, 2, 3]) { const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = NOTE(n) * h; const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; o.connect(lp); env(lp, at(tm), 0.06 / h, 0.03, d); o.start(at(tm)); o.stop(at(tm) + d + 0.1); }
+    });
+    for (const s of SCENES.slice(1)) whoosh(s.a - 0.15);
+    // sad descent for the problem
+    [[14.4, 62], [14.9, 61], [15.4, 60], [15.9, 55]].forEach(([tm, n]) => {
+      if (!ok(tm)) return;
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = NOTE(n) / 2;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 700; o.connect(lp);
+      env(lp, at(tm), 0.12, 0.05, tm === 15.9 ? 1.2 : 0.4); o.start(at(tm)); o.stop(at(tm) + 1.5);
+    });
+    bell(23.2, 1568, 1); bell(23.5, 2093, 0.8);
+    bell(25.05, 1760, 1); coins(25.1);
+    whoosh(31.05);
+    // blade "shing"
+    if (ok(31.6)) { const n = noise(at(31.6), 0.8); const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 6000; bp.Q.value = 8; n.connect(bp); env(bp, at(31.6), 0.25, 0.01, 0.7); }
+    bell(33.25, 1760, 1); coins(33.3);
+    // crossbow: twang, flight, impact, ricochet
+    const fire = 38.5 + 2.4, hit = 38.5 + 2.75;
+    if (ok(fire)) { const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(220, at(fire)); o.frequency.exponentialRampToValueAtTime(90, at(fire) + 0.15); env(o, at(fire), 0.35, 0.002, 0.25); o.start(at(fire)); o.stop(at(fire) + 0.3); whoosh(fire + 0.05); }
+    anvil(hit, 1.2); thud(hit, 0.8);
+    if (ok(hit + 0.1)) { const o = ac.createOscillator(); o.frequency.setValueAtTime(2400, at(hit + 0.1)); o.frequency.exponentialRampToValueAtTime(600, at(hit + 0.7)); env(o, at(hit + 0.1), 0.06, 0.02, 0.6); o.start(at(hit + 0.1)); o.stop(at(hit + 0.8)); }
+    thud(38.5 + 6.25, 1.1);   // the wax seal
+    // but wait: drum roll and a bell
+    for (let k = 0; k < 14; k++) thud(47.0 + k * 0.05, 0.35);
+    bell(47.75, 1320, 1.2);
+    bell(49.6, 1760, 1); coins(49.7);
+    // church bell for the street
+    bell(58.7, 392, 1.6); bell(60.2, 392, 1.2);
+    // closing jingle: "the Gold-en Gaunt-let"
+    [[63.1, 74, 0.25], [63.4, 77, 0.25], [63.7, 81, 0.25], [64.0, 79, 0.25], [64.3, 86, 1.1]].forEach(([tm, n, d]) => {
+      if (!ok(tm)) return;
+      for (const h of [1, 2]) { const o = ac.createOscillator(); o.type = h === 1 ? 'triangle' : 'sawtooth'; o.frequency.value = NOTE(n) * h; const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3000; o.connect(lp); env(lp, at(tm), 0.12 / h, 0.02, d); o.start(at(tm)); o.stop(at(tm) + d + 0.1); }
+    });
+    bell(64.3, 1175, 1); coins(64.4);
+    void opts;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Playback: clock, audio session, voice, controls.
+
+  const state = { t: 0, playing: false, started: false, sound: true, voice: true, subs: true, last: 0, spoken: new Set() };
+  let ac = null, session = null;
+  const el = (id) => document.getElementById(id);
+
+  function startAudio() {
+    stopAudio();
+    if (!state.sound) return;
+    try {
+      ac ??= new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+      session = ac.createGain();
+      session.gain.value = 0.9;
+      const comp = ac.createDynamicsCompressor();
+      session.connect(comp).connect(ac.destination);
+      session._comp = comp;
+      scheduleAudio(ac, session, state.t);
+    } catch { /* audio unavailable */ }
+  }
+  function stopAudio() {
+    if (session) {
+      try { session.gain.setTargetAtTime(0, ac.currentTime, 0.02); const s = session; setTimeout(() => { try { s.disconnect(); s._comp.disconnect(); } catch { /* gone */ } }, 120); } catch { /* gone */ }
+      session = null;
+    }
+  }
+
+  let voices = [];
+  function loadVoices() { try { voices = speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang)); } catch { voices = []; } }
+  if ('speechSynthesis' in window) { loadVoices(); try { speechSynthesis.onvoiceschanged = loadVoices; } catch { /* ignore */ } }
+  function say(l) {
+    if (!state.voice || !('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(l.text.replace('Oldřich', 'Oldrzich').replace('Platnéřská', 'Platnyerzhska').replace('Ješek', 'Yeshek').replace('Kutná Hora', 'Kootnah Hora'));
+      const male = voices.filter((v) => /male|daniel|alex|fred|george|arthur|rishi|david|mark|james/i.test(v.name) && !/female/i.test(v.name));
+      const pool = male.length ? male : voices;
+      if (pool.length) u.voice = pool[(l.who === 'vo' ? 0 : l.who === 'oldrich' ? 1 : 2) % pool.length];
+      u.rate = l.who === 'vo' ? 1.08 : l.who === 'oldrich' ? 1.06 : 0.98;
+      u.pitch = l.who === 'vo' ? 0.75 : l.who === 'oldrich' ? 1.05 : 0.6;
+      speechSynthesis.speak(u);
+    } catch { /* no voice */ }
+  }
+
+  function setPlaying(p) {
+    state.playing = p;
+    el('pp').textContent = p ? 'Pause' : 'Play';
+    if (p) {
+      if (state.t >= DURATION - 0.05) { state.t = 0; state.spoken.clear(); }
+      state.last = performance.now();
+      startAudio();
+      el('play').hidden = true;
+    } else {
+      stopAudio();
+      try { speechSynthesis.cancel(); } catch { /* ignore */ }
+    }
+  }
+
+  function seek(t) {
+    state.t = clamp(t, 0, DURATION);
+    state.spoken = new Set(LINES.filter((l) => l.t < state.t - 0.3).map((l) => l.t));
+    try { speechSynthesis.cancel(); } catch { /* ignore */ }
+    if (state.playing) startAudio();
+    if (!state.playing) render(state.t, state.subs);
+  }
+
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (!state.started) return;
+    if (state.playing) {
+      state.t += Math.min(0.1, (now - state.last) / 1000);
+      state.last = now;
+      if (state.t >= DURATION) { state.t = DURATION; setPlaying(false); el('play').hidden = false; el('play').querySelector('b').textContent = '↻ Play it again'; }
+      for (const l of LINES) if (!state.spoken.has(l.t) && state.t >= l.t && state.t < l.t + l.d) { state.spoken.add(l.t); say(l); }
+      render(state.t, state.subs);
+    }
+    el('seek').value = state.t.toFixed(1);
+    el('clock').textContent = `${fmt(state.t)} / ${fmt(DURATION)}`;
+  }
+
+  const toggle = (id, key, after) => el(id).addEventListener('click', () => {
+    state[key] = !state[key];
+    el(id).setAttribute('aria-pressed', String(state[key]));
+    after?.();
+  });
+
+  const FACES = ['900 40px "Grenze Gotisch"', '500 30px Alegreya', '600 30px Alegreya', '700 20px Alegreya', 'italic 500 30px Alegreya', 'italic 600 30px Alegreya'];
+  async function ready(wait = 2500) {
+    try {
+      await Promise.race([
+        Promise.all(FACES.map((f) => document.fonts.load(f))).then(() => document.fonts.ready),
+        new Promise((res) => setTimeout(res, wait)),
+      ]);
+    } catch { /* fallback fonts */ }
+    backgrounds();
+    state.started = true;
+    render(params.has('t') ? Number(params.get('t')) : 9.8, true);
+  }
+
+  if (params.has('render')) {
+    // Tooling: frame-exact rendering and an offline soundtrack for the MP4.
+    window.commercial = {
+      DURATION,
+      async ready() { await ready(20000); return FACES.every((f) => document.fonts.check(f)); },
+      frame(t) { render(t, true); return cv.toDataURL('image/jpeg', 0.92); },
+      async soundtrack(sr = 48000) {
+        const oac = new OfflineAudioContext(2, Math.ceil(sr * DURATION), sr);
+        const g = oac.createGain(); g.gain.value = 0.9;
+        const comp = oac.createDynamicsCompressor();
+        g.connect(comp).connect(oac.destination);
+        scheduleAudio(oac, g, 0.05, { duck: false, music: 0.8 });   // 0.05 cancels the live lead-in: sample 0 is t = 0
+        const buf = await oac.startRendering();
+        // 16-bit PCM WAV, base64
+        const n = buf.length, ch = 2, bytes = 44 + n * ch * 2;
+        const dv = new DataView(new ArrayBuffer(bytes));
+        const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+        w(0, 'RIFF'); dv.setUint32(4, bytes - 8, true); w(8, 'WAVE'); w(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+        dv.setUint16(22, ch, true); dv.setUint32(24, sr, true); dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true);
+        w(36, 'data'); dv.setUint32(40, n * ch * 2, true);
+        const L = buf.getChannelData(0), R = buf.getChannelData(1);
+        let o = 44;
+        for (let i = 0; i < n; i++) { dv.setInt16(o, clamp(L[i], -1, 1) * 32767, true); dv.setInt16(o + 2, clamp(R[i], -1, 1) * 32767, true); o += 4; }
+        let bin = '';
+        const u8 = new Uint8Array(dv.buffer);
+        for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+        return btoa(bin);
+      },
+    };
+  } else {
+    el('play').addEventListener('click', () => { if (!state.started) return; setPlaying(true); });
+    el('pp').addEventListener('click', () => setPlaying(!state.playing));
+    el('restart').addEventListener('click', () => { seek(0); setPlaying(true); });
+    el('seek').addEventListener('input', (e) => seek(Number(e.target.value)));
+    toggle('sound', 'sound', () => { if (state.playing) (state.sound ? startAudio() : stopAudio()); });
+    toggle('voice', 'voice', () => { if (!state.voice) try { speechSynthesis.cancel(); } catch { /* ignore */ } });
+    toggle('subs', 'subs', () => { if (!state.playing) render(state.t, state.subs); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && state.playing) setPlaying(false); });
+    ready();
+    requestAnimationFrame(frame);
+  }
+})();
+</script>
