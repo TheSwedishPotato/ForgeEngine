@@ -1,0 +1,21 @@
+{
+  "name": "duel-1403",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Physics-based medieval duel set in the Kingdom of Bohemia, 1403: active-ragdoll knights, historical guards, weapons and armour.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node tools/artifact.mjs",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
