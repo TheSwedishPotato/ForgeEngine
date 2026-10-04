@@ -263,7 +263,8 @@ export class DamageModel {
     const res = {
       type: 'hit', attacker: att, defender: def, blow: att.attack?.name ?? (type === 'thrust' ? 'Thrust' : 'Blow'),
       zone: zone.zone, zoneName: ZONE_NAMES[zone.zone], side, kind: type, energy: E, sharp: e, blunt,
-      layers: met, stoppedBy: stoppedBy ? MAT_NAMES[stoppedBy.mat] : null, stopItem: stoppedBy?.item?.name ?? null, glanced,
+      layers: met, stoppedBy: stoppedBy ? MAT_NAMES[stoppedBy.mat] : null,
+      stopItem: stoppedBy ? (stoppedBy.item.slot === 'head' && stoppedBy.mat === 'mail' && zone.zone === 'throat' && stoppedBy.item.id !== 'mailCoif' ? 'mail aventail' : stoppedBy.item.name) : null, glanced,
       point: ep.point.clone(), speed: v, severity: 0, wound: null, fatal: false, part,
     };
     if (e > 0) {
@@ -334,7 +335,7 @@ export class DamageModel {
           def.wounds.push({ zone, side, kind: 'broken ' + (Z.hand ? 'hand' : Z.joint ? (Z.limb === 'arm' ? 'elbow' : 'knee') : Z.limb), severity: 0.8, bleed: 0, t: this.sim.time });
           def.pain = Math.min(1.5, def.pain + 0.4);
         } else {
-          def.impairLimb(limb, B / 220);
+          def.impairLimb(limb, B / 220, false);
         }
       }
     }

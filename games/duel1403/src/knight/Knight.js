@@ -99,6 +99,7 @@ export class Knight {
     let total = this.ragdoll.totalMass + this.weapon.mass + (this.weapon.offhand ? this.weapon.offhand.def.mass : 0);
     this.totalMass = total;
     this.assist = world.addConstraint(new BalanceAssist(this.b.pelvis, total));
+    // The arms push against a body braced by the legs and trunk: react on the pelvis.
     this.drive = world.addConstraint(new WeaponDrive(this.weapon, this.b.chest));
     const bL = this.ragdoll.bones.armL;
     this.offReach = world.addConstraint(new ReachAssist(bL.lowerBody, bL.lowerEnd, this.b.chest, bL.rootLocalInParent));
@@ -127,6 +128,8 @@ export class Knight {
     this.pain = 0;
     this.shock = 0;
     this.limb = { armR: 1, armL: 1, legR: 1, legL: 1 };
+    this.limbWound = { armR: 0, armL: 0, legR: 0, legL: 0 };   // cuts, stabs, broken bones: they stay
+    this.limbBruise = { armR: 0, armL: 0, legR: 0, legL: 0 };  // numbness from blows through armour: wears off
     this.wounds = [];
     this.attack = null;
     this.queued = null;
@@ -250,7 +253,7 @@ export class Knight {
   _begin(spec) {
     if (this.attack && !this.attack.done) {
       // Chain: queue the next blow if this one is already recovering.
-      if (this.attack.phase === 'recover' || this.attack.phase === 'follow') this.queued = spec;
+      if (this.attack.phase !== 'prep') this.queued = spec;
       return null;
     }
     if (this.stamina < 6) return null;
@@ -427,6 +430,12 @@ export class Knight {
       this.bleed = this.wounds.reduce((s, w) => s + w.bleed, 0);
     }
     this.pain = Math.max(0, this.pain - dt * 0.03);
+    for (const l in this.limbBruise) {
+      if (this.limbBruise[l] > 0) {
+        this.limbBruise[l] = Math.max(0, this.limbBruise[l] - dt * 0.04);
+        this.limb[l] = clamp(1 - this.limbWound[l] - this.limbBruise[l], 0, 1);
+      }
+    }
     this.stun = Math.max(0, this.stun - dt * (0.08 + 0.1 * this.blood / 5));
     this.flinch = Math.max(0, this.flinch - dt * 4);
     this.stagger = Math.max(0, this.stagger - dt);
@@ -967,8 +976,10 @@ export class Knight {
   }
 
   /** Arms/legs lose function; a useless hand lets go of the weapon. */
-  impairLimb(limb, amount) {
-    this.limb[limb] = clamp(this.limb[limb] - amount, 0, 1);
+  impairLimb(limb, amount, lasting = true) {
+    if (lasting) this.limbWound[limb] = Math.min(1, this.limbWound[limb] + amount);
+    else this.limbBruise[limb] = Math.min(0.6, this.limbBruise[limb] + amount);
+    this.limb[limb] = clamp(1 - this.limbWound[limb] - this.limbBruise[limb], 0, 1);
     if (limb === 'armR' && this.limb.armR < 0.22 && this.weapon.joints.R) {
       this.weapon.release('R');
       this.onDrop?.(this, 'R');

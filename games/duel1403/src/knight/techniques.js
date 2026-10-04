@@ -150,7 +150,7 @@ export class Attack {
       this.durPrep = (0.07 + 0.16 * turn + 0.1 * this.start.hand.distanceTo(this.Hchamber) / s) / speed;
       this.durMain = ((spec.half ? 0.26 : 0.21) + 0.22 * this.stepIn / s) * inertiaFactor / speed;
       this.durHold = 0.1;
-      this.durRecover = 0.28 / speed;
+      this.durRecover = 0.22 / speed;
     } else {
       // Swing geometry.
       const P = new Vector3(0.12 * s, -0.05 * s, 1.38 * s);
@@ -194,8 +194,8 @@ export class Attack {
       const windup = this.swingPose(-this.thW, {});
       this.durPrep = clamp(0.1 + 0.28 * this.start.hand.distanceTo(windup.hand) / s, 0.12, 0.38) * inertiaFactor / speed;
       this.durMain = (spec.kind === 'stab' ? 0.2 : 0.24) * inertiaFactor / speed;
-      this.durFollow = 0.16 * inertiaFactor / speed;
-      this.durRecover = 0.32 / speed;
+      this.durFollow = 0.14 * inertiaFactor / speed;
+      this.durRecover = 0.24 / speed;
     }
     this.stepDone = false;
   }
