@@ -371,12 +371,15 @@ export class Knight {
     const top = this.toFightFrame(this.b.chest.pos, _ko2).clone();
     top.z += 0.1 * s;
     const head = this.toFightFrame(this.b.head.pos, _ko3).clone();
-    const rT = (this.mode === 'half' ? 0.17 : 0.21) * s, rH = 0.15 * s;
+    const rT = (this.mode === 'half' ? 0.19 : 0.23) * s, rH = 0.16 * s;
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
-      for (const t of [0.15, 0.3, 0.5, 0.7, 0.9]) {
+      for (const t of [0, 0.15, 0.3, 0.5, 0.7, 0.9]) {
         _ko4.copy(cmd.hand).addScaledVector(cmd.dir, t * L);
-        for (const [a, b, r] of [[pel, top, rT], [head, head, rH]]) {
+        // the hands themselves (fists, gauntlets) need more room than the blade
+        const m = t === 0 ? 0.09 * s : 0;
+        for (const [a, b, r0] of [[pel, top, rT], [head, head, rH]]) {
+          const r = r0 + m;
           // closest point on the axis segment
           _ko5.subVectors(b, a);
           const ll = _ko5.lengthSq();
@@ -386,6 +389,9 @@ export class Knight {
           const d = _ko5.length();
           if (d >= r) continue;
           if (d < 1e-4) _ko5.set(1, 0, 0); else _ko5.multiplyScalar(1 / d);
+          // out towards the front, where the arms can actually carry it
+          _ko5.x = Math.max(_ko5.x, 0) + 0.9;
+          _ko5.normalize();
           // the nearer the hand, the more of the correction it takes
           cmd.hand.addScaledVector(_ko5, (r - d) * (1 - 0.4 * t));
           moved = true;

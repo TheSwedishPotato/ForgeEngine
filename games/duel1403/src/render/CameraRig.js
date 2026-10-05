@@ -38,7 +38,8 @@ export class CameraRig {
     const left = _b.set(f.z, 0, -f.x);
     const portrait = this.camera.aspect < 1;
     if (mode === 'fighter') {
-      _pos.copy(player.center).addScaledVector(f, portrait ? -3.6 : -2.7).addScaledVector(left, -0.75);
+      // three-quarter view from the right: your hands and blade in front of you stay in sight
+      _pos.copy(player.center).addScaledVector(f, portrait ? -3.2 : -2.3).addScaledVector(left, portrait ? -1.5 : -1.75);
       _pos.y = Math.max(portrait ? 2.25 : 2.0, hp.y + 0.45);
       _look.copy(ho).lerp(_mid, 0.3);
       _look.y = Math.max(1.0, ho.y - 0.25);
