@@ -20,6 +20,7 @@ const _q = new Quaternion(), _q2 = new Quaternion(), _q3 = new Quaternion(), _qp
 const _qu = new Quaternion(), _ql = new Quaternion(), _rv = new Vector3();
 const _hip = new Vector3(), _ankle = new Vector3(), _sh = new Vector3(), _dir = new Vector3();
 const _w1 = new Vector3(), _w2 = new Vector3(), _w3 = new Vector3();
+const _ko1 = new Vector3(), _ko2 = new Vector3(), _ko3 = new Vector3(), _ko4 = new Vector3(), _ko5 = new Vector3(), _ko6 = new Vector3();
 
 function wrapAngle(a) {
   while (a > Math.PI) a -= 2 * Math.PI;
@@ -355,6 +356,45 @@ export class Knight {
     return out.set(world.dot(this.forward), world.dot(this.left), world.y);
   }
 
+  /**
+   * The commanded blade must not run through the man holding it. Paths
+   * between guards and back from a blow are straight lines in hand space,
+   * and some cut through the trunk or the head (Ochs to Pflug, recovering
+   * from a Zwerchhau). Points along the blade inside a keep-out capsule
+   * around pelvis-chest and a sphere around the head push the hand out.
+   */
+  _keepBladeOut(cmd) {
+    const W = this.weapon, s = this.scale;
+    const L = W.tipY - (W.gripY?.R ?? W.grips.main);
+    if (!(L > 0.2)) return;
+    const pel = this.toFightFrame(this.b.pelvis.pos, _ko1).clone();
+    const top = this.toFightFrame(this.b.chest.pos, _ko2).clone();
+    top.z += 0.1 * s;
+    const head = this.toFightFrame(this.b.head.pos, _ko3).clone();
+    const rT = (this.mode === 'half' ? 0.17 : 0.21) * s, rH = 0.15 * s;
+    for (let pass = 0; pass < 3; pass++) {
+      let moved = false;
+      for (const t of [0.15, 0.3, 0.5, 0.7, 0.9]) {
+        _ko4.copy(cmd.hand).addScaledVector(cmd.dir, t * L);
+        for (const [a, b, r] of [[pel, top, rT], [head, head, rH]]) {
+          // closest point on the axis segment
+          _ko5.subVectors(b, a);
+          const ll = _ko5.lengthSq();
+          const u = ll > 1e-9 ? Math.max(0, Math.min(1, _ko6.subVectors(_ko4, a).dot(_ko5) / ll)) : 0;
+          _ko6.copy(a).addScaledVector(_ko5, u);
+          _ko5.subVectors(_ko4, _ko6);
+          const d = _ko5.length();
+          if (d >= r) continue;
+          if (d < 1e-4) _ko5.set(1, 0, 0); else _ko5.multiplyScalar(1 / d);
+          // the nearer the hand, the more of the correction it takes
+          cmd.hand.addScaledVector(_ko5, (r - d) * (1 - 0.4 * t));
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+  }
+
   speedFactor() {
     const fat = 0.7 + 0.3 * this.stamina / 100;
     const arm = 0.55 + 0.45 * this.limb.armR;
@@ -647,6 +687,7 @@ export class Knight {
         this._begin(q);
       }
     }
+    this._keepBladeOut(cmd);
     // Keep the edge perpendicular to the blade.
     cmd.edge.addScaledVector(cmd.dir, -cmd.edge.dot(cmd.dir));
     if (cmd.edge.lengthSq() < 1e-6) cmd.edge.set(0, 0, 1).addScaledVector(cmd.dir, -cmd.dir.z);

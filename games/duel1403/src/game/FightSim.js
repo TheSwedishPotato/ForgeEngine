@@ -7,6 +7,8 @@ import { DamageModel } from './Damage.js';
  * The physical duel: the world, the ground of the lists and two fighters.
  * Shared by the game and the headless tools so both run identical physics.
  */
+const SELF_BLOCK = new Set(['chest', 'abdomen', 'pelvis', 'head', 'thigh']);
+
 export class FightSim {
   constructor({ substeps = 24, fighters = [{}, {}], separation = 3.2 } = {}) {
     this.world = new World({ substeps });
@@ -28,7 +30,13 @@ export class FightSim {
     this.world.collisionFilter = (s1, s2) => {
       const u1 = s1.userData, u2 = s2.userData;
       if (u1.fighter === undefined || u2.fighter === undefined) return true;
-      return u1.fighter !== u2.fighter;
+      if (u1.fighter !== u2.fighter) return true;
+      // His own blade cannot pass through his own trunk, head or thighs
+      // (the arms and hands hold it, so they are left out).
+      const w = u1.weapon ? u1 : u2.weapon ? u2 : null;
+      if (!w || (u1.weapon && u2.weapon)) return false;
+      const b = w === u1 ? u2 : u1;
+      return (w.weaponPart === 'blade' || w.weaponPart === 'haft' || w.weaponPart === 'head' || w.weaponPart === 'spike' || w.weaponPart === 'beak') && SELF_BLOCK.has(b.segType) && !(w.y0 !== undefined && w.y0 < 0.12);
     };
     // Edge bite: a sharp edge or point catches in flesh, cloth and leather and
     // cuts in (high friction, soft and lossy contact); it skids over mail
