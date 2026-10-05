@@ -84,6 +84,8 @@ export class Program {
       case gl.FLOAT_MAT4: gl.uniformMatrix4fv(u.loc, false, v.elements ?? v); break;
       case gl.INT: case gl.BOOL: u.isArray ? gl.uniform1iv(u.loc, v) : gl.uniform1i(u.loc, v | 0); break;
       case gl.INT_VEC2: gl.uniform2iv(u.loc, v); break;
+      case gl.INT_VEC3: gl.uniform3iv(u.loc, v); break;
+      case gl.INT_VEC4: gl.uniform4iv(u.loc, v); break;
       default: throw new Error(`${this.name}: uniform ${name} has unsupported type ${u.type}`);
     }
     return this;

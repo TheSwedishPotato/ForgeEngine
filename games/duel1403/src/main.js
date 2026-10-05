@@ -5,6 +5,7 @@ import { Input } from './game/Input.js';
 import { Audio } from './game/Audio.js';
 import { HUD } from './game/HUD.js';
 import { Stage } from './render/Stage.js';
+import { ForgeStage } from './render/ForgeStage.js';
 import { Lists } from './render/Lists.js';
 import { KnightMesh } from './render/KnightMesh.js';
 import { CameraRig } from './render/CameraRig.js';
@@ -27,7 +28,8 @@ function saveConfig(c) {
 const touch = matchMedia('(pointer: coarse)').matches;
 const stored = loadConfig();
 const quality = params.get('quality') ?? stored?.quality ?? (touch ? 'medium' : 'high');
-const stage = new Stage(document.getElementById('view'), { quality });
+// The Forge renderer is the default; ?engine=three falls back to three.js's renderer.
+const stage = params.get('engine') === 'three' ? new Stage(document.getElementById('view'), { quality }) : new ForgeStage(document.getElementById('view'), { quality });
 const lists = new Lists(stage.scene, { quality });
 const particles = new Particles(stage.scene);
 const rig = new CameraRig(stage.camera);
@@ -328,6 +330,11 @@ function tick(dt) {
   excitement = Math.max(0, excitement - dt * 0.25);
   lists.update(dt, excitement);
   stage.sky.update(wallTime);
+  // Lens: focus on the opponent (or the sparring pair behind the menus);
+  // a shallow depth of field for the cinematic cameras, a hint in the fight.
+  const focusOn = mode === 'menu' ? sim.b : foe;
+  if (focusOn) stage.focusPoint = focusOn.b.head.pos;
+  stage.dofAmount = rig.mode === 'helm' ? 0 : mode === 'menu' || mode === 'over' || (mode === 'intro' && introT < 3.4) ? 1 : 0.2;
   if (player && mode !== 'menu') {
     hud.update(player, foe);
     stage.hurt = Math.min(1, Math.max(0, player.stun - 0.3) * 1.2 + Math.max(0, 3.6 - player.blood) * 0.5);

@@ -8,8 +8,10 @@ const width = parseInt(process.env.W ?? '1280'), height = parseInt(process.env.H
 mkdirSync(prefix.split('/').slice(0, -1).join('/') || '.', { recursive: true });
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width, height } });
-page.on('console', (m) => { if ((m.type() === 'error' && !m.text().includes('CERT')) || process.env.VERBOSE) console.log('[page]', m.type(), m.text()); });
-page.on('pageerror', (e) => console.log('[pageerror]', e.message, e.stack?.split('\n').slice(0, 4).join(' | ')));
+const seen = new Set();
+const once = (s) => { if (!seen.has(s)) { seen.add(s); console.log(s); } };
+page.on('console', (m) => { if ((m.type() === 'error' && !m.text().includes('CERT')) || process.env.VERBOSE) once(`[page] ${m.type()} ${m.text().slice(0, 600)}`); });
+page.on('pageerror', (e) => once(`[pageerror] ${e.message.slice(0, 800)} ${e.stack?.split('\n').slice(1, 4).join(' | ')}`));
 const sep = query.includes('?') ? '&' : '?';
 await page.goto(`http://127.0.0.1:${process.env.PORT ?? 5174}/${query}${sep}manual=1`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.duel && window.duel.sim, null, { timeout: 90000 });
@@ -18,7 +20,9 @@ for (const t of times.split(',')) {
   const s = parseFloat(t);
   await page.evaluate(([dt, sc]) => { window.duel.advance(dt); if (sc) (0, eval)(sc); }, [s - prev, script]);
   prev = s;
-  await page.waitForTimeout(400);
+  // let the temporal passes (TAA, GI, volumetrics) and probes settle
+  const settle = parseInt(process.env.SETTLE ?? '24');
+  await page.evaluate((n) => new Promise((res) => { const f0 = window.forge ? window.forge.frame : 0; const tick = () => (!window.forge || window.forge.frame - f0 >= n ? res() : requestAnimationFrame(tick)); tick(); }), settle);
   await page.screenshot({ path: `${prefix}_${t}.png` });
 }
 const info = await page.evaluate(() => { const d = window.duel; return d.player ? { mode: d.mode, p: d.player.state, f: d.foe.state, pb: d.player.blood.toFixed(2), fb: d.foe.blood.toFixed(2), log: [...document.querySelectorAll('.log .line')].map((x) => x.textContent) } : null; });
