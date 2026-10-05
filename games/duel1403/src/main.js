@@ -7,6 +7,9 @@ import { HUD } from './game/HUD.js';
 import { DebugView } from './game/DebugView.js';
 import { JoustMode } from './game/JoustMode.js';
 import { JoustField } from './render/JoustField.js';
+import { LifeMode } from './game/LifeMode.js';
+import { STARTS } from './life/data.js';
+import { TownMesh } from './render/TownMesh.js';
 import { Stage } from './render/Stage.js';
 import { MedStage } from './render/MedStage.js';
 import { Lists } from './render/Lists.js';
@@ -51,6 +54,7 @@ const lists = new Lists(stage.scene, { quality, terrain: !!stage.attachTerrain }
 stage.attachTerrain?.(lists);
 lists.camera = stage.camera;   // LOD selection for the detailed scenery
 const field = new JoustField(stage.scene, { quality });   // the joust field south of the lists
+new TownMesh(stage.scene);                               // the town of Skalice on its terrace
 const dev = new DebugView({ stage, getSim: () => sim, getAis: () => ais, getPlayer: () => player });
 const particles = new Particles(stage.scene);
 const rig = new CameraRig(stage.camera);
@@ -63,10 +67,13 @@ let time = 0, timeScale = 1, slowUntil = 0, hitStop = 0, excitement = 0;
 let introT = 0, overT = 0, lastBeat = 0, lastBreath = 0;
 let fightConfig = null;
 let joust = null;              // the joust mode, while it runs
+let life = null;               // life in the town, while it runs
+let fromLife = null;           // a duel or joust entered from life: { done(result) }
 
 const hud = new HUD(document.getElementById('ui'), {
   start: (config) => { audio.start(); saveConfig(config); newFight(config); },
   joust: (config) => startJoust(config),
+  life: (config) => startLife(config),
   resume: () => setPaused(false),
   pause: () => setPaused(true),
   quit: () => toMenu(),
@@ -90,7 +97,7 @@ function build(config, attract = false) {
   for (const m of meshes) m.dispose();
   meshes = [];
   const P = config.player;
-  const O = OPPONENTS[config.opponent] ?? OPPONENTS.fencer;
+  const O = config.customFoe ?? OPPONENTS[config.opponent] ?? OPPONENTS.fencer;
   const A = attract ? OPPONENTS.squire : null;
   const fa = attract
     ? { name: A.name, items: A.items, weapon: A.weapon, offhand: A.offhand, colors: A.colors, heraldry: A.heraldry, skill: A.skill, height: A.body.height, mass: A.body.mass }
@@ -158,7 +165,54 @@ function exitJoust() {
   if (!joust) return;
   joust.dispose();
   joust = null;
+  if (fromLife) { const back = fromLife; back.done({}); return; }
   toMenu();
+}
+
+// ---------------------------------------------------------------------------
+// Life in the town
+
+function startLife(config) {
+  audio.start();
+  saveConfig(config);
+  for (const m of meshes) m.dispose();
+  meshes = [];
+  sim = null; ais = []; player = null; foe = null;
+  mode = 'life';
+  hud.show('none');
+  hud.showHud(false);
+  input.enabled = false;
+  life = new LifeMode({
+    stage, lists, audio, root: document.getElementById('ui'), quality, config,
+    onExit: () => { life.dispose(); life = null; toMenu(); },
+    onDuel: (npc, why, cb) => duelFromLife(npc, why, cb),
+    onJoust: () => joustFromLife(),
+  });
+}
+
+/** Hide the town's UI while a fight or joust runs, and bring it back after. */
+function suspendLife(on) {
+  for (const el of [life.hud, life.talkEl]) if (el) el.hidden = on || (el === life.talkEl && !life.talking);
+  life.walker.mesh.visible = !on;
+  for (const l of Object.values(life.people.parts)) l.group.visible = !on;
+  life.suspended = on;
+}
+
+function duelFromLife(npc, why, cb) {
+  const P = life.sim.player;
+  suspendLife(true);
+  const weapon = P.weapon && P.weapon !== 'none' ? P.weapon : 'dagger';
+  const nWeapon = npc.armed ? (npc.role === 'captain' ? 'longsword' : 'spear') : 'dagger';
+  const custom = { name: npc.fullName, title: npc.title, items: { ...npc.items }, weapon: nWeapon, offhand: 'none', colors: npc.colors, heraldry: 'none', skill: npc.armed ? 0.7 : 0.35, strength: 1, body: { height: npc.height, mass: 74 }, style: npc.armed ? 'liechtenauer' : 'brawler', aggression: 0.4 + npc.traits.temper * 0.5 };
+  const c = { ...hud.config, player: { ...hud.config.player, name: P.name, items: { ...P.dress }, weapon, offhand: 'none', system: undefined }, customFoe: custom, rules: 'yield' };
+  fromLife = { done: (res) => { fromLife = null; for (const m of meshes) m.dispose(); meshes = []; sim = null; ais = []; player = null; foe = null; hud.showHud(false); hud.show('none'); mode = 'life'; input.enabled = false; suspendLife(false); cb(res); } };
+  newFight(c);
+}
+
+function joustFromLife() {
+  suspendLife(true);
+  fromLife = { done: () => { fromLife = null; mode = 'life'; suspendLife(false); } };
+  startJoust({ ...hud.config, player: { ...hud.config.player, name: life.sim.player.name } });
 }
 
 function toMenu() {
@@ -256,6 +310,11 @@ function endFight() {
   const won = loser === foe;
   audio.crowd('roar', 1);
   hud.callout(won ? 'Victory' : 'Defeat', how, 3500);
+  if (fromLife) {
+    const back = fromLife;
+    setTimeout(() => back.done({ won, how, killed: foe.state === 'dead', died: player.state === 'dead' }), 3200);
+    return;
+  }
   setTimeout(() => {
     hud.showResult({ won, verdict: won ? 'Victory' : 'Defeat', how, you: player, foe });
   }, 3600);
@@ -403,6 +462,13 @@ function tick(dt) {
   }
 }
 
+function lifeTick(dt) {
+  life.frame(dt);
+  particles.update(dt);
+  lists.update(dt, 0);
+  stage.sky.update(wallTime);
+}
+
 function joustTick(dt) {
   joust.frame(dt);
   particles.update(dt * joust.timeScale);
@@ -428,6 +494,8 @@ function frame(now) {
   wallTime += dt;
   if (joust) {
     if (!manual) joustTick(dt);
+  } else if (life && !sim) {
+    if (!manual) lifeTick(dt);
   } else {
     handleInput();
     if (!manual) tick(dt);
@@ -448,11 +516,13 @@ window.duel = {
     const n = Math.round(seconds * 60);
     for (let i = 0; i < n; i++) {
       wallTime += FIXED;
-      if (joust) joustTick(FIXED); else { handleInput(); tick(FIXED); }
+      if (joust) joustTick(FIXED); else if (life && !sim) lifeTick(FIXED); else { handleInput(); tick(FIXED); }
       if (each) each(i);
     }
   },
   get joust() { return joust; },
+  get life() { return life; },
+  startLife: (overrides = {}) => startLife({ ...hud.config, ...overrides }),
   startJoust: (overrides = {}) => startJoust({ ...hud.config, ...overrides }),
   get mode() { return mode; },
 };
@@ -464,6 +534,12 @@ if (params.get('fight')) {
   if (params.get('weapon')) { c.player = { ...c.player, weapon: params.get('weapon'), system: WEAPONS[params.get('weapon')].systems[0] }; }
   if (params.get('kit')) c.player = { ...c.player, items: { ...PRESETS[params.get('kit')].items } };
   newFight(c);
+}
+if (params.get('life')) {
+  startLife({ ...hud.config });
+  if (params.get('begin')) {
+    life.begin({ name: 'Jan', sex: params.get('sex') ?? 'm', start: STARTS.find((x) => x.id === params.get('begin')) ?? STARTS[0] });
+  }
 }
 if (params.get('joust')) {
   const c = { ...hud.config };

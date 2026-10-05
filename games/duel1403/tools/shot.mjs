@@ -14,7 +14,7 @@ page.on('console', (m) => { if ((m.type() === 'error' && !m.text().includes('CER
 page.on('pageerror', (e) => once(`[pageerror] ${e.message.slice(0, 800)} ${e.stack?.split('\n').slice(1, 4).join(' | ')}`));
 const sep = query.includes('?') ? '&' : '?';
 await page.goto(`http://127.0.0.1:${process.env.PORT ?? 5174}/${query}${sep}manual=1`, { waitUntil: 'load' });
-await page.waitForFunction(() => window.duel && (window.duel.sim || window.duel.joust), null, { timeout: 90000 });
+await page.waitForFunction(() => window.duel && (window.duel.sim || window.duel.joust || window.duel.life), null, { timeout: 90000 });
 // wait for the terrain worker (Med Engine) before shooting
 await page.waitForFunction(() => !window.medStage?.terrain || window.medStage.terrain.ready, null, { timeout: 180000 }).catch(() => console.log('terrain not ready'));
 let prev = 0;

@@ -214,6 +214,8 @@ export class Renderer {
   render(scene, camera, dt = 1 / 60) {
     const gl = this.gl;
     this.time += dt;
+    const cpu0 = performance.now();
+    this._gpuBegin();
     this.dt = dt;
     this.stats.drawCalls = 0; this.stats.triangles = 0; this.stats.culled = 0;
     const lists = this.adapter.collect(scene);
@@ -280,7 +282,40 @@ export class Renderer {
     this.prevViewProj.copy(this.viewProj);
     this.adapter.endFrame(lists.opaque);
     for (const p of this.passes) p.endFrame?.(this);
+    this._gpuEnd();
+    this.timing.cpu += (performance.now() - cpu0 - this.timing.cpu) * 0.1;
     this.frame++;
+  }
+
+  // -------------------------------------------------------------------------
+  // Real GPU timing (EXT_disjoint_timer_query_webgl2): what the frame costs on
+  // this machine's GPU, read back a few frames late without stalling.
+
+  _gpuBegin() {
+    const gl = this.gl;
+    this.timing ??= { gpu: 0, cpu: 0, gpuAvailable: false, queries: [], ext: gl.getExtension('EXT_disjoint_timer_query_webgl2') };
+    const T = this.timing;
+    if (!T.ext) return;
+    T.gpuAvailable = true;
+    // collect finished queries
+    while (T.queries.length) {
+      const q = T.queries[0];
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+      T.queries.shift();
+      if (!gl.getParameter(T.ext.GPU_DISJOINT_EXT)) T.gpu += (gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6 - T.gpu) * 0.1;
+      gl.deleteQuery(q);
+    }
+    if (T.queries.length > 4) return;
+    T.current = gl.createQuery();
+    gl.beginQuery(T.ext.TIME_ELAPSED_EXT, T.current);
+  }
+
+  _gpuEnd() {
+    const T = this.timing;
+    if (!T?.ext || !T.current) return;
+    this.gl.endQuery(T.ext.TIME_ELAPSED_EXT);
+    T.queries.push(T.current);
+    T.current = null;
   }
 
   bindGBuffer(p) {

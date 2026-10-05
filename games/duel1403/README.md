@@ -34,6 +34,60 @@ npm test                  # physics validation suite
 | Visor up / down | V | visor |
 | Camera (shoulder, barrier, inside your helmet) | C | camera |
 
+## Life in Skalice
+
+**Live in Skalice** on the title screen. You are someone in Skalice, a small
+market town under the lord of Skalice castle (the names are invented, the
+shape is the period's), from the eve of St Wenceslas, Thursday
+27 September 1403. The weekday follows the Julian calendar then in use. The
+duel and the joust are things you can do here when you choose.
+
+- **Who you are**: a lodger (*podruh*), a farmer's second son, a journeyman
+  smith, a burgher's son, or a squire (*panoš*). You choose your sex.
+  Starting money, clothes, skills and home follow your station.
+- **The people**: about 45 people with Czech names of the period, ranks
+  from `src/data/society.js`, trades, families, homes and workplaces. Each
+  has a personality (Big Five plus piety, honesty, temper, greed, courage),
+  a mood, a memory of you and an attitude toward you. They follow their
+  routines in real time: the baker at his oven from half past two, farmers
+  in the fields, wives at the well and market, the sexton ringing the bells,
+  the watch walking the streets at night, Mass on Sunday and on the feast.
+  The clock runs a game minute per second.
+- **Talking**: walk up to anyone and press E. In the published game, Claude
+  answers as that person (on the viewer's own Claude account; the page asks
+  once). It is given their identity, personality, memories, what they sell,
+  the date, the law, the rumours of 1403 and how you look to them. It answers
+  as speech plus an action (sell, enlist, hire for a day, give directions,
+  call the watch, end the talk), and the game checks every action before it
+  happens. Without Claude, a scripted fallback answers in character.
+- **Your body**: health, hunger, thirst, bladder, bowels, tiredness and dirt.
+  Eat bread, drink at the well or the tavern, use the privy (in the street
+  it is an offence if seen), sleep at home, in a bed rented in the tavern
+  loft, or in the barracks. The bath-house cleans you.
+- **Money and prices**: 12 parvi make a groschen and 60 groschen a kopa. A
+  half-pound loaf costs 4 parvi and a labourer earns about 1 groschen a day
+  (attested). Other prices are marked as estimates in `src/life/data.js`.
+- **The law**: bearing arms in town, the curfew bell, brawling, theft,
+  killing (with reconciliation, *smír*, and its stone crosses), the house
+  peace, market rules, Sundays and fasts, filth in the street, dice and
+  insult. Each is marked attested, general or estimate. Witnesses remember
+  what they saw. The watch comes for you, and you pay the fine, go quietly
+  (the pillory or the gate tower) or resist and fight.
+- **The army**: the captain at the castle takes on men. You serve as foot
+  servant (*pacholek*) for a groschen a day, then crossbowman, man-at-arms,
+  leader of ten, and squire if you are of knightly birth. You drill in the
+  yard, stand watch at the gate and are paid at six in the evening.
+  Promotion comes with service and skill.
+- **Buildings**: the tavern, the bakery, the smithy, the butcher's, the
+  workshops, the bath-house, the rychta, the church and the castle hall and
+  barracks have interiors, lit by their fires. Homes are private: going in
+  uninvited breaks the house peace.
+- **Day and night**: the sun follows the hour at 50° N in late September,
+  and the moon lights the night.
+- Headless check: `node tools/lifetest.mjs 24` (where everyone is, hour by
+  hour). Browser playthrough: `node tools/lifeplay.mjs`.
+
+
 ## The joust
 
 **The joust** on the title screen. It is a joust of peace (*Gestech*) run at large, the
@@ -144,6 +198,8 @@ poleaxe, and a German knight in full harness who fights at the half-sword.
 Every source is listed in the in-game codex (`src/data/sources.js`).
 
 ## The Med Engine
+
+Press **F3** (or add `?stats=1`) for the engine overlay. It now shows the real **GPU time** per frame, measured with timer queries (`EXT_disjoint_timer_query_webgl2`) on the viewer's own graphics card, next to the CPU submit time. Use it to measure performance on real hardware: the numbers in this repository come from a software renderer.
 
 Every pixel is drawn by our own WebGL2 engine, `src/engine/` (three.js is kept
 only as the scene graph and maths library; `?engine=three` falls back to its
@@ -282,5 +338,7 @@ node tools/stress.mjs 60                 # AI tournament: NaNs, explosions, stuc
 node tools/getuptest.mjs                 # every kit can get up after being thrown
 npm test                                 # physics, simplifier and cluster-DAG crack tests
 node tools/jousttest.mjs 8 1 [war] [nobrace]   # AI jousts: breaks, forces, unhorsings
+node tools/lifetest.mjs 24                # a day in Skalice: everyone's whereabouts, the player's needs
+node tools/lifeplay.mjs                   # browser: walk, enter the tavern, talk, buy
 node tools/shot.mjs "?joust=1&cam=side" shots/j 7.7   # joust screenshots (cam: chase, helm, side)
 ```

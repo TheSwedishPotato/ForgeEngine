@@ -418,4 +418,19 @@ export class Audio {
       this._out(this._env(o, t, 0.05, 0.001, 0.12), 0.3);
     }
   }
+
+  /** A church bell: a struck bronze partial series, three strokes. */
+  bell() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    for (let k = 0; k < 3; k++) {
+      const t = ctx.currentTime + k * 1.6;
+      for (const [r, a] of [[0.5, 0.12], [1, 0.2], [1.19, 0.1], [1.5, 0.08], [2, 0.06], [2.5, 0.04]]) {
+        const o = ctx.createOscillator();
+        o.frequency.value = 330 * r;
+        o.start(t); o.stop(t + 4);
+        this._out(this._env(o, t, a * 0.6, 0.004, 3.5), 0.6);
+      }
+    }
+  }
 }

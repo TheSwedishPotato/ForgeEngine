@@ -73,6 +73,7 @@ export class HUD {
         <h1 class="title">Zweikampf<span>Bohemia 1403</span></h1>
         <p class="lede">A duel in the lists, fought with the arms, armour and fighting arts of the year 1403 — while King Wenceslas sits captive in Vienna and Sigismund's Hungarians and Cumans ride through the kingdom. Every fighter is a physical body: his muscles move real mass, his armour weighs what it weighed, and a blow does what its energy and the steel in its way allow.</p>
         <div class="actions">
+          <button class="primary" data-a="life">Live in Skalice</button>
           <button class="primary" data-a="fight">To the lists</button>
           <button class="primary" data-a="joust">The joust</button>
           <button data-a="armoury">Armoury</button>
@@ -87,6 +88,7 @@ export class HUD {
     el.addEventListener('click', (e) => {
       const a = e.target.closest('button')?.dataset.a;
       if (a === 'fight') this.on.start(this.config);
+      else if (a === 'life') this.on.life?.(this.config);
       else if (a === 'joust') { this._renderJoust(); this.show('joust'); }
       else if (a === 'armoury') this.show('armoury');
       else if (a === 'help') { this._helpBack = 'title'; this.show('help'); }

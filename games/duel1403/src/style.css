@@ -216,3 +216,37 @@ canvas.trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-
 .realm-cols .estate { break-inside: avoid; margin-bottom: 14px; }
 .realm-cols h3 small { text-transform: none; letter-spacing: 0; color: var(--ink-soft); font-weight: 400; }
 .realm-cols .jtable td:first-child { font-variant-numeric: tabular-nums; }
+
+/* life in the town */
+.life-create .lrow { display: flex; gap: 12px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.life-create input.lname { font: inherit; padding: 5px 8px; border: 1px solid #a8885a; background: #fbf5e4; min-width: 0; }
+.life-hud { pointer-events: none; }
+.lclock { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 14px; background: linear-gradient(rgba(30,20,10,0.82), rgba(30,20,10,0.62)); border-top: 3px solid var(--gold); padding: 6px 12px 8px; display: grid; gap: 2px; max-width: min(360px, calc(100vw - 28px)); }
+.lclock b { font-size: 16px; }
+.lclock .ltime { font-family: var(--black); font-size: 30px; line-height: 1; color: #fff3d6; font-variant-numeric: tabular-nums; }
+.lclock small { color: #cbb98f; font-style: italic; }
+.lneeds { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); right: 14px; width: 210px; background: rgba(30,20,10,0.66); padding: 8px 10px; display: grid; gap: 4px; }
+.lneed { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 6px; font-size: 13px; }
+.lneed i { display: block; height: 7px; background: #5e9a4a; transition: width 0.3s; }
+.lneed.warn span { color: #ff9a8a; font-weight: 700; }
+.lpurse { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 112px); left: 14px; font-size: 14px; background: rgba(30,20,10,0.6); padding: 4px 10px; max-width: min(520px, calc(100vw - 28px)); }
+.lwanted { color: #ff8a7a; }
+.lprompt { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 64px); transform: translateX(-50%); background: rgba(30,20,10,0.7); padding: 6px 16px; font-size: 16px; border-bottom: 2px solid var(--gold); white-space: nowrap; max-width: calc(100vw - 28px); overflow: hidden; text-overflow: ellipsis; }
+.lprompt:empty { display: none; }
+.lbar { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); transform: translateX(-50%); display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 20px); }
+.lbar button { font-size: 12px; padding: 5px 8px; background: rgba(30,20,10,0.66); color: #f3e8cc; border-color: rgba(243,232,204,0.3); box-shadow: none; }
+.lmode { position: absolute; right: 14px; bottom: calc(env(safe-area-inset-bottom, 0px) + 50px); color: rgba(243,232,204,0.6); font-style: italic; font-size: 12px; }
+.life-hud .log { bottom: calc(env(safe-area-inset-bottom, 0px) + 110px); }
+.ltalk { position: absolute; right: 14px; top: calc(env(safe-area-inset-top, 0px) + 190px); bottom: calc(env(safe-area-inset-bottom, 0px) + 60px); width: min(420px, calc(100vw - 28px)); display: flex; flex-direction: column; background: linear-gradient(var(--parch), var(--parch-2)); border: 1px solid #a8885a; box-shadow: 0 20px 50px rgba(0,0,0,0.5); color: var(--ink); }
+.lthead { padding: 10px 12px 6px; border-bottom: 1px solid rgba(140,108,60,0.5); display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px; align-items: baseline; }
+.lthead b { font-size: 18px; } .lthead small { grid-column: 1 / -1; color: var(--ink-soft); font-size: 13px; }
+.ltatt { font-size: 13px; color: var(--rubric); font-style: italic; }
+.ltclose { padding: 0 8px; font-size: 18px; box-shadow: none; }
+.ltlog { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 16px; line-height: 1.4; min-height: 0; }
+.ltlog p { margin: 0 0 8px; } .ltlog .me { color: var(--ink-soft); } .ltlog .note { font-style: italic; color: var(--rubric); font-size: 14px; }
+.ltchips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 10px; }
+.ltchips button { font-size: 12px; padding: 3px 7px; box-shadow: none; }
+.ltform { display: flex; gap: 6px; padding: 8px 10px; }
+.ltinput { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: 1px solid #a8885a; background: #fffaf0; }
+.ltstatus { padding: 0 12px 8px; color: var(--ink-soft); font-size: 12px; font-style: italic; }
+@media (max-width: 760px) { .lneeds { width: 150px; } .lneed { grid-template-columns: 56px 1fr; font-size: 11px; } .ltalk { top: auto; height: 55vh; } }

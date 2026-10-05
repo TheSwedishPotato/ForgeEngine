@@ -72,6 +72,7 @@ export class MedStage {
       `Med Engine · ${r.qualityName} · ${f.value.toFixed(0)} fps`,
       `internal ${r.width}x${r.height} -> display ${r.displayW}x${r.displayH} (TAAU ${Math.round(r.q.renderScale * 100)}%)`,
       `draws ${s.drawCalls}  triangles ${(s.triangles / 1e3).toFixed(0)}k  culled ${s.culled}`,
+      r.timing?.gpuAvailable ? `GPU ${r.timing.gpu.toFixed(2)} ms · CPU (render submit) ${r.timing.cpu.toFixed(2)} ms` : `CPU (render submit) ${(r.timing?.cpu ?? 0).toFixed(2)} ms · GPU timer not exposed by this browser`,
     ];
     const t = this.terrain?.stats();
     if (t) {

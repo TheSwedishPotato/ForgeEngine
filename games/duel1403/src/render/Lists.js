@@ -255,27 +255,10 @@ export class Lists {
       castle.position.set(30, terrain ? heightAt(30, 230) - 1.5 : 52, 230);
       castle.rotation.y = 0.3;
       this.group.add(castle);
-      // Village below: timber houses with steep roofs, and a church.
+      // The parish church of the town below.
       const plaster = new MeshStandardMaterial({ color: '#d9d0bb', roughness: 0.95 });
       const thatch = new MeshStandardMaterial({ color: '#7d6a44', roughness: 1, flatShading: true });
-      const houses = [], roofs = [];
-      for (let i = 0; i < 24; i++) {
-        const x = -60 + rand() * 120, z = 70 + rand() * 60;
-        const w = 5 + rand() * 3, d = 7 + rand() * 4, h = 3 + rand() * 1.5;
-        const ry = rand() * 0.6 - 0.3;
-        houses.push(new BoxGeometry(w, h, d).rotateY(ry).translate(x, h / 2, z));
-        const roof = new CylinderGeometry(0.01, w * 0.75, d, 4, 1);
-        roof.rotateX(Math.PI / 2);
-        roof.rotateZ(Math.PI / 4);
-        roof.scale(1, 1.6, 1);
-        roof.rotateY(ry);
-        roof.translate(x, h + w * 0.5, z);
-        roofs.push(roof);
-      }
-      const hm = new Mesh(mergeGeometries(houses), plaster);
-      const rm = new Mesh(mergeGeometries(roofs.map((r) => r.toNonIndexed())), thatch);
-      hm.castShadow = rm.castShadow = true;
-      this.group.add(hm, rm);
+      // The town's houses are drawn by TownMesh (src/render/TownMesh.js) from the town layout.
       const church = new Mesh(new BoxGeometry(5, 18, 5), plaster);
       church.position.set(-20, 9, 100);
       const spire = new Mesh(new ConeGeometry(3.8, 12, 4), roofMat);
