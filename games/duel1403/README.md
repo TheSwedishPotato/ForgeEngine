@@ -81,7 +81,7 @@ pause screens. **F3** (or `?stats=1`) shows live engine statistics.
 
 | The lists | The road to the village: ruts, puddles, hoof prints |
 | --- | --- |
-| ![Fight in the lists](docs/forge-lists.png) | ![Road with puddles](docs/forge-road.png) |
+| ![Fight in the lists](docs/forge-lists.jpg) | ![Road with puddles](docs/forge-road.jpg) |
 
 **Lighting (physically based, HDR)**
 - Deferred shading from a G-buffer (base colour, octahedral normals, roughness,
