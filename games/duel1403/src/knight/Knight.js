@@ -254,9 +254,15 @@ export class Knight {
 
   _begin(spec) {
     if (this.attack && !this.attack.done) {
-      // Chain: queue the next blow if this one is already recovering.
-      if (this.attack.phase !== 'prep') this.queued = spec;
-      return null;
+      // Recovering: the next blow flows straight out of it (a chain).
+      // Mid-blow: queue it for when this one is done.
+      if (this.attack.phase === 'recover') {
+        this.attack = null;
+        if (this.weapon.mode === 'mord' && spec.kind !== 'mord') this.weapon.setMode(this.mode === 'half' ? 'half' : 'normal');
+      } else {
+        if (this.attack.phase !== 'prep') this.queued = spec;
+        return null;
+      }
     }
     if (this.stamina < 6) return null;
     this.parrying = false;
@@ -608,8 +614,8 @@ export class Knight {
         const want = a.stepIn * smoothstep(0, a.impactTime * 0.9, a.t);
         this.center.addScaledVector(this.forward, want - a.stepped);
         a.stepped = want;
-        // A long step is a passing step.
-        if (a.stepIn > 0.18 * s) P.lead = P.lead === 'L' ? 'R' : 'L';
+        // A long step is a passing step: the lead foot changes, once.
+        if (a.stepIn > 0.18 * s && !a.passed) { a.passed = true; P.lead = P.lead === 'L' ? 'R' : 'L'; }
       }
       if (a.done) {
         this.attack = null;

@@ -122,6 +122,8 @@ export class Attack {
     const T = k.toFightFrame(spec.target, new Vector3());
     this.T = T;
     const speed = k.speedFactor();
+    // Never step into his body: close at most to about an arm's length.
+    const room = k.opponent ? Math.max(0, k.center.distanceTo(k.opponent.center) - 1.25 * s) : 0.85 * s;
     const inertiaFactor = clamp(Math.sqrt(k.weaponInertia / 0.22), 0.8, 1.45);
     this.start = { hand: k.cmd.hand.clone(), dir: k.cmd.dir.clone(), edge: k.cmd.edge.clone() };
 
@@ -140,7 +142,7 @@ export class Attack {
       const sh = new Vector3(0.0, -0.1 * s, 1.43 * s);
       const maxArm = (k.weapon.hands === 2 ? 0.56 : 0.66) * s;
       const need = Hend.distanceTo(sh);
-      this.stepIn = clamp(need - maxArm, 0, 0.85 * s);   // up to a full passing step
+      this.stepIn = clamp(need - maxArm, 0, Math.min(0.85 * s, room));   // up to a full passing step
       Hend.addScaledVector(_b.set(1, 0, 0), -this.stepIn);
       this.Hend = Hend;
       this.Hchamber = H0.clone().addScaledVector(D, -0.1 * s);
@@ -182,7 +184,7 @@ export class Attack {
       }
       const maxArm = (W.hands === 2 ? 0.5 : 0.6) * s;
       const minArm = 0.16 * s;
-      this.stepIn = clamp(rh - maxArm, 0, 0.85 * s);
+      this.stepIn = clamp(rh - maxArm, 0, Math.min(0.85 * s, room));
       rh = clamp(rh, minArm, maxArm);
       this.di = d.clone();
       const ti = tr.addScaledVector(this.di, -tr.dot(this.di));
