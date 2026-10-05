@@ -117,8 +117,8 @@ export const DRESS = {
   peasant: { colors: { cloth: '#7a6a44', hose: '#5a4a32' }, items: { head: 'hood', under: 'shirt', legs: 'hose', feet: 'shoes' } },
   poor: { colors: { cloth: '#6a5a40', hose: '#4a3a2a' }, items: { head: 'hood', under: 'shirt', legs: 'hose', feet: 'shoes' } },
   rags: { colors: { cloth: '#5a5040', hose: '#3a3428' }, items: { head: 'hood', under: 'shirt', legs: 'hose', feet: 'shoes' } },
-  woman: { colors: { cloth: '#7a2a2a', hose: '#4a3a2a' }, items: { head: 'hood', under: 'shirt', legs: 'hose', feet: 'shoes' }, female: true },
-  womanPoor: { colors: { cloth: '#8a7a5a', hose: '#4a3a2a' }, items: { head: 'hood', under: 'shirt', legs: 'hose', feet: 'shoes' }, female: true },
+  woman: { colors: { cloth: '#7a2a2a', hose: '#4a3a2a' }, items: { head: 'bareHead', under: 'shirt', legs: 'hose', feet: 'shoes' }, female: true },
+  womanPoor: { colors: { cloth: '#8a7a5a', hose: '#4a3a2a' }, items: { head: 'bareHead', under: 'shirt', legs: 'hose', feet: 'shoes' }, female: true },
 };
 
 export function makePeople(seed = 1403) {
@@ -156,12 +156,34 @@ export function makePeople(seed = 1403) {
       height: c.sex === 'f' ? 1.58 + R() * 0.1 : 1.66 + R() * 0.14,
     };
   });
-  // families: the wife of a farmstead is the farmer's wife
+  // families: a wife is called by her husband's byname in its feminine form
+  const fem = (b) => !b || /^(z |of )/.test(b) ? b : b.endsWith('ý') ? b.slice(0, -1) + 'á' : b.endsWith('í') ? b : b.endsWith('a') ? b.slice(0, -1) + 'ová' : b + 'ová';
   for (const p of people) {
-    if (p.spouseOf) p.spouse = people.find((q) => q.role === p.spouseOf)?.id;
-    if (p.spouseOfHome) { const h = people.find((q) => q.home === p.home && q.role === 'farmer'); if (h) { p.spouse = h.id; h.spouse = p.id; p.byname = h.byname + (p.byname?.endsWith('á') ? '' : 'ová'); p.fullName = `${p.name} ${h.byname}ová`; } }
+    let h = null;
+    if (p.spouseOf) h = people.find((q) => q.role === p.spouseOf);
+    if (p.spouseOfHome) h = people.find((q) => q.home === p.home && q.role === 'farmer');
+    if (h) { p.spouse = h.id; h.spouse = p.id; p.byname = fem(h.byname); p.fullName = `${p.name} ${p.byname}`; }
+    else if (p.sex === 'f') { p.byname = fem(p.byname); p.fullName = `${p.name} ${p.byname}`; }
   }
   for (const p of people) if (p.spouse) { const s = people.find((q) => q.id === p.spouse); if (s && !s.spouse) s.spouse = p.id; }
+  // how each one looks: skin, hair (greying with age), beards, women's headwear
+  const SKIN = ['#e8c4a4', '#e0b896', '#d6a882', '#d2a07c', '#c48e6a', '#b98462'];
+  const HAIR = ['#3a2818', '#5a3c22', '#2a1e14', '#7a5a32', '#a0784a', '#1a1410', '#6a4020'];
+  const dresses = { woman: 1, womanPoor: 1 };
+  for (const p of people) {
+    const R2 = rng(seed * 31 + p.idx);
+    const grey = p.age > 48 ? Math.min(1, (p.age - 48) / 15) : 0;
+    const base = HAIR[Math.floor(R2() * HAIR.length)];
+    p.look = {
+      skin: SKIN[Math.floor(R2() * SKIN.length)],
+      hair: grey > 0.5 ? '#8a8478' : base,
+      // beards: older men, soldiers and the rough mostly; priests shaven; boys none
+      beard: p.sex === 'f' || p.role === 'priest' || p.age < 20 ? 0 : Math.min(1, Math.max(0, (p.age - 22) / 25 + (p.role === 'soldier' || p.role === 'farmer' ? 0.25 : 0) + (R2() - 0.5) * 0.6)),
+      // married women cover their hair (a linen veil and wimple in town, a kerchief at farm work); girls braid it
+      headwear: p.sex !== 'f' ? null : p.spouse ? (p.dress === 'woman' && p.estate === 'peasants' ? 'kerchief' : 'veil') : 'braid',
+    };
+    if (dresses[p.dress]) p.items.head = 'bareHead';
+  }
   return people;
 }
 

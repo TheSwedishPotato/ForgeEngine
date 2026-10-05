@@ -45,7 +45,7 @@ duel and the joust are things you can do here when you choose.
 - **Who you are**: a lodger (*podruh*), a farmer's second son, a journeyman
   smith, a burgher's son, or a squire (*panoš*). You choose your sex.
   Starting money, clothes, skills and home follow your station.
-- **The people**: about 45 people with Czech names of the period, ranks
+- **The people**: about 45 people, each drawn with the same detailed body as the duel's fighters (skinned, clothed, with their own skin and hair; men bearded by age and trade, priests shaven). Women have their own build and wear long gowns. Married women cover their hair with a linen veil and wimple, or a knotted kerchief at farm work; girls wear a braid with a band. Wives take their husband's byname in its feminine form (Pekařová, Dlouhá). Beyond 70 m, and until each body is built at start-up, people are instanced figures. Each has a Czech name of the period, ranks
   from `src/data/society.js`, trades, families, homes and workplaces. Each
   has a personality (Big Five plus piety, honesty, temper, greed, courage),
   a mood, a memory of you and an attitude toward you. They follow their

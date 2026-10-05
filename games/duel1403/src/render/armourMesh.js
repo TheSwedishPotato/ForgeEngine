@@ -1,6 +1,6 @@
 import {
   BufferGeometry, Float32BufferAttribute, Mesh, Group, MeshPhysicalMaterial, MeshStandardMaterial, Vector2, Vector3,
-  SkinnedMesh, Matrix4, DoubleSide, Color, CylinderGeometry, SphereGeometry, BoxGeometry, Object3D,
+  SkinnedMesh, Matrix4, DoubleSide, Color, CylinderGeometry, SphereGeometry, BoxGeometry, Object3D, TubeGeometry, CatmullRomCurve3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Builder, loftVertical, blendY, BI, TORSO, lerpTable, sstep } from './bodyMesh.js';
@@ -272,18 +272,48 @@ export class ArmourMesh {
     const s = this.s;
     const B = new Builder();
     const rings = [];
-    // Crown down over the shoulders: a cape (the chaperon's gorget).
-    for (let k = 0; k <= 22; k++) {
-      const t = k / 22;
-      const y = C.y + (0.13 - 0.36 * t) * s;
-      const headR = Math.sqrt(Math.max(0, 1 - ((y - C.y) / (0.135 * s)) ** 2)) * 0.11 * s;
-      const capeR = (0.09 + 0.16 * sstep(0.45, 1, t)) * s;
-      const r = t < 0.45 ? Math.max(headR, 0.075 * s) + 0.008 * s : capeR;
-      const w = y > C.y - 0.1 * s ? [[BI.head, 1]] : blendY(y, C.y - 0.22 * s, C.y - 0.1 * s, BI.chest, BI.head);
-      rings.push({ y, cx: 0, cz: -0.01 * s, hw: r, f: r * 1.05, b: r * 1.1, n: 2, weights: w });
+    // The hood (kápě, Gugel): close round the head, open at the face, then a
+    // cape that follows the slope of the shoulders and hangs to mid-chest.
+    const top = 0.13, bottom = -0.46, n = 34;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const dy = top + (bottom - top) * t;           // metres from the head centre (unscaled)
+      const y = C.y + dy * s;
+      let hw, f, b;
+      if (dy > -0.11) {
+        const head = Math.sqrt(Math.max(0, 1 - (dy / 0.135) ** 2)) * 0.112;
+        hw = f = b = Math.max(head, 0.078) + 0.008;
+        f *= 1.05; b *= 1.1;
+      } else if (dy > -0.19) {
+        const u = (-0.11 - dy) / 0.08;                // the neck: gathered
+        hw = 0.086 + 0.03 * u; f = 0.088 + 0.02 * u; b = 0.094 + 0.02 * u;
+      } else if (dy > -0.28) {
+        const u = sstep(0, 1, (-0.19 - dy) / 0.09);   // over the shoulders
+        hw = 0.116 + 0.13 * u; f = 0.108 + 0.04 * u; b = 0.114 + 0.045 * u;
+      } else {
+        const u = (-0.28 - dy) / 0.18;                // hanging
+        hw = 0.246 + 0.008 * u; f = 0.148 + 0.006 * u; b = 0.159 + 0.006 * u;
+      }
+      const w = dy > -0.1 ? [[BI.head, 1]] : blendY(y, C.y - 0.2 * s, C.y - 0.1 * s, BI.chest, BI.head);
+      rings.push({ y, cx: 0, cz: (dy < -0.19 ? -0.012 : -0.01) * s, hw: hw * s, f: f * s, b: b * s, n: 2, weights: w });
     }
     this._partialLoft(B, rings, (y) => (y > C.y - 0.105 * s && y < C.y + 0.085 * s ? 0.85 : 0));
-    this.skinned(B, clothMat(this.knight.colors.accent ?? '#5a4e40'));
+    const mat = clothMat(this.knight.colors.accent ?? '#5a4e40');
+    mat.side = DoubleSide;
+    this.skinned(B, mat);
+    // the liripipe: the hood's long tail, hanging down the back
+    const pts = [];
+    for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(new Vector3(C.x, C.y + (0.07 - 0.38 * t) * s, C.z - (0.1 + 0.075 * Math.sin(t * 1.6)) * s)); }
+    const tube = new TubeGeometry(new CatmullRomCurve3(pts), 16, 0.022 * s, 8, false);
+    // taper toward the end
+    const P = tube.attributes.position, curve = new CatmullRomCurve3(pts);
+    for (let i = 0; i < P.count; i++) {
+      const ring = Math.floor(i / 9), t = ring / 16, c = curve.getPointAt(Math.min(1, t));
+      const k = 1.3 - 0.7 * t;
+      P.setXYZ(i, c.x + (P.getX(i) - c.x) * k, c.y + (P.getY(i) - c.y) * k, c.z + (P.getZ(i) - c.z) * k);
+    }
+    tube.computeVertexNormals();
+    this.rigid('head', tube, mat);
   }
 
   /** Loft that leaves a gap of half-angle gap(y) at the front (the face opening). */

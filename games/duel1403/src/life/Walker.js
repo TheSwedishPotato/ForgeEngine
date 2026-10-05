@@ -1,4 +1,4 @@
-import { Vector3, Quaternion, Group, Mesh, CylinderGeometry, MeshStandardMaterial, DoubleSide } from 'three';
+import { Vector3, Quaternion, Group } from 'three';
 import { World } from '../physics/index.js';
 import { Ragdoll } from '../knight/Ragdoll.js';
 import { resolveArmour } from '../knight/armourProfile.js';
@@ -19,7 +19,7 @@ const _q = new Quaternion(), _v = new Vector3();
  * the people near the camera; the rest of the town are instanced figures.
  */
 export class Walker {
-  constructor({ name = 'Walker', height = 1.75, mass = 72, items = {}, colors = {}, heraldry = 'none', female = false, quality = 'high' }) {
+  constructor({ name = 'Walker', height = 1.75, mass = 72, items = {}, colors = {}, heraldry = 'none', female = false, quality = 'high', beard = 0, headwear = null, texSize = 1024 }) {
     this.name = name;
     this.world = new World();          // never stepped: the bodies are posed
     this.profile = resolveArmour(items);
@@ -37,18 +37,9 @@ export class Walker {
     this.footRestY = this.b.footL.pos.y;
     this.mesh = new Group();
     const c = this.colors;
-    this.body = new BodyMesh(this, { skin: c.skin ?? SKIN_TONES.light, hair: c.hair, cloth: c.cloth, hose: c.hose, shoe: '#3b2a1c', quality, inflateTorso: 0.012, inflateArm: 0.008 });
+    this.body = new BodyMesh(this, { skin: c.skin ?? SKIN_TONES.light, hair: c.hair, cloth: c.cloth, hose: c.hose, shoe: '#3b2a1c', quality, inflateTorso: female ? 0.008 : 0.012, inflateArm: 0.008, female, beard, headwear, texSize });
     this.armour = new ArmourMesh(this.body, this, { quality });
     this.mesh.add(this.body.group);
-    if (female) {
-      // a long gown over the legs, hung from the girdle
-      const s = this.scale;
-      const g = new CylinderGeometry(0.17 * s, 0.3 * s, 0.86 * s, 18, 4, true).translate(0, -0.43 * s, 0);
-      this.skirt = new Mesh(g, new MeshStandardMaterial({ color: c.cloth, roughness: 0.9, side: DoubleSide }));
-      this.skirt.material.userData.cloth = true;
-      this.skirt.castShadow = true;
-      this.mesh.add(this.skirt);
-    }
   }
 
   /** Orientation of every segment for a gait phase and speed (m/s), or a posture. */
@@ -115,12 +106,6 @@ export class Walker {
     }
     this.body.update();
     this.armour.update(dt);
-    if (this.skirt) {
-      const pe = this.b.pelvis;
-      this.skirt.position.copy(pe.pos).add(_v.set(0, -0.02, 0));
-      this.skirt.quaternion.copy(_q.copy(root));
-      this.skirt.visible = posture !== 'lie';
-    }
   }
 
   dispose() {

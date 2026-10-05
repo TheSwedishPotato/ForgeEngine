@@ -90,7 +90,7 @@ export class LifeMode {
     this.createEl?.remove();
     this.sim = new LifeSim({ seed, start, name, sex });
     this.dialogue = new Dialogue(this.sim);
-    this.people = new PeopleMesh(this.stage.scene, this.sim);
+    this.people = new PeopleMesh(this.stage.scene, this.sim, { quality: this.quality });
     this._buildPlayer();
     this._buildHud();
     this._bind();
@@ -106,7 +106,7 @@ export class LifeMode {
   _buildPlayer() {
     const P = this.sim.player;
     this.walker?.dispose();
-    this.walker = new Walker({ name: P.name, items: P.dress, colors: P.colors, female: P.sex === 'f', height: P.sex === 'f' ? 1.62 : 1.75, quality: this.quality });
+    this.walker = new Walker({ name: P.name, items: P.dress, colors: P.colors, female: P.sex === 'f', headwear: P.sex === 'f' ? 'braid' : null, beard: P.sex === 'f' ? 0 : 0.15, height: P.sex === 'f' ? 1.62 : 1.75, quality: this.quality });
     this.stage.scene.add(this.walker.mesh);
   }
 
@@ -548,7 +548,7 @@ export class LifeMode {
     this._ls = [];
     this.walker?.dispose();
     this.interior?.dispose();
-    for (const l of Object.values(this.people?.parts ?? {})) l.group.removeFromParent();
+    this.people?.dispose();
     for (const el of [this.hud, this.talkEl, this.journalEl, this.modalEl, this.createEl]) el?.remove();
     if (this.lists.sun) this.lists.sun.position.copy(this.lists.sun.target.position).add(new Vector3(-0.55, 0.42, 0.72).normalize().multiplyScalar(30));
     if (this.stage.r) { this.stage.r.sunIntensity = 7.5; this.stage.r.sunColor.set(1.0, 0.87, 0.7); this.stage.r.invalidateEnvironment?.(); }

@@ -1,6 +1,7 @@
 import {
   ShaderChunk, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute, Bone, Skeleton, SkinnedMesh, Group,
   MeshPhysicalMaterial, MeshStandardMaterial, Vector3, Vector2, Quaternion, Matrix4, Color, CanvasTexture, SRGBColorSpace,
+  Mesh, SphereGeometry, CylinderGeometry, TorusGeometry, DoubleSide,
 } from 'three';
 import { skinNormal, eyeTexture, fabricTexture, clothNormal, leatherNormal } from './textures.js';
 
@@ -181,6 +182,24 @@ const TORSO = [
   [1.52, 0.078, 0.056, 0.062, 2.0],
 ];
 
+/** The same for a woman (scaled to her height): narrower shoulders and waist, wider hips. */
+const TORSO_F = [
+  [0.845, 0.158, 0.09, 0.106, 2.3],
+  [0.9, 0.178, 0.1, 0.126, 2.3],
+  [0.96, 0.184, 0.102, 0.128, 2.4],
+  [1.02, 0.163, 0.095, 0.108, 2.5],
+  [1.08, 0.132, 0.088, 0.088, 2.6],
+  [1.14, 0.13, 0.09, 0.086, 2.7],
+  [1.2, 0.14, 0.098, 0.09, 2.7],
+  [1.26, 0.152, 0.104, 0.094, 2.7],
+  [1.32, 0.16, 0.108, 0.098, 2.7],
+  [1.38, 0.166, 0.106, 0.1, 2.6],
+  [1.425, 0.17, 0.096, 0.098, 2.5],
+  [1.46, 0.158, 0.08, 0.085, 2.3],
+  [1.49, 0.116, 0.064, 0.074, 2.2],
+  [1.52, 0.07, 0.054, 0.06, 2.0],
+];
+
 function lerpTable(table, y) {
   if (y <= table[0][0]) return table[0];
   for (let i = 1; i < table.length; i++) {
@@ -197,6 +216,13 @@ function lerpTable(table, y) {
 function torsoSection(th, R) {
   const y = R.y0;
   let b = 0;
+  if (R.female) {
+    // bust, and a fuller seat; no muscle relief
+    b += 0.034 * window1(y, 1.24, 1.37, 0.04) * (gauss(th - 0.48, 0.42) + gauss(th + 0.48, 0.42));
+    b += 0.02 * window1(y, 0.87, 1.0, 0.04) * gauss(Math.abs(th) - 2.65, 0.45);
+    b -= 0.004 * window1(y, 1.02, 1.46, 0.05) * gauss(Math.abs(th) - Math.PI, 0.16);
+    return b;
+  }
   // pecs
   b += 0.013 * window1(y, 1.29, 1.415, 0.035) * (gauss(th - 0.55, 0.38) + gauss(th + 0.55, 0.38));
   // lats flare
@@ -236,7 +262,9 @@ export class BodyMesh {
     skin = SKIN_TONES.light, hair = '#3a2818', cloth = '#6a5a40', hose = '#4a3a2a', shoe = '#3b2a1c',
     iris = '#4a3a28', quality = 'high', inflateTorso = 0.006, inflateArm = 0.006, inflateLeg = 0.002,
     clothMap = null, clothNormalMap = null, clothRough = 0.88,
+    female = false, beard = 0, headwear = null, texSize = 1024, gown = female,
   } = {}) {
+    this.female = female;
     this.knight = knight;
     this.group = new Group();
     this.group.name = 'knight-' + knight.name;
@@ -258,7 +286,7 @@ export class BodyMesh {
     this.group.updateMatrixWorld(true);
     this.skeleton = new Skeleton(this.bones);
 
-    this.painter = new SkinPainter(skin, hair);
+    this.painter = new SkinPainter(skin, hair, { size: texSize, beard: female ? 0 : beard, female });
     this.regions = this.painter.regions;
 
     // ---- skin: neck, head, fists ---------------------------------------------
@@ -290,12 +318,13 @@ export class BodyMesh {
     const CL = new Builder();
     const rings = [];
     const it = inflateTorso;
-    for (let y = TORSO[0][0]; y <= TORSO[TORSO.length - 1][0] + 1e-6; y += 0.0125) {
-      const [, hw, f, b, n] = lerpTable(TORSO, y);
+    const TT = female ? TORSO_F : TORSO;
+    for (let y = TT[0][0]; y <= TT[TT.length - 1][0] + 1e-6; y += 0.0125) {
+      const [, hw, f, b, n] = lerpTable(TT, y);
       let weights;
       if (y < 1.1) weights = blendY(y, 1.03, 1.1, BI.pelvis, BI.abdomen);
       else weights = blendY(y, 1.19, 1.26, BI.abdomen, BI.chest);
-      rings.push({ y: y * s, y0: y, cx: 0, cz: -0.004 * s, hw: (hw + it) * s, f: (f + it) * s, b: (b + it) * s, n, weights });
+      rings.push({ y: y * s, y0: y, cx: 0, cz: -0.004 * s, hw: (hw + it) * s, f: (f + it) * s, b: (b + it) * s, n, weights, female });
     }
     loftVertical(CL, rings, segs * 2, [0, 0, 1, 1], { capTop: true, capBottom: true, section: (th, R) => torsoSection(th, R) * s * 0.35 });
     for (const side of ['L', 'R']) this._buildArm(CL, side, segs);
@@ -305,6 +334,8 @@ export class BodyMesh {
     });
     this.clothMat.map.repeat?.set(3, 3);
     this.clothMesh = this._addMesh(CL.build(), this.clothMat);
+    if (gown) this._buildGown(segs, cloth);
+    if (headwear) this._buildHeadwear(headwear, hair);
 
     // ---- hose ------------------------------------------------------------------
     const HO = new Builder();
@@ -319,6 +350,74 @@ export class BodyMesh {
     this.shoeMesh = this._addMesh(SH.build(), this.shoeMat);
     this._q = new Quaternion();
     this._p = new Vector3();
+  }
+
+  /**
+   * The long gown (kirtle) of a woman of 1400: fitted to the hips, falling
+   * in a wide bell to the ankle. Rigid to the pelvis, flared enough for the stride.
+   */
+  _buildGown(segs, cloth) {
+    const s = this.s;
+    const G = new Builder();
+    const rings = [];
+    for (let y = 1.0; y >= 0.04; y -= 0.04) {
+      const t = (1.0 - y) / 0.96;
+      const hw = 0.19 + 0.17 * t * t + 0.03 * t;
+      rings.push({ y: y * s, y0: y, cx: 0, cz: (-0.01 + 0.02 * t) * s, hw: hw * s, f: (0.12 + 0.17 * t * t) * s, b: (0.14 + 0.19 * t * t) * s, n: 2.2, weights: [[BI.pelvis, 1]] });
+    }
+    rings.reverse();
+    // folds deepen toward the hem
+    loftVertical(G, rings, segs * 2, [0, 0, 1, 1], { section: (th, R) => (0.012 * (1 - R.y0)) * Math.sin(th * 9) * s });
+    const mat = new MeshStandardMaterial({ color: '#ffffff', map: fabricTexture(cloth), roughness: 0.92, normalMap: clothNormal(), normalScale: new Vector2(0.4, 0.4), side: DoubleSide });
+    mat.map.repeat?.set(4, 3);
+    mat.userData.cloth = true;
+    this.gownMesh = this._addMesh(G.build(), mat);
+  }
+
+  /**
+   * Women's headwear: a married woman covers her hair with a linen veil and
+   * wimple (the Wenceslas Bible and every Bohemian painting of the time); a
+   * girl wears her hair in a braid with a band (vínek); a working woman ties
+   * a kerchief. Built rigid on the head bone.
+   */
+  _buildHeadwear(kind, hair) {
+    const s = this.s, C = this._headCenter(), rest = this.knight.ragdoll.bodies.head.userData.restPos;
+    const head = this.bones[BI.head];
+    const add = (geo, mat) => { geo.translate(-rest.x, -rest.y, -rest.z); const m = new Mesh(geo, mat); m.castShadow = true; head.add(m); return m; };
+    if (kind === 'veil' || kind === 'kerchief') {
+      const linen = new MeshStandardMaterial({ color: kind === 'veil' ? '#ece6d8' : '#c8b088', roughness: 0.9, side: DoubleSide });
+      linen.userData.cloth = true;
+      const g = 0.62;   // the face opening, radians either side of the front
+      const cap = new SphereGeometry(0.118 * s, 32, 20, Math.PI / 2 + g, Math.PI * 2 - 2 * g, 0, Math.PI * (kind === 'veil' ? 0.78 : 0.66));
+      cap.scale(1, 1.12, 1.08);
+      add(cap.translate(C.x, C.y + 0.008 * s, C.z - 0.004 * s), linen);
+      if (kind === 'kerchief') {
+        // the cloth comes down behind to the nape and is knotted there
+        const back = new CylinderGeometry(0.1 * s, 0.112 * s, 0.11 * s, 20, 1, true, Math.PI / 2 + 0.3, Math.PI - 0.6);
+        add(back.translate(C.x, C.y - 0.05 * s, C.z - 0.01 * s), linen);
+        add(new SphereGeometry(0.03 * s, 10, 8).scale(1.4, 1, 1).translate(C.x, C.y - 0.06 * s, C.z - 0.115 * s), linen);
+        for (const sx of [-1, 1]) add(new CylinderGeometry(0.012 * s, 0.02 * s, 0.09 * s, 6).rotateZ(sx * 0.35).translate(C.x + sx * 0.02 * s, C.y - 0.11 * s, C.z - 0.118 * s), linen);
+      }
+      if (kind === 'veil') {
+        // the wimple under the chin and the veil falling over the shoulders behind
+        const wimple = new CylinderGeometry(0.075 * s, 0.11 * s, 0.13 * s, 24, 1, true);
+        add(wimple.translate(C.x, C.y - 0.12 * s, C.z - 0.005 * s), linen);
+        const drape = new CylinderGeometry(0.12 * s, 0.2 * s, 0.26 * s, 24, 1, true, 0.9, Math.PI * 2 - 1.8);
+        add(drape.translate(C.x, C.y - 0.1 * s, C.z - 0.03 * s), linen);
+        add(new TorusGeometry(0.112 * s, 0.006 * s, 6, 32).rotateX(Math.PI / 2 - 0.25).translate(C.x, C.y + 0.07 * s, C.z), linen);
+      }
+    } else if (kind === 'braid') {
+      const hm = new MeshStandardMaterial({ color: hair, roughness: 0.7 });
+      // hair gathered back, and one long braid down the back
+      const back = new SphereGeometry(0.106 * s, 24, 16, Math.PI / 2 + 1.0, Math.PI * 2 - 2.0, 0, Math.PI * 0.62);
+      add(back.scale(1, 1.1, 1.06).translate(C.x, C.y + 0.012 * s, C.z - 0.006 * s), hm);
+      for (let i = 0; i < 9; i++) {
+        const y = C.y - 0.06 * s - i * 0.045 * s, r = (0.026 - 0.0015 * i) * s;
+        add(new SphereGeometry(r, 10, 8).scale(1, 1.4, 1).translate(C.x + (i % 2 ? 0.006 : -0.006) * s, y, C.z - 0.105 * s - Math.min(i, 3) * 0.008 * s), hm);
+      }
+      const band = new MeshStandardMaterial({ color: '#b0161c', roughness: 0.8 });
+      add(new TorusGeometry(0.109 * s, 0.007 * s, 6, 32).rotateX(Math.PI / 2 - 0.3).translate(C.x, C.y + 0.05 * s, C.z), band);
+    }
   }
 
   _addMesh(geo, mat) {
@@ -654,8 +753,10 @@ export class BodyMesh {
  * features and hair, plus runtime bruising.
  */
 class SkinPainter {
-  constructor(skin, hair) {
-    const S = 1024;
+  constructor(skin, hair, { size = 1024, beard = 0, female = false } = {}) {
+    const S = size;
+    this.beard = beard;
+    this.female = female;
     this.S = S;
     this.canvas = document.createElement('canvas');
     this.canvas.width = this.canvas.height = S;
@@ -776,8 +877,8 @@ class SkinPainter {
         }
         // stubble on jaw, chin and upper lip
         const beard = sstep(FACE.noseTip, FACE.noseBase - 0.05, dy) * sstep(0.15, 0.5, Math.abs(dz) + 0.3 * sstep(-0.4, -0.7, dy)) * (dz > -0.2 ? 1 : 0);
-        if (beard > 0 && noise < 0.55) {
-          const a = beard * 0.16;
+        if (beard > 0 && noise < 0.55 + 0.4 * this.beard) {
+          const a = this.female ? 0 : beard * (0.16 + 0.75 * this.beard);
           d[i] = d[i] * (1 - a) + stubRGB[0] * a;
           d[i + 1] = d[i + 1] * (1 - a) + stubRGB[1] * a;
           d[i + 2] = d[i + 2] * (1 - a) + stubRGB[2] * a;

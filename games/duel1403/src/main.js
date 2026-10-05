@@ -195,6 +195,7 @@ function suspendLife(on) {
   for (const el of [life.hud, life.talkEl]) if (el) el.hidden = on || (el === life.talkEl && !life.talking);
   life.walker.mesh.visible = !on;
   for (const l of Object.values(life.people.parts)) l.group.visible = !on;
+  for (const w of life.people.walkers) if (w) w.mesh.visible = false;
   life.suspended = on;
 }
 

@@ -1,6 +1,7 @@
 import { Object3D, Color, MeshStandardMaterial } from 'three';
 import { LODInstancer, buildLODChain } from '../engine/geometry/LOD.js';
 import { onlookerParts } from './Foliage.js';
+import { Walker } from '../life/Walker.js';
 
 const SKINS = ['#e0b896', '#d2a07c', '#c48e6a', '#e8c4a4', '#b98462'];
 const _o = new Object3D(), _c = new Color();
@@ -12,8 +13,16 @@ const _o = new Object3D(), _c = new Color();
  * only the people in that room are drawn, at their places in it.
  */
 export class PeopleMesh {
-  constructor(scene, sim) {
+  constructor(scene, sim, { quality = 'high', detailDistance = 70 } = {}) {
     this.sim = sim;
+    this.scene = scene;
+    this.quality = quality;
+    this.detailDistance = detailDistance;
+    // Everyone gets the full body (skinned, clothed, armoured) built a few at a
+    // time; until theirs is ready, and beyond detailDistance, a person is an
+    // instanced figure.
+    this.walkers = new Array(sim.people.length).fill(null);
+    this.buildQueue = sim.people.map((p, i) => i);
     const parts = onlookerParts();
     const n = sim.people.length;
     const mk = (geo, name) => {
@@ -32,8 +41,33 @@ export class PeopleMesh {
   }
 
   /** interior: {building, spotOf(person) -> {x,y,z,yaw,posture}} when the player is inside. */
+  _buildSome(camera, n = 2) {
+    // nearest first
+    if (!this.buildQueue.length) return;
+    const cp = camera.position, people = this.sim.people;
+    this.buildQueue.sort((a, b) => Math.hypot(people[a].agent.x - cp.x, people[a].agent.z - cp.z) - Math.hypot(people[b].agent.x - cp.x, people[b].agent.z - cp.z));
+    for (let k = 0; k < n && this.buildQueue.length; k++) {
+      const i = this.buildQueue.shift(), p = people[i];
+      const w = new Walker({
+        name: p.fullName, height: p.height, mass: p.sex === 'f' ? 58 : 72, items: p.items, female: p.sex === 'f',
+        colors: { ...p.colors, skin: p.look?.skin, hair: p.look?.hair }, heraldry: p.dress === 'herald' ? 'bohemia' : 'none',
+        beard: p.look?.beard ?? 0, headwear: p.look?.headwear ?? null, texSize: 512, quality: this.quality === 'low' ? 'low' : 'medium',
+      });
+      w.mesh.visible = false;
+      this.scene.add(w.mesh);
+      this.walkers[i] = w;
+    }
+  }
+
+  dispose() {
+    for (const w of this.walkers) w?.dispose();
+    for (const l of Object.values(this.parts)) l.group.removeFromParent();
+  }
+
   update(dt, camera, interior = null) {
     this.time += dt;
+    this._buildSome(camera, this.walkers.some((w) => w) ? 2 : 4);
+    const cp = camera.position;
     const P = this.parts;
     const zero = new Object3D(); zero.scale.setScalar(0); zero.updateMatrix();
     let k = 0;
@@ -52,6 +86,13 @@ export class PeopleMesh {
         else if (a.speed < 0.05 && /begging|resting/.test(a.act)) posture = 'sit';
       }
       const walking = a.speed > 0.05 && !interior;
+      const W = this.walkers[i];
+      if (W && (interior || Math.hypot(x - cp.x, z - cp.z) < this.detailDistance)) {
+        W.mesh.visible = true;
+        W.update(dt, { x, y, z, yaw: yaw ?? 0, speed: walking ? a.speed : 0, posture, gesture: false });
+        W.seen = true;
+        continue;
+      }
       const ph = this.time * 7.2 + i;
       _o.position.set(x, y + (walking ? Math.abs(Math.sin(ph)) * 0.045 : 0) - (posture === 'sit' ? 0.42 : 0), z);
       _o.rotation.set(0, yaw ?? 0, 0);
@@ -66,6 +107,7 @@ export class PeopleMesh {
       else if (hatKind === 'hat') P.hat.setInstance(counts.hat++, _o.matrix, _c.copy(this.wear[i]).multiplyScalar(0.7));
       k++;
     }
+    for (const W of this.walkers) if (W) { if (!W.seen) W.mesh.visible = false; W.seen = false; }
     for (const [name, l] of Object.entries(P)) {
       for (let j = counts[name]; j < l.count; j++) l.setInstance(j, zero.matrix);
       l._built = false;
