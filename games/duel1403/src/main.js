@@ -4,6 +4,7 @@ import { KnightAI } from './game/AI.js';
 import { Input } from './game/Input.js';
 import { Audio } from './game/Audio.js';
 import { HUD } from './game/HUD.js';
+import { DebugView } from './game/DebugView.js';
 import { Stage } from './render/Stage.js';
 import { MedStage } from './render/MedStage.js';
 import { Lists } from './render/Lists.js';
@@ -47,6 +48,7 @@ const stage = makeStage();
 const lists = new Lists(stage.scene, { quality, terrain: !!stage.attachTerrain });
 stage.attachTerrain?.(lists);
 lists.camera = stage.camera;   // LOD selection for the detailed scenery
+const dev = new DebugView({ stage, getSim: () => sim, getAis: () => ais, getPlayer: () => player });
 const particles = new Particles(stage.scene);
 const rig = new CameraRig(stage.camera);
 const audio = new Audio();
@@ -100,6 +102,7 @@ function build(config, attract = false) {
   meshes = sim.knights.map((k) => new KnightMesh(k, { quality }));
   for (const m of meshes) stage.scene.add(m.group);
   sim.damage.on(onDamage);
+  sim.damage.on((e) => dev.onDamage(e));
   for (const k of sim.knights) {
     k.onStep = () => { if (mode !== 'menu') audio.step(k.profile.total > 15); if (k.attack) particles.dust(k.b.pelvis.pos.clone().setY(0.02), 0.3); };
     k.onDown = (kk, cause) => onDown(kk, cause);
@@ -312,7 +315,8 @@ if (params.get('noui')) document.getElementById('ui').style.display = 'none';   
 
 function tick(dt) {
   if (!sim) return;
-  if (mode !== 'paused') {
+  if (mode !== 'paused' && dev.shouldStep()) {
+    if (dev.on) dt = dev.paused ? FIXED : dt * dev.timeScale;
     if (hitStop > 0) { hitStop -= dt; dt *= 0.05; }
     timeScale = time < slowUntil ? 0.3 : timeScale + (1 - timeScale) * Math.min(1, dt * 3);
     acc += dt * timeScale;
@@ -385,6 +389,7 @@ function frame(now) {
   handleInput();
   if (!manual) tick(dt);
   applyCameraOverride();
+  dev.update(dt);
   stage.render(dt, wallTime);
 }
 

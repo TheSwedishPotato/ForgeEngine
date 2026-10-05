@@ -8,6 +8,7 @@ import { DOF, MotionBlur } from '../engine/passes/Cinematic.js';
 import { TAA, Upscale } from '../engine/passes/TAA.js';
 import { Exposure, Bloom, Composite } from '../engine/passes/Post.js';
 import { Debug } from '../engine/passes/Debug.js';
+import { DebugDraw } from '../engine/passes/DebugDraw.js';
 import { Terrain } from './Terrain.js';
 import { SUN_DIR } from './Sky.js';
 
@@ -36,6 +37,7 @@ export class MedStage {
     this.exposure = r.addPass(new Exposure());
     this.bloom = r.addPass(new Bloom());
     this.composite = r.addPass(new Composite());
+    this.debugDraw = r.addPass(new DebugDraw());   // lines on top of everything (dev view)
     const dbg = new URLSearchParams(location.search).get('debug');
     if (dbg) r.addPass(new Debug(dbg));
     window.med = r;
