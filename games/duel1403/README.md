@@ -72,6 +72,97 @@ poleaxe, and a German knight in full harness who fights at the half-sword.
 
 Every source is listed in the in-game codex (`src/data/sources.js`).
 
+## The Forge Renderer
+
+Every pixel is drawn by our own WebGL2 engine, `src/engine/` (three.js is kept
+only as the scene graph and maths library; `?engine=three` falls back to its
+renderer). Graphics presets: **Ultra / High / Medium / Low** on the title and
+pause screens. **F3** (or `?stats=1`) shows live engine statistics.
+
+| The lists | The road to the village: ruts, puddles, hoof prints |
+| --- | --- |
+| ![Fight in the lists](docs/forge-lists.png) | ![Road with puddles](docs/forge-road.png) |
+
+**Lighting (physically based, HDR)**
+- Deferred shading from a G-buffer (base colour, octahedral normals, roughness,
+  metalness, motion vectors, emission) in 16-bit float HDR throughout.
+- Cook-Torrance BRDF: GGX distribution, height-correlated Smith visibility,
+  Schlick Fresnel, multiple-scattering energy compensation (rough metal keeps
+  its brightness). Material types: skin with wrapped subsurface light,
+  clear-coated polished steel, cloth sheen (Charlie), thin translucent banners.
+- Specular anti-aliasing from normal variance, so polished armour does not
+  shimmer at 4K.
+- Cascaded shadow maps (4 cascades, texel-snapped, rotated Poisson PCF).
+- Image-based light: sky cube, GGX-prefiltered mip chain, SH9 irradiance,
+  split-sum BRDF lookup table, and a parallax-corrected reflection probe that
+  captures the lists for the armour to reflect.
+
+**Global illumination**
+- An irradiance volume of 243 light probes over the lists, each capturing the
+  lit scene in six directions and stored as spherical harmonics; captures see
+  the previous probes, so light bounces accumulate (red pavilions tint the
+  ground beside them, sunlit sand lights the knights from below).
+- Screen-space GI: cosine-distributed rays find nearby surfaces and bring their
+  light (any colour, from any source, sparks included), accumulated over time
+  and cleaned with an edge-aware à-trous filter.
+
+**Atmosphere**
+- Volumetric height fog, wind-driven ground mist and smoke volumes, raymarched
+  through the sun's shadow cascades: light shafts form behind banners, trees
+  and knights, and dust kicked up in the fight scatters light. Aerial
+  perspective beyond the march distance comes from an analytic fog integral.
+
+**Geometry and data for 4K**
+- *Virtual geometry* (after Nanite): the terrain (720k source triangles: a fine
+  48 m patch at ~10 cm under the lists and 1.2 km of country) is split into
+  128-triangle clusters and simplified level by level with our own quadric
+  error simplifier into a cluster DAG, group borders locked so any cut is
+  crack-free. Each frame the renderer picks the cut whose error is under a
+  pixel, culls clusters by frustum and normal cone, and submits them all with
+  one multi-draw call. Built in a worker in a few seconds.
+- *Virtual texturing*: the ground is one 131,072² texture (~8 mm per texel)
+  streamed as 128-texel pages. A feedback pass records which pages the camera
+  needs, read back asynchronously; missing pages are generated on the GPU from
+  a procedural material (trodden earth, boot and hoof prints, pebbles, straw,
+  autumn grass, cart ruts holding water) into a 4K physical cache with LRU
+  eviction, and a mip-chained page table sends each lookup to the best
+  resident page.
+- *Dynamic LOD*: trees and spectators have detailed models (a spruce is ~3,900
+  triangles) with LOD chains made by the same simplifier (down to 76), chosen
+  per instance by distance with hysteresis; spatial cells let the camera and
+  each shadow cascade cull whole groves; coarse shadow proxies cast the shadows.
+
+**Post-processing**
+- Temporal anti-aliasing with upscaling (TAAU): rendering at 77% (High) of
+  display resolution with sub-pixel jitter, reconstructed to full resolution
+  from history (Catmull-Rom, variance clipping in YCoCg), then robust contrast-
+  adaptive sharpening after AMD FSR 1 RCAS. (DLSS needs NVIDIA's tensor-core
+  runtime, which a web page cannot use; this is the open alternative.)
+- Ground-truth ambient occlusion (horizon-based, after XeGTAO) and
+  screen-space reflections (in the puddles, on the steel).
+- Bloom (energy-conserving 13-tap downsample / tent upsample), physical depth
+  of field (thin-lens circle of confusion, autofocus on the opponent),
+  per-pixel motion blur from the motion vectors, auto exposure, ACES filmic
+  tonemapping and grading, plus the game's own lens: visor slits, the blur of
+  being stunned, the flash of a hit.
+
+```
+src/engine/
+  gl/GL.js              programs (uniform introspection), textures, render targets
+  Renderer.js           frame graph: shadows, G-buffer, screen-space, lighting, post
+  scene/SceneAdapter.js three.js scene -> GPU buffers, skinning, instancing, materials
+  shaders/              BRDF, sky, G-buffer, deferred lighting
+  passes/               Environment, Shadows, ScreenSpace (GTAO/SSR/SSGI), Volumetrics,
+                        Sprites, TAA, Cinematic (DOF, motion blur), Post (exposure,
+                        bloom, composite, RCAS), Debug
+  gi/ProbeVolume.js     irradiance probes + reflection probe
+  geometry/             Simplify (QEM), ClusterDAG, ClusterMesh, LOD, terrain worker
+  vt/                   virtual texture, procedural ground material
+```
+
+Debug views: `?debug=albedo|normal|rough|metal|motion|ao|ssr|ssgi|depth|emissive|lit`,
+`?glcheck=1` reports GL errors per pass.
+
 ## How it works
 
 ```
@@ -79,7 +170,9 @@ src/
   physics/   XPBD rigid-body solver (from Forge Boxing), plus contact work and friction impulses
   knight/    anatomy and armour loading, ragdoll, weapons and grips, controller, blows
   game/      fight setup, damage model, AI doctrines, input, HUD, audio
-  render/    stage and sky, the lists, body / armour / weapon meshes, particles, cameras
+  render/    stages (Forge, three.js fallback), the lists, terrain, foliage, body / armour / weapon meshes
+  engine/    the Forge renderer (see above)
+  world/     the land: one height function for terrain, scenery and physics
   data/      armour, weapons, guards, opponents, sources
 ```
 
@@ -114,4 +207,7 @@ node tools/falltest.mjs 3 15             # AI duels: does anyone fall over by hi
 npm run dev & node tools/smoke.mjs       # every opponent, armour piece and weapon in the browser
 node tools/shot.mjs "?fight=1&foe=knight" shots/k 6,10   # deterministic screenshots
 node tools/playtest.mjs fencer           # plays with real mouse drags and clicks
+node tools/stress.mjs 60                 # AI tournament: NaNs, explosions, stuck fights, falls
+node tools/getuptest.mjs                 # every kit can get up after being thrown
+npm test                                 # physics, simplifier and cluster-DAG crack tests
 ```

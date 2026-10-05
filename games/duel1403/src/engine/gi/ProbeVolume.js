@@ -151,8 +151,11 @@ class Capturer {
       frustum.setFromProjectionMatrix(vp);
       const near2 = near * near;
       const sel = items.filter((it) => {
-        if (it.mat.transparent) return false;
-        if (!it.bounds) { _t.setFromMatrixPosition(it.object.matrixWorld); return _t.distanceToSquared(pos) < near2; }
+        if (it.mat.transparent || it.object.userData.captureSkip) return false;
+        // Probes record the big, still world. Knights and their small fittings
+        // add nothing a 16-pixel face can see; leave them out.
+        if (!it.bounds || it.skin) return false;
+        if (it.bounds[3] < 0.6 && !it.instances) return false;
         const dx = it.bounds[0] - pos.x, dy = it.bounds[1] - pos.y, dz = it.bounds[2] - pos.z;
         return dx * dx + dy * dy + dz * dz < near2 + it.bounds[3] * it.bounds[3] * 4 || it.bounds[3] > 30;
       });
@@ -165,7 +168,7 @@ class Capturer {
 const _t = new Vector3(), _m = new Matrix4();
 
 export class ProbeVolume {
-  constructor({ min = [-21, 0.35, -21], max = [21, 6.5, 21], dims = [9, 3, 9], perFrame = 3, size = 16 } = {}) {
+  constructor({ min = [-21, 0.35, -21], max = [21, 6.5, 21], dims = [9, 3, 9], perFrame = 2, size = 16 } = {}) {
     this.name = 'probes';
     this.min = min; this.max = max; this.dims = dims;
     this.count = dims[0] * dims[1] * dims[2];

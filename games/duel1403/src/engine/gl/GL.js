@@ -152,7 +152,7 @@ export class Texture {
     const [ifmt] = FMT[o.format];
     const T = this.target;
     gl.bindTexture(T, this.tex);
-    const mips = o.filter === 'mip' ? (o.levels ?? (Math.floor(Math.log2(Math.max(w, h))) + 1)) : 1;
+    const mips = o.levels ?? (o.filter === 'mip' ? Math.floor(Math.log2(Math.max(w, h))) + 1 : 1);
     this.levels = mips;
     if (o.target === 'array' || o.target === '3d') gl.texStorage3D(T, mips, gl[ifmt], w, h, d);
     else gl.texStorage2D(T, mips, gl[ifmt], w, h);

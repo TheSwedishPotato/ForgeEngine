@@ -28,9 +28,25 @@ function saveConfig(c) {
 const touch = matchMedia('(pointer: coarse)').matches;
 const stored = loadConfig();
 const quality = params.get('quality') ?? stored?.quality ?? (touch ? 'medium' : 'high');
+if (stored) stored.quality = quality;
 // The Forge renderer is the default; ?engine=three falls back to three.js's renderer.
-const stage = params.get('engine') === 'three' ? new Stage(document.getElementById('view'), { quality }) : new ForgeStage(document.getElementById('view'), { quality });
-const lists = new Lists(stage.scene, { quality });
+function makeStage() {
+  const view = document.getElementById('view');
+  if (params.get('engine') === 'three') return new Stage(view, { quality });
+  try {
+    return new ForgeStage(view, { quality });
+  } catch (err) {
+    // No WebGL2 float targets (older or mobile GPUs): the original renderer still runs.
+    console.warn('Forge renderer unavailable, falling back to three.js:', err);
+    const fresh = view.cloneNode(false);
+    view.replaceWith(fresh);
+    return new Stage(fresh, { quality: quality === 'ultra' ? 'high' : quality });
+  }
+}
+const stage = makeStage();
+const lists = new Lists(stage.scene, { quality, terrain: !!stage.attachTerrain });
+stage.attachTerrain?.(lists);
+lists.camera = stage.camera;   // LOD selection for the detailed scenery
 const particles = new Particles(stage.scene);
 const rig = new CameraRig(stage.camera);
 const audio = new Audio();
@@ -49,6 +65,7 @@ const hud = new HUD(document.getElementById('ui'), {
   quit: () => toMenu(),
   rematch: () => newFight(fightConfig),
   volume: (v) => { audio.setVolume(v); saveConfig(hud.config); },
+  quality: (q) => { stage.setQuality?.(q); saveConfig(hud.config); },
   yieldFight: () => { setPaused(false); if (player) { player.yielded = true; } },
 });
 hud.loadConfig(stored);
@@ -291,6 +308,7 @@ const FIXED = 1 / 60;
 let acc = 0, last = performance.now(), wallTime = 0;
 
 const manual = !!params.get('manual');
+if (params.get('noui')) document.getElementById('ui').style.display = 'none';   // clean captures
 
 function tick(dt) {
   if (!sim) return;
@@ -348,6 +366,17 @@ function tick(dt) {
   }
 }
 
+/** Tooling: a fixed camera (window.duel.cam = { pos: [x,y,z], at: [x,y,z], fov }) overrides the rig. */
+function applyCameraOverride() {
+  const c = window.duel?.cam;
+  if (!c) return;
+  stage.camera.position.set(...c.pos);
+  stage.camera.lookAt(...c.at);
+  if (c.fov && stage.camera.fov !== c.fov) { stage.camera.fov = c.fov; stage.camera.updateProjectionMatrix(); }
+  stage.dofAmount = c.dof ?? 0;
+  if (stage.dof) stage.dof.amount = stage.dofAmount;
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -355,6 +384,7 @@ function frame(now) {
   wallTime += dt;
   handleInput();
   if (!manual) tick(dt);
+  applyCameraOverride();
   stage.render(dt, wallTime);
 }
 

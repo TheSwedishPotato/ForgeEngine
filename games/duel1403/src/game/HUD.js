@@ -74,6 +74,7 @@ export class HUD {
           <button data-a="help">How to fight</button>
           <button data-a="codex">Sources</button>
         </div>
+        <label class="vol gfx">Graphics <select data-q><option value="ultra">Ultra (native 4K-ready)</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
         <p class="fine">Liechtenauer (Hs. 3227a, 1389) · Fiore dei Liberi (1409) · Ms. I.33 (c. 1300) · the Wenceslas Bible (1390s)</p>
       </div>
     </div>`);
@@ -84,6 +85,7 @@ export class HUD {
       else if (a === 'help') { this._helpBack = 'title'; this.show('help'); }
       else if (a === 'codex') { this._codexBack = 'title'; this.show('codex'); }
     });
+    this._bindQuality(el);
     this.root.appendChild(el);
     this.screens.title = el;
   }
@@ -385,11 +387,24 @@ export class HUD {
 
   // ---------------------------------------------------------------------------
 
+  /** The graphics preset selector (title and pause screens share the setting). */
+  _bindQuality(el) {
+    const sel = el.querySelector('select[data-q]');
+    if (!sel) return;
+    sel.value = this.config.quality ?? 'high';
+    sel.addEventListener('change', () => {
+      this.config.quality = sel.value;
+      for (const s of this.root.querySelectorAll('select[data-q]')) s.value = sel.value;
+      this.on.quality?.(sel.value);
+    });
+  }
+
   _buildPause() {
     const el = h(`<div class="screen dim ui-interactive" hidden><div class="folio narrow">
       <h2>Paused</h2>
       <div class="actions col"><button class="primary" data-a="resume">Resume</button><button data-a="help">How to fight</button><button data-a="yield">Yield</button><button data-a="quit">Leave the lists</button></div>
       <label class="vol">Volume <input type="range" min="0" max="1" step="0.05"></label>
+      <label class="vol gfx">Graphics <select data-q><option value="ultra">Ultra (native 4K-ready)</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
     </div></div>`);
     el.addEventListener('click', (e) => {
       const a = e.target.closest('button')?.dataset.a;
@@ -401,6 +416,7 @@ export class HUD {
     const vol = el.querySelector('input');
     vol.value = this.config.volume;
     vol.addEventListener('input', () => { this.config.volume = Number(vol.value); this.on.volume(Number(vol.value)); });
+    this._bindQuality(el);
     this.root.appendChild(el);
     this.screens.pause = el;
   }

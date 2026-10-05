@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><canvas id="c" width="768" height="768"></canvas>
+<script type="module">
+import { createContext, postProgram, fullscreen } from '/src/engine/gl/GL.js';
+import { COMMON } from '/src/engine/shaders/common.js';
+import { GROUND_GLSL } from '/src/engine/vt/groundMaterial.js';
+const q = new URLSearchParams(location.search);
+const gl = createContext(document.getElementById('c'), { preserveDrawingBuffer: true });
+const p = postProgram(gl, `${COMMON}\n${GROUND_GLSL}\nin vec2 vUv; out vec4 o; uniform vec2 uC; uniform float uSize; uniform float uFp;
+void main(){ vec2 w = uC + (vUv - 0.5) * uSize; Ground g = ground(w, uFp); o = vec4(pow(g.albedo, vec3(1.0/2.2)), 1.0); }`, {}, 'ground-view');
+p.use().set('uC', [Number(q.get('x') ?? 0), Number(q.get('z') ?? 0)]).set('uSize', Number(q.get('size') ?? 40)).set('uFp', Number(q.get('fp') ?? 0.05));
+gl.viewport(0, 0, 768, 768); fullscreen(gl); window.done = true;
+</script>

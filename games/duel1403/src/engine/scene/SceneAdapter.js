@@ -81,8 +81,11 @@ export class SceneAdapter {
     if (o.isSkinnedMesh) item.skin = this.skin(o);
     if (o.isInstancedMesh) item.instances = this.instances(o);
     item.vao = this.vao(o, g, !!item.instances);
-    // World-space bounding sphere for culling (skinned meshes follow their bones; not culled).
-    if (!o.isSkinnedMesh && o.frustumCulled !== false) {
+    // World-space bounding sphere for culling. A skinned body is bounded by a
+    // sphere round its root bone (a person fits within 1.6 m of the pelvis).
+    if (o.isSkinnedMesh) {
+      item.bounds = this.skeletonBounds(o.skeleton);
+    } else if (o.frustumCulled !== false) {
       if (o.isInstancedMesh) {
         if (!o.boundingSphere) o.computeBoundingSphere();
         _s.copy(o.boundingSphere).applyMatrix4(o.matrixWorld);
@@ -243,6 +246,21 @@ export class SceneAdapter {
       s.frame = this.frame;
     }
     return { cur: s.cur, prev: s.prev, bind: o.bindMatrix.elements, bindInv: o.bindMatrixInverse.elements };
+  }
+
+  /** Sphere round all the bones of a skeleton (+ flesh and armour), once per frame. */
+  skeletonBounds(sk) {
+    const s = this.skins.get(sk);
+    if (s.boundsFrame === this.frame) return s.bounds;
+    let cx = 0, cy = 0, cz = 0;
+    const n = sk.bones.length, e = [];
+    for (const b of sk.bones) { const m = b.matrixWorld.elements; e.push(m[12], m[13], m[14]); cx += m[12]; cy += m[13]; cz += m[14]; }
+    cx /= n; cy /= n; cz /= n;
+    let r = 0;
+    for (let i = 0; i < e.length; i += 3) r = Math.max(r, Math.hypot(e[i] - cx, e[i + 1] - cy, e[i + 2] - cz));
+    s.bounds = [cx, cy, cz, r + 0.45];
+    s.boundsFrame = this.frame;
+    return s.bounds;
   }
 
   // -------------------------------------------------------------------------

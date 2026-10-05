@@ -8,6 +8,9 @@ import { grassTexture, earthTexture, woodTexture, heraldryTexture, fabricTexture
 import { SUN_DIR } from './Sky.js';
 import { HERALDRY } from '../data/opponents.js';
 import { LISTS_RADIUS } from '../knight/Knight.js';
+import { heightAt } from '../world/terrain.js';
+import { LODInstancer, buildLODChain } from '../engine/geometry/LOD.js';
+import { spruceGeometry, broadleafGeometry, onlookerParts } from './Foliage.js';
 
 /**
  * The lists below a Bohemian castle, autumn 1403: a ring fenced with
@@ -15,7 +18,9 @@ import { LISTS_RADIUS } from '../knight/Knight.js';
  * the village and its church, and a castle on the hill.
  */
 export class Lists {
-  constructor(scene, { quality = 'high' } = {}) {
+  constructor(scene, { quality = 'high', terrain = false } = {}) {
+    // With the Forge terrain, things stand on the real ground height.
+    const groundY = terrain ? heightAt : () => 0;
     this.scene = scene;
     this.group = new Group();
     scene.add(this.group);
@@ -47,6 +52,7 @@ export class Lists {
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     this.group.add(ground);
+    this.flatGround = [ground];
     const et = earthTexture().clone();
     et.needsUpdate = true;
     et.repeat.set(5, 5);
@@ -55,6 +61,7 @@ export class Lists {
     arena.position.y = 0.003;
     arena.receiveShadow = true;
     this.group.add(arena);
+    this.flatGround.push(arena);
 
     // ---- the fence of the lists ---------------------------------------------
     const R = LISTS_RADIUS + 1.2;
@@ -142,6 +149,8 @@ export class Lists {
     }
 
     // ---- onlookers at the fence ------------------------------------------------------------
+    if (terrain) this._detailedCrowd(R, rand, quality);
+    else {
     {
       const n = quality === 'low' ? 40 : 90;
       const bodyGeo = new CapsuleGeometry(0.2, 0.75, 4, 8);
@@ -178,7 +187,10 @@ export class Lists {
       this.crowdMeshes = [bodies, heads, hoods];
     }
 
+    }
     // ---- trees ---------------------------------------------------------------------------------
+    if (terrain) this._detailedTrees(rand, quality, groundY);
+    else {
     {
       const nT = quality === 'low' ? 120 : 260;
       const spruce = new InstancedMesh(mergeGeometries([new ConeGeometry(2.2, 7, 7).translate(0, 5, 0), new ConeGeometry(1.6, 5, 7).translate(0, 8, 0), new CylinderGeometry(0.25, 0.3, 2.2, 5).translate(0, 1.1, 0)].map((g) => g.toNonIndexed())), new MeshStandardMaterial({ color: '#2f4227', roughness: 1, flatShading: true }), nT);
@@ -189,7 +201,7 @@ export class Lists {
         for (const [mesh, isLeafy] of [[spruce, false], [leafy, true]]) {
           let x, z;
           do { x = (rand() - 0.5) * 420; z = (rand() - 0.5) * 420; } while (Math.hypot(x, z) < 26 || (z > 70 && Math.abs(x - 10) < 70));
-          o.position.set(x, 0, z);
+          o.position.set(x, groundY(x, z) - 0.25, z);
           o.rotation.y = rand() * 6;
           o.scale.setScalar(0.7 + rand() * 0.8);
           o.updateMatrix();
@@ -201,6 +213,7 @@ export class Lists {
       this.group.add(spruce, leafy);
     }
 
+    }
     // ---- hills, the castle on its rock, the village ------------------------------------------
     {
       const hillMat = new MeshStandardMaterial({ color: '#56653a', roughness: 1, flatShading: true });
@@ -209,6 +222,7 @@ export class Lists {
         hill.scale.y = h / r;
         hill.position.set(x, -2, z);
         this.group.add(hill);
+        (this.hills ??= []).push(hill);
       }
       const stone = new MeshStandardMaterial({ color: '#cfc6b2', roughness: 0.95 });
       const roofMat = new MeshStandardMaterial({ color: '#8a3c26', roughness: 0.9, flatShading: true });
@@ -238,7 +252,7 @@ export class Lists {
       const cren = [];
       for (let i = 0; i < 22; i++) cren.push(new BoxGeometry(1, 1.2, 2).translate(-25 + i * 2.2, 8.6, -12));
       castle.add(new Mesh(mergeGeometries(cren), stone));
-      castle.position.set(30, 52, 230);
+      castle.position.set(30, terrain ? heightAt(30, 230) - 1.5 : 52, 230);
       castle.rotation.y = 0.3;
       this.group.add(castle);
       // Village below: timber houses with steep roofs, and a church.
@@ -274,6 +288,109 @@ export class Lists {
     void Vector3; void BufferGeometry; void Float32BufferAttribute;
   }
 
+  /**
+   * Detailed spectators with LOD chains (QEM-simplified), split into parts so
+   * clothes, faces and headwear each get their own colours.
+   */
+  _detailedCrowd(R, rand, quality) {
+    const n = quality === 'low' ? 50 : 110;
+    const parts = onlookerParts();
+    const mk = (geo, color, name, count) => {
+      const chain = buildLODChain(geo, [1, 0.4, 0.12]);
+      const mat = new MeshStandardMaterial({ roughness: name === 'head' ? 0.6 : 0.92, vertexColors: true, color });
+      if (name !== 'head') mat.userData.cloth = true;
+      return new LODInstancer(chain.map((c, i) => ({ geometry: c.geometry, distance: [14, 32, Infinity][i] })), mat, count, { name: 'crowd-' + name });
+    };
+    const cloths = ['#6a5a40', '#7a1c1c', '#3a4a2a', '#4a3a2a', '#8a7a5a', '#2a2a3a', '#9a6a2a', '#5a2a3a', '#d6ccb0', '#3c4c6a'];
+    const skins = ['#e0b896', '#d2a07c', '#c48e6a', '#e8c4a4', '#b98462'];
+    const people = [];
+    for (let i = 0; i < n; i++) {
+      let a = rand() * Math.PI * 2;
+      if (Math.abs(Math.sin(a / 2 - Math.PI / 4)) < 0.08) a += 0.3;
+      const d = R + 0.55 + rand() * 1.6 + (rand() < 0.3 ? 1.2 : 0);
+      people.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, sc: 0.92 + rand() * 0.16, phase: rand() * 10, hat: rand() < 0.5 ? 0 : rand() < 0.6 ? 1 : 2,
+        cloth: new Color(cloths[Math.floor(rand() * cloths.length)]), skin: new Color(skins[Math.floor(rand() * skins.length)]), wear: new Color(cloths[Math.floor(rand() * cloths.length)]).multiplyScalar(rand() < 0.5 ? 1 : 0.7) });
+    }
+    this.people = people;
+    this.crowdLod = {
+      body: mk(parts.body, '#ffffff', 'body', n),
+      head: mk(parts.head, '#ffffff', 'head', n),
+      hood: mk(parts.hood, '#ffffff', 'hood', people.filter((p) => p.hat === 0).length),
+      hat: mk(parts.hat, '#ffffff', 'hat', people.filter((p) => p.hat === 1).length),
+    };
+    for (const l of Object.values(this.crowdLod)) this.group.add(l.group);
+    this._poseCrowd(0, 0);
+  }
+
+  _poseCrowd(t, excitement) {
+    const o = new Object3D();
+    let ih = 0, it = 0;
+    const C = this.crowdLod;
+    this.people.forEach((p, i) => {
+      o.position.set(p.x, Math.max(0, Math.sin(t * 7 + p.phase) * 0.08 * excitement), p.z);
+      o.rotation.set(0, 0, 0);
+      o.lookAt(0, o.position.y, 0);
+      o.rotateZ(Math.sin(t * 0.8 + p.phase) * 0.03);
+      o.scale.setScalar(p.sc);
+      o.updateMatrix();
+      C.body.setInstance(i, o.matrix, p.cloth);
+      C.head.setInstance(i, o.matrix, p.skin);
+      if (p.hat === 0) C.hood.setInstance(ih++, o.matrix, p.wear);
+      else if (p.hat === 1) C.hat.setInstance(it++, o.matrix, p.wear);
+    });
+  }
+
+  /** Detailed spruces and autumn broadleaves on the terrain, with LOD chains. */
+  _detailedTrees(rand, quality, groundY) {
+    const nT = quality === 'low' ? 140 : 300;
+    const spruceChain = buildLODChain(spruceGeometry(7), [1, 0.3, 0.08, 0.02]);
+    const leafChain = buildLODChain(broadleafGeometry(11), [1, 0.3, 0.08, 0.02]);
+    const dists = [45, 110, 240, Infinity];
+    const spruceMat = new MeshStandardMaterial({ roughness: 0.95, vertexColors: true });
+    spruceMat.userData.foliage = true;
+    const leafMat = new MeshStandardMaterial({ roughness: 0.9, vertexColors: true });
+    leafMat.userData.foliage = true;
+    // Instances are bucketed into 115 m cells, one LOD instancer per cell and
+    // species, so the camera and each shadow cascade cull whole cells.
+    const CELL = 115;
+    const cells = new Map();
+    const cellOf = (x, z, leafy) => {
+      const k = `${leafy ? 'b' : 's'}${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+      let c = cells.get(k);
+      if (!c) { c = { leafy, list: [] }; cells.set(k, c); }
+      return c;
+    };
+    const o = new Object3D();
+    const autumn = ['#c9a23a', '#c8642a', '#9aa83a', '#d89a3a', '#8c9a2e', '#b8441e', '#e0b040'];
+    for (let i = 0; i < nT; i++) {
+      for (const isLeafy of [false, true]) {
+        let x, z;
+        do { x = (rand() - 0.5) * 460; z = (rand() - 0.5) * 460; } while (Math.hypot(x, z) < 28 || (z > 55 && z < 145 && Math.abs(x) < 80));
+        o.position.set(x, groundY(x, z) - 0.2, z);
+        o.rotation.set(0, rand() * 6, 0);
+        o.scale.setScalar(0.7 + rand() * 0.8);
+        o.updateMatrix();
+        cellOf(x, z, isLeafy).list.push({ m: o.matrix.clone(), c: isLeafy ? new Color(autumn[Math.floor(rand() * autumn.length)]) : new Color(1, 1, 1).multiplyScalar(0.85 + rand() * 0.3) });
+      }
+    }
+    this.treeLod = [];
+    for (const [k, c] of cells) {
+      const chain = c.leafy ? leafChain : spruceChain;
+      const inst = new LODInstancer(chain.map((ch, i) => ({ geometry: ch.geometry, distance: dists[i] })), c.leafy ? leafMat : spruceMat, c.list.length, { name: (c.leafy ? 'broadleaf-' : 'spruce-') + k });
+      c.list.forEach((e, i) => inst.setInstance(i, e.m, e.c));
+      inst.leafy = c.leafy;
+      this.treeLod.push(inst);
+      this.group.add(inst.group);
+    }
+    const sum = (leafy) => this.treeLod.filter((t) => t.leafy === leafy).reduce((acc, t) => acc.map((v, i) => v + t.stats[i]), [0, 0, 0, 0]);
+    this.lodStats = () => ({ spruce: sum(false), broadleaf: sum(true), triangles: { spruce: spruceChain.map((c) => c.triangles), broadleaf: leafChain.map((c) => c.triangles), onlooker: buildTris(this.crowdLod) } });
+  }
+
+  /** The Forge terrain has arrived: retire the flat ground and the dome hills. */
+  useTerrain() {
+    for (const m of [...(this.flatGround ?? []), ...(this.hills ?? [])]) m.visible = false;
+  }
+
   update(dt, excitement = 0) {
     this.time += dt;
     const t = this.time;
@@ -287,6 +404,15 @@ export class Lists {
       }
       pos.needsUpdate = true;
       f.mesh.geometry.computeVertexNormals();
+    }
+    // LOD selection for the detailed scenery, from the camera.
+    if (this.camera) {
+      const cp = this.camera.position;
+      for (const l of this.treeLod ?? []) l.update(cp);
+      if (this.crowdLod) {
+        this._poseCrowd(t, excitement);
+        for (const l of Object.values(this.crowdLod)) { l._built = false; l.update(cp); }
+      }
     }
     // The crowd sways and, when the fight is hot, jumps.
     if (this.crowd) {
@@ -305,3 +431,5 @@ export class Lists {
     }
   }
 }
+
+function buildTris(c) { return c ? Object.fromEntries(Object.entries(c).map(([k, l]) => [k, l.levels.map((v) => v.geometry.index.count / 3)])) : null; }

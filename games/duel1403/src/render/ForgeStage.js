@@ -8,6 +8,7 @@ import { DOF, MotionBlur } from '../engine/passes/Cinematic.js';
 import { TAA, Upscale } from '../engine/passes/TAA.js';
 import { Exposure, Bloom, Composite } from '../engine/passes/Post.js';
 import { Debug } from '../engine/passes/Debug.js';
+import { Terrain } from './Terrain.js';
 import { SUN_DIR } from './Sky.js';
 
 /**
@@ -38,6 +39,7 @@ export class ForgeStage {
     const dbg = new URLSearchParams(location.search).get('debug');
     if (dbg) r.addPass(new Debug(dbg));
     window.forge = r;
+    window.forgeStage = this;
     this._applyQuality();
     this.sky = { update: (t) => { this.skyTime = t; } };
     this.shake = 0; this.flash = 0; this.aberration = 0; this.hurt = 0; this.visor = 0;
@@ -45,6 +47,42 @@ export class ForgeStage {
     this.focusPoint = null;   // world point the lens focuses on
     this.dofAmount = 0.4;
     window.addEventListener('resize', () => this.resize());
+    // Engine statistics overlay: F3 or ?stats=1
+    this.statsEl = null;
+    this._fps = { frames: 0, t: 0, value: 0 };
+    if (new URLSearchParams(location.search).get('stats')) this.toggleStats();
+    window.addEventListener('keydown', (e) => { if (e.key === 'F3') { e.preventDefault(); this.toggleStats(); } });
+  }
+
+  /** Builds the cluster terrain and virtual-textured ground for the lists. */
+  attachTerrain(lists) { this.lists = lists; this.terrain = new Terrain(this, lists); }
+
+  toggleStats() {
+    if (this.statsEl) { this.statsEl.remove(); this.statsEl = null; return; }
+    this.statsEl = document.createElement('div');
+    this.statsEl.id = 'forge-stats';
+    document.body.appendChild(this.statsEl);
+  }
+
+  statsText() {
+    const r = this.r, s = r.stats, f = this._fps;
+    const lines = [
+      `Forge Renderer · ${r.qualityName} · ${f.value.toFixed(0)} fps`,
+      `internal ${r.width}x${r.height} -> display ${r.displayW}x${r.displayH} (TAAU ${Math.round(r.q.renderScale * 100)}%)`,
+      `draws ${s.drawCalls}  triangles ${(s.triangles / 1e3).toFixed(0)}k  culled ${s.culled}`,
+    ];
+    const t = this.terrain?.stats();
+    if (t) {
+      lines.push(`terrain: ${((t.patchTris + t.landTris) / 1e6).toFixed(2)}M src tris, ${t.clusters} clusters, ${t.levels} levels`);
+      lines.push(`  cut: ${t.drawnClusters} clusters, ${(t.drawnTris / 1e3).toFixed(1)}k tris drawn`);
+      lines.push(`virtual texture: ${t.vt.resident}/900 pages, ${t.vt.generated} made, ${t.vt.evicted} evicted, ${t.vt.requests} queued`);
+    }
+    const ls = this.lists?.lodStats?.();
+    if (ls) lines.push(`LOD trees  spruce ${ls.spruce.join('/')}  broadleaf ${ls.broadleaf.join('/')}`);
+    const p = this.probes;
+    if (p) lines.push(`GI probes ${p.count} (${p.dims.join('x')}), ${p.filled} updates · refl probe ${p.reflection.ready ? 'live' : '...'}`);
+    lines.push(`exposure ${this.exposure.b ? 'auto' : '-'} · SSAO ${r.q.ssao ? 'on' : 'off'} · SSR ${r.q.ssr ? 'on' : 'off'} · SSGI ${r.q.ssgi ? 'on' : 'off'} · vol ${r.q.volumetrics}`);
+    return lines.join('\n');
   }
 
   _applyQuality() {
@@ -85,5 +123,8 @@ export class ForgeStage {
     this.r.lens = { time, hurt: this.hurt, visor: this.visor ?? 0, flash: this.flash, aberration: 0.0012 + this.aberration * 0.01 };
     this.r.render(this.scene, this.camera, dt);
     this.camera.position.sub(this.shakeOffset);
+    const f = this._fps;
+    f.frames++; f.t += dt;
+    if (f.t > 0.5) { f.value = f.frames / f.t; f.frames = 0; f.t = 0; if (this.statsEl) this.statsEl.textContent = this.statsText(); }
   }
 }

@@ -62,6 +62,15 @@ export class Renderer {
     this.dummyProbes = new Texture(gl, { width: 1, height: 9, format: 'rgba16f', filter: 'nearest' });
     this.resize();
     this._envDirty = true;
+    this.glCheck = !!new URLSearchParams(location.search).get('glcheck');
+    this._glErrSeen = new Set();
+  }
+
+  /** With ?glcheck=1: report the first GL error raised in each stage (slow; for debugging). */
+  check(where) {
+    if (!this.glCheck) return;
+    const e = this.gl.getError();
+    if (e && !this._glErrSeen.has(where)) { this._glErrSeen.add(where); console.error(`GL error 0x${e.toString(16)} in ${where}`); }
   }
 
   // -------------------------------------------------------------------------
@@ -104,7 +113,7 @@ export class Renderer {
     this.resize();
   }
 
-  addPass(p) { this.passes.push(p); p.init?.(this); p.resize?.(this); return p; }
+  addPass(p, { first = false } = {}) { first ? this.passes.unshift(p) : this.passes.push(p); p.init?.(this); p.resize?.(this); return p; }
   pass(name) { return this.passes.find((p) => p.name === name); }
 
   // -------------------------------------------------------------------------
@@ -150,12 +159,15 @@ export class Renderer {
   // Drawing
 
   /** Draws geometry items with the given program kind and view-projection. */
-  drawItems(items, kind, vp, { frustum = null, shadow = false, extra = null } = {}) {
+  drawItems(items, kind, vp, { frustum = null, shadow = false, extra = null, minRadius = 0 } = {}) {
     const gl = this.gl;
     let cur = null;
     const sorted = items;
     for (const it of sorted) {
       if (shadow && !it.castShadow) continue;
+      if (!shadow && it.object.userData.shadowOnly) continue;
+      // in coarse shadow cascades, casters smaller than a few texels cannot be seen
+      if (minRadius && it.bounds && it.bounds[3] < minRadius) continue;
       if (frustum && it.bounds) {
         _sphere.center.set(it.bounds[0], it.bounds[1], it.bounds[2]);
         _sphere.radius = it.bounds[3];
@@ -211,18 +223,20 @@ export class Renderer {
       this.sunDir.copy(lists.sun.position).sub(lists.sun.target.position).normalize();
     }
     this.setupCamera(camera);
-    for (const p of this.passes) p.beginFrame?.(this, lists);
+    this.check('before frame');
+    for (const p of this.passes) { p.beginFrame?.(this, lists); this.check(`${p.name}.beginFrame`); }
 
-    if (this._envDirty) { this.env.update(this.skyUniforms()); this._envDirty = false; }
+    if (this._envDirty) { this.env.update(this.skyUniforms()); this._envDirty = false; this.check('environment'); }
 
     // 1. Shadows
     this.shadows.n = this.q.cascades;
     this.shadows.fit(camera, this.sunDir);
-    this.shadows.render((c) => {
+    this.shadows.render((c, i) => {
       const fr = new Frustum().setFromProjectionMatrix(c.vp);
-      this.drawItems(lists.opaque, 'depth', c.vp, { frustum: fr, shadow: true });
+      this.drawItems(lists.opaque, 'depth', c.vp, { frustum: fr, shadow: true, minRadius: this.shadows.texel[i] * 2.5 });
       this.customDraw('depth', c.vp, fr, null);
     });
+    this.check('shadows');
 
     // 2. G-buffer
     this.gbuffer.bind();
@@ -234,10 +248,11 @@ export class Renderer {
     gl.clearBufferfv(gl.DEPTH, 0, [1]);
     this.drawItems(lists.opaque, 'gbuffer', this.viewProjJit, { frustum: this.frustum });
     this.customDraw('gbuffer', this.viewProjJit, this.frustum, null);
-    for (const p of this.passes) p.afterGBuffer?.(this);
+    this.check('gbuffer');
+    for (const p of this.passes) { p.afterGBuffer?.(this); this.check(`${p.name}.afterGBuffer`); }
 
     // 3. Screen-space passes that feed lighting (AO, GI, reflections)
-    for (const p of this.passes) if (p.enabled !== false) p.beforeLighting?.(this);
+    for (const p of this.passes) if (p.enabled !== false) { p.beforeLighting?.(this); this.check(`${p.name}.beforeLighting`); }
 
     // 4. Deferred lighting
     this.hdr.bind();
@@ -259,7 +274,8 @@ export class Renderer {
     // 5. Everything after lighting: forward particles, volumetrics, temporal
     //    reconstruction and the post chain, ending on the canvas.
     let color = this.hdr.tex;
-    for (const p of this.passes) if (p.enabled !== false && p.afterLighting) color = p.afterLighting(this, color) ?? color;
+    this.check('lighting');
+    for (const p of this.passes) if (p.enabled !== false && p.afterLighting) { color = p.afterLighting(this, color) ?? color; this.check(`${p.name}.afterLighting`); }
 
     this.prevViewProj.copy(this.viewProj);
     this.adapter.endFrame(lists.opaque);
