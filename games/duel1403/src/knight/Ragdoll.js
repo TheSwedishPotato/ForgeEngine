@@ -40,6 +40,9 @@ export class Ragdoll {
       const com = g.com.clone();
       if (mirror) com.x = -com.x;
       const b = new Body({ name, mass: g.mass, inertia: g.inertia.clone(), position: com, angularDamping: 0.25, linearDamping: 0.02 });
+      // A limb is never faster than a fencer's hand at full cut (~15 m/s, Askew 2012);
+      // anything far beyond that is a contact pop, so cap it.
+      b.maxSpeed = 24;
       for (const sd of shapes[key]) {
         const off = v3(sd.offset);
         if (mirror) off.x = -off.x;

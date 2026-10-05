@@ -12,6 +12,7 @@ import { rotVecToQuat, quatToRotVec, clamp, smoothstep } from '../physics/math.j
 
 const deg = Math.PI / 180;
 const UP = new Vector3(0, 1, 0);
+const GETUP_RISE = 1.4;   // seconds from lying to standing
 export const LISTS_RADIUS = 5.2;   // inside the barrier of the lists
 
 const _v = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _pole = new Vector3();
@@ -450,10 +451,12 @@ export class Knight {
       if (this.blood < 3.0) this.collapse('blood');
       else if (this.stun >= 1) this.knockDown('stunned');
       else if (legs < 0.15) this.knockDown('legs');
-      // Fell over: pelvis low or torso far from upright.
+      // Fell over: pelvis low or torso far from upright. Not checked while he
+      // is still rising from the ground, or he would be knocked straight back down.
+      const rising = this.state === 'getup' && this.getUpTime < GETUP_RISE + 0.5;
       const pel = this.b.pelvis;
       _v.set(0, 1, 0).applyQuaternion(this.b.chest.q);
-      if (pel.pos.y < 0.5 * this.scale || _v.y < 0.35) this.knockDown('fell');
+      if (!rising && (pel.pos.y < 0.5 * this.scale || _v.y < 0.35)) this.knockDown('fell');
     }
     if (this.state === 'down') {
       this.downTime += dt;
@@ -463,7 +466,7 @@ export class Knight {
       if (this.blood < 2.4) this.die('blood');
     } else if (this.state === 'getup') {
       this.getUpTime += dt;
-      if (this.getUpTime > 2.2) this.state = 'fight';
+      if (this.getUpTime > GETUP_RISE + 0.8) this.state = 'fight';
     }
     if (this.fatal && this.state !== 'dead') {
       this.fatal.t -= dt;
@@ -715,8 +718,19 @@ export class Knight {
     _qp.setFromAxisAngle(UP, this.yaw + P.pelvisYaw);
     this.assist.targetQ.copy(_qp);
     const grounded = (this.feet.L.planted ? 1 : 0) + (this.feet.R.planted ? 1 : 0);
-    const ramp = this.state === 'getup' ? smoothstep(0, 1.6, this.getUpTime) : 1;
+    const ramp = this.state === 'getup' ? smoothstep(0, GETUP_RISE, this.getUpTime) : 1;
     this.assist.strength = this.balanceScale * (grounded > 0 ? 1 : 0.75) * ramp;
+    this.assist.lift = 1;
+    if (this.state === 'getup' && this.rise) {
+      // Rising: carry the pelvis from where it lay up to standing height and
+      // turn it upright, pushing off the ground with legs and arms.
+      const u = smoothstep(0, GETUP_RISE, this.getUpTime);
+      this.assist.targetPos.y = this.rise.y0 + (pelTarget.y - this.rise.y0) * smoothstep(0.1, 1, u);
+      this.assist.targetQ.copy(this.rise.q0).slerp(_qp, smoothstep(0, 0.75, u));
+      this.assist.targetVel.set(0, 0, 0);
+      this.assist.strength = Math.max(0.65, this.balanceScale);
+      this.assist.lift = 2.2;
+    }
     this.assist.boost = this.attack && this.attack.stepIn > 0 && this.attack.stepped < this.attack.stepIn * 0.95 ? 1.6 : 1;
 
     // --- spine ------------------------------------------------------------------
@@ -959,6 +973,7 @@ export class Knight {
     if (this.state !== 'down') return;
     this.state = 'getup';
     this.getUpTime = 0;
+    this.rise = { y0: this.b.pelvis.pos.y, q0: this.b.pelvis.q.clone() };
     const pel = this.b.pelvis.pos;
     this.center.set(pel.x, 0, pel.z);
     const r = Math.hypot(this.center.x, this.center.z);

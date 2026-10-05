@@ -23,6 +23,7 @@ export class BalanceAssist {
     this.targetQ = body.q.clone();
     this.strength = 1;
     this.boost = 1;          // temporary extra push-off (lunges)
+    this.lift = 1;           // extra vertical strength while rising from the ground
     // Nominal gains (scaled by strength).
     this.kHorizontal = totalMass * 6.5 * 6.5;      // N/m
     this.kVertical = totalMass * 9 * 9;
@@ -47,12 +48,12 @@ export class BalanceAssist {
     // gentle pull when far too high (e.g. mid-air after a stumble is left to gravity).
     if (_d.y > 0) {
       _c.set(0, _d.y, 0);
-      applyPairCorrection(b, null, _c, 1 / (this.kVertical * s), h, b.pos, null, this.maxVertical * s * h * h);
+      applyPairCorrection(b, null, _c, 1 / (this.kVertical * s * this.lift), h, b.pos, null, this.maxVertical * s * this.lift * h * h);
     }
     // Orientation
     _q.copy(b.q).invert().premultiply(this.targetQ);
     quatToRotVec(_q, _c);
-    applyPairCorrection(b, null, _c, 1 / (this.kRot * s), h, null, null, this.maxTorque * s * h * h);
+    applyPairCorrection(b, null, _c, 1 / (this.kRot * s * this.lift), h, null, null, this.maxTorque * s * this.lift * h * h);
   }
 
   solveVelocity(h) {

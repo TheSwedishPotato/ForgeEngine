@@ -194,7 +194,8 @@ export class Body {
     const s = _q.w >= 0 ? 2 / h : -2 / h;
     this.omega.set(_q.x * s, _q.y * s, _q.z * s);
     const v2 = this.vel.lengthSq();
-    if (v2 > MAX_VEL * MAX_VEL) this.vel.multiplyScalar(MAX_VEL / Math.sqrt(v2));
+    const vmax = this.maxSpeed ?? MAX_VEL;
+    if (v2 > vmax * vmax) this.vel.multiplyScalar(vmax / Math.sqrt(v2));
   }
 
   kineticEnergy() {
