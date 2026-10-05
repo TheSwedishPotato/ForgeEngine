@@ -288,4 +288,134 @@ export class Audio {
     n.connect(bp);
     this._out(this._env(bp, t, 0.06 * level, 0.25, 0.5), 0.1);
   }
+
+  // ---- the joust -------------------------------------------------------------------------
+
+  /** One hoof on packed earth: a dull knock with grit; louder and sharper at speed. gain 0..1 by distance. */
+  hoof(gain = 1, speed = 6) {
+    if (!this.ctx || gain < 0.02) return;
+    const ctx = this.ctx, t = ctx.currentTime + Math.random() * 0.01;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(130 + Math.random() * 40, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.07);
+    o.start(t); o.stop(t + 0.12);
+    this._out(this._env(o, t, 0.22 * gain * (0.6 + speed / 20), 0.002, 0.08), 0.15);
+    const n = this._noise(t, 0.08);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 700 + Math.random() * 500; bp.Q.value = 0.9;
+    n.connect(bp);
+    this._out(this._env(bp, t, 0.09 * gain, 0.002, 0.05), 0.1);
+  }
+
+  /** Harness on a moving horse: bit, stirrup irons and plate jingling with the stride. */
+  tack(gain = 1) {
+    if (!this.ctx || gain < 0.05) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    for (let i = 0; i < 2; i++) {
+      const o = ctx.createOscillator();
+      o.frequency.value = 2600 + Math.random() * 2400;
+      const tt = t + i * 0.03;
+      o.start(tt); o.stop(tt + 0.08);
+      this._out(this._env(o, tt, 0.01 * gain, 0.001, 0.06), 0.2);
+    }
+  }
+
+  /**
+   * A lance breaking: the crack of fibres letting go (broadband, very
+   * short), the boom of the shaft, then splinters pattering down.
+   */
+  lanceBreak(force = 9000) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const k = Math.min(1.4, force / 9000);
+    const n = this._noise(t, 0.25);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 900;
+    n.connect(hp);
+    this._out(this._env(hp, t, 0.9 * k, 0.001, 0.09), 0.6);
+    const n2 = this._noise(t, 0.4);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 600;
+    n2.connect(lp);
+    this._out(this._env(lp, t, 0.7 * k, 0.003, 0.25), 0.6);
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.3);
+    o.start(t); o.stop(t + 0.4);
+    this._out(this._env(o, t, 0.5 * k, 0.002, 0.3), 0.4);
+    for (let i = 0; i < 9; i++) {
+      const tt = t + 0.35 + Math.random() * 0.9;
+      const s = this._noise(tt, 0.04);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 1500 + Math.random() * 2500; bp.Q.value = 2;
+      s.connect(bp);
+      this._out(this._env(bp, tt, 0.05, 0.001, 0.03), 0.3);
+    }
+  }
+
+  /** A lance that holds: the coronel hammering shield or plate. */
+  lanceStrike(onSteel = false, energy = 1) {
+    if (!this.ctx) return;
+    if (onSteel) return this.clang(60 * energy, true);
+    const ctx = this.ctx, t = ctx.currentTime;
+    const n = this._noise(t, 0.2);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 400; bp.Q.value = 1.2;
+    n.connect(bp);
+    this._out(this._env(bp, t, 0.8 * energy, 0.002, 0.15), 0.5);
+  }
+
+  /** The heralds' trumpets: a short call to ride. */
+  trumpetCall() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const notes = [[0, 523], [0.14, 523], [0.28, 659], [0.5, 784]];
+    for (const [dt, f] of notes) {
+      const t = ctx.currentTime + dt + 0.03;
+      const dur = dt === 0.5 ? 0.7 : 0.11;
+      for (const [h, a] of [[1, 0.12], [2, 0.07], [3, 0.05], [4, 0.03]]) {
+        const o = ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = f * h;
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 2600;
+        o.connect(lp);
+        o.start(t); o.stop(t + dur + 0.1);
+        this._out(this._env(lp, t, a, 0.02, dur), 0.6);
+      }
+    }
+  }
+
+  /** A horse blowing through its nostrils. */
+  snort(gain = 1) {
+    if (!this.ctx) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const n = this._noise(t, 0.6);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 350; bp.Q.value = 0.7;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 28;
+    const lg = ctx.createGain();
+    lg.gain.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.value = 0.6;
+    lfo.connect(lg).connect(g.gain);
+    lfo.start(t); lfo.stop(t + 0.6);
+    n.connect(bp).connect(g);
+    this._out(this._env(g, t, 0.18 * gain, 0.05, 0.45), 0.2);
+  }
+
+  /** A man in harness hitting the ground from horseback: thud, then plate and mail clattering. */
+  armourFall() {
+    if (!this.ctx) return;
+    this.thud(400);
+    const ctx = this.ctx;
+    for (let i = 0; i < 6; i++) {
+      const t = ctx.currentTime + 0.03 + i * 0.05 + Math.random() * 0.05;
+      const o = ctx.createOscillator();
+      o.frequency.value = 900 + Math.random() * 2200;
+      o.start(t); o.stop(t + 0.15);
+      this._out(this._env(o, t, 0.05, 0.001, 0.12), 0.3);
+    }
+  }
 }

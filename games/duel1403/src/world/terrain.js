@@ -8,7 +8,12 @@
 // The hills of the old scene, now real terrain: [x, z, radius, height]
 export const HILLS = [[30, 230, 120, 55], [-160, 260, 140, 40], [210, 180, 110, 35], [-260, -120, 150, 45], [180, -260, 160, 50], [0, -320, 180, 38]];
 export const VILLAGE = { x0: -72, x1: 72, z0: 58, z1: 142 };
-export const FLAT_RADIUS = 35;   // covers the whole fine patch (corner at 34 m)
+export const FLAT_RADIUS = 35;
+// The joust field south of the lists: a long level run with its stands.
+export const JOUST_FIELD = { x0: -64, x1: 64, z0: -52, z1: -12 };
+export function inJoustField(x, z, margin = 0) {
+  return x > JOUST_FIELD.x0 - margin && x < JOUST_FIELD.x1 + margin && z > JOUST_FIELD.z0 - margin && z < JOUST_FIELD.z1 + margin;
+}   // covers the whole fine patch (corner at 34 m)
 
 function hash(x, z) { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); }
 function vnoise(x, z) {
@@ -35,6 +40,10 @@ export function heightAt(x, z) {
   const vx = smooth(VILLAGE.x0 - 25, VILLAGE.x0, x) * (1 - smooth(VILLAGE.x1, VILLAGE.x1 + 25, x));
   const vz = smooth(VILLAGE.z0 - 25, VILLAGE.z0, z) * (1 - smooth(VILLAGE.z1, VILLAGE.z1 + 25, z));
   h *= 1 - vx * vz;
+  // and so does the joust field
+  const jx = smooth(JOUST_FIELD.x0 - 22, JOUST_FIELD.x0, x) * (1 - smooth(JOUST_FIELD.x1, JOUST_FIELD.x1 + 22, x));
+  const jz = smooth(JOUST_FIELD.z0 - 22, JOUST_FIELD.z0, z) * (1 - smooth(JOUST_FIELD.z1, JOUST_FIELD.z1 + 22, z));
+  h *= 1 - jx * jz;
   return Math.max(h, -1.5);
 }
 

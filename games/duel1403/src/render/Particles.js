@@ -75,6 +75,20 @@ export class Particles {
     }
   }
 
+  /** Splinters of a breaking lance: long pale slivers thrown forward and up. */
+  splinters(point, dir, amount = 1) {
+    const n = Math.floor(30 + 50 * Math.min(1.5, amount));
+    for (let i = 0; i < n; i++) {
+      const p = this._spawn('drop');
+      p.life = p.max = 1.2 + Math.random() * 1.6;
+      p.pos.copy(point);
+      p.vel.set(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize().multiplyScalar(2 + Math.random() * 6).addScaledVector(dir, 2 + Math.random() * 4);
+      p.size = 0.006 + Math.random() * 0.012;
+      p.color.setHSL(0.09 + Math.random() * 0.03, 0.35, 0.55 + Math.random() * 0.25);
+    }
+    this.dust(point, 0.6);
+  }
+
   dust(point, amount = 1) {
     for (let k = 0; k < 2; k++) {
       const f = this.puffs.find((x) => x.life <= 0);

@@ -8,7 +8,7 @@ import { grassTexture, earthTexture, woodTexture, heraldryTexture, fabricTexture
 import { SUN_DIR } from './Sky.js';
 import { HERALDRY } from '../data/opponents.js';
 import { LISTS_RADIUS } from '../knight/Knight.js';
-import { heightAt } from '../world/terrain.js';
+import { heightAt, inJoustField } from '../world/terrain.js';
 import { LODInstancer, buildLODChain } from '../engine/geometry/LOD.js';
 import { spruceGeometry, broadleafGeometry, onlookerParts } from './Foliage.js';
 
@@ -200,7 +200,7 @@ export class Lists {
       for (let i = 0; i < nT; i++) {
         for (const [mesh, isLeafy] of [[spruce, false], [leafy, true]]) {
           let x, z;
-          do { x = (rand() - 0.5) * 420; z = (rand() - 0.5) * 420; } while (Math.hypot(x, z) < 26 || (z > 70 && Math.abs(x - 10) < 70));
+          do { x = (rand() - 0.5) * 420; z = (rand() - 0.5) * 420; } while (Math.hypot(x, z) < 26 || (z > 70 && Math.abs(x - 10) < 70) || inJoustField(x, z, 6));
           o.position.set(x, groundY(x, z) - 0.25, z);
           o.rotation.y = rand() * 6;
           o.scale.setScalar(0.7 + rand() * 0.8);
@@ -365,7 +365,7 @@ export class Lists {
     for (let i = 0; i < nT; i++) {
       for (const isLeafy of [false, true]) {
         let x, z;
-        do { x = (rand() - 0.5) * 460; z = (rand() - 0.5) * 460; } while (Math.hypot(x, z) < 28 || (z > 55 && z < 145 && Math.abs(x) < 80));
+        do { x = (rand() - 0.5) * 460; z = (rand() - 0.5) * 460; } while (Math.hypot(x, z) < 28 || (z > 55 && z < 145 && Math.abs(x) < 80) || inJoustField(x, z, 6));
         o.position.set(x, groundY(x, z) - 0.2, z);
         o.rotation.set(0, rand() * 6, 0);
         o.scale.setScalar(0.7 + rand() * 0.8);

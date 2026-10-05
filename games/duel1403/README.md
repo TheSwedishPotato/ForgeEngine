@@ -34,6 +34,77 @@ npm test                  # physics validation suite
 | Visor up / down | V | visor |
 | Camera (shoulder, barrier, inside your helmet) | C | camera |
 
+## The joust
+
+**The joust** on the title screen. It is a joust of peace (*Gestech*) run at large, the
+way it was done before the tilt barrier, which is first recorded in 1429/30.
+The riders pass left side to left side, each lance crossing over its own horse's
+neck. You ride against one of four challengers over four courses, with extra
+courses on a tie.
+
+| Meeting at large, no tilt | Second course, the riders' ends swapped |
+| --- | --- |
+| ![Two jousters meeting](docs/joust-side.png) | ![Riding down the run](docs/joust-chase.png) |
+
+| Action | Mouse / keyboard | Touch |
+| --- | --- | --- |
+| Aim the lance | Move the mouse: the ring is where you want to strike him, the gold dot is where your lance head will pass now | Drag |
+| Brace (lean into the shock) | Left click or Space, just before you meet | BRACE |
+| Spur on / rein in (trot, canter, gallop) | W / S | Spur / Rein |
+| Ride your line closer / wider | A / D | |
+| Camera (behind, through your helm, from the side) | C | |
+| Leave the lists | Esc | Leave |
+
+**What is simulated** (`src/joust/`, `src/data/joust.js`):
+- **The horse** is a driven 600 kg courser of 15 hands. Its acceleration and
+  turning circle depend on gait, and its back rises and pitches through walk,
+  trot, canter and gallop. The rider and the lance feel that motion.
+- **The rider** is the duel's 13-segment body, held in the saddle by bounded
+  seat constraints: the seat, thighs, stirrups and the cantle at the loins.
+  The **high saddle** (*Hohenzeug*), used in the Empire from the second half of
+  the 14th century, holds him so firmly that unhorsing is almost impossible;
+  breaking lances was the point. The **war saddle** holds less. A square blow
+  from an ash lance on a man who is not braced can lay him over the cantle.
+- **The lance** is 3.8 m of painted fir (or ash) with a vamplate and a
+  three-pointed coronel. It lies in the rest on the right breast, so an
+  impact goes into the breastplate, not the arm. It breaks at its Euler
+  buckling load P = π²EI/(KL)², about 12 kN for a sound 55 mm fir lance and
+  less for a knotty one. The bowed lance holds a few milliseconds before it
+  snaps, or springs back if the load drops first. A sideways load beyond
+  what the wood bends to snaps it at once.
+- **The coronel** bites into the wooden ecranche on the left breast and
+  skids off plate, so shield hits break lances and helm hits often glance.
+- **Scoring**: a broken lance counts 1, on the helm 2, and unhelming adds 2.
+  This follows the Order of the Band (Castile, c. 1330), the oldest written
+  joust rules. Striking the horse or below the girdle is a foul (−1), after
+  Tiptoft's ordinances (1466). Unhorsing ends the joust. No herald's rules
+  from Bohemia survive for 1403, and the game says so.
+- Headless check: `node tools/jousttest.mjs 8 1` (AI against AI; add `war` or
+  `nobrace`). In the high saddle about 70 % of courses break a lance, at a
+  median 10–12 kN and 13 m/s closing speed.
+
+## The realm
+
+**The realm** on the title screen lists the estates of the kingdom in 1403
+(`src/data/society.js`). They run from the captive king, the great offices,
+the lords (*páni*), knights, squires and *zemané*, through the clergy and the
+burghers of the royal towns (burgomaster, aldermen, guild masters,
+journeymen, apprentices), to the Jews of Prague, the village (*rychtář,
+sedlák, zahradník, chalupník, podruh*) and those outside the estates. Each
+estate lists rights, dues, dress and arms, with a precedence number and how
+sure the attribution is. The town and its people will be built on this.
+`docs/references.md` collects the museum and manuscript references for
+modelling armour, swords, horses, people and buildings.
+
+## Debug view
+
+F1 (or `?dev=1`) draws the physics over the scene: colliders by material,
+blade trails coloured by speed, commanded hand positions, measure rings and
+balance targets. It also shows each fighter's state and an inspector for the
+last hit (energy, speed, layers cut through, wound). Keys: P pause,
+`.` step one frame, `,` slow motion, B colliders, X x-ray, M measure,
+T trails.
+
 ## What is historical
 
 **Armour, slot by slot** (`src/data/armour.js`): hood, arming cap, mail coif,
@@ -210,4 +281,6 @@ node tools/playtest.mjs fencer           # plays with real mouse drags and click
 node tools/stress.mjs 60                 # AI tournament: NaNs, explosions, stuck fights, falls
 node tools/getuptest.mjs                 # every kit can get up after being thrown
 npm test                                 # physics, simplifier and cluster-DAG crack tests
+node tools/jousttest.mjs 8 1 [war] [nobrace]   # AI jousts: breaks, forces, unhorsings
+node tools/shot.mjs "?joust=1&cam=side" shots/j 7.7   # joust screenshots (cam: chase, helm, side)
 ```

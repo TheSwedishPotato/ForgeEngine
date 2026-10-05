@@ -166,3 +166,53 @@ canvas.trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-
 .dev-label { position: absolute; transform: translate(-50%, -100%); font: 11px/1.35 ui-monospace, Menlo, monospace; white-space: pre; text-align: center; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
 .dev-panel { position: fixed; left: 14px; bottom: 120px; z-index: 26; max-width: min(640px, calc(100vw - 28px)); font: 12px/1.5 ui-monospace, Menlo, monospace; color: #f4ecd8; background: rgba(15,12,8,0.82); border-left: 3px solid #4caf50; padding: 8px 10px; pointer-events: none; }
 .dev-panel .dim { color: #b9a983; }
+
+/* the joust */
+.joust-hud { pointer-events: none; }
+.jscore { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 14px; right: 14px; display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: start; }
+.jside { background: linear-gradient(rgba(30,20,10,0.82), rgba(30,20,10,0.62)); border-top: 3px solid var(--gold); padding: 6px 12px 8px; display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; max-width: 420px; min-width: 0; }
+.jside.foe { border-top-color: var(--rubric); justify-self: end; width: 100%; }
+.jside .jname { font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jside .jpts { font-family: var(--black); font-size: 30px; line-height: 1; grid-row: span 2; align-self: center; color: #fff3d6; font-variant-numeric: tabular-nums; }
+.jcourses { display: flex; gap: 5px; min-height: 12px; }
+.jcourses .m { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(243,232,204,0.6); display: inline-block; }
+.jcourses .m.broke { background: var(--gold); border-color: var(--gold); }
+.jcourses .m.att { background: rgba(243,232,204,0.45); }
+.jcourses .m.foul { background: #c0261e; border-color: #c0261e; }
+.jmid { text-align: center; background: rgba(30,20,10,0.66); padding: 6px 14px; border-bottom: 2px solid var(--gold); }
+.jcourse { display: block; font-family: var(--black); font-size: 22px; color: #fff3d6; white-space: nowrap; }
+.jsaddle { color: #cbb98f; font-size: 13px; letter-spacing: 0.04em; }
+.jgait { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 34px); transform: translateX(-50%); text-align: center; background: rgba(30,20,10,0.66); padding: 6px 16px 7px; border-bottom: 2px solid var(--gold); display: flex; gap: 12px; align-items: baseline; white-space: nowrap; }
+.jgait .g { font-family: var(--black); font-weight: 400; font-size: 26px; color: #fff3d6; text-transform: capitalize; }
+.jgait .v { color: #d8c79f; font-style: italic; font-variant-numeric: tabular-nums; }
+.jgait .brace { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; padding: 2px 8px; border: 1px solid rgba(243,232,204,0.4); color: #f3e8cc; }
+.jgait .brace.on { background: var(--gold); color: #2a1d12; border-color: var(--gold); }
+.jgait .brace.cool { opacity: 0.35; }
+.reticle { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; pointer-events: none; }
+.reticle i { position: absolute; inset: 0; border: 2px solid rgba(255,243,214,0.9); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,0.4); }
+.reticle::after { content: ""; position: absolute; left: 19px; top: 19px; width: 6px; height: 6px; border-radius: 50%; background: rgba(255,243,214,0.9); }
+.tipmark { position: absolute; left: -5px; top: -5px; width: 10px; height: 10px; border-radius: 50%; background: #e0b040; box-shadow: 0 0 0 2px rgba(0,0,0,0.5); pointer-events: none; }
+.jtouch { position: absolute; right: calc(env(safe-area-inset-right, 0px) + 12px); bottom: calc(env(safe-area-inset-bottom, 0px) + 90px); display: grid; grid-template-columns: repeat(2, 84px); gap: 6px; }
+.jtouch button { font-size: 14px; padding: 10px 4px; background: rgba(30,20,10,0.6); color: #f3e8cc; border-color: rgba(243,232,204,0.35); box-shadow: none; touch-action: none; }
+.jtouch button.big { grid-column: span 2; padding: 18px 4px; font-size: 17px; background: rgba(154,28,28,0.65); }
+.jquit { top: calc(env(safe-area-inset-top, 0px) + 100px); }
+.jtable { width: 100%; border-collapse: collapse; font-size: 15px; margin: 6px 0 12px; }
+.jtable th, .jtable td { text-align: left; padding: 4px 6px; border-bottom: 1px solid rgba(140,108,60,0.35); vertical-align: top; }
+.jtable td:first-child { color: var(--rubric); font-weight: 600; width: 1.5em; }
+.jlist { display: grid; gap: 8px; margin: 8px 0 14px; }
+.jlist label { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start; padding: 8px 10px; border: 1px solid rgba(140,108,60,0.45); background: rgba(255,250,235,0.45); cursor: pointer; }
+.jlist label:has(input:checked) { border-color: var(--rubric); background: rgba(255,250,235,0.85); }
+.jlist input { grid-row: span 2; margin-top: 4px; accent-color: var(--rubric); }
+.jlist b { font-size: 17px; }
+.jlist small { color: var(--ink-soft); font-size: 14px; line-height: 1.35; }
+@media (max-width: 760px) {
+  .jscore { grid-template-columns: 1fr 1fr; left: 8px; right: 8px; gap: 8px; }
+  .jmid { grid-column: span 2; grid-row: 2; justify-self: center; }
+  .jside .jname { font-size: 14px; }
+  .jside .jpts { font-size: 24px; }
+  .jgait .v { display: none; }
+}
+.realm-cols { columns: 2 420px; column-gap: 28px; }
+.realm-cols .estate { break-inside: avoid; margin-bottom: 14px; }
+.realm-cols h3 small { text-transform: none; letter-spacing: 0; color: var(--ink-soft); font-weight: 400; }
+.realm-cols .jtable td:first-child { font-variant-numeric: tabular-nums; }

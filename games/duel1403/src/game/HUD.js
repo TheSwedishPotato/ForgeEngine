@@ -4,6 +4,8 @@ import { OPPONENTS, OPPONENT_ORDER, HERALDRY } from '../data/opponents.js';
 import { SYSTEMS, GUARDS } from '../data/guards.js';
 import { SOURCES, cite } from '../data/sources.js';
 import { resolveArmour, locomotionCost } from '../knight/armourProfile.js';
+import { JOUSTERS, SADDLES, JOUST_SOURCES } from '../data/joust.js';
+import { ESTATES, SOCIETY_SOURCES } from '../data/society.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const h = (html) => {
@@ -36,6 +38,8 @@ export class HUD {
     this._buildResult();
     this._buildCodex();
     this._buildHelp();
+    this._buildJoust();
+    this._buildRealm();
     this.current = null;
   }
 
@@ -70,8 +74,10 @@ export class HUD {
         <p class="lede">A duel in the lists, fought with the arms, armour and fighting arts of the year 1403 — while King Wenceslas sits captive in Vienna and Sigismund's Hungarians and Cumans ride through the kingdom. Every fighter is a physical body: his muscles move real mass, his armour weighs what it weighed, and a blow does what its energy and the steel in its way allow.</p>
         <div class="actions">
           <button class="primary" data-a="fight">To the lists</button>
+          <button class="primary" data-a="joust">The joust</button>
           <button data-a="armoury">Armoury</button>
           <button data-a="help">How to fight</button>
+          <button data-a="realm">The realm</button>
           <button data-a="codex">Sources</button>
         </div>
         <label class="vol gfx">Graphics <select data-q><option value="ultra">Ultra (native 4K-ready)</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
@@ -81,9 +87,11 @@ export class HUD {
     el.addEventListener('click', (e) => {
       const a = e.target.closest('button')?.dataset.a;
       if (a === 'fight') this.on.start(this.config);
+      else if (a === 'joust') { this._renderJoust(); this.show('joust'); }
       else if (a === 'armoury') this.show('armoury');
       else if (a === 'help') { this._helpBack = 'title'; this.show('help'); }
       else if (a === 'codex') { this._codexBack = 'title'; this.show('codex'); }
+      else if (a === 'realm') this.show('realm');
     });
     this._bindQuality(el);
     this.root.appendChild(el);
@@ -470,6 +478,8 @@ export class HUD {
         <section class="srcs">
           <h3>Sources</h3>
           ${Object.values(SOURCES).map((s) => `<p><b>${esc(s.short)}.</b> ${esc(s.text)}</p>`).join('')}
+          <h3>The joust</h3>
+          ${Object.values(JOUST_SOURCES).map((s) => `<p><b>${esc(s.short)}.</b> ${esc(s.text)}</p>`).join('')}
         </section>
       </div>
     </div></div>`);
@@ -553,6 +563,71 @@ export class HUD {
         });
       }
     }
+  }
+  // ---------------------------------------------------------------------------
+  // The joust: pick a challenger and a saddle
+
+  _buildJoust() {
+    const el = h(`<div class="screen joust-screen ui-interactive" hidden>
+      <div class="folio">
+        <div class="kicker">Gestech · the joust of peace</div>
+        <h2>The joust</h2>
+        <p class="fine">Run at large, as jousts were before the tilt (first recorded in 1429): no barrier, the riders pass left side to left side with the lance across the horse's neck. Coronel-tipped lances of fir are made to break on the little shield (ecranche) on the left breast. A broken lance scores 1, on the helm 2; striking the horse or below the girdle is a foul. You have ${4} courses.</p>
+        <h3>Challenger</h3>
+        <div class="jlist jfoes"></div>
+        <h3>Saddle</h3>
+        <div class="jlist jsaddles"></div>
+        <p class="fine">Mouse: where your lance should strike him · click or Space: brace as you meet · W/S: spur or rein in · A/D: your line · C: camera.</p>
+        <div class="actions"><button class="primary" data-a="ride">Ride into the lists</button><button data-a="back">Back</button></div>
+        <p class="fine jsrc"></p>
+      </div>
+    </div>`);
+    el.addEventListener('click', (e) => {
+      const a = e.target.closest('button')?.dataset.a;
+      if (a === 'ride') this.on.joust?.(this.config);
+      else if (a === 'back') this.show('title');
+    });
+    el.addEventListener('change', (e) => {
+      if (e.target.name === 'jfoe') this.config.joustFoe = e.target.value;
+      if (e.target.name === 'jsaddle') this.config.joustSaddle = e.target.value;
+    });
+    el.querySelector('.jsrc').textContent = [JOUST_SOURCES.tilt, JOUST_SOURCES.hohenzeug, JOUST_SOURCES.banda].map((s) => s.short).join(' · ');
+    this.root.appendChild(el);
+    this.screens.joust = el;
+    this.joustEl = el;
+  }
+
+  _renderJoust() {
+    const el = this.joustEl;
+    const foe = this.config.joustFoe ?? 'rozmberk', sad = this.config.joustSaddle ?? 'hohenzeug';
+    el.querySelector('.jfoes').innerHTML = JOUSTERS.map((j) => `<label><input type="radio" name="jfoe" value="${j.id}" ${j.id === foe ? 'checked' : ''}><b>${esc(j.name)}</b><small>${esc(j.title)} · arms: ${esc(HERALDRY[j.heraldry]?.name ?? '')} · skill ${Math.round(j.skill * 100)}</small></label>`).join('');
+    el.querySelector('.jsaddles').innerHTML = Object.entries(SADDLES).map(([id, s]) => `<label><input type="radio" name="jsaddle" value="${id}" ${id === sad ? 'checked' : ''}><b>${esc(s.name)} · <i>${esc(s.native)}</i></b><small>${esc(s.text)}</small></label>`).join('');
+  }
+
+  // ---------------------------------------------------------------------------
+  // The realm: estates and ranks of Bohemia in 1403
+
+  _buildRealm() {
+    const sure = { attested: 'named in sources of the time', later: 'documented later, projected back', general: 'common to Central Europe' };
+    const est = ESTATES.map((e) => `<section class="estate">
+        <h3>${esc(e.name)} <small>· ${esc(e.cz)} · ${esc(e.de)}</small></h3>
+        <p>${esc(e.text)}</p>
+        ${e.rights ? `<p class="fine"><b>Rights:</b> ${e.rights.map(esc).join('; ')}. ${e.duties ? `<b>Owed:</b> ${e.duties.map(esc).join('; ')}.` : ''}</p>` : ''}
+        ${e.dress ? `<p class="fine"><b>Dress:</b> ${esc(e.dress)}</p>` : ''}
+        ${e.arms ? `<p class="fine"><b>Arms:</b> ${e.arms.map(esc).join('; ')}.</p>` : ''}
+        <table class="jtable">${e.members.map((m) => `<tr><td>${m.rank}</td><td><b>${esc(m.name)}</b> <i>${esc(m.cz)}</i></td><td>${esc(m.note)}</td></tr>`).join('')}</table>
+        <p class="fine"><i>${esc(sure[e.sureness] ?? '')}</i> · ${e.sources.map((k) => esc(SOCIETY_SOURCES[k]?.short ?? k)).join(' · ')}</p>
+      </section>`).join('');
+    const el = h(`<div class="screen ui-interactive" hidden><div class="folio wide scroll">
+      <div class="armoury-head"><div><div class="kicker">Království české · 1403</div><h2>The realm</h2></div><div class="actions"><button data-a="back">Back</button></div></div>
+      <p class="fine">Who stood where in the kingdom in 1403, from the captive king to the lodger in a cottager's house. The number is precedence: who sits higher, who gives way in the street. The town, its people and their conduct will be built on this.</p>
+      <div class="realm-cols">${est}</div>
+      <h3>Sources</h3>
+      ${Object.values(SOCIETY_SOURCES).map((s) => `<p class="fine"><b>${esc(s.short)}.</b> ${esc(s.text)}</p>`).join('')}
+    </div></div>`);
+    el.addEventListener('click', (e) => { if (e.target.closest('button')?.dataset.a === 'back') this.show('title'); });
+    this.root.appendChild(el);
+    this.screens.realm = el;
   }
 }
 

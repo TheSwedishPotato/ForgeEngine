@@ -5,6 +5,8 @@ import { Input } from './game/Input.js';
 import { Audio } from './game/Audio.js';
 import { HUD } from './game/HUD.js';
 import { DebugView } from './game/DebugView.js';
+import { JoustMode } from './game/JoustMode.js';
+import { JoustField } from './render/JoustField.js';
 import { Stage } from './render/Stage.js';
 import { MedStage } from './render/MedStage.js';
 import { Lists } from './render/Lists.js';
@@ -48,6 +50,7 @@ const stage = makeStage();
 const lists = new Lists(stage.scene, { quality, terrain: !!stage.attachTerrain });
 stage.attachTerrain?.(lists);
 lists.camera = stage.camera;   // LOD selection for the detailed scenery
+const field = new JoustField(stage.scene, { quality });   // the joust field south of the lists
 const dev = new DebugView({ stage, getSim: () => sim, getAis: () => ais, getPlayer: () => player });
 const particles = new Particles(stage.scene);
 const rig = new CameraRig(stage.camera);
@@ -59,9 +62,11 @@ let mode = 'menu';             // menu | intro | fight | paused | over
 let time = 0, timeScale = 1, slowUntil = 0, hitStop = 0, excitement = 0;
 let introT = 0, overT = 0, lastBeat = 0, lastBreath = 0;
 let fightConfig = null;
+let joust = null;              // the joust mode, while it runs
 
 const hud = new HUD(document.getElementById('ui'), {
   start: (config) => { audio.start(); saveConfig(config); newFight(config); },
+  joust: (config) => startJoust(config),
   resume: () => setPaused(false),
   pause: () => setPaused(true),
   quit: () => toMenu(),
@@ -126,6 +131,34 @@ function newFight(config) {
   rig.mode = config.camera ?? 'fighter';
   audio.fanfare();
   hud.callout(foe.name, foe.title, 2600);
+}
+
+// ---------------------------------------------------------------------------
+// The joust
+
+function startJoust(config) {
+  audio.start();
+  saveConfig(config);
+  for (const m of meshes) m.dispose();
+  meshes = [];
+  sim = null; ais = []; player = null; foe = null;
+  mode = 'joust';
+  hud.show('none');
+  hud.showHud(false);
+  input.enabled = false;
+  stage.hurt = 0;
+  joust = new JoustMode({
+    stage, audio, particles, root: document.getElementById('ui'), config, playerColors, quality,
+    onExit: () => exitJoust(),
+    onDone: () => saveConfig(hud.config),
+  });
+}
+
+function exitJoust() {
+  if (!joust) return;
+  joust.dispose();
+  joust = null;
+  toMenu();
 }
 
 function toMenu() {
@@ -370,6 +403,13 @@ function tick(dt) {
   }
 }
 
+function joustTick(dt) {
+  joust.frame(dt);
+  particles.update(dt * joust.timeScale);
+  lists.update(dt, joust.excitement);
+  stage.sky.update(wallTime);
+}
+
 /** Tooling: a fixed camera (window.duel.cam = { pos: [x,y,z], at: [x,y,z], fov }) overrides the rig. */
 function applyCameraOverride() {
   const c = window.duel?.cam;
@@ -386,8 +426,13 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   wallTime += dt;
-  handleInput();
-  if (!manual) tick(dt);
+  if (joust) {
+    if (!manual) joustTick(dt);
+  } else {
+    handleInput();
+    if (!manual) tick(dt);
+  }
+  field.update(dt, { excitement: joust?.excitement ?? 0, focusX: joust ? (joust.sim.horses[0].body.pos.x + joust.sim.horses[1].body.pos.x) / 2 : 0, camera: stage.camera });
   applyCameraOverride();
   dev.update(dt);
   stage.render(dt, wallTime);
@@ -401,8 +446,14 @@ window.duel = {
   /** Tooling: advance the game by `seconds` in fixed steps (with ?manual=1). */
   advance(seconds, each = null) {
     const n = Math.round(seconds * 60);
-    for (let i = 0; i < n; i++) { wallTime += FIXED; handleInput(); tick(FIXED); if (each) each(i); }
+    for (let i = 0; i < n; i++) {
+      wallTime += FIXED;
+      if (joust) joustTick(FIXED); else { handleInput(); tick(FIXED); }
+      if (each) each(i);
+    }
   },
+  get joust() { return joust; },
+  startJoust: (overrides = {}) => startJoust({ ...hud.config, ...overrides }),
   get mode() { return mode; },
 };
 
@@ -413,5 +464,12 @@ if (params.get('fight')) {
   if (params.get('weapon')) { c.player = { ...c.player, weapon: params.get('weapon'), system: WEAPONS[params.get('weapon')].systems[0] }; }
   if (params.get('kit')) c.player = { ...c.player, items: { ...PRESETS[params.get('kit')].items } };
   newFight(c);
+}
+if (params.get('joust')) {
+  const c = { ...hud.config };
+  if (params.get('foe')) c.joustFoe = params.get('foe');
+  if (params.get('saddle')) c.joustSaddle = params.get('saddle');
+  if (params.get('cam')) c.joustCamera = params.get('cam');
+  startJoust(c);
 }
 requestAnimationFrame(frame);
