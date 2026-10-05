@@ -72,7 +72,7 @@ poleaxe, and a German knight in full harness who fights at the half-sword.
 
 Every source is listed in the in-game codex (`src/data/sources.js`).
 
-## The Forge Renderer
+## The Med Engine
 
 Every pixel is drawn by our own WebGL2 engine, `src/engine/` (three.js is kept
 only as the scene graph and maths library; `?engine=three` falls back to its
@@ -171,7 +171,7 @@ src/
   knight/    anatomy and armour loading, ragdoll, weapons and grips, controller, blows
   game/      fight setup, damage model, AI doctrines, input, HUD, audio
   render/    stages (Forge, three.js fallback), the lists, terrain, foliage, body / armour / weapon meshes
-  engine/    the Forge renderer (see above)
+  engine/    the Med Engine (see above)
   world/     the land: one height function for terrain, scenery and physics
   data/      armour, weapons, guards, opponents, sources
 ```

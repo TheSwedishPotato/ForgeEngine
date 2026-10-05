@@ -3,7 +3,7 @@ import { ClusterMesh } from '../engine/geometry/ClusterMesh.js';
 import { VirtualTexture, VirtualTexturePass } from '../engine/vt/VirtualTexture.js';
 
 /**
- * The landscape on the Forge renderer: a fine 48 m patch under the lists
+ * The landscape on the Med Engine: a fine 48 m patch under the lists
  * (~0.1 m spacing, ~400k triangles) and 1.2 km of country around it, both
  * as cluster hierarchies built in a worker, textured by one virtual texture.
  * Until the worker is done the old flat ground stands in.

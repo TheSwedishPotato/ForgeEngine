@@ -1,6 +1,6 @@
 import { Vector3, Quaternion } from 'three';
 import { Ragdoll } from './Ragdoll.js';
-import { BalanceAssist } from './BalanceAssist.js';
+import { BalanceAssist, TrunkBrace } from './BalanceAssist.js';
 import { ReachAssist } from './ReachAssist.js';
 import { Weapon, WeaponDrive } from './Weapon.js';
 import { resolveArmour, locomotionCost } from './armourProfile.js';
@@ -100,6 +100,7 @@ export class Knight {
     let total = this.ragdoll.totalMass + this.weapon.mass + (this.weapon.offhand ? this.weapon.offhand.def.mass : 0);
     this.totalMass = total;
     this.assist = world.addConstraint(new BalanceAssist(this.b.pelvis, total));
+    this.brace = world.addConstraint(new TrunkBrace(this.b.chest));
     // The arms push against a body braced by the legs and trunk: react on the pelvis.
     this.drive = world.addConstraint(new WeaponDrive(this.weapon, this.b.chest));
     const bL = this.ragdoll.bones.armL;
@@ -570,6 +571,8 @@ export class Knight {
     P.pelvisYaw = (P.lead === 'L' ? -1 : 1) * 18 * deg;
     P.spineTwist = (g.twist ?? 0) * deg;
     P.flex = 6 * deg;
+    P.pelvisPitch = 3 * deg;
+    P.brace = 0.35;
     P.roll = 0;
     P.armDrive = 0.9;
     P.neckDrive = 1;
@@ -596,7 +599,10 @@ export class Knight {
         P.spineTwist += (side * 22 * wind - side * 18 * (pr === 'strike' || pr === 'follow' ? 1 : 0)) * deg;
       }
       P.pelvisFwd += 0.08 * s * drive;
-      P.flex += 6 * deg * drive;
+      P.flex += 10 * deg * drive;
+      P.pelvisPitch += 7 * deg * drive;
+      // the trunk is braced from the wind-up through the follow-through
+      P.brace = 0.35 + 0.65 * Math.max(drive, pr === 'recover' ? 0.5 : 0);
       P.driveMode = pr === 'strike' || pr === 'follow' || pr === 'hold' ? 'strike' : pr === 'prep' ? 'prep' : 'hold';
       if (a.stepIn > 0 && pr !== 'recover') {
         const want = a.stepIn * smoothstep(0, a.impactTime * 0.9, a.t);
@@ -716,7 +722,16 @@ export class Knight {
     this.assist.targetPos.copy(pelTarget);
     this.assist.targetVel.copy(this.centerVel);
     _qp.setFromAxisAngle(UP, this.yaw + P.pelvisYaw);
+    // In a blow the hips tip forward into the lunge (front knee bent, back leg driving).
+    _q2.setFromAxisAngle(_v.set(1, 0, 0), P.pelvisPitch);
+    _qp.multiply(_q2);
     this.assist.targetQ.copy(_qp);
+    // Trunk brace: chest faces the line of the blow and leans into it.
+    _q.setFromAxisAngle(UP, this.yaw + P.pelvisYaw * 0.3 + P.spineTwist);
+    _q2.setFromAxisAngle(_v.set(1, 0, 0), P.flex + P.pelvisPitch);
+    _q.multiply(_q2);
+    this.brace.targetQ.copy(_q);
+    this.brace.strength = (this.state === 'getup' ? 0.3 : P.brace) * this.balanceScale;
     const grounded = (this.feet.L.planted ? 1 : 0) + (this.feet.R.planted ? 1 : 0);
     const ramp = this.state === 'getup' ? smoothstep(0, GETUP_RISE, this.getUpTime) : 1;
     this.assist.strength = this.balanceScale * (grounded > 0 ? 1 : 0.75) * ramp;
@@ -916,6 +931,7 @@ export class Knight {
 
   _relax() {
     this.assist.strength = 0;
+    this.brace.strength = 0;
     this.offReach.stiffness = 0;
     this.offReach.damping = 0;
     const D = this.drive;

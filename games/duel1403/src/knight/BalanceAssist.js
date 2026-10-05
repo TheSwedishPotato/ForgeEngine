@@ -92,3 +92,46 @@ export class BalanceAssist {
     }
   }
 }
+
+/**
+ * Trunk brace: the core and legs holding the chest's attitude while the
+ * arms drive the weapon. Without it, the reaction of accelerating a blade
+ * and two armoured arms tips the trunk backwards and the fighter "sits
+ * back" into every cut — the opposite of what the masters teach (lean in,
+ * the weight over the front foot; Ringeck, Danzig). Orientation only,
+ * with the torque bounded near what the trunk muscles can produce.
+ */
+export class TrunkBrace {
+  constructor(body) {
+    this.body = body;
+    this.targetQ = body.q.clone();
+    this.strength = 0;
+    this.kRot = 650;
+    this.cRot = 55;
+    this.maxTorque = 230;   // Nm, erector spinae + obliques in a braced lunge
+  }
+
+  solvePosition(h) {
+    const s = this.strength;
+    if (s <= 1e-3) return;
+    const b = this.body;
+    _q.copy(b.q).invert().premultiply(this.targetQ);
+    quatToRotVec(_q, _c);
+    applyPairCorrection(b, null, _c, 1 / (this.kRot * s), h, null, null, this.maxTorque * s * h * h);
+  }
+
+  solveVelocity(h) {
+    const s = this.strength;
+    if (s <= 1e-3) return;
+    const b = this.body;
+    _w.copy(b.omega);
+    const wl = _w.length();
+    if (wl < 1e-6) return;
+    _w.multiplyScalar(1 / wl);
+    const wi = b.getInverseMass(_w, null);
+    const c = this.cRot * s;
+    const dw = Math.min((c * h * wi * wl) / (1 + c * h * wi), this.maxTorque * s * h * wi);
+    _c.copy(_w).multiplyScalar(-dw);
+    applyPairCorrection(b, null, _c, 0, h, null, null, Infinity, true);
+  }
+}

@@ -5,7 +5,7 @@ import { Input } from './game/Input.js';
 import { Audio } from './game/Audio.js';
 import { HUD } from './game/HUD.js';
 import { Stage } from './render/Stage.js';
-import { ForgeStage } from './render/ForgeStage.js';
+import { MedStage } from './render/MedStage.js';
 import { Lists } from './render/Lists.js';
 import { KnightMesh } from './render/KnightMesh.js';
 import { CameraRig } from './render/CameraRig.js';
@@ -29,15 +29,15 @@ const touch = matchMedia('(pointer: coarse)').matches;
 const stored = loadConfig();
 const quality = params.get('quality') ?? stored?.quality ?? (touch ? 'medium' : 'high');
 if (stored) stored.quality = quality;
-// The Forge renderer is the default; ?engine=three falls back to three.js's renderer.
+// The Med Engine is the default; ?engine=three falls back to three.js's renderer.
 function makeStage() {
   const view = document.getElementById('view');
   if (params.get('engine') === 'three') return new Stage(view, { quality });
   try {
-    return new ForgeStage(view, { quality });
+    return new MedStage(view, { quality });
   } catch (err) {
     // No WebGL2 float targets (older or mobile GPUs): the original renderer still runs.
-    console.warn('Forge renderer unavailable, falling back to three.js:', err);
+    console.warn('Med Engine unavailable, falling back to three.js:', err);
     const fresh = view.cloneNode(false);
     view.replaceWith(fresh);
     return new Stage(fresh, { quality: quality === 'ultra' ? 'high' : quality });
@@ -170,7 +170,7 @@ function onDamage(e) {
     if ((e.zone === 'face' || e.zone === 'skull') && km) km.body.mark(e.point, e.severity, true);
   }
   const big = e.fatal || e.severity > 0.9 || e.concussion > 0.6 || e.fracture;
-  hud.log(e.text, (isPlayer ? 'hurt' : 'good') + (big ? ' big' : ''));
+  if (!e.followUp || e.severity > 0.2 || big) hud.log(e.text, (isPlayer ? 'hurt' : 'good') + (big ? ' big' : ''));
   stage.kick({ shake: Math.min(0.6, e.energy / 150) * (isPlayer ? 1.3 : 0.7), aberration: big ? 0.4 : 0.1 });
   if (big) {
     hitStop = 0.06;

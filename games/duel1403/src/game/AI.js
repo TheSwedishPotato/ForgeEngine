@@ -195,8 +195,16 @@ export class KnightAI {
 
     const d = Math.hypot(o.center.x - k.center.x, o.center.z - k.center.z);
     const W = k.weapon;
-    const reach = 0.5 * k.scale + (W.tipY - (W.gripY.R ?? W.grips.main)) + 0.15;
-    const want = reach + this.style.measure + (k.stamina < 35 ? 0.4 : 0);
+    const reach = 0.75 * k.scale + (W.tipY - (W.gripY.R ?? W.grips.main)) + 0.15;
+    // Zufechten: wait just out of his reach (and ours), so that every blow
+    // must be made with a step — the "wide measure" of the German masters,
+    // about a fathom from the hands (Meyer 1570). Close fighters (half-sword,
+    // dagger, the brawler) want the bind and grappling distance instead.
+    const closeFighter = this.styleId === 'halfsword' || this.styleId === 'brawler' || k.weaponId === 'dagger';
+    const oReach = 0.75 * o.scale + (o.weapon.tipY - (o.weapon.gripY.R ?? o.weapon.grips.main)) + 0.15;
+    const outOfReach = Math.max(reach, oReach) + 0.35;
+    const want = (closeFighter ? reach : outOfReach) + this.style.measure + (k.stamina < 35 ? 0.4 : 0);
+    const stepReach = reach + 0.8 * k.scale;   // what one passing step brings into range
 
     // --- defence: read his blow --------------------------------------------------
     const oa = o.attack;
@@ -228,13 +236,13 @@ export class KnightAI {
     // --- footwork ---------------------------------------------------------------------
     let my = 0, mx = 0;
     const err = d - want;
-    const closeFighter = this.styleId === 'halfsword' || this.styleId === 'brawler' || k.weaponId === 'dagger';
     if (this.response === 'void') { my = -1; if (!oa || oa.phase === 'recover') this.response = null; }
     else if (k.attack && k.attack.phase !== 'recover') my = 0.3;
-    else if (!closeFighter && err < -0.25) my = -1;   // Abziehen: step back out of measure after the exchange
+    else if (!closeFighter && err < -0.25 && (!this.pressT || this.pressT <= 0)) my = -1;   // Abziehen: step back out of measure after the exchange
     else if (err > 0.35) my = 1;
     else if (err > 0.08) my = 0.5;
     else if (err < -0.35) my = -0.8;
+    this.pressT = (this.pressT ?? 0) - dt;
     this.strafeT -= dt;
     if (this.strafeT <= 0) { this.strafe = Math.random() < 0.5 ? -1 : 1; this.strafeT = 1 + Math.random() * 2.5; if (Math.random() < 0.35) this.strafe = 0; }
     mx = this.strafe * 0.45 * this.style.footwork;
@@ -264,7 +272,8 @@ export class KnightAI {
 
     // --- attack -------------------------------------------------------------------------
     this.attackCooldown -= dt;
-    const inMeasure = d < reach + 0.55 && (closeFighter || d > reach - 0.65);
+    // Attack from wide measure with a step, or when he has come too close.
+    const inMeasure = d < stepReach && (closeFighter || d > reach - 0.65);
     const opening = !o.attack || o.attack.phase === 'recover' || o.stun > 0.4 || o.stamina < 20;
     if (this.attackCooldown <= 0 && inMeasure && !k.attack && k.armed && k.stamina > 15 && this.response !== 'parry') {
       const p = (0.35 + 0.9 * this.aggression) * this.style.tempo * (opening ? 1.5 : 0.6) * (0.5 + 0.5 * k.stamina / 100);
@@ -272,6 +281,8 @@ export class KnightAI {
         if (this.style.wrestle && d < 0.95 && Math.random() < this.style.wrestle) k.shove();
         else this._attack();
         this.attackCooldown = (0.45 + Math.random() * 0.9) / this.style.tempo;
+        // stay in to follow up (Nachreisen) for a moment before withdrawing
+        this.pressT = 0.6 * this.aggression;
       }
     }
   }

@@ -298,7 +298,17 @@ export class DamageModel {
     def.flinch = Math.min(1, def.flinch + clamp(E / 120, 0, 0.8));
     def.lastHitTime = sim.time;
     att.stats.hits += res.severity > 0.15 || res.concussion > 0.15 ? 1 : 0;
-    if (att.attack && !att.attack.hit) { att.attack.hit = res; att.attack.hitT = att.attack.t; }
+    // One blow can touch several parts as the blade carries on (shoulder, then
+    // arm). The first contact is the blow; the rest are its follow-through,
+    // logged only if they wound.
+    if (att.attack) {
+      if (!att.attack.hit) { att.attack.hit = res; att.attack.hitT = att.attack.t; }
+      else res.followUp = true;
+    } else {
+      const lb = this.lastBlow?.get(att);
+      if (lb && sim.time - lb < 0.3) res.followUp = true;
+    }
+    (this.lastBlow ??= new Map()).set(att, sim.time);
     res.text = describe(res);
     this.emit(res);
   }

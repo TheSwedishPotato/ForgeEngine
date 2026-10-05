@@ -19,7 +19,7 @@ import { spruceGeometry, broadleafGeometry, onlookerParts } from './Foliage.js';
  */
 export class Lists {
   constructor(scene, { quality = 'high', terrain = false } = {}) {
-    // With the Forge terrain, things stand on the real ground height.
+    // With the Med Engine terrain, things stand on the real ground height.
     const groundY = terrain ? heightAt : () => 0;
     this.scene = scene;
     this.group = new Group();
@@ -386,7 +386,7 @@ export class Lists {
     this.lodStats = () => ({ spruce: sum(false), broadleaf: sum(true), triangles: { spruce: spruceChain.map((c) => c.triangles), broadleaf: leafChain.map((c) => c.triangles), onlooker: buildTris(this.crowdLod) } });
   }
 
-  /** The Forge terrain has arrived: retire the flat ground and the dome hills. */
+  /** The Med Engine terrain has arrived: retire the flat ground and the dome hills. */
   useTerrain() {
     for (const m of [...(this.flatGround ?? []), ...(this.hills ?? [])]) m.visible = false;
   }

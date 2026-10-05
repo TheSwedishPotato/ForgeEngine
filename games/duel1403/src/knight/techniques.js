@@ -132,13 +132,15 @@ export class Attack {
       // Mix in the current blade line so a thrust from a guard comes out of it.
       D.lerp(this.start.dir, 0.15).normalize();
       this.D = D.clone();
-      const overshoot = 0.1 * s;
+      // Thrust through the target, not to it: the arms and the step keep
+      // driving the point after it arrives (the target is what stops it).
+      const overshoot = 0.28 * s;
       const Hend = T.clone().addScaledVector(D, -(reachL - overshoot));
       // How far can the hand go? Measure from the shoulder line.
       const sh = new Vector3(0.0, -0.1 * s, 1.43 * s);
       const maxArm = (k.weapon.hands === 2 ? 0.56 : 0.66) * s;
       const need = Hend.distanceTo(sh);
-      this.stepIn = clamp(need - maxArm, 0, 0.55 * s);
+      this.stepIn = clamp(need - maxArm, 0, 0.85 * s);   // up to a full passing step
       Hend.addScaledVector(_b.set(1, 0, 0), -this.stepIn);
       this.Hend = Hend;
       this.Hchamber = H0.clone().addScaledVector(D, -0.1 * s);
@@ -148,7 +150,7 @@ export class Attack {
       // Bring the point on line first; the more it must turn, the longer.
       const turn = Math.acos(clamp(this.start.dir.dot(D), -1, 1));
       this.durPrep = (0.07 + 0.16 * turn + 0.1 * this.start.hand.distanceTo(this.Hchamber) / s) / speed;
-      this.durMain = ((spec.half ? 0.26 : 0.21) + 0.22 * this.stepIn / s) * inertiaFactor / speed;
+      this.durMain = ((spec.half ? 0.22 : 0.17) + 0.2 * this.stepIn / s) * inertiaFactor / speed;
       this.durHold = 0.1;
       this.durRecover = 0.22 / speed;
     } else {
@@ -180,7 +182,7 @@ export class Attack {
       }
       const maxArm = (W.hands === 2 ? 0.5 : 0.6) * s;
       const minArm = 0.16 * s;
-      this.stepIn = clamp(rh - maxArm, 0, 0.6 * s);
+      this.stepIn = clamp(rh - maxArm, 0, 0.85 * s);
       rh = clamp(rh, minArm, maxArm);
       this.di = d.clone();
       const ti = tr.addScaledVector(this.di, -tr.dot(this.di));

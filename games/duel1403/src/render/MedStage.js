@@ -12,11 +12,11 @@ import { Terrain } from './Terrain.js';
 import { SUN_DIR } from './Sky.js';
 
 /**
- * The game's stage on the Forge renderer: same interface the game used with
+ * The game's stage on the Med Engine: same interface the game used with
  * the old three.js Stage (scene, camera, sky.update, kick, hurt, visor,
  * setQuality, render), but every pixel is drawn by our own engine.
  */
-export class ForgeStage {
+export class MedStage {
   constructor(canvas, { quality = 'high' } = {}) {
     this.quality = quality;
     const r = this.r = this.renderer = new Renderer(canvas, { quality });
@@ -38,8 +38,8 @@ export class ForgeStage {
     this.composite = r.addPass(new Composite());
     const dbg = new URLSearchParams(location.search).get('debug');
     if (dbg) r.addPass(new Debug(dbg));
-    window.forge = r;
-    window.forgeStage = this;
+    window.med = r;
+    window.medStage = this;
     this._applyQuality();
     this.sky = { update: (t) => { this.skyTime = t; } };
     this.shake = 0; this.flash = 0; this.aberration = 0; this.hurt = 0; this.visor = 0;
@@ -60,14 +60,14 @@ export class ForgeStage {
   toggleStats() {
     if (this.statsEl) { this.statsEl.remove(); this.statsEl = null; return; }
     this.statsEl = document.createElement('div');
-    this.statsEl.id = 'forge-stats';
+    this.statsEl.id = 'med-stats';
     document.body.appendChild(this.statsEl);
   }
 
   statsText() {
     const r = this.r, s = r.stats, f = this._fps;
     const lines = [
-      `Forge Renderer · ${r.qualityName} · ${f.value.toFixed(0)} fps`,
+      `Med Engine · ${r.qualityName} · ${f.value.toFixed(0)} fps`,
       `internal ${r.width}x${r.height} -> display ${r.displayW}x${r.displayH} (TAAU ${Math.round(r.q.renderScale * 100)}%)`,
       `draws ${s.drawCalls}  triangles ${(s.triangles / 1e3).toFixed(0)}k  culled ${s.culled}`,
     ];

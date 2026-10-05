@@ -3,7 +3,7 @@ import { Texture } from '../gl/GL.js';
 
 /**
  * Reads a three.js scene graph (used here only as a scene description) and
- * keeps GPU-side mirrors of everything the Forge renderer draws: vertex
+ * keeps GPU-side mirrors of everything the Med Engine draws: vertex
  * arrays, instance buffers, bone textures, textures and PBR material
  * parameters. Also remembers last frame's transforms for motion vectors.
  *

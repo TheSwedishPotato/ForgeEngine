@@ -1,5 +1,5 @@
 /**
- * Forge Renderer — thin WebGL2 layer: context, programs, textures, render
+ * Med Engine — thin WebGL2 layer: context, programs, textures, render
  * targets, buffers and a fullscreen triangle. Everything above this file
  * talks to these helpers, never to raw GL state directly.
  */
