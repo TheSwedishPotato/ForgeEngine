@@ -29,7 +29,7 @@ export class Program {
   constructor(gl, vs, fs, defines = {}, name = 'program', opts = {}) {
     this.gl = gl;
     this.name = name;
-    const head = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision highp sampler2DArray;\nprecision highp sampler2DShadow;\nprecision highp sampler2DArrayShadow;\nprecision highp samplerCube;\nprecision highp sampler3D;\n'
+    const head = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision highp sampler2DArray;\nprecision highp sampler2DShadow;\nprecision highp sampler2DArrayShadow;\nprecision highp samplerCube;\nprecision highp sampler3D;\nprecision highp usampler2D;\nprecision highp isampler2D;\n'
       + Object.entries(defines).filter(([, v]) => v !== false && v != null).map(([k, v]) => `#define ${k} ${v === true ? '' : v}`).join('\n') + '\n';
     const p = gl.createProgram();
     gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, head + vs, name));
@@ -122,6 +122,8 @@ export const FMT = {
   rg16f: ['RG16F', 'RG', 'HALF_FLOAT'],
   r16f: ['R16F', 'RED', 'HALF_FLOAT'],
   r32f: ['R32F', 'RED', 'FLOAT'],
+  r32ui: ['R32UI', 'RED_INTEGER', 'UNSIGNED_INT'],
+  rgba32ui: ['RGBA32UI', 'RGBA_INTEGER', 'UNSIGNED_INT'],
   r8: ['R8', 'RED', 'UNSIGNED_BYTE'],
   rg8: ['RG8', 'RG', 'UNSIGNED_BYTE'],
   r11g11b10f: ['R11F_G11F_B10F', 'RGB', 'HALF_FLOAT'],

@@ -54,7 +54,8 @@ const lists = new Lists(stage.scene, { quality, terrain: !!stage.attachTerrain }
 stage.attachTerrain?.(lists);
 lists.camera = stage.camera;   // LOD selection for the detailed scenery
 const field = new JoustField(stage.scene, { quality });   // the joust field south of the lists
-new TownMesh(stage.scene);                               // the town of Skalice on its terrace
+const town = new TownMesh(stage.scene);                  // the town of Skalice on its terrace
+stage.setStaticWorld?.(town.staticMeshes);              // baked for the visibility buffer and the ray tracer
 const dev = new DebugView({ stage, getSim: () => sim, getAis: () => ais, getPlayer: () => player });
 const particles = new Particles(stage.scene);
 const rig = new CameraRig(stage.camera);

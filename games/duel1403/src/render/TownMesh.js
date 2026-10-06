@@ -559,6 +559,7 @@ export class TownMesh {
     this.group = new Group();
     this.group.name = 'town';
     scene.add(this.group);
+    this.staticMeshes = [];
     const M = townMaterials();
     let seed = 7;
     const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -601,6 +602,8 @@ export class TownMesh {
       const mesh = new Mesh(geo, mat);
       mesh.name = 'town-' + key;
       mesh.castShadow = !['dark', 'water'].includes(key);
+      mesh.userData.static = true;          // drawn through the visibility buffer and traced by the ray tracer
+      this.staticMeshes.push(mesh);
       mesh.receiveShadow = true;
       parent.add(mesh);
     }

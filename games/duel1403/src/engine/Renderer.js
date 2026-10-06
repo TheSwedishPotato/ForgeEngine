@@ -155,19 +155,27 @@ export class Renderer {
     this.invProj.copy(this.projJit).invert();
     _frustum.setFromProjectionMatrix(this.viewProj);
     this.frustum = _frustum.clone();
+    // a camera cut: last frame's depth says nothing about this one
+    const moved = this._lastCamPos ? this._lastCamPos.distanceTo(this.cameraPos) : 1e9;
+    const turned = this._lastCamQ ? 1 - Math.abs(this._lastCamQ.dot(camera.quaternion)) : 1;
+    this.cameraCut = moved > 3 || turned > 0.02;
+    (this._lastCamPos ??= new Vector3()).copy(this.cameraPos);
+    (this._lastCamQ ??= camera.quaternion.clone()).copy(camera.quaternion);
   }
 
   // -------------------------------------------------------------------------
   // Drawing
 
   /** Draws geometry items with the given program kind and view-projection. */
-  drawItems(items, kind, vp, { frustum = null, shadow = false, extra = null, minRadius = 0 } = {}) {
+  drawItems(items, kind, vp, { frustum = null, shadow = false, extra = null, minRadius = 0, skipStatic = false } = {}) {
     const gl = this.gl;
     let cur = null;
     const sorted = items;
     for (const it of sorted) {
       if (shadow && !it.castShadow) continue;
       if (!shadow && it.object.userData.shadowOnly) continue;
+      if (skipStatic && it.object.userData.static) continue;
+      if (shadow && it.object.userData.static && this.rtShadowsActive) continue;   // ray-traced instead
       // in coarse shadow cascades, casters smaller than a few texels cannot be seen
       if (minRadius && it.bounds && it.bounds[3] < minRadius) continue;
       if (frustum && it.bounds) {
@@ -251,7 +259,9 @@ export class Renderer {
     gl.clearBufferfv(gl.COLOR, 2, [0, 0, 0, 0]);
     gl.clearBufferfv(gl.COLOR, 3, [0, 0, 0, 0]);
     gl.clearBufferfv(gl.DEPTH, 0, [1]);
-    this.drawItems(lists.opaque, 'gbuffer', this.viewProjJit, { frustum: this.frustum });
+    // the static world through the GPU-driven visibility buffer (passes/VisBuffer.js), the rest as usual
+    const staticDone = this.visBuffer?.gbufferStatic(this) ?? false;
+    this.drawItems(lists.opaque, 'gbuffer', this.viewProjJit, { frustum: this.frustum, skipStatic: staticDone });
     this.customDraw('gbuffer', this.viewProjJit, this.frustum, null);
     this.check('gbuffer');
     for (const p of this.passes) { p.afterGBuffer?.(this); this.check(`${p.name}.afterGBuffer`); }

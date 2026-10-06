@@ -3,6 +3,8 @@ import { Renderer } from '../engine/Renderer.js';
 import { ProbeVolume } from '../engine/gi/ProbeVolume.js';
 import { Sprites } from '../engine/passes/Sprites.js';
 import { GPUParticles } from '../engine/passes/GPUParticles.js';
+import { VisBuffer } from '../engine/passes/VisBuffer.js';
+import { StaticScene } from '../engine/scene/StaticScene.js';
 import { Volumetrics } from '../engine/passes/Volumetrics.js';
 import { ScreenSpace } from '../engine/passes/ScreenSpace.js';
 import { DOF, MotionBlur } from '../engine/passes/Cinematic.js';
@@ -30,6 +32,7 @@ export class MedStage {
     this.probes = r.addPass(new ProbeVolume());
     this.sprites = r.addPass(new Sprites());
     this.gpuParticles = r.addPass(new GPUParticles());
+    this.visBuffer = r.addPass(new VisBuffer());
     this.volumetrics = r.addPass(new Volumetrics());
     this.screen = r.addPass(new ScreenSpace());
     this.dof = r.addPass(new DOF());
@@ -112,6 +115,15 @@ export class MedStage {
     this.shake = Math.min(1, this.shake + shake);
     this.flash = Math.min(0.6, this.flash + flash);
     this.aberration = Math.min(1, this.aberration + aberration);
+  }
+
+  /** The static world (town, church, castle): baked once for the visibility buffer and the ray tracer. */
+  setStaticWorld(meshes) {
+    if (!this.r || !meshes?.length) return;
+    this.scene.updateMatrixWorld(true);
+    this.staticScene = new StaticScene(this.r, meshes);
+    this.visBuffer?.setScene(this.staticScene);
+    this.r.staticScene = this.staticScene;
   }
 
   render(dt, time) {
