@@ -8,6 +8,7 @@ import { PeopleMesh } from '../render/PeopleMesh.js';
 import { Interior } from '../render/Interior.js';
 import { allRanks } from '../data/society.js';
 import { memorySummary } from '../life/Memory.js';
+import { GPUParticles } from '../engine/passes/GPUParticles.js';
 
 const _SHOP_KEYS = new Set(['tavern', 'bakery', 'butcher', 'bath', 'cobbler', 'smithy', 'weaver']);
 const SAVE_KEY = 'skalice-1403-save-v1';
@@ -584,6 +585,12 @@ export class LifeMode {
     const posture = P.sleepingUntil > s.t ? 'lie' : 'stand';
     this.walker.update(dt, { x: P.x, y: P.y, z: P.z, yaw: P.yaw, speed, posture, gesture: !!this.talking });
     this.people.update(dt, this.stage.camera, this.interior ? this.interior : null);
+    // embers rising from the forge and the hearths (GPU particles)
+    if (this.interior && GPUParticles.active) for (const L of this.interior.lights) {
+      if (L.intensity < 8 || Math.random() > dt * (this.interior.b.kind === 'smithy' ? 10 : 3)) continue;
+      const g = this.interior.group.position;
+      GPUParticles.active.emit({ pos: { x: g.x + L.position.x, y: g.y + L.position.y - 0.2, z: g.z + L.position.z }, count: this.interior.b.kind === 'smithy' ? 6 : 2, kind: 'ember', speed: 0.5, life: 2.5, heat: 0.8, size: 0.006, dir: { x: 0, y: 1, z: 0 }, spread: 0.6 });
+    }
     this._daylight(s.date().h);
     this._camera(dt);
     this._hud();

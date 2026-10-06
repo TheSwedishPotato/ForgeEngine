@@ -25,7 +25,8 @@ export function createContext(canvas, { preserveDrawingBuffer = false } = {}) {
 
 const SAMPLER_TYPES = new Set();
 export class Program {
-  constructor(gl, vs, fs, defines = {}, name = 'program') {
+  /** opts.feedback: varying names captured by transform feedback (interleaved). */
+  constructor(gl, vs, fs, defines = {}, name = 'program', opts = {}) {
     this.gl = gl;
     this.name = name;
     const head = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision highp sampler2DArray;\nprecision highp sampler2DShadow;\nprecision highp sampler2DArrayShadow;\nprecision highp samplerCube;\nprecision highp sampler3D;\n'
@@ -33,6 +34,7 @@ export class Program {
     const p = gl.createProgram();
     gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, head + vs, name));
     gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, head + fs, name));
+    if (opts.feedback) gl.transformFeedbackVaryings(p, opts.feedback, gl.INTERLEAVED_ATTRIBS);
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`${name}: link failed: ${gl.getProgramInfoLog(p)}`);
     this.p = p;

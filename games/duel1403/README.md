@@ -139,6 +139,33 @@ duel and the joust are things you can do here when you choose.
   workshops, the bath-house, the rychta, the church and the castle hall and
   barracks have interiors, lit by their fires. Homes are private: going in
   uninvited breaks the house peace.
+- **Modelled, not painted**: `src/render/props.js` and `TownMesh.js` build
+  everything from real geometry, batched by material:
+  - Houses have oak frames standing proud of the plaster on rubble sills,
+    plank doors with iron straps, windows with open shutters, thick thatch or
+    shingle roofs with ridges, boarded gables, smoke holes or chimneys.
+  - Farmyards have wattle fences, two-wheeled carts with spoked wheels,
+    haystacks, dung heaps and troughs. Woodpiles stand against the walls.
+  - The trades show their wares: an ale-stake and casks at the tavern, the
+    smith's lean-to with anvil and quench tub, loaves at the baker's window,
+    meat hanging at the butcher's, shoes and cloth.
+  - The square has a well with a windlass and roof, a pillory with its
+    board, and market stalls with goods.
+  - The church is Gothic, with a west tower and octagonal spire, buttresses,
+    lancet windows and graves.
+  - The castle stands on a levelled terrace on its hill: curtain walls with
+    merlons and arrow slits, corner turrets, a gate tower with a vaulted
+    passage and raised portcullis, a round keep with its door high up, the
+    great hall, lean-tos for the garrison and the horses, a well, a pell and
+    butts for drill.
+  - Interiors are furnished with beds and blankets, chests, shelves of pots
+    and bread, tools, a loom, casks, mugs and herbs drying.
+- **Nobody walks through walls**: every building, castle wall and tower, and
+  every prop that stands in the way has a collision box (`town.js`). People
+  are routed round them and in and out by their doors; the hue and cry,
+  companions and you use the same. Over a simulated day, 0 of 27,563
+  walking samples are inside anything solid. Everyone starts at their door,
+  on the ground.
 - **Day and night**: the sun follows the hour at 50° N in late September,
   and the moon lights the night.
 - **Walking**: everyone's walk is built from clinical gait data (Perry and
@@ -387,6 +414,43 @@ src/engine/
 Debug views: `?debug=albedo|normal|rough|metal|motion|ao|ssr|ssgi|depth|emissive|lit`,
 `?glcheck=1` reports GL errors per pass.
 
+- **GPU particles**: sparks and embers are simulated on the graphics card
+  with transform feedback (WebGL2's stand-in for compute shaders). The new
+  state of every particle is written back into a buffer, ping-pong, and
+  nothing returns to the CPU. Sparks fall, embers rise on hot air, both cool
+  through a black-body colour, and they bounce off whatever is drawn, using
+  the depth buffer and the G-buffer normals. A sword clash throws a few
+  hundred; the forge and the hearths send embers up.
+- **Order-independent transparency**: dust and smoke are composited with
+  weighted blended OIT (McGuire and Bavoil 2013), so overlapping sprites
+  need no sorting and never pop.
+- **Robustness**: a degenerate flat-shaded face falls back to its vertex
+  normal, and the temporal filter rejects NaN and infinity, so one bad pixel
+  can no longer blank the frame.
+
+**Your engine list, item by item**
+
+| Item | Status |
+| --- | --- |
+| Cascaded shadow maps, contact-hardening soft shadows | Done |
+| Virtual shadow maps | WebGL2 form: a focus shadow map around the characters at about 1.5 mm per texel. Paged VSM needs compute |
+| Contact shadows / micro-shadows | Done (screen-space) |
+| SSGI and SSR, denoised | Done (SVGF-style history and variance clamp; temporal SSR) |
+| Better temporal stability | Done (TAA with variance clipping; NaN-safe) |
+| Probe GI with dynamic updates | Done (probes are recaptured round-robin every frame, so they follow the sun) |
+| Virtual texturing / streaming | Done (131,072² ground texture, feedback-driven pages) |
+| Virtual geometry (Nanite-style) | Done for the terrain (cluster DAG); characters and props use LOD chains |
+| GPU instancing and LOD | Done (instanced LOD chains, cell culling on the CPU) |
+| Compute particles | WebGL2 form: transform-feedback particles with depth-buffer collision |
+| Cloth | Banners and flags (CPU Verlet); capes need character cloth not yet done |
+| Order-independent transparency | Done (weighted blended) |
+| Volumetrics | Done (height fog, mist, smoke, light shafts through the cascades) |
+| Fully GPU-driven pipeline (GPU culling writing its own draws) | Needs WebGPU: no indirect draws in WebGL2 |
+| Visibility buffer | Needs WebGPU (or storage buffers) to resolve efficiently |
+| Mesh-shader amplification | Needs mesh shaders: not on the web at all yet |
+| Software ray-traced shadows and reflections, path-traced reference | Needs WebGPU compute and storage buffers for a BVH; screen-space versions are in |
+| Gaussian splatting | Optional; not done |
+
 **What WebGL2 cannot do, and so this engine does not claim.** WebGL2 has no
 compute shaders, no indirect or GPU-generated draws, no mesh shaders and no
 storage buffers. A fully GPU-driven pipeline (culling and LOD selection on the
@@ -433,6 +497,14 @@ src/
   of armour, +66 %; Askew et al. 2012), and a closed visor slows recovery.
 
 ### Tools
+
+- `node tools/dev/selfpen.mjs` measures how often a fighter's own weapon is
+  more than 2 cm inside his own body or clothes. Each weapon now collides
+  with its wielder's trunk, head, thighs, shins and upper arms (only the
+  forearms holding it are exempt), with a skin for the clothes and armour.
+  The controller also keeps the whole weapon, butt to point, out of the body.
+  The figure fell from 10–60 % of frames to under 1 % for swords and 1–2 %
+  for polearms.
 
 ```bash
 node tools/sim.mjs                       # headless smoke test

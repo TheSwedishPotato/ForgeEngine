@@ -3,6 +3,8 @@ import {
   Sprite, SpriteMaterial, CanvasTexture, AdditiveBlending,
 } from 'three';
 
+import { GPUParticles } from '../engine/passes/GPUParticles.js';
+
 const MAX = 500;
 const _o = new Object3D();
 const _c = new Color();
@@ -48,7 +50,10 @@ export class Particles {
   }
 
   sparksAt(point, strength = 1) {
-    const n = Math.floor(10 + 30 * Math.min(1.5, strength));
+    // the shower itself on the GPU (hundreds of sparks that bounce off whatever they hit)
+    const gpu = GPUParticles.active;
+    gpu?.emit({ pos: point, count: Math.floor(60 + 220 * Math.min(1.5, strength)), kind: 'spark', speed: 3 + 6 * Math.min(1.5, strength), life: 0.8, heat: 1, size: 0.0035 });
+    const n = Math.floor((gpu ? 3 : 10) + (gpu ? 8 : 30) * Math.min(1.5, strength));
     for (let i = 0; i < n; i++) {
       const p = this._spawn('spark');
       p.life = p.max = 0.15 + Math.random() * 0.35;

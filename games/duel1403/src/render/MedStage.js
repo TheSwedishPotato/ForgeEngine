@@ -2,6 +2,7 @@ import { Scene, PerspectiveCamera, Vector3 } from 'three';
 import { Renderer } from '../engine/Renderer.js';
 import { ProbeVolume } from '../engine/gi/ProbeVolume.js';
 import { Sprites } from '../engine/passes/Sprites.js';
+import { GPUParticles } from '../engine/passes/GPUParticles.js';
 import { Volumetrics } from '../engine/passes/Volumetrics.js';
 import { ScreenSpace } from '../engine/passes/ScreenSpace.js';
 import { DOF, MotionBlur } from '../engine/passes/Cinematic.js';
@@ -28,6 +29,7 @@ export class MedStage {
     // Pass order is pipeline order.
     this.probes = r.addPass(new ProbeVolume());
     this.sprites = r.addPass(new Sprites());
+    this.gpuParticles = r.addPass(new GPUParticles());
     this.volumetrics = r.addPass(new Volumetrics());
     this.screen = r.addPass(new ScreenSpace());
     this.dof = r.addPass(new DOF());
