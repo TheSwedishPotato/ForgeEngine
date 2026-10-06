@@ -12,6 +12,67 @@ const qz = (a) => new Quaternion().setFromAxisAngle(Z, a);
 const _v = new Vector3();
 const TAU = Math.PI * 2, D = (deg) => deg * Math.PI / 180;
 
+/**
+ * What a person standing at their task is doing, from the words of their
+ * activity: the motion the body makes. Each gives per-side arm raise and
+ * elbow bend (radians), a forward bend of the trunk and the head, at time t.
+ */
+export function taskOf(act = '', role = '') {
+  const a = act.toLowerCase();
+  if (/ringing/.test(a)) return 'bell';
+  if (/hammer|forging|shoeing/.test(a) || (/^working$/.test(a) && /smith|apprentice/.test(role))) return 'hammer';
+  if (/digging|ploughing|weeding|gleaning|threshing|fields|dung/.test(a)) return 'dig';
+  if (/sweeping/.test(a)) return 'sweep';
+  if (/drawing water|fetching water/.test(a)) return 'water';
+  if (/cooking|spinning|lighting the fire|heating|baking|keeping house|feeding the beasts|bleeding and shaving/.test(a)) return 'handwork';
+  if (/eating|drinking/.test(a)) return 'eat';
+  if (/confession|saying the hours|breviary|praying|fasting/.test(a)) return 'pray';
+  if (/reckoning|town book|accounts/.test(a)) return 'write';
+  if (/begging/.test(a)) return 'beg';
+  if (/drilling|cleaning his gear/.test(a)) return 'drill';
+  if (/watch at the gate|standing watch|watching/.test(a)) return 'guard';
+  if (/selling|serving|gossip|talking|hiring|stories|judging|hearing|calling|taking on|buying|working/.test(a)) return 'talk';
+  return null;
+}
+
+function taskPose(task, t, side, seed) {
+  const s = Math.sin, c = Math.cos, R = side === 'R';
+  const pulse = (f, sharp = 3) => Math.pow(Math.max(0, s(t * f * TAU + seed)), sharp);
+  switch (task) {
+    case 'hammer': {   // a stroke a second: lift, then drop on the anvil; the other hand holds the work in tongs
+      const u = 0.5 + 0.5 * s(t * TAU * 0.9 + seed);
+      return R ? { arm: 0.5 + 1.1 * u, elbow: 1.5 - 0.9 * u, abd: 0.15, bend: 0.28, head: 0.45 } : { arm: 0.75, elbow: 1.0, abd: 0.12, bend: 0.28, head: 0.45 };
+    }
+    case 'bell': {     // hauling on the bell rope overhead, both hands, knees giving with each pull
+      const u = 0.5 + 0.5 * s(t * TAU * 0.45 + seed);
+      return { arm: 1.3 + 1.2 * u, elbow: 0.25 + 0.5 * (1 - u), abd: 0.05, bend: 0.15 * (1 - u), head: -0.25 * u };
+    }
+    case 'dig': {      // stooped over a hoe or the plough handles, both arms working together
+      const u = s(t * TAU * 0.7 + seed);
+      return { arm: 0.75 + 0.45 * u, elbow: 0.55 - 0.25 * u, abd: 0.12, bend: 0.55 + 0.12 * u, head: 0.3 };
+    }
+    case 'sweep': { const u = s(t * TAU * 0.8 + seed); return { arm: 0.55 + (R ? 0.2 : -0.1) * u, elbow: 0.5, abd: 0.1 + (R ? 0.12 : -0.06) * u, bend: 0.3, head: 0.25, twist: 0.25 * u }; }
+    case 'water': { const u = 0.5 + 0.5 * s(t * TAU * 0.5 + seed); return { arm: 0.6 + 0.9 * (R ? u : 1 - u), elbow: 0.7, abd: 0.1, bend: 0.25, head: 0.35 }; }
+    case 'handwork': { // stirring, spinning, kneading: small working circles in front of the belly
+      return R ? { arm: 0.65 + 0.15 * s(t * TAU * 1.1 + seed), elbow: 1.45 + 0.2 * c(t * TAU * 1.1 + seed), abd: 0.18, bend: 0.2, head: 0.4 } : { arm: 0.55, elbow: 1.35 + 0.1 * s(t * 2 + seed), abd: 0.15, bend: 0.2, head: 0.4 };
+    }
+    case 'eat': {      // a bite or a pull at the mug every few seconds
+      const u = pulse(0.22, 2);
+      return R ? { arm: 0.45 + 0.55 * u, elbow: 1.2 + 1.0 * u, abd: 0.12, bend: 0.12, head: 0.15 - 0.2 * u } : { arm: 0.4, elbow: 1.3, abd: 0.1, bend: 0.12, head: 0.15 };
+    }
+    case 'pray': return { arm: 0.55, elbow: 1.75, abd: -0.05, bend: 0.12, head: 0.4 };   // hands joined before the chest, head bowed
+    case 'write': return R ? { arm: 0.6, elbow: 1.5 + 0.06 * s(t * 9 + seed), abd: 0.15, bend: 0.32, head: 0.55 } : { arm: 0.55, elbow: 1.4, abd: 0.12, bend: 0.32, head: 0.55 };
+    case 'beg': { const u = pulse(0.15, 1); return R ? { arm: 0.6 + 0.4 * u, elbow: 0.4, abd: 0.08, bend: 0.2, head: -0.05 } : { arm: 0.2, elbow: 0.6, abd: 0.08, bend: 0.2, head: -0.05 }; }
+    case 'drill': { const u = pulse(0.6, 2); return { arm: 0.7 + 0.35 * u, elbow: 0.9 - 0.5 * u, abd: 0.12, bend: 0.1 + 0.1 * u, head: 0.05 }; }
+    case 'guard': return R ? { arm: 0.35, elbow: 1.25, abd: 0.12, bend: 0, head: 0.02, look: 0.6 * s(t * 0.21 + seed) } : { arm: 0.05, elbow: 0.25, abd: 0.08, bend: 0, head: 0.02, look: 0.6 * s(t * 0.21 + seed) };
+    case 'talk': {     // the hands speak too: now one, now the other
+      const u = pulse(R ? 0.31 : 0.23, 2);
+      return { arm: 0.15 + 0.5 * u, elbow: 0.4 + 1.0 * u, abd: 0.1, bend: 0.02, head: 0.05 };
+    }
+    default: return null;
+  }
+}
+
 /** A periodic curve through [phase 0..1, value] points (Catmull-Rom). */
 function cycle(points) {
   const n = points.length;
@@ -120,8 +181,21 @@ export class Walker {
       if (posture === 'sit') { arm = 0.5; elbow = 1.1; }
       if (posture === 'pillory') { arm = 1.25; elbow = 0.15; abd = 0.32; }
       if (this.gesture && side === 'R' && posture !== 'pillory') { arm = Math.max(arm, 0.45); elbow += 1.0; }
+      // at work: the task's motion, faded in as he stops walking
+      const tw = this.taskW * (posture === 'pillory' || posture === 'lie' ? 0 : 1);
+      if (tw > 0.01 && this.task) {
+        const tp = taskPose(this.task, t, side, this.seed);
+        if (tp) { arm += (tp.arm - arm) * tw; elbow += (tp.elbow - elbow) * tw; abd += (tp.abd - abd) * tw; this._tp = tp; }
+      }
       P['upperArm' + side] = qz(sx * abd).multiply(qx(-arm));
       P['forearm' + side] = P['upperArm' + side].clone().multiply(qx(-elbow));
+    }
+    if (this._tp && this.taskW > 0.01 && posture !== 'pillory' && posture !== 'lie') {
+      const w = this.taskW, tp = this._tp, sit = posture === 'sit' ? 0.4 : 1;
+      P.abdomen = qx(tp.bend * 0.45 * w * sit).multiply(P.abdomen);
+      P.chest = qy((tp.twist ?? 0) * w).multiply(qx(tp.bend * w * sit)).multiply(P.chest);
+      P.head = qy((tp.look ?? 0) * w).multiply(qx(tp.head * w)).multiply(P.head);
+      this._tp = null;
     }
     if (posture === 'pillory') {
       // bent at the board, neck and wrists through it
@@ -146,8 +220,10 @@ export class Walker {
    * Pose at a world position facing yaw. speed in m/s; posture 'stand' |
    * 'walk' | 'sit' | 'lie'. groundY is the height of the ground (or seat).
    */
-  update(dt, { x, y, z, yaw, speed = 0, posture = 'stand', gesture = false, look = 0 }) {
+  update(dt, { x, y, z, yaw, speed = 0, posture = 'stand', gesture = false, look = 0, task = null }) {
     dt = Math.min(dt, 0.1);
+    if (task) this.task = task;
+    this.taskW = (this.taskW ?? 0) + (((task && speed < 0.05) ? 1 : 0) - (this.taskW ?? 0)) * Math.min(1, dt * 3);
     this.t = (this.t ?? 0) + dt;
     // start and stop smoothly: speed eases in and out over about a quarter second
     if (posture !== 'stand' && posture !== 'walk') speed = 0;

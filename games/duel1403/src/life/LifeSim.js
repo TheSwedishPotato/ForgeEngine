@@ -103,6 +103,14 @@ export class LifeSim {
 
   _updatePerson(p, dt, d, teleport) {
     const a = p.agent;
+    // In conversation: he stops where he is and turns to you; his day waits.
+    if (p === this.talkingWith && !a.pursuit && p.alive) {
+      const P = this.player;
+      a.speed = 0;
+      if (!a.inside || a.inside === P.inside) a.yaw = Math.atan2(P.x - a.x, P.z - a.z);
+      a.y = groundY(a.x, a.z);
+      return;
+    }
     if (p.follow && !a.pursuit && p.alive) { this._follow(p, a, dt, teleport, d); a.y = groundY(a.x, a.z); return; }
     const s = a.pursuit ? { place: a.place, act: a.pursuit === 'hue' ? 'running after you, shouting' : 'coming for you' } : this._schedule(p, d);
     const place = s.place;

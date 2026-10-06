@@ -1,3 +1,4 @@
+import { etiquette, addressOf, personWho, playerWho } from './address.js';
 import { GOODS, SHOPS, LAWS, RUMOURS, fmtMoney, ARMY_RANK, WAGES } from './data.js';
 import { allRanks } from '../data/society.js';
 import { BUILDING, PLACES, TOWN_NAME } from '../world/town.js';
@@ -23,6 +24,9 @@ export class Dialogue {
     this.sample = null;
     this.mode = 'scripted';
     this.turns = new Map();     // person id -> [{role, content}]
+    // which Claude answers: 'default' (quick enough to talk to), or ?claude=complex for the deepest
+    this.tier = (typeof location !== 'undefined' && new URLSearchParams(location.search).get('claude')) || 'default';
+    if (!['quick', 'default', 'complex'].includes(this.tier)) this.tier = 'default';
     this.ready = (async () => {
       try {
         if (typeof window !== 'undefined' && window.claude?.use) {
@@ -63,6 +67,7 @@ export class Dialogue {
       `Character: ${p.words.join(', ')}. (Openness ${T.openness}, conscientiousness ${T.conscientiousness}, extraversion ${T.extraversion}, agreeableness ${T.agreeableness}, neuroticism ${T.neuroticism}, piety ${T.piety}, honesty ${T.honesty}, temper ${T.temper}, greed ${T.greed}, courage ${T.courage}; 0–1.)`,
       spouse ? `Married to ${spouse.fullName}, ${spouse.title}.` : '',
       `Right now: ${a.act}, at ${where}. Mood: ${p.mood}.${p.hurt > 0.3 ? ' You are hurt and sore.' : ''}`,
+      CARES[p.role] ? `What weighs on you these days: ${CARES[p.role]}. Let it colour what you want from people and what you ask of them.` : '',
       `Your purse: exactly ${p.money} parvi (${fmtMoney(p.money)}). Things you have: ${own || 'nothing to speak of'}.`,
       sells ? `You sell: ${sells}. You may haggle a little according to your greed, never below cost.` : '',
       p.recruiter ? `You are the captain (hejtman) of the castle garrison and are taking on men for the lord in these troubled times: foot servants (pacholci) at ${fmtMoney(ARMY_RANK.pacholek.pay)} a day with bread, beer and a padded coat and kettle hat; you want sound, sober men who will obey, not women, not drunkards, not known thieves.` : '',
@@ -102,10 +107,15 @@ ${this._persona(p)}
 
 WHO IS TALKING TO YOU
 ${this._player(p)}
+
+RANK AND MANNERS (keep to these exactly)
+${etiquette(p, P)}
 (What the game knows, not what you can see: their purse holds exactly ${P.money} parvi; they carry ${inv || 'nothing'}.)
 
 HOW TO ANSWER
-- Speak as this person would in 1403: plain words, their own concerns, the manners of their rank toward the speaker's apparent rank (deference upward, condescension or familiarity downward), their mood and temper. English, with an occasional Czech word they would naturally use (pane, paní, groš, rychta, krčma, hejtman). One to three sentences, never more than 60 words.
+- Speak as this person would in 1403: plain words, their own concerns, the manners of their rank toward the speaker's apparent rank (deference upward, condescension or familiarity downward), their mood and temper. English, with an occasional Czech word they would naturally use (groš, rychta, krčma, hejtman, and the form of address given above). One to three sentences, never more than 60 words.
+- Think as this person: what do they want from this stranger, what do they fear, what would they gain or risk? Answer the point of what was said, remember what was said before in this talk, and do not repeat yourself.
+- Keep to your station: a superior may be curt, give orders, or ignore; an inferior defers, but may grumble behind politeness. Use the form of address given above every time you address them.
 - You know only what this person could know. If asked about things outside it, say you don't know, or answer from rumour.
 - You are a real person, not a guide: you may refuse, haggle, lie (if dishonest), take offence, call the watch, attack, or end the talk.
 - WORDS ARE DEEDS. If the stranger hands you something, offers payment, asks you to come along, to take them with you, to teach them, to give or lend them something, and you agree, you MUST put the matching action in "actions" — that is what makes it happen in the world. If you refuse, put no action. Never claim to give what you do not have.
@@ -147,7 +157,7 @@ Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES
       const recent = hist.slice(-10);
       if (recent.length) turns.splice(0, 1, { role: 'user', content: this._instructions(p) + '\n\n(The conversation so far follows.)' }, ...recent, { role: 'user', content: msg });
       try {
-        r = await this.sample.json(turns, { modelTier: 'quick', cache: false, signal, onText });
+        r = await this.sample.json(turns, { modelTier: this.tier ?? 'default', cache: false, signal, onText });
         this.mode = 'claude';
       } catch (e) {
         if (e?.code === 'cancelled') throw e;
@@ -288,6 +298,39 @@ Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES
   }
 }
 
+/**
+ * What weighs on each kind of person this autumn of 1403: the cares that
+ * drive what they want from a stranger. From the situation of the year
+ * (the king a prisoner, Hungarian raids, debased coin) and the round of a
+ * subject town's year (Michaelmas rent, the harvest in, guild rules).
+ */
+const CARES = {
+  burgrave: 'holding the castle and its lands for an absent lord while bands roam; getting the Michaelmas rents in; keeping the townsmen obedient and the garrison paid',
+  captain: 'too few men and too little pay for them; Hungarian riders and robber bands on the roads; drunkenness and desertion among his pacholci',
+  soldier: 'pay in arrears; the cold watch; dice and beer; whether the Hungarians will come this way',
+  herald: 'a good field for the St Wenceslas joust, proper arms and lineage of every rider, and being paid by the lord for it',
+  priest: 'the tithe and the parish dues, sinners who skip confession, talk from Prague of Master Hus preaching against the clergy\'s wealth',
+  sexton: 'the bells at the right hours, the graves, his aching back',
+  beggar: 'bread for today, a place out of the wind, alms at the church door',
+  headman: 'collecting the lord\'s rent and fines, keeping the peace on market day, quarrels over boundaries and debts, the lord\'s displeasure if the money falls short',
+  innkeeper: 'the price of malt, the lord\'s excise on beer, guests who drink and do not pay, brawls',
+  innwife: 'the kitchen and the beds, the maid, drunk guests who paw at her',
+  maid: 'her wages and keep, saving for a dowry, rough guests, a lad she likes',
+  smith: 'iron and charcoal dear, horses to shoe and tools to mend after harvest, the garrison\'s orders, his apprentice\'s laziness',
+  apprentice: 'his master\'s temper and the long hours; years still to serve before he is a journeyman',
+  baker: 'the price of grain, the bread assize that fixes weight and price, his seat on the council, rivals who sell short weight',
+  bakerwife: 'the household and the shop, the girls\' marriages, what the neighbours say',
+  butcher: 'beasts for slaughter before winter, the meat benches, his seat on the council',
+  cobbler: 'leather prices, customers who pay late, the guild\'s rules',
+  weaver: 'yarn, the merchant who buys his cloth too cheap, debts',
+  weaverwife: 'spinning enough yarn, a child that is sickly, the price of bread',
+  bathkeeper: 'firewood for the bath, being looked down on as a dishonourable trade, cupping and shaving customers, gossip he hears',
+  merchant: 'getting his cloth safely back to Prague past robbers and Hungarians, debased groschen, collecting what is owed',
+  farmer: 'the harvest in and the Michaelmas rent and tithe due, the plough team, the weather for winter sowing, soldiers taking his beasts',
+  farmwife: 'the house, the children, geese and hens, spinning, whether there is enough grain to last till spring',
+  cottager: 'finding day work, feeding his family on almost nothing, debts to the farmer he works for',
+};
+
 /** Who can teach what. */
 const TEACH = { smith: 'smithing', apprentice: 'smithing', captain: 'swordsmanship and the crossbow', soldier: 'the crossbow and the spear', priest: 'reading and writing', merchant: 'trade and reckoning', herald: 'riding and heraldry', farmer: 'farm work', burgrave: 'riding and the sword', bathkeeper: 'barbering' };
 const TEACH_SKILL = { smith: ['smithing'], apprentice: ['smithing'], captain: ['sword', 'crossbow', 'riding'], soldier: ['crossbow', 'sword'], priest: ['letters'], merchant: ['trade', 'letters'], herald: ['riding', 'letters'], farmer: ['labour'], burgrave: ['riding', 'sword'], bathkeeper: ['labour'] };
@@ -300,8 +343,7 @@ const has = (t, ...w) => w.some((x) => t.includes(x));
 export function scripted(sim, p, text) {
   const t = text.toLowerCase();
   const P = sim.player;
-  const pr = RANK[p.rank]?.rank ?? 20, myRank = { podruh: 10, sedlak: 24, journeyman: 36, patrician: 55, squire: 66 }[P.rank] ?? 20;
-  const sir = myRank > pr + 15 ? (P.sex === 'f' ? 'paní' : 'pane') : myRank + 15 < pr ? 'fellow' : 'friend';
+  const sir = addressOf(personWho(p), playerWho(P)).cz;
   const cold = p.attitude < -25, warm = p.attitude > 25;
   const R = (a) => a[Math.floor(Math.random() * a.length)];
   if (has(t, 'bye', 'farewell', 'god be with', 'go now')) return { say: R([`God be with you, ${sir}.`, 'Go with God.', 'Mind how you go.']), attitude: 1, mood: p.mood, action: { type: 'leave' } };

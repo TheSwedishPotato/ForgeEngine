@@ -1,3 +1,4 @@
+import { addressOf, personWho, playerWho } from '../life/address.js';
 import { Vector3 } from 'three';
 import { LifeSim } from '../life/LifeSim.js';
 import { Dialogue } from '../life/Dialogue.js';
@@ -40,7 +41,7 @@ function sunDir(hour, out) {
  * choose (a quarrel, the herald at the joust field).
  *
  * Controls: WASD walk (Shift to hurry), drag the mouse to look, wheel to
- * zoom, E talk / go in / come out, F eat, Q drink, R relieve yourself,
+ * zoom, E go in / come out (or talk), H talk, F eat, Q drink, R relieve yourself,
  * Z sleep, T let an hour pass, X drill (soldiers), G steal / cut a purse,
  * V strike someone, J journal, Esc menu. The game saves itself in this
  * browser every minute and when you leave.
@@ -116,7 +117,7 @@ export class LifeMode {
     this.lastSave = this.wall;
     if (save) this.log(`${P.name} again. ${this.sim.situation()}.`, 'info');
     else this.log(`You are ${P.name}, ${start.name.toLowerCase()}. ${start.text}`, 'info');
-    this.log('E talk to someone or go through a door · J journal · Esc menu.', 'info');
+    this.log('E go through a door (or talk) · H talk to someone · J journal · Esc menu.', 'info');
     this.dialogue.ready.then(() => { this.hud.querySelector('.lmode').textContent = this.dialogue.mode === 'claude' ? 'people answer through Claude' : 'people answer from a script (Claude not available here)'; });
   }
 
@@ -142,7 +143,7 @@ export class LifeMode {
       <div class="lprompt"></div>
       <div class="callout"></div><div class="subcall"></div>
       <div class="lbar ui-interactive">
-        <button data-k="e">E · talk / door</button><button data-k="f">F · eat</button><button data-k="q">Q · drink</button><button data-k="r">R · relieve</button><button data-k="z">Z · sleep</button><button data-k="t">T · wait 1 h</button><button data-k="x">X · drill</button><button data-k="g">G · steal</button><button data-k="v">V · strike</button><button data-k="j">J · journal</button>
+        <button data-k="e">E · door</button><button data-k="h">H · talk</button><button data-k="f">F · eat</button><button data-k="q">Q · drink</button><button data-k="r">R · relieve</button><button data-k="z">Z · sleep</button><button data-k="t">T · wait 1 h</button><button data-k="x">X · drill</button><button data-k="g">G · steal</button><button data-k="v">V · strike</button><button data-k="j">J · journal</button>
       </div>
       <small class="lmode"></small>
     </div>`);
@@ -201,10 +202,11 @@ export class LifeMode {
     // what E would do
     const near = this._nearby()[0], door = s.doorNear();
     let prompt = '';
+    const talkTo = near ? `talk to ${P.knownNames.has(near.id) ? near.fullName : near.title}${near.agent.act ? ` (${near.agent.act})` : ''}` : '';
+    const atDoor = P.inside && this.interior?.nearDoor(P.x, P.z) ? 'go out' : !P.inside && door ? `go into ${door.name}` : '';
     if (this.talking) prompt = '';
-    else if (near) prompt = `E · talk to ${P.knownNames.has(near.id) ? near.fullName : near.title}${near.agent.act ? ` (${near.agent.act})` : ''}`;
-    else if (P.inside && this.interior?.nearDoor(P.x, P.z)) prompt = `E · go out`;
-    else if (door) prompt = `E · go into ${door.name}`;
+    else if (atDoor) prompt = `E · ${atDoor}${near ? ` · H · ${talkTo}` : ''}`;
+    else if (near) prompt = `E or H · ${talkTo}`;
     else if (!P.inside && Math.hypot(P.x - PLACES.well.x, P.z - PLACES.well.z) < 3) prompt = 'Q · drink from the well';
     else if (!P.inside && Math.hypot(P.x - PLACES.privy.x, P.z - PLACES.privy.z) < 3) prompt = 'R · use the privy';
     const duty = s.dutyNow(d);
@@ -271,12 +273,19 @@ export class LifeMode {
     const s = this.sim, P = s.player;
     switch (k) {
       case 'e': {
+        // At a door, E is the door, whoever is standing about; H always talks.
         if (this.talking) return;
+        if (P.inside && this.interior?.nearDoor(P.x, P.z)) return this._leave();
+        const door = !P.inside && s.doorNear();
+        if (door) return this._enter(door);
         const near = this._nearby()[0];
         if (near) return this.openTalk(near);
-        if (P.inside && this.interior?.nearDoor(P.x, P.z)) return this._leave();
-        const door = s.doorNear();
-        if (door) return this._enter(door);
+        break;
+      }
+      case 'h': {
+        if (this.talking) return;
+        const near = this._nearby()[0];
+        if (near) this.openTalk(near); else this.log('Nobody near enough to speak to.', 'info');
         break;
       }
       case 'f': if (P.inventory.bread > 0) { s.consume('bread'); this.log('You eat a loaf of rye bread.', 'info'); } else this.log('You have nothing to eat. Bread is 4 parvi at the bakery or the tavern.', 'info'); break;
@@ -353,16 +362,18 @@ export class LifeMode {
   // --- talking ----------------------------------------------------------------------------------
 
   openTalk(p) {
+    this.sim.talkingWith = p;
     this.talking = p;
     this.closeTalk(true);
     this.talking = p;
     const T = this.talkEl, P = this.sim.player;
     T.hidden = false;
     T.querySelector('.ltname').textContent = P.knownNames.has(p.id) ? p.fullName : p.title[0].toUpperCase() + p.title.slice(1);
-    T.querySelector('.lttitle').textContent = `${P.knownNames.has(p.id) ? p.title + ' · ' : ''}${RANKS[p.rank]?.estateName ?? ''} · ${p.words.join(', ')} · ${p.agent.act}`;
+    const adr = addressOf(playerWho(P), personWho(p));
+    T.querySelector('.lttitle').textContent = `${P.knownNames.has(p.id) ? p.title + ' · ' : ''}${RANKS[p.rank]?.name ?? ''} (${RANKS[p.rank]?.estateName ?? ''}) · ${p.words.join(', ')} · ${p.agent.act} · address: ${adr.cz} (${adr.en})${adr.bow !== 'none' && adr.bow !== 'nod' ? `, ${adr.bow}` : ''}`;
     this._att();
     T.querySelector('.ltlog').innerHTML = '';
-    const chips = ['God give you good day.', `My name is ${P.name}.`, 'What news?', 'What have you heard about me?', 'What do you sell?', 'Is there work for me?', 'Here, take a groschen.', 'Come with me.', 'Can I come with you?', 'Teach me what you know.', 'I want to serve in the garrison.', 'Farewell.'];
+    const chips = [`God give you good day, ${adr.cz}.`, `My name is ${P.name}.`, 'What news?', 'What have you heard about me?', 'What do you sell?', 'Is there work for me?', 'Here, take a groschen.', 'Come with me.', 'Can I come with you?', 'Teach me what you know.', 'I want to serve in the garrison.', 'Farewell.'];
     if (p.follow) chips.splice(7, 2, 'You can go now.');
     if (p.jousts) chips.splice(3, 0, 'I want to ride in the joust.');
     T.querySelector('.ltchips').innerHTML = chips.map((c) => `<button type="button">${esc(c)}</button>`).join('');
@@ -380,7 +391,7 @@ export class LifeMode {
 
   closeTalk(keep = false) {
     this.ctl?.abort();
-    if (!keep) { this.talkEl.hidden = true; this.talking = null; }
+    if (!keep) { this.talkEl.hidden = true; this.talking = null; this.sim.talkingWith = null; }
   }
 
   async speak(text) {

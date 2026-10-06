@@ -1,7 +1,7 @@
 import { Object3D, Color, MeshStandardMaterial } from 'three';
 import { LODInstancer, buildLODChain } from '../engine/geometry/LOD.js';
 import { onlookerParts } from './Foliage.js';
-import { Walker } from '../life/Walker.js';
+import { Walker, taskOf } from '../life/Walker.js';
 import { Cape, CAPES } from './Capes.js';
 
 const SKINS = ['#e0b896', '#d2a07c', '#c48e6a', '#e8c4a4', '#b98462'];
@@ -121,7 +121,7 @@ export class PeopleMesh {
       const W = this.walkers[i];
       if (W && (interior || Math.hypot(x - cp.x, z - cp.z) < this.detailDistance)) {
         W.mesh.visible = true;
-        W.update(dt, { x, y, z, yaw: yaw ?? 0, speed: walking ? (interior ? inSpeed : a.speed) : 0, posture, gesture: false });
+        W.update(dt, { x, y, z, yaw: yaw ?? 0, speed: walking ? (interior ? inSpeed : a.speed) : 0, posture, gesture: false, task: walking || !p.alive ? null : p === this.sim.talkingWith ? 'talk' : taskOf(a.act, p.role) });
         this.capes.get(i)?.update(y);
         W.seen = true;
         continue;

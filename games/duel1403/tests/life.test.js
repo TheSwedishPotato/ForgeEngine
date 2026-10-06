@@ -134,3 +134,32 @@ test('the town saves and comes back the same', () => {
   for (let i = 0; i < 60; i++) r.update(1);
   assert.ok(r.people.every((q) => Number.isFinite(q.agent.x)));
 });
+
+test('a person you talk to stays and faces you; afterwards goes on', () => {
+  const s = fresh();
+  s.t = 10.2;
+  s.update(0.1);
+  const p = s.people.find((q) => q.agent.route.length > 2 && !q.agent.inside);
+  assert.ok(p, 'someone walking');
+  s.talkingWith = p;
+  const x = p.agent.x, z = p.agent.z;
+  for (let i = 0; i < 30; i++) s.update(0.1);
+  assert.equal(p.agent.x, x); assert.equal(p.agent.z, z);
+  assert.equal(p.agent.speed, 0);
+  s.talkingWith = null;
+  for (let i = 0; i < 30; i++) s.update(0.1);
+  assert.ok(Math.hypot(p.agent.x - x, p.agent.z - z) > 0.3, 'walks on after the talk');
+});
+
+test('forms of address follow rank: no "pane" for a farmer, "pane" for a squire', async () => {
+  const { addressOf, playerWho, personWho } = await import('../src/life/address.js');
+  const s = fresh();
+  for (const p of s.people) {
+    const toFarmer = addressOf(personWho(p), playerWho({ rank: 'sedlak', sex: 'm' }));
+    assert.ok(!/^pane$|^paní$/.test(toFarmer.cz), `${p.role} would call a farmer ${toFarmer.cz}`);
+  }
+  const smith = s.people.find((p) => p.role === 'smith'), priest = s.people.find((p) => p.role === 'priest');
+  assert.equal(addressOf(personWho(smith), playerWho({ rank: 'squire', noble: true, sex: 'm' })).cz, 'pane');
+  assert.equal(addressOf(playerWho({ rank: 'sedlak', sex: 'm' }), personWho(smith)).cz, 'mistře');
+  assert.equal(addressOf(personWho(priest), playerWho({ rank: 'sedlak', sex: 'm' })).cz, 'synu');
+});
