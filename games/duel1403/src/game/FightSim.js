@@ -38,6 +38,8 @@ export class FightSim {
       if (!w || (u1.weapon && u2.weapon)) return false;
       const b = w === u1 ? u2 : u1;
       if (!SELF_BLOCK.has(b.segType) || w.weaponPart === 'buckler') return false;
+      // the player's drawn swings cross his own body; only head and chest stop his blade, so it never snags
+      if (w.fighter === 0 && b.segType !== 'head' && b.segType !== 'chest') return false;
       const W = this.knights[w.fighter]?.weapon;
       if (W && w.y0 !== undefined) {
         for (const g of [W.gripY.R, W.gripY.L]) if (g !== null && g !== undefined && g > w.y0 - 0.02 && g < w.y1 + 0.02) return false;
@@ -54,6 +56,7 @@ export class FightSim {
     this.world.pairSkin = (sa, sb) => {
       const u1 = sa.userData, u2 = sb.userData;
       if (u1.fighter === undefined || u1.fighter !== u2.fighter || !(u1.weapon ^ u2.weapon)) return 0;
+      if (u1.fighter === 0) return 0.01;
       const body = u1.weapon ? u2 : u1;
       return body.mat === 'plate' || body.mat === 'mail' ? 0.045 : 0.035;
     };

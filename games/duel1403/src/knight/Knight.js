@@ -380,7 +380,9 @@ export class Knight {
     const wear = (this.profile?.mass ?? 0) > 12 ? 0.045 : 0.035;   // mail and plate stand off further than cloth
     const caps = (this._selfCaps ??= []);
     caps.length = 0;
-    for (const name of ['pelvis', 'abdomen', 'chest', 'head', 'thighL', 'thighR']) {
+    // the player's swings are drawn freely: only trunk and head steer his blade, lightly
+    const names = this.id === 0 ? ['chest', 'head'] : ['pelvis', 'abdomen', 'chest', 'head', 'thighL', 'thighR'];
+    for (const name of names) {
       const body = this.b[name];
       if (!body) continue;
       for (const sh of body.shapes) {
@@ -401,7 +403,7 @@ export class Knight {
     const cross = W.def.parts.find((p) => p.kind === 'cross');
     const pts = ys.map((y) => [y, 0]);
     if (cross) for (const e of [-1, 1]) pts.push([cross.y, e * cross.half]);
-    for (let pass = 0; pass < 6; pass++) {
+    for (let pass = 0, n = this.id === 0 ? 2 : 6; pass < n; pass++) {
       let moved = false;
       for (const [y, ex] of pts) {
         const rel = (y - g) * sign;               // metres from the hand along cmd.dir
