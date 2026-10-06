@@ -302,7 +302,11 @@ export class Knight {
 
   setParry(on) {
     if (on && !this.parrying) this.parryT = 0;
+    const was = this.parrying;
     this.parrying = on && this.canAct && this.armed;
+    // Absetzen: let go of the cover while still in the bind and the point,
+    // already on his face, goes straight in along his blade.
+    if (was && !on && this.bound > 0 && this.opponent?.b?.head && this.def.hands === 2 && this.mode !== 'mord') this.thrust(this.opponent.b.head.pos);
   }
 
   /** Ringen: a shove or throw when close. Returns the outcome. */
@@ -628,22 +632,35 @@ export class Knight {
     const vel = W.body.velocityAt(_w1, _w2);
     _w3.copy(_w1).addScaledVector(vel, 0.08);
     const T = this.toFightFrame(_w3, _v3);
+    // Cover the opening (Blöße) his blow is aimed at, read as it starts,
+    // rather than chasing his point: the cover settles instead of flailing.
+    if (o.attack?.target && !o.attack.done && o.attack.phase !== 'recover') {
+      const A = this.toFightFrame(o.attack.target, _w2);
+      const k = 0.8;
+      T.y += (A.y - T.y) * k; T.z += (A.z - T.z) * k;
+    }
     const l = clamp(T.y, -0.4, 0.4);
     const h = T.z;
     const sideSign = l >= 0 ? 1 : -1;
-    const fwd = (this.def.hands === 2 && this.weapon.tipY > 1 ? 0.18 : 0.36) * s;
+    // Versetzen: no flat wall held against the face. Go out to meet the cut
+    // with the strong (the forte, near the cross), the blade crossing outward
+    // over the opening he aims at, point rising, long edge against the blow,
+    // so a thrust can follow from the bind (Absetzen, on letting go).
+    const fwd = (this.def.hands === 2 ? 0.3 : 0.4) * s;
     if (h > 1.5 * s && Math.abs(l) < 0.12) {
-      // Straight down the middle: the crown (Krone), blade across above the head.
-      out.hand.set(0.33 * s, -0.16 * s, 1.68 * s);
-      out.dir.set(0.15, 1, 0.22).normalize();
+      // Straight down the middle: the crown (Krone), hilt high, the cut caught on the cross and forte.
+      out.hand.set(fwd * 0.9, -0.1 * s, 1.62 * s);
+      out.dir.set(0.55, 0.75, 0.38).normalize();
       out.edge.set(0, 0, 1);
     } else if (h > 1.05 * s) {
-      out.hand.set(fwd, clamp(0.6 * l, -0.22, 0.22) * s, clamp(h - 0.12 * s, 1.05 * s, 1.5 * s));
-      out.dir.set(0.3, 0.55 * sideSign, 0.78).normalize();
-      out.edge.set(0, sideSign, 0.2);
+      // High: the forte out in front of the threatened side of the head, point up and out.
+      out.hand.set(fwd, clamp(0.6 * l - 0.05 * sideSign, -0.3, 0.3) * s, clamp(h, 1.3 * s, 1.55 * s));
+      out.dir.set(0.45, 0.8 * sideSign, 0.25).normalize();
+      out.edge.set(0, sideSign, 0.35);
     } else {
-      out.hand.set(fwd, clamp(0.5 * l, -0.2, 0.2) * s, 1.02 * s);
-      out.dir.set(0.3, 0.5 * sideSign, -0.8).normalize();
+      // Low and middle: hilt at the hip, the blade rising across the opening.
+      out.hand.set(fwd, clamp(0.5 * l - 0.05 * sideSign, -0.28, 0.28) * s, 1.0 * s);
+      out.dir.set(0.45, 0.7 * sideSign, 0.55).normalize();
       out.edge.set(0, sideSign, -0.2);
     }
     out.edge.addScaledVector(out.dir, -out.edge.dot(out.dir)).normalize();

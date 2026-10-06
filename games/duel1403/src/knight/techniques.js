@@ -113,6 +113,7 @@ export class Attack {
     this.hit = null;
     this.blocked = false;
     this.done = false;
+    this.target = spec.target;    // the opening aimed at, for the defender to read
     this.stepIn = 0;
     this.stepped = 0;
     const s = k.scale;
