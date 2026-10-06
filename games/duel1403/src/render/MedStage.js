@@ -9,6 +9,7 @@ import { RayTracing } from '../engine/passes/RayTracing.js';
 import { VirtualShadows } from '../engine/passes/VirtualShadows.js';
 import { ClothSystem } from '../engine/passes/GPUCloth.js';
 import { windAt } from './Cloth.js';
+import { GaussianSplats } from '../engine/passes/GaussianSplats.js';
 import { Volumetrics } from '../engine/passes/Volumetrics.js';
 import { ScreenSpace } from '../engine/passes/ScreenSpace.js';
 import { DOF, MotionBlur } from '../engine/passes/Cinematic.js';
@@ -36,6 +37,8 @@ export class MedStage {
     this.probes = r.addPass(new ProbeVolume());
     this.sprites = r.addPass(new Sprites());
     this.gpuParticles = r.addPass(new GPUParticles());
+    this.splats = r.addPass(new GaussianSplats());
+    this.splats.windFn = (t, out) => windAt(t, out, 0.6);
     this.visBuffer = r.addPass(new VisBuffer());
     this.rayTracing = r.addPass(new RayTracing(), { first: true });
     this.vsm = r.addPass(new VirtualShadows());

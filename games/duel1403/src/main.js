@@ -56,6 +56,7 @@ lists.camera = stage.camera;   // LOD selection for the detailed scenery
 const field = new JoustField(stage.scene, { quality });   // the joust field south of the lists
 const town = new TownMesh(stage.scene);                  // the town of Skalice on its terrace
 stage.setStaticWorld?.(town.staticMeshes);              // baked for the visibility buffer and the ray tracer
+stage.splats?.setSources(town.smokeSources);            // chimney smoke as 3D Gaussian splats
 const dev = new DebugView({ stage, getSim: () => sim, getAis: () => ais, getPlayer: () => player });
 const particles = new Particles(stage.scene);
 const rig = new CameraRig(stage.camera);
@@ -495,7 +496,7 @@ function applyCameraOverride() {
 
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));   // the first rAF stamp can precede `last`
   last = now;
   wallTime += dt;
   if (joust) {
@@ -516,7 +517,7 @@ function frame(now) {
 window.duel = {
   get sim() { return sim; }, get player() { return player; }, get foe() { return foe; },
   start: (overrides = {}) => { const c = { ...hud.config, ...overrides }; audio.start(); newFight(c); },
-  menu: toMenu, hud, rig, OPPONENT_ORDER, PRESETS,
+  menu: toMenu, hud, rig, OPPONENT_ORDER, PRESETS, stage,
   /** Tooling: advance the game by `seconds` in fixed steps (with ?manual=1). */
   advance(seconds, each = null) {
     const n = Math.round(seconds * 60);

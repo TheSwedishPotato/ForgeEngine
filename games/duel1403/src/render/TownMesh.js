@@ -264,14 +264,22 @@ function house(B, b) {
     B.put('planks', tri, gx, top, gz, along ? (s > 0 ? Math.PI / 2 : -Math.PI / 2) : (s > 0 ? 0 : Math.PI));
     // the smoke hole under the ridge (most houses had no chimney yet)
     if (b.roof === 'thatch') B.put('dark', new BoxGeometry(along ? 0.05 : 0.4, 0.3, along ? 0.4 : 0.05), gx + (along ? s * 0.02 : 0), top + rise * 0.72, gz + (along ? 0 : s * 0.02));
+    // most hearths are lit: the smoke leaks out of the hole under the ridge
+    if (b.roof === 'thatch' && s > 0 && smoking(b)) (B.smoke ??= []).push({ x: gx + (along ? 0.3 : 0), y: top + rise * 0.72, z: gz + (along ? 0 : 0.3), rate: 1.6, size: 0.3, dark: 0.15 });
   }
   if (b.roof !== 'thatch') {
     // a stone chimney through the shingles near the ridge
     const cx = b.x + (along ? w * 0.25 : 0.4), cz = b.z + (along ? 0.4 : d * 0.25);
     B.put('rubble', new BoxGeometry(0.7, rise + 1.2, 0.7), cx, top + (rise + 1.2) / 2 + 0.2, cz);
     B.put('stone', new BoxGeometry(0.85, 0.15, 0.85), cx, top + rise + 1.4, cz);
+    if (smoking(b)) (B.smoke ??= []).push(b.kind === 'smithy'
+      ? { x: cx, y: top + rise + 1.5, z: cz, rate: 5, size: 0.38, dark: 0.85 }     // the forge, all day
+      : { x: cx, y: top + rise + 1.5, z: cz, rate: 2.2, size: 0.3, dark: 0.3 });
   }
 }
+
+/** Whose hearth is burning: the smithy always, three houses in four otherwise. */
+function smoking(b) { return b.kind === 'smithy' || (Math.abs(Math.sin(b.x * 12.9898 + b.z * 78.233) * 43758.5453) % 1) < 0.75; }
 
 /** What stands about a building: by kind, against the side or back walls, out of the way of the door. */
 function yardFor(B, b, rand) {
@@ -584,6 +592,7 @@ export class TownMesh {
     sack(B, mk.x - 15.5, 0, mk.z - 0.6, { seed: 3 }); sack(B, mk.x - 15, 0, mk.z - 0.2, { seed: 9 });
     const pr = PLACES.privy;
     privy(B, pr.x, heightAt(pr.x, pr.z), pr.z + 1.6, 0);
+    this.smokeSources = B.smoke ?? [];       // chimneys and smoke holes, for the splat smoke
     this._emit(B, M);
     // the castle in its own frame
     const CB = new Batch();

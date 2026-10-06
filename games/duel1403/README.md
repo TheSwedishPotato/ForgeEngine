@@ -433,7 +433,7 @@ Debug views: `?debug=albedo|normal|rough|metal|motion|ao|ssr|ssgi|depth|emissive
 | Item | Status |
 | --- | --- |
 | Cascaded shadow maps, contact-hardening soft shadows | Done |
-| Virtual shadow maps | WebGL2 form: a focus shadow map around the characters at about 1.5 mm per texel. Paged VSM needs compute |
+| Virtual shadow maps | Done: 3 clipmap levels (32/128/512 m), 8192² virtual texels each in 128² pages, a 4096² physical atlas with LRU, pages marked on the GPU and read back asynchronously (PBO + fence), only invalidated pages redrawn (24 per frame). CSM fills any page not yet resident |
 | Contact shadows / micro-shadows | Done (screen-space) |
 | SSGI and SSR, denoised | Done (SVGF-style history and variance clamp; temporal SSR) |
 | Better temporal stability | Done (TAA with variance clipping; NaN-safe) |
@@ -441,25 +441,29 @@ Debug views: `?debug=albedo|normal|rough|metal|motion|ao|ssr|ssgi|depth|emissive
 | Virtual texturing / streaming | Done (131,072² ground texture, feedback-driven pages) |
 | Virtual geometry (Nanite-style) | Done for the terrain (cluster DAG); characters and props use LOD chains |
 | GPU instancing and LOD | Done (instanced LOD chains, cell culling on the CPU) |
-| Compute particles | WebGL2 form: transform-feedback particles with depth-buffer collision |
-| Cloth | Banners and flags (CPU Verlet); capes need character cloth not yet done |
+| Fully GPU-driven culling | Done for the static town: 64-triangle clusters culled on the GPU against the frustum and a Hi-Z pyramid of last frame's depth, drawn in one call |
+| Visibility buffer | Done: the static town writes cluster + triangle IDs to an R32UI target; a full-screen resolve fetches the triangle, intersects the pixel's ray for barycentrics and shades with analytic texture gradients |
+| Mesh-shader-style clusters | Done as above: clusters are the unit of culling, culled ones collapse in the vertex shader |
+| Ray-traced shadows | Done: a binned-SAH BVH (built in a worker) in float textures, traversed per pixel in GLSL; people are traced as capsules. One ray per pixel towards the sun disc, accumulated over time. Near cascades no longer draw the static world |
+| Path-traced reference | Done: **F7** or `?pathtrace=1`. Four bounces with sun next-event estimation, accumulating while the camera is still. A reference, not a game mode: it is slow |
+| Compute particles | Transform-feedback particles with depth-buffer collision |
+| Cloth | Banners and flags (CPU Verlet); character capes simulated on the GPU (fragment-shader Verlet on float textures, Jacobi constraints, body-capsule collision, wind) |
+| Gaussian splatting | Done for smoke: chimney and smoke-hole plumes are anisotropic 3D Gaussians, sorted each frame, projected with the EWA Jacobian and lit with a forward-scattering phase |
 | Order-independent transparency | Done (weighted blended) |
 | Volumetrics | Done (height fog, mist, smoke, light shafts through the cascades) |
-| Fully GPU-driven pipeline (GPU culling writing its own draws) | Needs WebGPU: no indirect draws in WebGL2 |
-| Visibility buffer | Needs WebGPU (or storage buffers) to resolve efficiently |
-| Mesh-shader amplification | Needs mesh shaders: not on the web at all yet |
-| Software ray-traced shadows and reflections, path-traced reference | Needs WebGPU compute and storage buffers for a BVH; screen-space versions are in |
-| Gaussian splatting | Optional; not done |
+| Hardware ray tracing, real mesh shaders, indirect draws | Not on the web: no browser exposes them. The rows above are the same techniques built from what WebGL2 does have |
 
-**What WebGL2 cannot do, and so this engine does not claim.** WebGL2 has no
-compute shaders, no indirect or GPU-generated draws, no mesh shaders and no
-storage buffers. A fully GPU-driven pipeline (culling and LOD selection on the
-GPU writing its own draw lists), true virtual shadow maps (page tables filled by
-compute), a visibility buffer (a triangle-ID pass resolved by compute), GPU
-particle and cloth simulation, and hardware ray tracing all need WebGPU or a
-native API. What is here instead: CPU cluster-DAG culling with one multi-draw
-call per mesh, a focus shadow map, CPU Verlet cloth, and deferred shading from a
-compact G-buffer. A WebGPU backend is the step that unlocks the rest.
+**How WebGL2 gets these without compute.** Every "compute" pass here is a
+full-screen fragment shader writing to a float or integer texture, or a vertex
+shader with transform feedback: cluster culling writes a visibility texture
+that the draw's vertex shader reads; the BVH is packed into RGBA32F textures
+and walked with a fixed-size stack in GLSL; virtual-shadow page requests are
+scattered as points into a small texture and read back a frame late without
+stalling; cloth particles live in ping-pong textures. The one thing that cannot
+be faked is the GPU writing its own draw calls, so the town is drawn as one
+call over all its clusters with the culled ones collapsed to nothing. All of
+this runs on the software renderer used for the screenshots; real speed must be
+measured on real graphics cards with **F3**.
 
 ## How it works
 
