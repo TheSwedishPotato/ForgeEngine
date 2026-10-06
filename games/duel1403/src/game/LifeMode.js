@@ -3,7 +3,7 @@ import { LifeSim } from '../life/LifeSim.js';
 import { Dialogue } from '../life/Dialogue.js';
 import { Walker } from '../life/Walker.js';
 import { STARTS, GOODS, LAWS, LIFE_SOURCES, ARMY_RANK, fmtMoney, NEEDS, RUMOURS } from '../life/data.js';
-import { BUILDING, BUILDINGS, PLACES, TOWN_NAME, groundY } from '../world/town.js';
+import { BUILDING, BUILDINGS, PLACES, TOWN_NAME, groundY, pushOut } from '../world/town.js';
 import { PeopleMesh } from '../render/PeopleMesh.js';
 import { Interior } from '../render/Interior.js';
 import { allRanks } from '../data/society.js';
@@ -577,6 +577,8 @@ export class LifeMode {
       s.update(dt);
     }
     if (this.wall - this.lastSave > 60 && P.alive && !s.justice.trial && !s.pendingStop) this.save();
+    // always on the ground outside (never sunk into it, whatever moved you)
+    if (!P.inside) P.y = groundY(P.x, P.z);
     // where the player stands, and the people around
     const speed = this._speed ?? 0;
     const posture = P.sleepingUntil > s.t ? 'lie' : 'stand';
@@ -617,19 +619,10 @@ export class LifeMode {
     this._speed = this._speed === undefined ? speed : this._speed + (speed - this._speed) * Math.min(1, dt * 8);
   }
 
-  /** Walls: keep out of buildings (their footprints), and on the map. */
+  /** Walls: keep out of buildings, the castle's walls and towers and the things in the square, and on the map. */
   _collide(x, z) {
-    for (const b of BUILDINGS) {
-      if (b.kind === 'hall' || b.kind === 'barracks') continue;
-      const hw = b.w / 2 + 0.3, hd = b.d / 2 + 0.3;
-      const lx = x - b.x, lz = z - b.z;
-      if (Math.abs(lx) < hw && Math.abs(lz) < hd) {
-        const px = hw - Math.abs(lx), pz = hd - Math.abs(lz);
-        if (px < pz) x = b.x + Math.sign(lx) * hw; else z = b.z + Math.sign(lz) * hd;
-      }
-    }
-    // the castle stands on its rock: keep to the gate and the yard
-    return { x: Math.max(-140, Math.min(140, x)), z: Math.max(-60, Math.min(250, z)) };
+    ({ x, z } = pushOut(x, z, 0.3));
+    return { x: Math.max(-140, Math.min(140, x)), z: Math.max(-60, Math.min(260, z)) };
   }
 
   _camera(dt) {

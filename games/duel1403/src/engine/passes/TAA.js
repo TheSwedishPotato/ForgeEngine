@@ -61,6 +61,7 @@ void main() {
     vec2 px = base + vec2(x, y);
     vec2 suv = (px + 0.5) / uInSize;
     vec3 s = tm(texture(uCurrent, suv).rgb);
+    if (any(isnan(s)) || any(isinf(s))) s = vec3(0.0);   // one bad pixel must not spread through the history
     // where this sample really landed this frame
     vec2 d = (px + 0.5 - uJitter) - inPos;
     float w = exp(-2.29 * dot(d, d) * max(1.0, scale * scale) * 0.6);
@@ -77,6 +78,7 @@ void main() {
   vec2 prevUv = vUv - motion;
   float offscreen = any(lessThan(prevUv, vec2(0.0))) || any(greaterThan(prevUv, vec2(1.0))) ? 1.0 : 0.0;
   vec3 hist = tm(sampleHistory(prevUv));
+  if (any(isnan(hist)) || any(isinf(hist))) hist = vec3(0.0);
   // Clip the history toward the neighbourhood mean (variance box, gamma 1.1).
   vec3 hy = toYCoCg(hist);
   vec3 lo = mean - 1.1 * sigma, hi = mean + 1.1 * sigma;
@@ -91,6 +93,7 @@ void main() {
   float alpha = mix(0.035, 0.12, conf) + saturate(speed * 0.02) * 0.1;
   alpha = max(alpha, max(offscreen, uReset));
   vec3 res = mix(hist, cur, alpha);
+  if (any(isnan(res)) || any(isinf(res))) res = vec3(0.0);
   o = vec4(itm(res), 1.0);
 }`;
 

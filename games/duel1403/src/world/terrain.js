@@ -25,8 +25,22 @@ function vnoise(x, z) {
 function fbm(x, z, oct) { let s = 0, a = 0.5; for (let i = 0; i < oct; i++) { s += a * vnoise(x, z); x = x * 2.03 + 17.1; z = z * 2.03 + 9.7; a *= 0.5; } return s; }
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
+// The castle's bailey stands on a levelled terrace cut into the top of its hill.
+export const CASTLE_SITE = { x: 30, z: 230, flat: 31, edge: 44 };
+let _castleH = null;
+/** Height of the castle terrace (the hilltop there, levelled). */
+export function castleTerraceY() { return (_castleH ??= rawHeight(CASTLE_SITE.x, CASTLE_SITE.z)); }
+
 /** Ground height (m) at world x, z. */
 export function heightAt(x, z) {
+  const h = rawHeight(x, z);
+  const d = Math.hypot(x - CASTLE_SITE.x, z - CASTLE_SITE.z);
+  if (d >= CASTLE_SITE.edge) return h;
+  const w = 1 - smooth(CASTLE_SITE.flat, CASTLE_SITE.edge, d);
+  return h + (castleTerraceY() - h) * w;
+}
+
+function rawHeight(x, z) {
   const r = Math.hypot(x, z);
   let h = 0;
   // rolling country beyond the tournament field

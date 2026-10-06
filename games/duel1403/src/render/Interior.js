@@ -1,7 +1,9 @@
 import {
-  Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, PlaneGeometry, MeshStandardMaterial, MeshBasicMaterial, PointLight, DoubleSide, Color,
+  Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, PlaneGeometry, ConeGeometry, MeshStandardMaterial, MeshBasicMaterial, PointLight, DoubleSide, Color,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { Batch, barrel, tub, crate, sack, stool, goods, woodpile, bench as benchProp } from './props.js';
+import { townMaterials } from './TownMesh.js';
 
 const DEPTH = -60;   // rooms are built below the town, out of the sun
 
@@ -42,7 +44,10 @@ export class Interior {
     // ceiling beams
     if (!stone) for (let x = -W / 2 + 0.8; x < W / 2; x += 1.4) add(new BoxGeometry(0.18, 0.22, D), wood, x, H - 0.11, 0);
     // the door: on the wall facing the street door
-    const dx = building.door.x - building.x, dz = building.door.z - building.z;
+    // the door's side, in the building's own frame (castle buildings are turned)
+    const rc = Math.cos(building.rot ?? 0), rs = Math.sin(building.rot ?? 0);
+    const dx0 = building.door.x - building.x, dz0 = building.door.z - building.z;
+    const dx = dx0 * rc - dz0 * rs, dz = dx0 * rs + dz0 * rc;
     const onX = Math.abs(dx) / building.w > Math.abs(dz) / building.d;
     this.doorLocal = onX ? { x: Math.sign(dx) * (W / 2 - 0.8), z: 0 } : { x: 0, z: Math.sign(dz) * (D / 2 - 0.8) };
     const doorFace = onX ? { x: Math.sign(dx) * (W / 2 - 0.09), z: 0 } : { x: 0, z: Math.sign(dz) * (D / 2 - 0.09) };
@@ -131,12 +136,119 @@ export class Interior {
       spot(0.2, -0.45, 0, 'sit'); spot(0.9, -0.45, 0, 'sit'); spot(W / 2 - 0.7, D / 2 - 1.1, 0, 'lie'); spot(-W / 2 + 1.2, 0.4, Math.PI / 2);
       this.sleep = { x: W / 2 - 0.7, z: D / 2 - 1.1 };
     }
+    this._furnish(kind, W, D, H);
     for (const L of lights) this.group.add(L);
     this.lights = lights;
     this.group.position.set(this.origin.x, this.origin.y, this.origin.z);
     scene.add(this.group);
     this.assign = new Map();
     void PlaneGeometry;
+  }
+
+  /**
+   * The things of the trade and of daily life, modelled (see props.js): the
+   * tavern's casks and stools and mugs, the smith's tools and coal, flour
+   * sacks and loaves, the shoemaker's lasts, a loom, beds with blankets,
+   * shelves of pots, a font, shields and spears, and so on. Kept clear of
+   * the door and of the places where people stand.
+   */
+  _furnish(kind, W, D, H) {
+    const M = townMaterials(), B = new Batch();
+    const shelf = (x, z, ry, ware = 'pots') => {
+      for (const yy of [1.1, 1.6]) B.put('planks', new BoxGeometry(1.4, 0.04, 0.3), x, yy, z, ry);
+      for (const s2 of [-1, 1]) B.put('beam', new BoxGeometry(0.05, 0.3, 0.3), x + Math.cos(ry) * s2 * 0.65, 1.0, z - Math.sin(ry) * s2 * 0.65, ry);
+      goods(B, ware, x, 1.13, z, { ry, n: 3 }); goods(B, ware, x, 1.63, z, { ry, n: 3 });
+    };
+    const bed = (x, z, ry = 0, color = 'clothRed') => {
+      B.put('planks', new BoxGeometry(1.0, 0.35, 2.0), x, 0.18, z, ry);
+      B.put('hay', new BoxGeometry(0.9, 0.12, 1.9), x, 0.41, z, ry);
+      B.put(color, new BoxGeometry(0.95, 0.06, 1.3), x + Math.sin(ry) * 0.3, 0.49, z + Math.cos(ry) * 0.3, ry, { rx: 0.03 });
+      B.put('sack', new BoxGeometry(0.6, 0.12, 0.3), x - Math.sin(ry) * 0.75, 0.52, z - Math.cos(ry) * 0.75, ry);
+    };
+    const chest = (x, z, ry = 0) => {
+      B.put('planks', new BoxGeometry(1.1, 0.55, 0.55), x, 0.28, z, ry);
+      B.put('planks', new CylinderGeometry(0.28, 0.28, 1.1, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), x, 0.55, z, ry);
+      for (const t of [-0.35, 0.35]) B.put('iron', new BoxGeometry(0.05, 0.6, 0.58), x + Math.cos(ry) * t, 0.3, z - Math.sin(ry) * t, ry);
+    };
+    const mug = (x, y, z) => { B.put('stave', new CylinderGeometry(0.05, 0.045, 0.13, 8), x, y + 0.065, z); B.put('iron', new CylinderGeometry(0.052, 0.052, 0.015, 8, 1, true), x, y + 0.11, z); };
+    const herbs = (x, z) => { for (let i = 0; i < 4; i++) { const g = new ConeGeometry(0.07, 0.3, 6); g.rotateX(Math.PI); B.put(i % 2 ? 'leaves' : 'hay', g, x + i * 0.25, H - 0.45, z); } };
+    if (kind === 'tavern') {
+      for (const [x, z] of [[-W / 4, -D / 4], [-W / 4, D / 4], [W / 6, -D / 4]]) { mug(x - 0.4, 0.8, z); mug(x + 0.3, 0.8, z + 0.1); }
+      for (let i = 0; i < 3; i++) barrel(B, W / 2 - 0.45, 0, -D / 2 + 0.6 + i * 0.65, { lying: true, ry: Math.PI / 2 });
+      shelf(W / 2 - 0.2, D / 2 - 1.4, -Math.PI / 2);
+      sack(B, -W / 2 + 0.5, 0, D / 2 - 0.5, { seed: 4 }); crate(B, -W / 2 + 1.1, 0, D / 2 - 0.45, {});
+      stool(B, W / 6 + 1.3, 0, D / 4 + 0.4); stool(B, W / 6 + 1.9, 0, D / 4 - 0.3);
+      herbs(-W / 4, -D / 2 + 0.4);
+    } else if (kind === 'smithy') {
+      // tongs and hammers on a rack, a coal heap, a quench tub, bar iron
+      B.put('beam', new BoxGeometry(1.6, 0.08, 0.06), 1.0, 1.5, -D / 2 + 0.12);
+      for (let i = 0; i < 5; i++) B.put('iron', new BoxGeometry(0.04, 0.5, 0.03), 0.4 + i * 0.3, 1.2, -D / 2 + 0.16);
+      const coal = new SphereGeometry(0.5, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2); coal.scale(1, 0.5, 1);
+      B.put('dark', coal, -W / 2 + 0.6, 0, D / 2 - 0.7);
+      tub(B, 1.4, 0, -0.9, { r: 0.32, h: 0.5 });
+      for (let i = 0; i < 6; i++) B.put('iron', new BoxGeometry(1.2, 0.03, 0.03), W / 2 - 0.8, 0.05 + i * 0.03, D / 2 - 0.5 + (i % 2) * 0.04);
+      woodpile(B, W / 2 - 0.5, 0, 0, { len: 1.8, h: 0.8, ry: Math.PI / 2 });
+    } else if (kind === 'bakery') {
+      for (let i = 0; i < 3; i++) sack(B, W / 2 - 0.5, 0, -D / 2 + 0.6 + i * 0.6, { seed: i + 1 });
+      shelf(0.6, D / 2 - 0.2, Math.PI, 'bread');
+      B.put('log', new BoxGeometry(1.6, 0.35, 0.55), 1, 0.55, -D / 2 + 0.5);       // the kneading trough
+      woodpile(B, -W / 2 + 0.5, 0, D / 2 - 0.6, { len: 1.6, h: 0.9 });
+    } else if (kind === 'butcher') {
+      for (let i = 0; i < 4; i++) goods(B, 'meat', -1 + i * 0.6, H - 0.3, D / 2 - 0.4, { n: 1 });
+      B.put('log', new CylinderGeometry(0.35, 0.38, 0.8, 10), 1.6, 0.4, -0.6);
+      tub(B, -1.6, 0, -D / 2 + 0.6, {});
+    } else if (kind === 'workshop') {
+      if (this.b.id === 'weaver') {
+        // an upright loom: two posts, beams and the warp
+        for (const s2 of [-0.8, 0.8]) B.put('beam', new BoxGeometry(0.1, 1.9, 0.1), 1 + s2, 0.95, D / 2 - 0.6);
+        for (const yy of [0.3, 1.8]) B.put('log', new CylinderGeometry(0.05, 0.05, 1.7, 8).rotateZ(Math.PI / 2), 1, yy, D / 2 - 0.6);
+        B.put('clothBlue', new BoxGeometry(1.5, 1.4, 0.02), 1, 1.05, D / 2 - 0.6);
+        goods(B, 'cloth', -1.2, 0.8, D / 2 - 0.5, { n: 3 });
+      } else {
+        shelf(1.2, D / 2 - 0.2, Math.PI, 'shoes');
+        for (let i = 0; i < 4; i++) B.put('log', new BoxGeometry(0.08, 0.06, 0.24), -0.4 + i * 0.15, 0.83, 0.1);   // lasts on the bench
+      }
+      chest(W / 2 - 0.8, -D / 2 + 0.6);
+    } else if (kind === 'rychta') {
+      chest(W / 2 - 0.8, -D / 2 + 0.6);
+      shelf(-W / 2 + 0.2, -D / 2 + 1.5, Math.PI / 2);
+      B.put('iron', new BoxGeometry(0.06, 0.6, 0.06), 0.9, 1.0, 0.0);   // a candle on an iron stand
+    } else if (kind === 'church') {
+      const font = new CylinderGeometry(0.55, 0.35, 0.8, 8);
+      B.put('stone', font, -W / 2 + 1.5, 0.4, -D / 2 + 2);
+      B.put('stone', new CylinderGeometry(0.3, 0.4, 0.3, 8), -W / 2 + 1.5, 0.05, -D / 2 + 2);
+      for (const s2 of [-1, 1]) B.put('iron', new CylinderGeometry(0.03, 0.12, 1.2, 6), s2 * 1.6, 0.6, D / 2 - 1.6);
+    } else if (kind === 'hall') {
+      B.put('planks', new BoxGeometry(W - 2, 0.25, 1.8), 0, 0.12, D / 2 - 1.2);     // the dais for the high table
+      for (let i = 0; i < 4; i++) { const sh = new CylinderGeometry(0.35, 0.35, 0.05, 3); sh.rotateX(Math.PI / 2); B.put(i % 2 ? 'clothRed' : 'clothBlue', sh, -W / 2 + 3 + i * (W - 6) / 3, 2.4, -D / 2 + 0.15); }
+      for (let i = 0; i < 6; i++) B.put('beam', new BoxGeometry(0.04, 2.6, 0.04), W / 2 - 0.4, 1.3, -D / 2 + 1 + i * 0.35, 0, { rz: 0.1 });
+      chest(-W / 2 + 1, -D / 2 + 0.6);
+      for (let i = -2; i <= 2; i++) mug(i * 1.1, 0.8, 0.1);
+    } else if (kind === 'barracks') {
+      for (let i = 0; i < 4; i++) B.put('hay', new BoxGeometry(0.85, 0.08, 1.9), -W / 2 + 0.7 + i * 1.1, 0.44, -D / 2 + 1.2);
+      for (let i = 0; i < 3; i++) { const sh = new CylinderGeometry(0.32, 0.32, 0.04, 16); sh.rotateX(Math.PI / 2); B.put(i % 2 ? 'clothRed' : 'planks', sh, -W / 2 + 0.8 + i * 0.8, 1.7, D / 2 - 0.12); }
+      chest(W / 2 - 0.8, 0.4, Math.PI / 2);
+      barrel(B, W / 2 - 0.5, 0, -D / 2 + 0.5, {});
+    } else if (kind === 'bath') {
+      for (let i = 0; i < 3; i++) tub(B, -W / 2 + 0.6 + i * 0.5, 0, D / 2 - 0.5, { r: 0.18, h: 0.25 });
+      for (let i = 0; i < 4; i++) B.put('sack', new BoxGeometry(0.5, 0.02, 0.8), -W / 2 + 0.3, 1.2, -1 + i * 0.6, 0, { rz: 1.4 });   // linen on a rail
+      woodpile(B, W / 2 - 0.4, 0, -D / 2 + 1.4, { len: 1.6, h: 0.8, ry: Math.PI / 2 });
+    } else {
+      // a home: a bed with a blanket, a chest, pots on a shelf, a distaff, herbs drying
+      bed(W / 2 - 0.7, D / 2 - 1.1, 0, Math.random() < 0.5 ? 'clothRed' : 'clothBlue');
+      chest(-W / 2 + 0.7, D / 2 - 0.5);
+      shelf(0.6, -D / 2 + 0.2, 0);
+      tub(B, -W / 2 + 0.5, 0, 0.6, { r: 0.25, h: 0.35 });
+      stool(B, 1.3, 0, 0.7);
+      herbs(-0.5, D / 2 - 0.4);
+      B.put('beam', new CylinderGeometry(0.015, 0.015, 1.2, 4), -W / 2 + 1.6, 0.6, -D / 2 + 0.4, 0, { rz: 0.3 });
+    }
+    void benchProp;
+    for (const [key, geo] of B.build({ planks: 0.8, beam: 0.6, stone: 0.5, hay: 0.8 })) {
+      const m = new Mesh(geo, M[key] ?? M.planks);
+      m.castShadow = true; m.receiveShadow = true;
+      this.group.add(m);
+    }
   }
 
   /** World position of a local room point. */

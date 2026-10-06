@@ -217,57 +217,25 @@ export class Lists {
     }
     // ---- hills, the castle on its rock, the village ------------------------------------------
     {
-      const hillMat = new MeshStandardMaterial({ color: '#56653a', roughness: 1, flatShading: true });
-      for (const [x, z, r, h] of [[30, 230, 120, 55], [-160, 260, 140, 40], [210, 180, 110, 35], [-260, -120, 150, 45], [180, -260, 160, 50], [0, -320, 180, 38]]) {
-        const hill = new Mesh(new SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), hillMat);
-        hill.scale.y = h / r;
-        hill.position.set(x, -2, z);
-        this.group.add(hill);
-        (this.hills ??= []).push(hill);
+      // Until the engine's terrain has been built (a few seconds, in a worker),
+      // a coarse copy of the same land: the same height function on a 10 m
+      // grid, so the town, the road and the castle terrace stand where they
+      // will stand (the old dome hills buried the north of the town).
+      const hillMat = new MeshStandardMaterial({ color: '#56653a', roughness: 1 });
+      {
+        const N = 120, S = 1200, step = S / N;
+        const geo = new PlaneGeometry(S, S, N, N);
+        geo.rotateX(-Math.PI / 2);
+        const P = geo.attributes.position;
+        for (let i = 0; i < P.count; i++) P.setY(i, heightAt(P.getX(i), P.getZ(i)) - 0.06);
+        geo.computeVertexNormals();
+        const land = new Mesh(geo, hillMat);
+        land.receiveShadow = true;
+        this.group.add(land);
+        (this.hills ??= []).push(land);
+        void step;
       }
-      const stone = new MeshStandardMaterial({ color: '#cfc6b2', roughness: 0.95 });
-      const roofMat = new MeshStandardMaterial({ color: '#8a3c26', roughness: 0.9, flatShading: true });
-      const castle = new Group();
-      const keep = new Mesh(new BoxGeometry(9, 26, 9), stone);
-      keep.position.set(0, 13, 0);
-      const keepRoof = new Mesh(new ConeGeometry(7.4, 9, 4), roofMat);
-      keepRoof.rotation.y = Math.PI / 4;
-      keepRoof.position.set(0, 30.5, 0);
-      const tower = new Mesh(new CylinderGeometry(4, 4.4, 20, 16), stone);
-      tower.position.set(-16, 10, 6);
-      const towerRoof = new Mesh(new ConeGeometry(5, 9, 16), roofMat);
-      towerRoof.position.set(-16, 24.5, 6);
-      const hall = new Mesh(new BoxGeometry(18, 11, 9), stone);
-      hall.position.set(13, 5.5, 2);
-      const hallRoof = new Mesh(new CylinderGeometry(0.01, 7, 18, 4, 1), roofMat);
-      hallRoof.rotation.z = Math.PI / 2;
-      hallRoof.rotation.x = Math.PI / 4;
-      hallRoof.scale.set(1, 1, 0.75);
-      hallRoof.position.set(13, 13.5, 2);
-      const wall = new Mesh(new BoxGeometry(48, 8, 2), stone);
-      wall.position.set(-2, 4, -12);
-      const wall2 = new Mesh(new BoxGeometry(2, 8, 30), stone);
-      wall2.position.set(-25, 4, 0);
-      for (const m of [keep, keepRoof, tower, towerRoof, hall, hallRoof, wall, wall2]) castle.add(m);
-      // crenellations
-      const cren = [];
-      for (let i = 0; i < 22; i++) cren.push(new BoxGeometry(1, 1.2, 2).translate(-25 + i * 2.2, 8.6, -12));
-      castle.add(new Mesh(mergeGeometries(cren), stone));
-      castle.position.set(30, terrain ? heightAt(30, 230) - 1.5 : 52, 230);
-      castle.rotation.y = 0.3;
-      this.group.add(castle);
-      // The parish church of the town below.
-      const plaster = new MeshStandardMaterial({ color: '#d9d0bb', roughness: 0.95 });
-      const thatch = new MeshStandardMaterial({ color: '#7d6a44', roughness: 1, flatShading: true });
-      // The town's houses are drawn by TownMesh (src/render/TownMesh.js) from the town layout.
-      const church = new Mesh(new BoxGeometry(5, 18, 5), plaster);
-      church.position.set(-20, 9, 100);
-      const spire = new Mesh(new ConeGeometry(3.8, 12, 4), roofMat);
-      spire.rotation.y = Math.PI / 4;
-      spire.position.set(-20, 24, 100);
-      const nave = new Mesh(new BoxGeometry(9, 9, 18), plaster);
-      nave.position.set(-20, 4.5, 112);
-      this.group.add(church, spire, nave);
+      // The castle, the church and the town's houses are drawn by TownMesh (src/render/TownMesh.js).
     }
     void Vector3; void BufferGeometry; void Float32BufferAttribute;
   }

@@ -1,5 +1,5 @@
 import { LAW, GOODS, SHOPS, fmtMoney } from './data.js';
-import { BUILDING, PLACES, NODES, groundY } from '../world/town.js';
+import { BUILDING, PLACES, NODES, groundY, navRoute, doorApproach } from '../world/town.js';
 import { remember, knowsCrime } from './Memory.js';
 
 /**
@@ -219,7 +219,7 @@ export class Justice {
         if (a.pursuit !== 'hue' && dist > 25) { if (a.pursuit) this._release(p); continue; }
         if (a.pursuit === 'hue' && dist > 70) continue;
         a.pursuit ||= 'watch'; a.place = 'pursuit';
-        a.route = [[b.door.x, b.door.z]];
+        { const ap = doorApproach(b); a.route = navRoute([[a.x, a.z], [ap.x, ap.z], [b.door.x, b.door.z]], { skipLast: b.id }).slice(1); a.skip = new Set([b.id]); }
         if (dist < 1.2) { a.inside = P.inside; a.route = []; a.seizeT = 0; }
         anyClose ||= dist < 45;
         continue;
@@ -237,7 +237,7 @@ export class Justice {
       }
       if (dist > 70) continue;
       anyClose ||= dist < 45;
-      if (dist > 1.5) a.route = [[P.x, P.z]];
+      if (dist > 1.5) { a.route = navRoute([[a.x, a.z], [P.x, P.z]]).slice(1); a.skip = null; }
       else return this._seize(p);
     }
     // a hue and cry runs out when you are out of reach long enough

@@ -1,4 +1,4 @@
-import { NODES, BUILDING, BUILDINGS, PLACES, path, nearestNode, groundY } from '../world/town.js';
+import { NODES, BUILDING, BUILDINGS, PLACES, path, nearestNode, groundY, navRoute, doorApproach, pushOut } from '../world/town.js';
 import { makePeople, scheduled } from './people.js';
 import { NEEDS, GOODS, SHOPS, LAW, ARMY_RANKS, ARMY_RANK, START_DATE, CURFEW, DAWN, dateText, BELLS, STARTS, fmtMoney } from './data.js';
 import { Justice } from './Crime.js';
@@ -14,7 +14,9 @@ function spotFor(place, idx) {
   const pl = PLACES[place];
   if (pl) {
     const a = idx * 2.39996, r = 0.6 + (idx % 4) * 0.55;
-    return { x: pl.x + Math.cos(a) * r, z: pl.z + Math.sin(a) * r, node: pl.node, inside: null };
+    // never inside the well, the pillory or a wall
+    const p = pushOut(pl.x + Math.cos(a) * r, pl.z + Math.sin(a) * r, 0.35);
+    return { x: p.x, z: p.z, node: pl.node, inside: null };
   }
   const b = BUILDING[place];
   if (b) return { x: b.door.x, z: b.door.z, node: b.node, inside: b.id };
@@ -47,9 +49,9 @@ export class LifeSim {
     const home = BUILDING[st.home];
     this.player = {
       name, sex, start: st.id, rank: st.rank, estate: st.estate, noble: !!st.noble, startName: st.name,
-      x: home ? home.door.x + Math.sign(home.door.x - home.x) * (Math.abs(home.door.x - home.x) / home.w > Math.abs(home.door.z - home.z) / home.d ? 1.6 : 0) : 0,
-      z: home ? home.door.z + Math.sign(home.door.z - home.z) * (Math.abs(home.door.x - home.x) / home.w > Math.abs(home.door.z - home.z) / home.d ? 0 : 1.6) : 95,
-      y: 0, yaw: home ? Math.atan2(home.door.x - home.x, home.door.z - home.z) : Math.PI, inside: null,
+      x: home ? doorApproach(home, 1.4).x : 0,
+      z: home ? doorApproach(home, 1.4).z : 95,
+      y: 0, yaw: home ? Math.atan2(doorApproach(home).nx, doorApproach(home).nz) : Math.PI, inside: null,
       money: st.money, skills: { labour: 10, sword: 10, crossbow: 5, speech: 10, trade: 5, letters: 0, riding: 0, stealth: 5, ...st.skills },
       needs: { hunger: 25, thirst: 30, bladder: 35, bowels: 20, fatigue: 10, dirt: 20 }, health: 100, drunk: 0,
       inventory: { bread: 1 }, dress: { ...st.dress }, colors: { ...st.colors }, weapon: st.weapon ?? null, weaponDrawn: false,
@@ -138,6 +140,9 @@ export class LifeSim {
         a.x += (dx / dist) * step; a.z += (dz / dist) * step;
         a.yaw = Math.atan2(dx, dz);
         a.speed = step / Math.max(1e-4, dt);
+        // never through a wall: the route goes round, this catches the rest
+        const o = pushOut(a.x, a.z, 0.25, a.skip);
+        a.x = o.x; a.z = o.z;
       }
     } else a.speed = 0;
     a.y = groundY(a.x, a.z);
@@ -162,7 +167,12 @@ export class LifeSim {
       if (a.inside) { const o = BUILDING[a.inside]; a.x = o.door.x; a.z = o.door.z; a.inside = null; }
       const dx = b.door.x - a.x, dz = b.door.z - a.z, dist = Math.hypot(dx, dz), step = Math.min(dist, 2.6 * dt);
       if (teleport || dist < 0.6) { a.x = b.door.x; a.z = b.door.z; a.inside = P.inside; a.speed = 0; return; }
-      a.x += dx / dist * step; a.z += dz / dist * step; a.yaw = Math.atan2(dx, dz); a.speed = step / Math.max(1e-4, dt);
+      const ap = doorApproach(b);
+      const r = navRoute([[a.x, a.z], [ap.x, ap.z], [b.door.x, b.door.z]], { skipLast: b.id });
+      const next = dist < 1.6 ? [b.door.x, b.door.z] : r.find((q, i) => i > 0 && Math.hypot(q[0] - a.x, q[1] - a.z) > 0.05) ?? [b.door.x, b.door.z];
+      const nx = next[0] - a.x, nz = next[1] - a.z, nd = Math.hypot(nx, nz) || 1;
+      a.x += nx / nd * step; a.z += nz / nd * step; a.yaw = Math.atan2(nx, nz); a.speed = step / Math.max(1e-4, dt);
+      const o = pushOut(a.x, a.z, 0.25, new Set([b.id])); a.x = o.x; a.z = o.z;
       return;
     }
     if (a.inside) { const o = BUILDING[a.inside]; a.x = o.door.x; a.z = o.door.z; a.inside = null; }
@@ -173,8 +183,15 @@ export class LifeSim {
     if (teleport || dist > 40) { a.x = tx; a.z = tz; a.speed = 0; return; }
     if (dist < 0.35) { a.speed = 0; let e = P.yaw - a.yaw; e = Math.atan2(Math.sin(e), Math.cos(e)); a.yaw += e * Math.min(1, dt * 3); return; }
     const sp = Math.min(dist > 5 ? 3.0 : dist > 1.5 ? 1.9 : 1.2, dist / Math.max(dt, 1e-4));
-    a.x += dx / dist * sp * dt; a.z += dz / dist * sp * dt;
-    a.yaw = Math.atan2(dx, dz); a.speed = sp;
+    // round buildings, not through them
+    if (!a.navT || a.navT < this.t - 0.01 || dist > 3) {
+      const r = navRoute([[a.x, a.z], [tx, tz]]);
+      a.navNext = r.find((q, i) => i > 0 && Math.hypot(q[0] - a.x, q[1] - a.z) > 0.05) ?? null; a.navT = this.t;
+    }
+    const nx = a.navNext ? a.navNext[0] - a.x : dx, nz = a.navNext ? a.navNext[1] - a.z : dz, nd = Math.hypot(nx, nz) || 1;
+    a.x += nx / nd * sp * dt; a.z += nz / nd * sp * dt;
+    const o = pushOut(a.x, a.z, 0.25); a.x = o.x; a.z = o.z;
+    a.yaw = Math.atan2(nx, nz); a.speed = sp;
   }
 
   /** Pay hired companions at dawn; the unpaid walk off. */
@@ -243,12 +260,32 @@ export class LifeSim {
     return { ok: true, what };
   }
 
+  /**
+   * A walkable route: out of the door you are in (if any), along the streets,
+   * to the door you are going to (or the spot), round anything in the way.
+   */
   _routeTo(a, node, spot) {
     const from = nearestNode(a.x, a.z);
     const nodes = path(from, node);
-    const route = nodes.map((n) => [...NODES[n]]);
-    if (spot) route.push([spot.x, spot.z]);
-    return route;
+    const pts = [[a.x, a.z]];
+    let skipFirst = null, skipLast = null;
+    if (a.inside && BUILDING[a.inside]) {
+      const b = BUILDING[a.inside], ap = doorApproach(b);
+      pts[0] = [b.door.x, b.door.z];
+      pts.push([ap.x, ap.z]);
+      skipFirst = b.id;
+    }
+    for (const n of nodes) pts.push([...NODES[n]]);
+    if (spot) {
+      if (spot.inside && BUILDING[spot.inside]) {
+        const b = BUILDING[spot.inside], ap = doorApproach(b);
+        pts.push([ap.x, ap.z]);
+        skipLast = b.id;
+      }
+      pts.push([spot.x, spot.z]);
+    }
+    a.skip = new Set([skipFirst, skipLast].filter(Boolean));
+    return navRoute(pts, { skipFirst, skipLast }).slice(1);
   }
 
   // --- the player ----------------------------------------------------------------------------------

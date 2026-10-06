@@ -125,9 +125,13 @@ void main() {
   if (base.a < uAlphaTest) discard;
 #endif
 #ifdef FLAT
-  vec3 N = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+  // the face normal from screen derivatives; edge-on or sub-pixel faces give
+  // a zero vector, which would put a NaN in the G-buffer (and through the
+  // temporal passes, across the whole frame): fall back to the vertex normal
+  vec3 fn = cross(dFdx(vWorld), dFdy(vWorld));
+  vec3 N = dot(fn, fn) > 1e-24 ? normalize(fn) : normalize(vNormal + vec3(0.0, 1e-6, 0.0));
 #else
-  vec3 N = normalize(vNormal);
+  vec3 N = normalize(vNormal + vec3(0.0, 1e-9, 0.0));
 #endif
 #if defined(DOUBLE_SIDED) || defined(BACK_SIDE)
   if (!gl_FrontFacing) N = -N;
