@@ -4,8 +4,9 @@
  * Every person keeps a short list of memories: things they saw, things done
  * to them or for them, things they were told, and things they heard from
  * others. Each has a weight (how much it matters to them, 1–10) and an
- * `about` (the player, or another person's id). The heaviest and newest are
- * kept; trivial ones fade. When two people stand together for a while, the
+ * `about` (the player, or another person's id). Memories fade with time,
+ * trifles within hours, grave things over a week or more; half-faded ones
+ * come back hazy, and only what is still fresh is worth gossiping about. When two people stand together for a while, the
  * talkative one passes on what she knows that is worth telling, a little
  * weaker each time it is retold, and the listener's opinion of whoever it
  * is about shifts with it. That is how a theft in the market at nine is
@@ -14,6 +15,22 @@
 
 const KEEP = 24;
 const KIND_WORD = { saw: 'you saw', done: 'they did to you', got: 'you got from them', gave: 'you gave them', said: 'they told you', met: 'you noted', heard: 'you heard' };
+
+/**
+ * How strongly a memory is still held: its weight, halving over a time that
+ * grows with how much it mattered (a trifle in about 6 game hours, a theft or
+ * a blow in about 6 days, the gravest things over a week).
+ */
+export function strength(m, t) {
+  const half = 6 * Math.pow(m.weight, 1.5);
+  return m.weight * Math.pow(0.5, Math.max(0, t - m.t) / half);
+}
+
+/** Let what has faded go. */
+export function fade(p, t) {
+  if (!p.memories?.length) return;
+  p.memories = p.memories.filter((m) => strength(m, t) >= 0.6);
+}
 
 /** Store a memory. m: {kind, text, about = 'player', weight = 3, src, crime, att}. Returns it. */
 export function remember(p, m, t) {
@@ -26,7 +43,7 @@ export function remember(p, m, t) {
   if (p.memories.length > KEEP) {
     // forget the least important, weighing age (a day halves it)
     let worst = 0, ws = Infinity;
-    for (const [i, x] of p.memories.entries()) { const s = x.weight * Math.pow(0.5, (t - x.t) / 24); if (s < ws) { ws = s; worst = i; } }
+    for (const [i, x] of p.memories.entries()) { const s = strength(x, t); if (s < ws) { ws = s; worst = i; } }
     p.memories.splice(worst, 1);
   }
   return mem;
@@ -44,7 +61,8 @@ export function memoryLines(sim, p, max = 10) {
   return list.map((m) => {
     const ago = sim.t - m.t, when = ago < 1 ? 'just now' : ago < 20 ? `${Math.round(ago)} hours ago` : `${Math.round(ago / 24)} days ago`;
     const src = m.kind === 'heard' && m.src ? ` (from ${sim.byId[m.src]?.fullName ?? 'someone'})` : '';
-    return `${when}, ${KIND_WORD[m.kind] ?? m.kind}${src}: ${m.text}`;
+    const hazy = strength(m, sim.t) < m.weight * 0.4 ? ' (you only half remember this; you may have details wrong)' : '';
+    return `${when}, ${KIND_WORD[m.kind] ?? m.kind}${src}: ${m.text}${hazy}`;
   });
 }
 
@@ -57,6 +75,7 @@ export function memorySummary(p, n = 2) { return about(p, 'player').slice(-n).ma
  */
 export function gossip(sim, rng = Math.random) {
   const groups = new Map();
+  for (const p of sim.people) fade(p, sim.t);
   for (const p of sim.people) {
     if (!p.alive || p.agent.route.length || /sleep/.test(p.agent.act)) continue;
     const a = p.agent;
@@ -70,7 +89,7 @@ export function gossip(sim, rng = Math.random) {
     for (const speaker of g) {
       // the talkative talk; the honest keep secrets less than the sly embroider them, but both talk
       if (rng() > 0.25 + 0.6 * speaker.traits.extraversion) continue;
-      const worth = (speaker.memories ?? []).filter((m) => m.weight >= 3 && m.about !== speaker.id).sort((a, b) => b.weight - a.weight || b.t - a.t);
+      const worth = (speaker.memories ?? []).filter((m) => strength(m, sim.t) >= 3 && m.about !== speaker.id).sort((a, b) => b.weight - a.weight || b.t - a.t);
       for (const m of worth.slice(0, 2)) {
         const listener = g.find((q) => q !== speaker && !m.told.includes(q.id) && q.id !== m.about);
         if (!listener) continue;

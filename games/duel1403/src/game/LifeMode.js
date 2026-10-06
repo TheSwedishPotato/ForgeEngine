@@ -76,6 +76,7 @@ export class LifeMode {
       <p class="fine">You wake in ${esc(TOWN_NAME)}, a small market town under the lord of Skalice castle, on the eve of the feast of St Wenceslas, patron of the land. The king is a prisoner in Vienna, Hungarian riders are loose in the kingdom, and the captain at the castle is taking on men. Everyone in the town lives their own day. You can talk to any of them.</p>
       <label class="lrow">Name <input class="lname" maxlength="24" value="${esc(this.config?.player?.name || 'Jan')}"></label>
       <div class="lrow">Sex <label><input type="radio" name="lsex" value="m" checked> man</label> <label><input type="radio" name="lsex" value="f"> woman</label></div>
+      <div class="lrow">Origin <label><input type="radio" name="lorigin" value="native" checked> born here: family, home, everyone knows you</label> <label><input type="radio" name="lorigin" value="newcomer"> a newcomer: a bed at the inn, nobody knows you</label></div>
       <h3>Your station</h3>
       <div class="jlist lstarts">${STARTS.map((s, i) => `<label data-sex="${s.sex}"><input type="radio" name="lstart" value="${s.id}" ${i === 0 ? 'checked' : ''}><b>${esc(s.name)} · ${fmtMoney(s.money)}</b><small>${esc(s.text)}</small></label>`).join('')}</div>
       <p class="fine lclaude">People answer through Claude when it is available to this page (you will be asked to allow it the first time); otherwise they answer from a simpler script.</p>
@@ -92,17 +93,17 @@ export class LifeMode {
       if (a === 'continue') { const o = readSave(); if (o) this.begin({ save: o }); }
       if (a === 'begin') {
         const start = STARTS.find((s) => s.id === el.querySelector('input[name=lstart]:checked').value);
-        this.begin({ name: el.querySelector('.lname').value.trim() || 'Jan', sex: el.querySelector('input[name=lsex]:checked').value, start });
+        this.begin({ name: el.querySelector('.lname').value.trim() || 'Jan', sex: el.querySelector('input[name=lsex]:checked').value, start, origin: el.querySelector('input[name=lorigin]:checked').value });
       }
     });
     this.root.appendChild(el);
     this.createEl = el;
   }
 
-  begin({ name, sex, start, seed = 1403, save = null }) {
+  begin({ name, sex, start, origin = 'native', seed = 1403, save = null }) {
     this.createEl?.remove();
     if (save) { try { this.sim = LifeSim.restore(save, { seed }); } catch (e) { console.warn('save unreadable', e); clearSave(); this.sim = null; } }
-    if (!this.sim) this.sim = new LifeSim({ seed, start, name, sex });
+    if (!this.sim) this.sim = new LifeSim({ seed, start, name, sex, origin });
     start = STARTS.find((x) => x.id === this.sim.player.start) ?? STARTS[0];
     this.dialogue = new Dialogue(this.sim);
     if (save?.turns) for (const [k, v] of save.turns) this.dialogue.turns.set(k, v);

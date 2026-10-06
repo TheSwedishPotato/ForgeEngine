@@ -163,3 +163,26 @@ test('forms of address follow rank: no "pane" for a farmer, "pane" for a squire'
   assert.equal(addressOf(playerWho({ rank: 'sedlak', sex: 'm' }), personWho(smith)).cz, 'mistře');
   assert.equal(addressOf(personWho(priest), playerWho({ rank: 'sedlak', sex: 'm' })).cz, 'synu');
 });
+
+test('born here: known by all, family at home; a newcomer is a stranger at the inn', () => {
+  const nat = new LifeSim({ start: STARTS[1], name: 'Jan', origin: 'native' });
+  const father = nat.people.find((p) => p.home === nat.player.home && p.role === 'farmer');
+  assert.ok(father && /father/.test(father.kin));
+  assert.equal(nat.player.knownNames.size, nat.people.length);
+  assert.ok(father.attitude > 40);
+  const neu = new LifeSim({ start: STARTS[1], name: 'Jan', origin: 'newcomer' });
+  assert.equal(neu.player.home, 'tavern');
+  assert.equal(neu.player.knownNames.size, 0);
+  assert.ok(!neu.people.some((p) => p.kin));
+});
+
+test('memories fade: trifles go in a day, grave things last', async () => {
+  const { remember, fade } = await import('../src/life/Memory.js');
+  const p = { memories: [] };
+  remember(p, { text: 'nodded at me', weight: 1 }, 0);
+  remember(p, { text: 'stole my purse', weight: 8 }, 0);
+  fade(p, 30);
+  assert.deepEqual(p.memories.map((m) => m.text), ['stole my purse']);
+  fade(p, 24 * 30);
+  assert.equal(p.memories.length, 0);
+});

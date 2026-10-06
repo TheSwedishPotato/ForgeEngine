@@ -29,7 +29,7 @@ function spotFor(place, idx) {
  * Time is in game hours from midnight before 27 September 1403.
  */
 export class LifeSim {
-  constructor({ seed = 1403, start = STARTS[0], name = 'Jan', sex = 'm' } = {}) {
+  constructor({ seed = 1403, start = STARTS[0], name = 'Jan', sex = 'm', origin = 'native' } = {}) {
     this.t = START_DATE.h;
     this.rate = 1 / 60;        // game hours per real second (a game minute per second)
     this.people = makePeople(seed);
@@ -46,7 +46,10 @@ export class LifeSim {
     }
     // the player
     const st = start;
-    const home = BUILDING[st.home];
+    // a newcomer lodges at the inn, unless he came to a post (the burgrave's household, the forge)
+    const native = origin !== 'newcomer';
+    const homeId = native || st.id === 'panos' || st.id === 'tovarys' ? st.home : 'tavern';
+    const home = BUILDING[homeId];
     this.player = {
       name, sex, start: st.id, rank: st.rank, estate: st.estate, noble: !!st.noble, startName: st.name,
       x: home ? doorApproach(home, 1.4).x : 0,
@@ -55,12 +58,34 @@ export class LifeSim {
       money: st.money, skills: { labour: 10, sword: 10, crossbow: 5, speech: 10, trade: 5, letters: 0, riding: 0, stealth: 5, ...st.skills },
       needs: { hunger: 25, thirst: 30, bladder: 35, bowels: 20, fatigue: 10, dirt: 20 }, health: 100, drunk: 0,
       inventory: { bread: 1 }, dress: { ...st.dress }, colors: { ...st.colors }, weapon: st.weapon ?? null, weaponDrawn: false,
-      home: st.home, reputation: 0, crimes: [], wanted: 0, jailUntil: 0, army: null, renown: 0, alive: true, deathCause: null,
+      home: homeId, native, reputation: native ? 5 : 0, crimes: [], wanted: 0, jailUntil: 0, army: null, renown: 0, alive: true, deathCause: null,
       knownNames: new Set(),
     };
     this.player.y = groundY(this.player.x, this.player.z);
+    if (native) this._kinfolk(st);
     this.justice = new Justice(this);
     this.lastGossip = this.t;
+  }
+
+  /**
+   * Born here: everyone knows your name and your people; those you live with
+   * are your family (or your master's household), and like you accordingly.
+   */
+  _kinfolk(st) {
+    const P = this.player, child = P.sex === 'f' ? 'daughter' : 'son';
+    for (const p of this.people) {
+      P.knownNames.add(p.id);
+      p.attitude = Math.max(-100, Math.min(100, p.attitude + 8));
+      if (p.home !== P.home) continue;
+      const kin = st.id === 'sedlak' || st.id === 'burgher'
+        ? (p.role === 'farmer' || p.role === 'merchant' ? `father: you are his ${child}` : p.sex === 'f' && p.age > 30 ? `mother: you are her ${child}` : `kin`)
+        : st.id === 'podruh' ? 'the householder you lodge with'
+        : st.id === 'tovarys' ? (p.role === 'smith' ? 'your master, whom you serve for wages' : 'of your master\'s household')
+        : st.id === 'panos' ? (p.role === 'burgrave' ? 'your lord, in whose household you serve' : 'of the household you serve in')
+        : 'of your household';
+      p.kin = kin;
+      p.attitude = Math.max(-100, Math.min(100, p.attitude + (/father|mother/.test(kin) ? 55 : 25)));
+    }
   }
 
   /** Remember something (see Memory.js). */
@@ -643,6 +668,7 @@ export class LifeSim {
     return {
       v: 1, t: this.t, lastBell: this.lastBell,
       player: { ...P, knownNames: [...P.knownNames] },
+      kin: Object.fromEntries(this.people.filter((p) => p.kin).map((p) => [p.id, p.kin])),
       people: this.people.map((p) => ({ id: p.id, attitude: p.attitude, mood: p.mood, money: p.money, alive: p.alive, hurt: p.hurt, inventory: p.inventory, follow: p.follow, override: p.override, memories: serializeMemories(p), agent: { x: p.agent.x, z: p.agent.z, inside: p.agent.inside, yaw: p.agent.yaw } })),
       justice: this.justice.serialize(),
     };
@@ -652,6 +678,7 @@ export class LifeSim {
     const sim = new LifeSim({ ...opts, start: STARTS.find((x) => x.id === o.player.start) ?? STARTS[0], name: o.player.name, sex: o.player.sex });
     sim.t = o.t; sim.lastBell = o.lastBell ?? -1; sim.lastGossip = o.t;
     Object.assign(sim.player, o.player, { knownNames: new Set(o.player.knownNames ?? []), sleepingUntil: 0, restrained: null, held: false });
+    for (const p of sim.people) p.kin = o.kin?.[p.id] ?? null;
     sim.player.inside = null;
     for (const q of o.people ?? []) {
       const p = sim.byId[q.id];

@@ -47,7 +47,9 @@ export class Dialogue {
     if (P.drunk > 25) bits.push('plainly drunk');
     if (P.weapon && P.weaponDrawn) bits.push('with a drawn weapon in hand');
     else if (P.weapon) bits.push(`carrying a ${P.weapon === 'longsword' ? 'sword' : P.weapon}`);
-    const known = P.knownNames.has(p.id) ? `You know this person as ${P.name}, ${P.startName.toLowerCase()}.` : 'You do not know this person\'s name unless they tell you.';
+    const known = P.native
+      ? `You have known them all their life: ${P.name}, born and raised here in ${TOWN_NAME}, ${P.startName.toLowerCase()}.${p.kin ? ` They are your own: ${p.kin}. Speak to them as family or household, with the ease, fondness, worries and old quarrels that go with it.` : ''}`
+      : P.knownNames.has(p.id) ? `You know this person as ${P.name}, ${P.startName.toLowerCase()}, a newcomer to the town.` : 'A stranger, new to the town: you have never seen them before today unless your memories below say otherwise, and you do not know their name unless they tell you.';
     const crimes = P.crimes.filter((c) => c.seen.includes(p.id)).map((c) => LAWS.find((l) => l.id === c.law)?.name).filter(Boolean);
     return `${bits.join(', ')}. ${known}${crimes.length ? ` You saw them commit: ${crimes.join(', ')}.` : ''}${P.army ? ` They serve in the castle garrison as ${ARMY_RANK[P.army.rank].name.toLowerCase()}.` : ''} Town reputation: ${P.reputation > 15 ? 'well thought of' : P.reputation < -15 ? 'a known troublemaker' : P.reputation < -5 ? 'talked about' : 'a newcomer nobody knows much about'}.`;
   }
