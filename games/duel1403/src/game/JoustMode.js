@@ -399,6 +399,7 @@ export class JoustMode {
     if (Math.abs(cam.fov - fov) > 0.1) { cam.fov += (fov - cam.fov) * Math.min(1, snap ? 1 : dt * 3); cam.updateProjectionMatrix(); }
     this.stage.focusPoint = o.b.head.pos;
     this.stage.shadowFocus = [p.b.head.pos, p.b.footL.pos, p.horse.body.pos];
+    this.stage.setPeople?.(this.sim.riders.map((r) => r.ragdoll));
     this.stage.dofAmount = mode === 'impact' ? 0.8 : mode === 'helm' ? 0 : 0.25;
     this.stage.visor = mode === 'helm' && !p.helmOff ? 1 : 0;
   }

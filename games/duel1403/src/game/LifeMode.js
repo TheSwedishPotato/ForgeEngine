@@ -660,6 +660,8 @@ export class LifeMode {
     const fpts = [this.walker.b.head.pos, this.walker.b.footL.pos];
     if (this.talking) fpts.push(this.people.walkers[this.talking.idx]?.b.head.pos ?? this.walker.b.head.pos);
     this.stage.shadowFocus = fpts;
+    // bodies for the ray tracer: you and the people drawn in full near you
+    this.stage.setPeople?.([this.walker.ragdoll, ...this.people.walkers.filter((w) => w?.mesh.visible).map((w) => w.ragdoll)].slice(0, 12));
     this.stage.dofAmount = 0;
     this.stage.visor = 0;
     this.stage.hurt = Math.max(0, (60 - P.health) / 80) + (P.drunk > 40 ? 0.15 : 0);

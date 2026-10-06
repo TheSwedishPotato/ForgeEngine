@@ -5,6 +5,7 @@ import { Sprites } from '../engine/passes/Sprites.js';
 import { GPUParticles } from '../engine/passes/GPUParticles.js';
 import { VisBuffer } from '../engine/passes/VisBuffer.js';
 import { StaticScene } from '../engine/scene/StaticScene.js';
+import { RayTracing } from '../engine/passes/RayTracing.js';
 import { Volumetrics } from '../engine/passes/Volumetrics.js';
 import { ScreenSpace } from '../engine/passes/ScreenSpace.js';
 import { DOF, MotionBlur } from '../engine/passes/Cinematic.js';
@@ -33,6 +34,8 @@ export class MedStage {
     this.sprites = r.addPass(new Sprites());
     this.gpuParticles = r.addPass(new GPUParticles());
     this.visBuffer = r.addPass(new VisBuffer());
+    this.rayTracing = r.addPass(new RayTracing(), { first: true });
+    if (new URLSearchParams(location.search).get('pathtrace')) r.pathTrace = true;
     this.volumetrics = r.addPass(new Volumetrics());
     this.screen = r.addPass(new ScreenSpace());
     this.dof = r.addPass(new DOF());
@@ -59,7 +62,11 @@ export class MedStage {
     this.statsEl = null;
     this._fps = { frames: 0, t: 0, value: 0 };
     if (new URLSearchParams(location.search).get('stats')) this.toggleStats();
-    window.addEventListener('keydown', (e) => { if (e.key === 'F3') { e.preventDefault(); this.toggleStats(); } });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'F3') { e.preventDefault(); this.toggleStats(); }
+      // F7: the path-traced reference (hold the camera still and it converges)
+      if (e.key === 'F7' && this.r) { e.preventDefault(); this.r.pathTrace = !this.r.pathTrace; }
+    });
   }
 
   /** Builds the cluster terrain and virtual-textured ground for the lists. */
@@ -117,6 +124,29 @@ export class MedStage {
     this.aberration = Math.min(1, this.aberration + aberration);
   }
 
+  /**
+   * The bodies of everyone near the camera, as capsules for the ray tracer
+   * (ragdolls: anything with .list of bodies whose shapes are capsules or spheres).
+   */
+  setPeople(ragdolls) {
+    if (!this.rayTracing) return;
+    const out = (this._caps ??= []);
+    let n = 0;
+    for (const rd of ragdolls) {
+      if (!rd) continue;
+      for (const b of rd.list) for (const sh of b.shapes) {
+        if (sh.type !== 'capsule' && sh.type !== 'sphere') continue;
+        if (n >= 256) break;
+        sh.updateWorld();
+        const c = (out[n++] ??= { a: new Vector3(), b: new Vector3(), r: 0 });
+        if (sh.type === 'sphere') { c.a.copy(sh.wCenter); c.b.copy(sh.wCenter).y += 1e-3; } else { c.a.copy(sh.wA); c.b.copy(sh.wB); }
+        c.r = sh.radius;
+      }
+    }
+    out.length = n;
+    this.rayTracing.setCapsules(out);
+  }
+
   /** The static world (town, church, castle): baked once for the visibility buffer and the ray tracer. */
   setStaticWorld(meshes) {
     if (!this.r || !meshes?.length) return;
@@ -124,6 +154,7 @@ export class MedStage {
     this.staticScene = new StaticScene(this.r, meshes);
     this.visBuffer?.setScene(this.staticScene);
     this.r.staticScene = this.staticScene;
+    this.rayTracing?.setScene(this.staticScene);
   }
 
   render(dt, time) {

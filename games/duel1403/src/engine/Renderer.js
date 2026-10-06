@@ -175,7 +175,7 @@ export class Renderer {
       if (shadow && !it.castShadow) continue;
       if (!shadow && it.object.userData.shadowOnly) continue;
       if (skipStatic && it.object.userData.static) continue;
-      if (shadow && it.object.userData.static && this.rtShadowsActive) continue;   // ray-traced instead
+      if (shadow && it.object.userData.static && this._skipStaticShadow) continue;   // ray-traced instead
       // in coarse shadow cascades, casters smaller than a few texels cannot be seen
       if (minRadius && it.bounds && it.bounds[3] < minRadius) continue;
       if (frustum && it.bounds) {
@@ -245,10 +245,13 @@ export class Renderer {
     this.shadows.focus = this.q.focusShadows === false ? null : this.shadowFocus;
     this.shadows.fit(camera, this.sunDir);
     this.shadows.render((c, i) => {
+      // near the camera the static world's shadows are ray-traced (passes/RayTracing.js)
+      this._skipStaticShadow = !!this.rtShadowsActive && !this.pathTrace && (i === 4 || this.shadows.splits[i] <= (this.rayTracing?.maxDist ?? 0));
       const fr = new Frustum().setFromProjectionMatrix(c.vp);
       this.drawItems(lists.opaque, 'depth', c.vp, { frustum: fr, shadow: true, minRadius: c.texel * 2.5 });
       this.customDraw('depth', c.vp, fr, null);
     });
+    this._skipStaticShadow = false;
     this.check('shadows');
 
     // 2. G-buffer
@@ -278,6 +281,7 @@ export class Renderer {
       .set('uShadowTexel', this.shadows.texel).set('uShadowSize', this.shadows.size).set('uShadowsOn', 1)
       .set('uShadowFocusOn', this.shadows.focusOn).set('uShadowFocusTexel', this.shadows.focusTexel)
       .set('uContact', this.q.contactShadows === false ? 0 : this.contactShadowLength)
+      .set('uRTShadow', this.rtShadowTexture ?? this.whiteF).set('uRTOn', this.rtShadowTexture ? 1 : 0).set('uRTDist', this.rtShadowDist ?? 0)
       .set('uEnvSpec', this.reflectionProbe?.tex ?? this.env.spec).set('uEnvLevels', this.env.levels)
       .set('uReflPos', this.reflectionProbe?.pos ?? [0, 0, 0]).set('uReflRadius', this.reflectionProbe?.radius ?? 0).set('uEnvIntensity', this.envIntensity).set('uBrdfLut', this.env.lut)
       .set('uSkySH', this.env.sh).set('uSunIrradiance', [this.sunColor.x * this.sunIntensity, this.sunColor.y * this.sunIntensity, this.sunColor.z * this.sunIntensity])

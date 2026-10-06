@@ -451,6 +451,7 @@ function tick(dt) {
   const focusOn = mode === 'menu' ? sim.b : foe;
   if (focusOn) stage.focusPoint = focusOn.b.head.pos;
   stage.shadowFocus = sim ? [sim.a.b.chest.pos, sim.b.b.chest.pos, sim.a.b.footL.pos, sim.b.b.footR.pos] : null;
+  if (sim && mode !== 'life' && mode !== 'joust') stage.setPeople?.([sim.a.ragdoll, sim.b.ragdoll]);
   stage.dofAmount = rig.mode === 'helm' ? 0 : mode === 'menu' || mode === 'over' || (mode === 'intro' && introT < 3.4) ? 1 : 0.2;
   if (player && mode !== 'menu') {
     hud.update(player, foe);

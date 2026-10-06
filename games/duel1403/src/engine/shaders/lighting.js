@@ -80,6 +80,8 @@ uniform float uFrame;
 uniform vec3 uSunIrradiance;    // sun colour * intensity
 uniform float uShadowsOn;
 uniform float uContact;         // contact-shadow ray length (m), 0 = off
+uniform highp sampler2D uRTShadow;   // ray-traced sun visibility (passes/RayTracing.js)
+uniform float uRTOn, uRTDist;
 
 /**
  * Contact shadows: a short ray from the pixel toward the sun, marched
@@ -147,6 +149,7 @@ void main() {
   vec3 L = uSunDir;
   float NoLraw = dot(N, L);
   float vis = uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0;
+  if (uRTOn > 0.5) vis *= mix(1.0, texture(uRTShadow, vUv).r, 1.0 - smoothstep(uRTDist * 0.85, uRTDist, viewDepth));
   if (vis > 0.02 && NoLraw > 0.0) vis *= contactShadow(wpos, L, viewDepth, fract(rot * 0.159155 + 0.37));
   vec3 diffBrdf;
   vec3 spec = brdfDirect(N, V, L, diffuseColor, F0, rough, diffBrdf);
