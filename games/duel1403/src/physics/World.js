@@ -44,6 +44,8 @@ export class World {
     this.planes = [];
     this.collisionFilter = null;  // (shapeA, shapeB) => boolean
     this.materialRule = null;     // (shapeA, shapeB, contact) => void, may override friction etc.
+    this.skinMargin = 0;          // added to the broadphase margin when pairSkin is used
+    this.pairSkin = null;         // (shapeA, shapeB) => metres of extra thickness on B (clothes over a body)
     this.contacts = [];
     this._contactPool = [];
     this._numContacts = 0;
@@ -102,7 +104,7 @@ export class World {
     const shapes = this.shapes;
     for (const s of shapes) {
       const b = s.body;
-      const margin = b.isStatic ? 0.01 : b.vel.length() * dt + b.omega.length() * dt * 0.3 + 0.02;
+      const margin = b.isStatic ? 0.01 : b.vel.length() * dt + b.omega.length() * dt * 0.3 + 0.02 + this.skinMargin;
       s.computeAabb(margin);
     }
     for (let i = 0; i < shapes.length; i++) {
@@ -168,7 +170,7 @@ export class World {
       const a = pairs[i], b = pairs[i + 1];
       a.updateWorld();
       b.updateWorld();
-      collide(a, b, this._allocContact);
+      collide(a, b, this._allocContact, this.pairSkin ? this.pairSkin(a, b) : 0);
     }
   }
 

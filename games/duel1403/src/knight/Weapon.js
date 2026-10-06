@@ -164,6 +164,9 @@ export class Weapon {
     this.body = body;
     body.userData = { fighter: owner, weapon: true };
     this.length = 0;
+    // the weapon's extent along its axis, hilt frame (butt or pommel to point or head)
+    this.yMin = Math.min(...def.parts.map((p) => Math.min(p.y0 ?? p.y ?? 0, p.y1 ?? p.y ?? 0) - (p.r ?? 0)));
+    this.yMax = Math.max(...def.parts.map((p) => Math.max(p.y0 ?? p.y ?? 0, p.y1 ?? p.y ?? 0) + (p.r ?? 0)));
     for (const p of def.parts) {
       const mat = p.kind === 'haft' ? WOOD : STEEL;
       const ud = (extra) => ({ fighter: owner, weapon: true, weaponPart: extra.part, ...extra });
@@ -177,8 +180,12 @@ export class Weapon {
           break;
         }
         case 'haft': {
-          const half = (p.y1 - p.y0) / 2;
-          body.addShape(Shape.capsule(p.r + 0.003, half, new Vector3(0, 1, 0), off(0, (p.y0 + p.y1) / 2), { ...WOOD, userData: ud({ part: 'haft', y0: p.y0, y1: p.y1 }) }));
+          // in pieces of at most 16 cm, so the parts away from the hands can meet the wielder's body
+          const n = Math.max(1, Math.ceil((p.y1 - p.y0) / 0.16));
+          for (let k = 0; k < n; k++) {
+            const a = p.y0 + ((p.y1 - p.y0) * k) / n, b = p.y0 + ((p.y1 - p.y0) * (k + 1)) / n;
+            body.addShape(Shape.capsule(p.r + 0.003, (b - a) / 2, new Vector3(0, 1, 0), off(0, (a + b) / 2), { ...WOOD, userData: ud({ part: 'haft', y0: a, y1: b }) }));
+          }
           break;
         }
         case 'cross':
@@ -267,7 +274,10 @@ export class Weapon {
       j.driveEnabled = false;
       j.anchorParent.copy(handLocal(side));
       j.anchorChild.copy(this.local(this.gripY[side]));
-      for (const b of ragdoll.list) this.world.excludePair(b, this.body);
+      // only the forearms (the hands) that hold it are excluded; the rest of
+      // the wielder's body is left to the world's collision filter, which
+      // keeps the weapon out of his own trunk, head, thighs and upper arms
+      for (const b of ragdoll.list) if (/forearm/.test(b.name)) this.world.excludePair(b, this.body);
       if (side === 'R') {
         this.world.addJoint(j);
         this.joints[side] = j;

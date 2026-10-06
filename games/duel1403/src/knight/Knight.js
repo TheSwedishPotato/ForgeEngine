@@ -363,37 +363,75 @@ export class Knight {
    * from a Zwerchhau). Points along the blade inside a keep-out capsule
    * around pelvis-chest and a sphere around the head push the hand out.
    */
+  /**
+   * Keep the whole weapon, butt or pommel to point, out of his own body and
+   * the clothes and armour on it: the trunk, head and thighs, each as its
+   * collision capsule plus a margin for what he wears. Points ahead of the
+   * hand are freed by moving the hand (the arms carry it); points behind it
+   * (a polearm's haft, the pommel) by tilting the weapon about the hand.
+   * The physics also blocks the weapon against the body; this keeps the
+   * controller from asking for it in the first place.
+   */
   _keepBladeOut(cmd) {
     const W = this.weapon, s = this.scale;
-    const L = W.tipY - (W.gripY?.R ?? W.grips.main);
-    if (!(L > 0.2)) return;
-    const pel = this.toFightFrame(this.b.pelvis.pos, _ko1).clone();
-    const top = this.toFightFrame(this.b.chest.pos, _ko2).clone();
-    top.z += 0.1 * s;
-    const head = this.toFightFrame(this.b.head.pos, _ko3).clone();
-    const rT = (this.mode === 'half' ? 0.19 : 0.23) * s, rH = 0.16 * s;
-    for (let pass = 0; pass < 3; pass++) {
+    if (!W || W.yMin === undefined) return;
+    const g = W.gripY.R ?? W.gripY.L ?? W.grips.main;
+    const sign = W.mode === 'mord' ? -1 : 1;
+    const wear = (this.profile?.mass ?? 0) > 12 ? 0.045 : 0.035;   // mail and plate stand off further than cloth
+    const caps = (this._selfCaps ??= []);
+    caps.length = 0;
+    for (const name of ['pelvis', 'abdomen', 'chest', 'head', 'thighL', 'thighR']) {
+      const body = this.b[name];
+      if (!body) continue;
+      for (const sh of body.shapes) {
+        if (sh.type !== 'capsule' && sh.type !== 'sphere') continue;
+        if (sh.userData.part === 'hand') continue;
+        sh.updateWorld();
+        const A = this.toFightFrame(sh.type === 'sphere' ? sh.wCenter : sh.wA, new Vector3());
+        const B = this.toFightFrame(sh.type === 'sphere' ? sh.wCenter : sh.wB, new Vector3());
+        caps.push({ a: A, b: B, r: sh.radius + wear * s });
+      }
+    }
+    // sample points along the weapon every ~10 cm
+    const ys = [];
+    const step = 0.1;
+    for (let y = W.yMin; y <= W.yMax + 1e-6; y += step) ys.push(y);
+    ys.push(W.yMax);
+    // the crossguard's ends, out along the edge
+    const cross = W.def.parts.find((p) => p.kind === 'cross');
+    const pts = ys.map((y) => [y, 0]);
+    if (cross) for (const e of [-1, 1]) pts.push([cross.y, e * cross.half]);
+    for (let pass = 0; pass < 6; pass++) {
       let moved = false;
-      for (const t of [0, 0.15, 0.3, 0.5, 0.7, 0.9]) {
-        _ko4.copy(cmd.hand).addScaledVector(cmd.dir, t * L);
-        // the hands themselves (fists, gauntlets) need more room than the blade
-        const m = t === 0 ? 0.09 * s : 0;
-        for (const [a, b, r0] of [[pel, top, rT], [head, head, rH]]) {
-          const r = r0 + m;
-          // closest point on the axis segment
-          _ko5.subVectors(b, a);
+      for (const [y, ex] of pts) {
+        const rel = (y - g) * sign;               // metres from the hand along cmd.dir
+        _ko4.copy(cmd.hand).addScaledVector(cmd.dir, rel);
+        if (ex) _ko4.addScaledVector(cmd.edge, ex);
+        // the fist (and the cross beside it) needs more room than the blade
+        const extra = Math.abs(rel) < 0.09 ? 0.06 * s : 0;
+        for (const c of caps) {
+          const r = c.r + extra;
+          _ko5.subVectors(c.b, c.a);
           const ll = _ko5.lengthSq();
-          const u = ll > 1e-9 ? Math.max(0, Math.min(1, _ko6.subVectors(_ko4, a).dot(_ko5) / ll)) : 0;
-          _ko6.copy(a).addScaledVector(_ko5, u);
+          const u = ll > 1e-9 ? Math.max(0, Math.min(1, _ko6.subVectors(_ko4, c.a).dot(_ko5) / ll)) : 0;
+          _ko6.copy(c.a).addScaledVector(_ko5, u);
           _ko5.subVectors(_ko4, _ko6);
           const d = _ko5.length();
           if (d >= r) continue;
           if (d < 1e-4) _ko5.set(1, 0, 0); else _ko5.multiplyScalar(1 / d);
-          // out towards the front, where the arms can actually carry it
-          _ko5.x = Math.max(_ko5.x, 0) + 0.9;
+          // out, and towards the front where the arms can carry it
+          _ko5.x = Math.max(_ko5.x, 0) + 0.6;
           _ko5.normalize();
-          // the nearer the hand, the more of the correction it takes
-          cmd.hand.addScaledVector(_ko5, (r - d) * (1 - 0.4 * t));
+          const push = r - d;
+          if (rel > -0.12) {
+            cmd.hand.addScaledVector(_ko5, push * (rel < 0.35 ? 1 : 0.75));
+          } else {
+            // behind the hand: tilt the weapon so this end comes out; the hand gives a little too
+            _ko6.copy(_ko4).addScaledVector(_ko5, push);        // where that point should be
+            cmd.hand.addScaledVector(_ko5, push * 0.5);
+            _ko6.subVectors(cmd.hand, _ko6).multiplyScalar(1 / -rel);   // new dir (from the rear point through the hand)
+            if (_ko6.lengthSq() > 1e-6) cmd.dir.copy(_ko6).normalize();
+          }
           moved = true;
         }
       }

@@ -7,7 +7,7 @@ import { DamageModel } from './Damage.js';
  * The physical duel: the world, the ground of the lists and two fighters.
  * Shared by the game and the headless tools so both run identical physics.
  */
-const SELF_BLOCK = new Set(['chest', 'abdomen', 'pelvis', 'head', 'thigh']);
+const SELF_BLOCK = new Set(['chest', 'abdomen', 'pelvis', 'head', 'thigh', 'shin', 'upperArm']);
 
 export class FightSim {
   constructor({ substeps = 24, fighters = [{}, {}], separation = 3.2 } = {}) {
@@ -31,12 +31,31 @@ export class FightSim {
       const u1 = s1.userData, u2 = s2.userData;
       if (u1.fighter === undefined || u2.fighter === undefined) return true;
       if (u1.fighter !== u2.fighter) return true;
-      // His own blade cannot pass through his own trunk, head or thighs
-      // (the arms and hands hold it, so they are left out).
+      // No part of his own weapon passes through his own trunk, head, thighs
+      // or upper arms, except where his hands are on it (the forearms and
+      // hands hold it, so they are left out).
       const w = u1.weapon ? u1 : u2.weapon ? u2 : null;
       if (!w || (u1.weapon && u2.weapon)) return false;
       const b = w === u1 ? u2 : u1;
-      return (w.weaponPart === 'blade' || w.weaponPart === 'haft' || w.weaponPart === 'head' || w.weaponPart === 'spike' || w.weaponPart === 'beak') && SELF_BLOCK.has(b.segType) && !(w.y0 !== undefined && w.y0 < 0.12);
+      if (!SELF_BLOCK.has(b.segType) || w.weaponPart === 'buckler') return false;
+      const W = this.knights[w.fighter]?.weapon;
+      if (W && w.y0 !== undefined) {
+        for (const g of [W.gripY.R, W.gripY.L]) if (g !== null && g !== undefined && g > w.y0 - 0.02 && g < w.y1 + 0.02) return false;
+      }
+      // the crossguard and pommel sit at the sword hand: they may touch the other arm, not the sword arm's own
+      if ((w.weaponPart === 'cross' || w.weaponPart === 'pommel' || w.weaponPart === 'rondel') && b.segType === 'upperArm') return false;
+      return true;
+    };
+    // The clothes and armour over the body: his own weapon stops at their
+    // surface, not at the bare body capsule (gambeson and mail stand off
+    // 3–5 cm). Only for his own weapon; blows from the other man are
+    // governed by the armour model.
+    this.world.skinMargin = 0.05;
+    this.world.pairSkin = (sa, sb) => {
+      const u1 = sa.userData, u2 = sb.userData;
+      if (u1.fighter === undefined || u1.fighter !== u2.fighter || !(u1.weapon ^ u2.weapon)) return 0;
+      const body = u1.weapon ? u2 : u1;
+      return body.mat === 'plate' || body.mat === 'mail' ? 0.045 : 0.035;
     };
     // Edge bite: a sharp edge or point catches in flesh, cloth and leather and
     // cuts in (high friction, soft and lossy contact); it skids over mail

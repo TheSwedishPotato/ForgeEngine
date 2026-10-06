@@ -131,26 +131,28 @@ function sphereSphere(cA, rA, cB, rB, shapeA, shapeB, out) {
  * Narrowphase for one shape pair. `alloc` returns a fresh Contact to fill.
  * Returns the number of contacts produced.
  */
-export function collide(sa, sb, alloc) {
+/** skin: extra thickness added to B for this pair (e.g. the clothes over a body capsule). */
+export function collide(sa, sb, alloc, skin = 0) {
   // Order so that planes are always B.
   if (sa.type === 'plane') { const t = sa; sa = sb; sb = t; }
   if (sb.type === 'plane') return collidePlane(sa, sb, alloc);
   if (sa.type === 'box' || sb.type === 'box') return 0;
+  const rb = sb.radius + skin;
 
   if (sa.type === 'sphere' && sb.type === 'sphere') {
-    return sphereSphere(sa.wCenter, sa.radius, sb.wCenter, sb.radius, sa, sb, alloc) ? 1 : 0;
+    return sphereSphere(sa.wCenter, sa.radius, sb.wCenter, rb, sa, sb, alloc) ? 1 : 0;
   }
   if (sa.type === 'capsule' && sb.type === 'capsule') {
     closestPtSegmentSegment(sa.wA, sa.wB, sb.wA, sb.wB, _c1, _c2);
-    return sphereSphere(_c1, sa.radius, _c2, sb.radius, sa, sb, alloc) ? 1 : 0;
+    return sphereSphere(_c1, sa.radius, _c2, rb, sa, sb, alloc) ? 1 : 0;
   }
   if (sa.type === 'capsule' && sb.type === 'sphere') {
     closestPtPointSegment(sb.wCenter, sa.wA, sa.wB, _c1);
-    return sphereSphere(_c1, sa.radius, sb.wCenter, sb.radius, sa, sb, alloc) ? 1 : 0;
+    return sphereSphere(_c1, sa.radius, sb.wCenter, rb, sa, sb, alloc) ? 1 : 0;
   }
   if (sa.type === 'sphere' && sb.type === 'capsule') {
     closestPtPointSegment(sa.wCenter, sb.wA, sb.wB, _c2);
-    return sphereSphere(sa.wCenter, sa.radius, _c2, sb.radius, sa, sb, alloc) ? 1 : 0;
+    return sphereSphere(sa.wCenter, sa.radius, _c2, rb, sa, sb, alloc) ? 1 : 0;
   }
   return 0;
 }
