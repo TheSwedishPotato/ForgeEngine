@@ -203,10 +203,49 @@ float shadowFocus(vec3 wpos, vec3 n, float rot, out float w) {
   }
   return sum / 12.0;
 }
+// ---- virtual shadow maps (passes/VirtualShadows.js) ----
+uniform float uVsmOn;
+uniform mat4 uVsmLight;
+uniform highp sampler2D uVsmTable;
+uniform highp sampler2DShadow uVsmAtlas;
+uniform vec4 uVsmLevel[3];     // page size (m), window centre page x, y
+/** Visibility from the finest resident virtual page, or false where none is resident. */
+bool vsmShadow(vec3 wpos, vec3 n, float rot, out float vis) {
+  vis = 1.0;
+  if (uVsmOn < 0.5) return false;
+  for (int l = 0; l < 3; l++) {
+    float P = uVsmLevel[l].x, texel = P / 128.0;
+    vec3 lp = (uVsmLight * vec4(wpos + n * texel * 2.0, 1.0)).xyz;
+    vec2 ip = floor(lp.xy / P);
+    vec2 rel = ip - uVsmLevel[l].yz;
+    if (any(lessThan(rel, vec2(-32.0))) || any(greaterThanEqual(rel, vec2(32.0)))) continue;
+    vec2 slot = mod(ip, 64.0);
+    vec4 t = texelFetch(uVsmTable, ivec2(slot.x, float(l) * 64.0 + slot.y), 0);
+    if (t.x < 0.0 || t.z != ip.x || t.w != ip.y) continue;
+    vec2 f = lp.xy / P - ip;
+    float dref = (800.0 - lp.z) / 1600.0;
+    // a penumbra of about 3 cm in the world, in this level's texels, kept inside the page
+    float rad = clamp(0.03 / texel, 1.0, 6.0);
+    float ca = cos(rot), sa = sin(rot), sum = 0.0;
+    for (int k = 0; k < 12; k++) {
+      vec2 o = POISSON[k];
+      o = vec2(o.x * ca - o.y * sa, o.x * sa + o.y * ca) * rad;
+      vec2 inPage = clamp(f * 128.0 + o, vec2(0.75), vec2(127.25));
+      vec2 uv = (t.xy * 128.0 + inPage) / 4096.0;
+      sum += texture(uVsmAtlas, vec3(uv, dref - 0.00002));
+    }
+    vis = sum / 12.0;
+    return true;
+  }
+  return false;
+}
 /** Sun visibility at a world position; viewDepth is positive distance along the view axis. */
 float sunShadow(vec3 wpos, vec3 n, float viewDepth, float rot) {
   float fw;
   float fs = shadowFocus(wpos, n, rot, fw);
+  if (fw >= 1.0) return fs;
+  float vv;
+  if (vsmShadow(wpos, n, rot, vv)) return mix(vv, fs, fw);
   int i = viewDepth < uShadowSplits.x ? 0 : viewDepth < uShadowSplits.y ? 1 : viewDepth < uShadowSplits.z ? 2 : viewDepth < uShadowSplits.w ? 3 : 4;
   if (i > 3) return mix(1.0, fs, fw);
   if (fw >= 1.0) return fs;

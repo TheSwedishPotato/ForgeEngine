@@ -19,8 +19,8 @@ function halton(i, b) { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % 
 export const QUALITY = {
   ultra: { renderScale: 1.0, shadowSize: 4096, cascades: 4, ssao: true, ssgi: true, ssr: true, volumetrics: 'high', probes: true, bloom: true, dof: true, motionBlur: true, maxDpr: 2, envSize: 256 },
   high: { renderScale: 0.77, shadowSize: 2048, cascades: 4, ssao: true, ssgi: true, ssr: true, volumetrics: 'high', probes: true, bloom: true, dof: true, motionBlur: true, maxDpr: 2, envSize: 256 },
-  medium: { renderScale: 0.67, shadowSize: 2048, cascades: 3, ssao: true, ssgi: false, ssr: true, volumetrics: 'low', probes: true, bloom: true, dof: false, motionBlur: true, maxDpr: 1.5, envSize: 128 },
-  low: { renderScale: 0.5, shadowSize: 1024, cascades: 2, ssao: false, ssgi: false, ssr: false, volumetrics: 'off', probes: false, bloom: true, dof: false, motionBlur: false, maxDpr: 1, envSize: 128, focusShadows: false, contactShadows: false },
+  medium: { renderScale: 0.67, shadowSize: 2048, cascades: 3, ssao: true, ssgi: false, ssr: true, volumetrics: 'low', probes: true, bloom: true, dof: false, motionBlur: true, maxDpr: 1.5, envSize: 128, rtShadows: false },
+  low: { renderScale: 0.5, shadowSize: 1024, cascades: 2, ssao: false, ssgi: false, ssr: false, volumetrics: 'off', probes: false, bloom: true, dof: false, motionBlur: false, maxDpr: 1, envSize: 128, focusShadows: false, contactShadows: false, vsm: false, rtShadows: false },
 };
 
 export class Renderer {
@@ -281,6 +281,7 @@ export class Renderer {
       .set('uShadowTexel', this.shadows.texel).set('uShadowSize', this.shadows.size).set('uShadowsOn', 1)
       .set('uShadowFocusOn', this.shadows.focusOn).set('uShadowFocusTexel', this.shadows.focusTexel)
       .set('uContact', this.q.contactShadows === false ? 0 : this.contactShadowLength)
+      .set('uVsmOn', 0)
       .set('uRTShadow', this.rtShadowTexture ?? this.whiteF).set('uRTOn', this.rtShadowTexture ? 1 : 0).set('uRTDist', this.rtShadowDist ?? 0)
       .set('uEnvSpec', this.reflectionProbe?.tex ?? this.env.spec).set('uEnvLevels', this.env.levels)
       .set('uReflPos', this.reflectionProbe?.pos ?? [0, 0, 0]).set('uReflRadius', this.reflectionProbe?.radius ?? 0).set('uEnvIntensity', this.envIntensity).set('uBrdfLut', this.env.lut)
@@ -288,6 +289,7 @@ export class Renderer {
       .set('uFrame', this.frame).setAll(this.skyUniforms())
       .set('uAO', this.aoTexture ?? this.whiteF).set('uSSGI', this.ssgiTexture ?? this.black).set('uSSR', this.ssrTexture ?? this.black)
       .set('uProbes', this.probeTexture ?? this.dummyProbes).set('uProbeWeight', this.probeTexture ? 1 : 0);
+    this.vsm?.bind(L);
     if (this.probeVolume) L.set('uProbeMin', this.probeVolume.min).set('uProbeMax', this.probeVolume.max).set('uProbeDims', this.probeVolume.dims);
     this.setPointLights(L, lists.points);
     fullscreen(gl);
