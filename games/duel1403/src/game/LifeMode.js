@@ -165,7 +165,15 @@ export class LifeMode {
     this.root.appendChild(this.talkEl);
     // journal
     this.journalEl = h(`<div class="screen dim ui-interactive" hidden><div class="folio wide scroll ljournal"></div></div>`);
-    this.journalEl.addEventListener('click', (e) => { if (e.target.closest('button')?.dataset.a === 'close') this.journalEl.hidden = true; });
+    this.journalEl.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (b?.dataset.a === 'close') this.journalEl.hidden = true;
+      if (b?.dataset.a === 'home') {
+        const H = BUILDING[this.sim.player.home];
+        if (H) { this.marker = { x: H.door.x, z: H.door.z, name: H.name, until: this.wall + 180 }; this.log(`The way home: ${H.name}.`, 'info'); }
+        this.journalEl.hidden = true;
+      }
+    });
     this.root.appendChild(this.journalEl);
     // modal (the watch, death, menus)
     this.modalEl = h(`<div class="screen dim ui-interactive" hidden><div class="folio narrow lmodal"></div></div>`);
@@ -564,7 +572,7 @@ export class LifeMode {
 
   _journal() {
     const s = this.sim, P = s.player;
-    const met = s.people.filter((p) => p.memories.some((m) => m.about === 'player') || P.knownNames.has(p.id)).sort((a, b) => b.attitude - a.attitude);
+    const met = s.people.filter((p) => !p.kin && (p.memories.some((m) => m.about === 'player') || (!P.native && P.knownNames.has(p.id)) || p.attitude > 25 || p.attitude < -15)).sort((a, b) => b.attitude - a.attitude);
     const news = s.justice.news.slice(-6).reverse();
     const J = this.journalEl.querySelector('.ljournal');
     J.innerHTML = `<div class="armoury-head"><div><div class="kicker">${esc(s.situation())}</div><h2>${esc(P.name)}</h2></div><div class="actions"><button data-a="close">Close</button></div></div>
@@ -573,6 +581,14 @@ export class LifeMode {
           <table class="jtable">${Object.entries(P.skills).map(([k, v]) => `<tr><td>${Math.round(v)}</td><td>${esc(k)}</td></tr>`).join('')}</table>
           ${P.army ? `<p class="fine">Duties: drill in the yard 5:30–8, watch at the gate 8–12, drill 13–16. Pay at 18:00. Absences are docked. Promotion comes with service and skill: ${esc(Object.values(ARMY_RANK).map((r) => r.name).join(' → '))}.</p>` : `<p class="fine">The captain, Hereš of Vrchy, takes on men in the castle yard after noon or in the tavern of an evening.</p>`}
         </section>
+        <section class="estate"><h3>Home and family</h3>${(() => {
+          const H = BUILDING[P.home], fam = s.people.filter((p) => p.kin);
+          const where = (p) => !p.alive ? 'dead' : p.agent.inside ? `in ${BUILDING[p.agent.inside]?.name ?? 'a house'}` : p.agent.act;
+          const feel = (a) => (a > 60 ? 'loves you' : a > 30 ? 'fond of you' : a > 5 ? 'well-disposed' : a > -10 ? 'cool' : a > -40 ? 'angry with you' : 'will not forgive you');
+          return `<p>${H ? `Home: <b>${esc(H.name)}</b>${P.inside === P.home ? ' (you are here)' : ''}. You sleep here (Z) and keep your things here.` : 'No home of your own.'} ${P.native ? `Born and raised in ${esc(TOWN_NAME)}.` : 'A newcomer to the town.'}</p>
+            ${H ? '<p><button data-a="home">Show the way home</button></p>' : ''}
+            ${fam.length ? `<table class="jtable">${fam.map((p) => `<tr><td>${p.attitude}</td><td><b>${esc(p.fullName)}</b> · ${esc(p.kin.split(':')[0])}<br><small>${esc(p.title)}, ${p.age} · ${esc(feel(p.attitude))} · now: ${esc(where(p))}</small></td></tr>`).join('')}</table>` : `<p class="fine">${P.native ? 'No kin living under your roof.' : 'No family here: yours are far away.'}</p>`}`;
+        })()}</section>
         <section class="estate"><h3>People you know</h3>${met.length ? `<table class="jtable">${met.map((p) => `<tr><td>${p.attitude}</td><td><b>${esc(P.knownNames.has(p.id) ? p.fullName : p.title)}</b><br><small>${esc(p.title)}${p.follow ? ' · with you' : ''} · ${esc(memorySummary(p, 2))}</small></td></tr>`).join('')}</table>` : '<p class="fine">Nobody yet.</p>'}</section>
         <section class="estate"><h3>The law of ${esc(TOWN_NAME)}</h3>${LAWS.map((l) => `<p class="fine"><b>${esc(l.name)}.</b> ${esc(l.text)} <i>(${esc(l.sureness)})</i></p>`).join('')}</section>
         <section class="estate"><h3>Your record</h3>${P.crimes.length ? P.crimes.slice(-8).map((c) => `<p class="fine">${c.settled ? '✓' : c.seen.length ? '<b>open</b>' : 'unseen'} · ${esc(LAWS.find((l) => l.id === c.law)?.name ?? c.law)}${c.value ? ` (${esc(fmtMoney(c.value))})` : ''}</p>`).join('') : '<p class="fine">Clean.</p>'}${P.banished > s.t ? '<p class="fine"><b>Banished from Skalice.</b> If the watch finds you in the town you hang.</p>' : ''}
