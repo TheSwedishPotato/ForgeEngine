@@ -1,0 +1,25 @@
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1100, height: 760 } });
+page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+await page.goto('http://127.0.0.1:5174/');
+await page.waitForFunction(() => document.querySelector('button') && window.duel, null, { timeout: 120000 });
+const btns = await page.evaluate(() => [...document.querySelectorAll('button')].map((b) => b.textContent.trim()).filter(Boolean).slice(0, 20));
+console.log(btns);
+await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find((x) => /joust/i.test(x.textContent)); b?.click(); });
+await page.waitForTimeout(500);
+console.log(await page.evaluate(() => [...document.querySelectorAll('input[name=jtilt]')].map((i) => [i.value, i.checked])));
+await page.screenshot({ path: 'shots/joust_setup.png' });
+// life: make a save, reload, see Continue
+await page.goto('http://127.0.0.1:5174/?life=1&begin=sedlak&manual=1');
+await page.waitForFunction(() => window.duel?.life?.sim, null, { timeout: 120000 });
+await page.evaluate(() => { window.duel.life.sim.player.money = 999; window.duel.life.save(); });
+await page.goto('http://127.0.0.1:5174/');
+await page.waitForFunction(() => window.duel, null, { timeout: 120000 });
+await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find((x) => /Live in/i.test(x.textContent)); b?.click(); });
+await page.waitForTimeout(800);
+console.log(await page.evaluate(() => [...document.querySelectorAll('.life-create button')].map((b) => b.textContent)));
+await page.evaluate(() => [...document.querySelectorAll('.life-create button')].find((b) => b.dataset.a === 'continue')?.click());
+await page.waitForTimeout(1500);
+console.log(await page.evaluate(() => ({ money: window.duel.life?.sim?.player.money, start: window.duel.life?.sim?.player.start })));
+await browser.close();

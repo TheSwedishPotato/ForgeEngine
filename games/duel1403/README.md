@@ -42,6 +42,9 @@ shape is the period's), from the eve of St Wenceslas, Thursday
 27 September 1403. The weekday follows the Julian calendar then in use. The
 duel and the joust are things you can do here when you choose.
 
+- **Keys**: WASD walk (Shift to hurry), drag to look, wheel to zoom; E talk
+  or go through a door; F eat, Q drink, R relieve yourself, Z sleep, T let
+  an hour pass, X drill (soldiers), G steal, V strike, J journal, Esc menu.
 - **Who you are**: a lodger (*podruh*), a farmer's second son, a journeyman
   smith, a burgher's son, or a squire (*panoš*). You choose your sex.
   Starting money, clothes, skills and home follow your station.
@@ -53,13 +56,37 @@ duel and the joust are things you can do here when you choose.
   in the fields, wives at the well and market, the sexton ringing the bells,
   the watch walking the streets at night, Mass on Sunday and on the feast.
   The clock runs a game minute per second.
-- **Talking**: walk up to anyone and press E. In the published game, Claude
-  answers as that person (on the viewer's own Claude account; the page asks
-  once). It is given their identity, personality, memories, what they sell,
-  the date, the law, the rumours of 1403 and how you look to them. It answers
-  as speech plus an action (sell, enlist, hire for a day, give directions,
-  call the watch, end the talk), and the game checks every action before it
-  happens. Without Claude, a scripted fallback answers in character.
+- **Talking, and words that do things**: walk up to anyone and press E. In
+  the published game, Claude answers as that person (on the viewer's own
+  Claude account; the page asks once). It is given their identity,
+  personality, what they own, their memories, what they sell, the date, the
+  law, the town's recent news, the rumours of 1403, how you look to them and
+  exactly what is in your purse. It answers with speech plus *actions*, and
+  the game checks each one against the world and then carries it out:
+  - "Here, take two groschen": they **accept** and the money moves from your
+    purse to theirs. They can **give** you money or a thing they actually
+    have, **sell** to you, or **buy** what you carry.
+  - "Come with me" / "I'll pay you a groschen a day": they **follow** you,
+    through doors and into buildings, as company or for a daily wage paid
+    each morning (unpaid, they walk off). "You can go now" sends them home.
+  - "Can I come with you?": they **lead** you to where they are going.
+    "Meet me at the tavern": they **go there** and wait.
+  - They **teach** you a skill they have (an hour, for a fee or as a favour),
+    **hire** you for a day, **enlist** you, point the **way** (an arrow and
+    distance appear at the top of the screen), **forgive** a wrong and drop
+    the charge, raise the **hue and cry**, or **attack** you.
+  Without Claude, a scripted fallback answers in character and understands
+  the same kinds of request.
+- **Memory and gossip**: everyone keeps memories, each with a weight and a
+  source: what they saw, what you did to them or gave them, what you said,
+  what they heard and from whom. People standing together pass on what is
+  worth telling, weaker with each retelling, and their opinion of you moves
+  with it. A theft in the market at nine is known in the tavern by supper,
+  and the talk is about who said it.
+- **Saving**: the town keeps itself in this browser (every minute and when
+  you leave): the clock, your body, purse and record, and everyone's money,
+  whereabouts, memories and the last words you exchanged. **Continue** on the
+  "Who are you?" screen.
 - **Your body**: health, hunger, thirst, bladder, bowels, tiredness and dirt.
   Eat bread, drink at the well or the tavern, use the privy (in the street
   it is an offence if seen), sleep at home, in a bed rented in the tavern
@@ -69,10 +96,40 @@ duel and the joust are things you can do here when you choose.
   (attested). Other prices are marked as estimates in `src/life/data.js`.
 - **The law**: bearing arms in town, the curfew bell, brawling, theft,
   killing (with reconciliation, *smír*, and its stone crosses), the house
-  peace, market rules, Sundays and fasts, filth in the street, dice and
-  insult. Each is marked attested, general or estimate. Witnesses remember
-  what they saw. The watch comes for you, and you pay the fine, go quietly
-  (the pillory or the gate tower) or resist and fight.
+  peace, market rules, Sundays and fasts, filth in the street, dice,
+  insult, false oaths and breaking banishment. Each is marked attested,
+  general or estimate.
+- **Crime** (`src/life/Crime.js`): **G** steals from the counter or market
+  stall you stand at, or cuts the purse of whoever is next to you (shopkeepers
+  watch their goods; the drunk and the busy notice less; your stealth grows
+  with practice). **V** strikes someone; the bold fight back (a fight to
+  yield), the timid cry out. Unseen, a theft leaves only a suspicion. Seen,
+  the victim or a witness raises the **hue and cry** ("Zloděj!"), and every
+  able man in earshot gives chase at a run. Outrun them and get out of sight
+  and the shouting dies away, but everyone who saw you knows your face.
+- **The watch and the court**: small matters are settled on the spot (the
+  fine, a night in the gate tower, or a bribe to a greedy watchman). Serious
+  ones go before the headman (*rychtář*) and two aldermen (*konšelé*) in the
+  rychta, by day; at night you wait in the cellar. For each charge the
+  accuser speaks and the court weighs the proof, after the Saxon-Magdeburg
+  pattern the Bohemian towns followed:
+  - Taken in the act with the goods on you (the "hand-having deed") or two
+    sworn witnesses: there is no defence.
+  - Otherwise you may **deny on oath**, with **oath-helpers** who swear to
+    your good name: two for a small charge, six for a great one ("with seven
+    hands"). They are the people who think well of you and did not see you
+    do it.
+  - You can **confess**, or offer **reconciliation** (*smír*) to the victim or
+    the dead man's kin, at a price set by their wealth, temper and grudge.
+  - Sentences: fines and amends; restoration twofold and the pillory for
+    petty theft; the whip and banishment for a second theft or housebreaking
+    by night; the gallows for great theft (over half a kopa) or theft by
+    night; the sword for killing, unless reconciled or done in
+    self-defence. Before a death sentence you may beg for mercy; friends and
+    the priest may intercede. Banished, you are put out on the south road,
+    and if the watch finds you in town again you hang.
+  The townsfolk break the law too: pilfering at the market, brawls in the
+  tavern at night. Their pillory hours and fines are news, and news is gossip.
 - **The army**: the captain at the castle takes on men. You serve as foot
   servant (*pacholek*) for a groschen a day, then crossbowman, man-at-arms,
   leader of ten, and squire if you are of knightly birth. You drill in the
@@ -84,19 +141,38 @@ duel and the joust are things you can do here when you choose.
   uninvited breaks the house peace.
 - **Day and night**: the sun follows the hour at 50° N in late September,
   and the moon lights the night.
+- **Walking**: everyone's walk is built from clinical gait data (Perry and
+  Burnfield; Winter). Over a stride the hip swings from 30° flexion to 10°
+  extension, the knee bends about 15° as the heel takes the weight and about
+  60° in swing, and the ankle drops the foot after heel strike, rolls
+  forward and pushes off. The pelvis rotates, tilts and drops a few degrees
+  each step, the chest turns against it, the arms swing against the legs
+  with the elbows a little bent, and the head stays level. Stride length
+  comes from each body's own leg lengths, so feet do not skate. People ease
+  into and out of a walk, lean into turns, break into a run when they
+  hurry, and when standing shift their weight slowly from foot to foot.
+  ![Walking, then running, side on](docs/gait.png)
 - Headless check: `node tools/lifetest.mjs 24` (where everyone is, hour by
-  hour). Browser playthrough: `node tools/lifeplay.mjs`.
+  hour); `node --test tests/life.test.js` (money changing hands, followers,
+  gossip, the hue and cry, the court, saves). Browser playthroughs:
+  `node tools/lifeplay.mjs`, `node tools/dev/crimeplay.mjs` (steal bread, be
+  seized, stand trial), `node tools/dev/gait.mjs` (side-on walk frames).
 
 
 ## The joust
 
-**The joust** on the title screen. It is a joust of peace (*Gestech*) run at large, the
-way it was done before the tilt barrier, which is first recorded in 1429/30.
-The riders pass left side to left side, each lance crossing over its own horse's
+**The joust** on the title screen. It is a joust of peace (*Gestech*). By
+default it is run **with the tilt**, a cloth-hung barrier about 1.8 m high down the
+middle, which keeps the horses apart and on their lines and makes it easier.
+The tilt is first recorded at Arras in 1429/30, a generation after 1403. Choose
+**At large** on the joust screen to ride as it was done in 1403, with no
+barrier. The riders pass left side to left side, each lance crossing over its own horse's
 neck. You ride against one of four challengers over four courses, with extra
 courses on a tie.
 
-| Meeting at large, no tilt | Second course, the riders' ends swapped |
+![With the tilt](docs/joust-tilt.png)
+
+| Meeting at large, no tilt (choose "At large") | Second course, the riders' ends swapped |
 | --- | --- |
 | ![Two jousters meeting](docs/joust-side.png) | ![Riding down the run](docs/joust-chase.png) |
 
@@ -133,8 +209,10 @@ courses on a tie.
   joust rules. Striking the horse or below the girdle is a foul (−1), after
   Tiptoft's ordinances (1466). Unhorsing ends the joust. No herald's rules
   from Bohemia survive for 1403, and the game says so.
-- Headless check: `node tools/jousttest.mjs 8 1` (AI against AI; add `war` or
-  `nobrace`). In the high saddle about 70 % of courses break a lance, at a
+- **The tilt** is in the physics as two half-spaces, one for each side, that
+  only the horse and rider on that side touch.
+- Headless check: `node tools/jousttest.mjs 8 1` (AI against AI; add `war`,
+  `nobrace` or `atlarge`). In the high saddle about 70 % of courses break a lance, at a
   median 10–12 kN and 13 m/s closing speed.
 
 ## The realm
@@ -220,6 +298,16 @@ pause screens. **F3** (or `?stats=1`) shows live engine statistics.
 - Specular anti-aliasing from normal variance, so polished armour does not
   shimmer at 4K.
 - Cascaded shadow maps (4 cascades, texel-snapped, rotated Poisson PCF).
+- **A focus shadow map** on top of the cascades: one more layer fitted tightly
+  around what matters on screen (the two fighters, the jouster and his horse,
+  you and whoever you are talking to). At 2048² over a sphere a few metres
+  across a texel is about 1.5 mm, ten times finer than the first cascade, so
+  the shadows of a blade, fingers or a hood's edge are sharp where you look.
+  This is the idea behind virtual shadow maps (resolution spent where the
+  screen needs it) in the form WebGL2 allows.
+- **Contact shadows**: a short screen-space ray toward the sun from each pixel,
+  thickness-tested against the depth buffer, for what any shadow map is too
+  coarse for: a foot on the ground, a hand on a hilt, the fold of a sleeve.
 - Image-based light: sky cube, GGX-prefiltered mip chain, SH9 irradiance,
   split-sum BRDF lookup table, and a parallax-corrected reflection probe that
   captures the lists for the armour to reflect.
@@ -230,8 +318,12 @@ pause screens. **F3** (or `?stats=1`) shows live engine statistics.
   the previous probes, so light bounces accumulate (red pavilions tint the
   ground beside them, sunlit sand lights the knights from below).
 - Screen-space GI: cosine-distributed rays find nearby surfaces and bring their
-  light (any colour, from any source, sparks included), accumulated over time
-  and cleaned with an edge-aware à-trous filter.
+  light (any colour, from any source, sparks included). They are accumulated
+  over time SVGF-style: each pixel counts how many frames its history holds
+  (up to 32) and blends in at 1/n, the history is clamped to the
+  neighbourhood's mean ± 2σ so it cannot ghost when the light changes, and a
+  disocclusion restarts it. The result is cleaned with an edge-aware à-trous
+  filter.
 
 **Atmosphere**
 - Volumetric height fog, wind-driven ground mist and smoke volumes, raymarched
@@ -266,7 +358,12 @@ pause screens. **F3** (or `?stats=1`) shows live engine statistics.
   adaptive sharpening after AMD FSR 1 RCAS. (DLSS needs NVIDIA's tensor-core
   runtime, which a web page cannot use; this is the open alternative.)
 - Ground-truth ambient occlusion (horizon-based, after XeGTAO) and
-  screen-space reflections (in the puddles, on the steel).
+  screen-space reflections (in the puddles, on the steel), filtered over
+  time with a neighbourhood-clipped history, faster for mirrors than for
+  rough metal.
+- **Cloth**: banners and flags are Verlet cloth (stretch, shear and bending
+  constraints, pinned at the hoist or the top edge) in a gusting wind, with
+  drag along each vertex's normal so they stream and flap.
 - Bloom (energy-conserving 13-tap downsample / tent upsample), physical depth
   of field (thin-lens circle of confusion, autofocus on the opponent),
   per-pixel motion blur from the motion vectors, auto exposure, ACES filmic
@@ -289,6 +386,16 @@ src/engine/
 
 Debug views: `?debug=albedo|normal|rough|metal|motion|ao|ssr|ssgi|depth|emissive|lit`,
 `?glcheck=1` reports GL errors per pass.
+
+**What WebGL2 cannot do, and so this engine does not claim.** WebGL2 has no
+compute shaders, no indirect or GPU-generated draws, no mesh shaders and no
+storage buffers. A fully GPU-driven pipeline (culling and LOD selection on the
+GPU writing its own draw lists), true virtual shadow maps (page tables filled by
+compute), a visibility buffer (a triangle-ID pass resolved by compute), GPU
+particle and cloth simulation, and hardware ray tracing all need WebGPU or a
+native API. What is here instead: CPU cluster-DAG culling with one multi-draw
+call per mesh, a focus shadow map, CPU Verlet cloth, and deferred shading from a
+compact G-buffer. A WebGPU backend is the step that unlocks the rest.
 
 ## How it works
 

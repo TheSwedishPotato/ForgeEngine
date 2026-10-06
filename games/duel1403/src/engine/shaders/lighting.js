@@ -79,6 +79,37 @@ uniform sampler2D uSSR;         // rgb: reflected radiance, a: confidence
 uniform float uFrame;
 uniform vec3 uSunIrradiance;    // sun colour * intensity
 uniform float uShadowsOn;
+uniform float uContact;         // contact-shadow ray length (m), 0 = off
+
+/**
+ * Contact shadows: a short ray from the pixel toward the sun, marched
+ * through the depth buffer. It catches what the shadow maps are too coarse
+ * for: the shadow where a foot meets the ground, a hand on a hilt, the
+ * fold of a sleeve. Thickness-tested so thin things do not shadow what is
+ * far behind them; faded with distance (beyond ~25 m the maps suffice).
+ */
+float contactShadow(vec3 wpos, vec3 L, float viewDepth, float jitter) {
+  if (uContact <= 0.0 || viewDepth > 28.0) return 1.0;
+  float len = uContact * (0.6 + viewDepth * 0.02);
+  const int STEPS = 14;
+  vec3 start = (uView * vec4(wpos, 1.0)).xyz;
+  vec3 dir = mat3(uView) * L;
+  start += dir * 0.012 * (1.0 + viewDepth * 0.05);
+  float shadow = 0.0;
+  for (int i = 1; i <= STEPS; i++) {
+    float t = (float(i) - 1.0 + jitter) / float(STEPS);
+    vec3 pv = start + dir * (t * t * len);
+    vec4 c = uProj * vec4(pv, 1.0);
+    vec2 uv = c.xy / c.w * 0.5 + 0.5;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) break;
+    float sceneZ = -viewFromDepth(uv, texture(uDepth, uv).r).z;
+    float rayZ = -pv.z;
+    float dz = rayZ - sceneZ;
+    float thick = 0.06 + rayZ * 0.004;
+    if (dz > 0.004 && dz < thick) { shadow = 1.0 - t * 0.6; break; }
+  }
+  return 1.0 - shadow * (1.0 - smoothstep(18.0, 28.0, viewDepth));
+}
 
 #define MAX_POINTS 8
 uniform int uPointCount;
@@ -116,6 +147,7 @@ void main() {
   vec3 L = uSunDir;
   float NoLraw = dot(N, L);
   float vis = uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0;
+  if (vis > 0.02 && NoLraw > 0.0) vis *= contactShadow(wpos, L, viewDepth, fract(rot * 0.159155 + 0.37));
   vec3 diffBrdf;
   vec3 spec = brdfDirect(N, V, L, diffuseColor, F0, rough, diffBrdf);
   float NoL = saturate(NoLraw);

@@ -47,6 +47,7 @@ export class MedStage {
     this.shake = 0; this.flash = 0; this.aberration = 0; this.hurt = 0; this.visor = 0;
     this.shakeOffset = new Vector3();
     this.focusPoint = null;   // world point the lens focuses on
+    this.shadowFocus = null;  // world points (Vector3) the sharp focus shadow map should cover
     this.dofAmount = 0.4;
     window.addEventListener('resize', () => this.resize());
     // Engine statistics overlay: F3 or ?stats=1
@@ -123,6 +124,17 @@ export class MedStage {
       this.dof.focus += (d - this.dof.focus) * Math.min(1, dt * 6);
     }
     this.dof.amount += (this.dofAmount - this.dof.amount) * Math.min(1, dt * 3);
+    // the focus shadow map: a sphere around the points that matter (fighters, the player)
+    const fp = this.shadowFocus;
+    if (fp?.length) {
+      const c = (this._sfc ??= this.camera.position.clone()).set(0, 0, 0);
+      for (const p of fp) c.add(p);
+      c.multiplyScalar(1 / fp.length);
+      let r = 0;
+      for (const p of fp) r = Math.max(r, c.distanceTo(p));
+      // only when it is near the camera (far away the cascades are fine)
+      this.r.shadowFocus = c.distanceTo(this.camera.position) < 30 ? { center: c, radius: Math.min(7, r + 1.25) } : null;
+    } else this.r.shadowFocus = null;
     this.r.lens = { time, hurt: this.hurt, visor: this.visor ?? 0, flash: this.flash, aberration: 0.0012 + this.aberration * 0.01 };
     this.r.render(this.scene, this.camera, dt);
     this.camera.position.sub(this.shakeOffset);

@@ -574,7 +574,12 @@ export class HUD {
       <div class="folio">
         <div class="kicker">Gestech · the joust of peace</div>
         <h2>The joust</h2>
-        <p class="fine">Run at large, as jousts were before the tilt (first recorded in 1429): no barrier, the riders pass left side to left side with the lance across the horse's neck. Coronel-tipped lances of fir are made to break on the little shield (ecranche) on the left breast. A broken lance scores 1, on the helm 2; striking the horse or below the girdle is a foul. You have ${4} courses.</p>
+        <p class="fine">The riders pass left side to left side with the lance across the horse's neck. Coronel-tipped lances of fir are made to break on the little shield (ecranche) on the left breast. A broken lance scores 1, on the helm 2; striking the horse or below the girdle is a foul. You have ${4} courses.</p>
+        <h3>The run</h3>
+        <div class="jlist jtilt">
+          <label><input type="radio" name="jtilt" value="1"><b>With the tilt · easier</b><small>A cloth-hung barrier about 1.8 m high down the middle keeps the horses apart and on their lines. First recorded at Arras in 1429/30, a generation after 1403.</small></label>
+          <label><input type="radio" name="jtilt" value="0"><b>At large · as in 1403</b><small>No barrier: you keep your own line, and horses can swerve or collide.</small></label>
+        </div>
         <h3>Challenger</h3>
         <div class="jlist jfoes"></div>
         <h3>Saddle</h3>
@@ -592,6 +597,7 @@ export class HUD {
     el.addEventListener('change', (e) => {
       if (e.target.name === 'jfoe') this.config.joustFoe = e.target.value;
       if (e.target.name === 'jsaddle') this.config.joustSaddle = e.target.value;
+      if (e.target.name === 'jtilt') this.config.joustTilt = e.target.value === '1';
     });
     el.querySelector('.jsrc').textContent = [JOUST_SOURCES.tilt, JOUST_SOURCES.hohenzeug, JOUST_SOURCES.banda].map((s) => s.short).join(' · ');
     this.root.appendChild(el);
@@ -603,6 +609,7 @@ export class HUD {
     const el = this.joustEl;
     const foe = this.config.joustFoe ?? 'rozmberk', sad = this.config.joustSaddle ?? 'hohenzeug';
     el.querySelector('.jfoes').innerHTML = JOUSTERS.map((j) => `<label><input type="radio" name="jfoe" value="${j.id}" ${j.id === foe ? 'checked' : ''}><b>${esc(j.name)}</b><small>${esc(j.title)} · arms: ${esc(HERALDRY[j.heraldry]?.name ?? '')} · skill ${Math.round(j.skill * 100)}</small></label>`).join('');
+    for (const i of el.querySelectorAll('input[name=jtilt]')) i.checked = (i.value === '1') === (this.config.joustTilt ?? true);
     el.querySelector('.jsaddles').innerHTML = Object.entries(SADDLES).map(([id, s]) => `<label><input type="radio" name="jsaddle" value="${id}" ${id === sad ? 'checked' : ''}><b>${esc(s.name)} · <i>${esc(s.native)}</i></b><small>${esc(s.text)}</small></label>`).join('');
   }
 

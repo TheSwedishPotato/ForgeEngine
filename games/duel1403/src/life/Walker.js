@@ -9,7 +9,28 @@ const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 
 const qx = (a) => new Quaternion().setFromAxisAngle(X, a);
 const qy = (a) => new Quaternion().setFromAxisAngle(Y, a);
 const qz = (a) => new Quaternion().setFromAxisAngle(Z, a);
-const _q = new Quaternion(), _v = new Vector3();
+const _v = new Vector3();
+const TAU = Math.PI * 2, D = (deg) => deg * Math.PI / 180;
+
+/** A periodic curve through [phase 0..1, value] points (Catmull-Rom). */
+function cycle(points) {
+  const n = points.length;
+  return (phi) => {
+    phi = ((phi % 1) + 1) % 1;
+    let i = 0;
+    while (i < n - 1 && points[i + 1][0] <= phi) i++;
+    const p = (j) => points[((j % n) + n) % n];
+    const a = p(i - 1), b = p(i), c = p(i + 1), d = p(i + 2);
+    const span = ((c[0] - b[0]) + 1) % 1 || 1;
+    const u = (((phi - b[0]) + 1) % 1) / span;
+    const u2 = u * u, u3 = u2 * u;
+    return 0.5 * ((2 * b[1]) + (-a[1] + c[1]) * u + (2 * a[1] - 5 * b[1] + 4 * c[1] - d[1]) * u2 + (-a[1] + 3 * b[1] - 3 * c[1] + d[1]) * u3);
+  };
+}
+// Normal walking, degrees, from heel strike (0) through toe-off (about 0.6) to the next heel strike.
+const HIP = cycle([[0, 30], [0.1, 27], [0.2, 19], [0.3, 10], [0.4, 1], [0.5, -8], [0.56, -10], [0.62, -4], [0.7, 10], [0.8, 25], [0.87, 33], [0.94, 31]]);
+const KNEE = cycle([[0, 3], [0.06, 11], [0.13, 17], [0.22, 13], [0.32, 6], [0.42, 4], [0.5, 9], [0.58, 30], [0.65, 50], [0.72, 61], [0.8, 50], [0.88, 25], [0.95, 6]]);
+const ANKLE = cycle([[0, 0], [0.06, -7], [0.15, -1], [0.3, 6], [0.45, 10], [0.55, 2], [0.62, -18], [0.7, -10], [0.8, -1], [0.9, 2]]);
 
 /**
  * A person on foot, posed by forward kinematics rather than simulated: the
@@ -33,6 +54,8 @@ export class Walker {
     this.visorDown = false;
     this.female = female;
     this.phase = 0;
+    this.v = 0; this.k = 0; this.run = 0; this.lean = 0; this.lateral = 0;
+    this.seed = (name.length * 1.37) % 6.28;
     this.pose = {};
     this.footRestY = this.b.footL.pos.y;
     this.mesh = new Group();
@@ -42,27 +65,69 @@ export class Walker {
     this.mesh.add(this.body.group);
   }
 
-  /** Orientation of every segment for a gait phase and speed (m/s), or a posture. */
-  _orient(speed, posture) {
+  /**
+   * Orientation of every segment. Walking follows normal adult gait
+   * (Perry & Burnfield; Winter): per cycle from heel strike, the hip goes
+   * from 30° flexion to 10° extension at about 55 % and back; the knee
+   * flexes about 15° in loading response and about 60° in swing; the ankle
+   * plantarflexes about 7° after heel strike, dorsiflexes to about 10° in
+   * late stance and plantarflexes about 18° at toe-off. The pelvis rotates
+   * ±4°, drops about 4° on the swing side and tilts forward about 4°; the
+   * thorax counter-rotates, the arms swing against the legs with the elbows
+   * a little bent, and the head stays level and looking ahead. All scale
+   * with speed (k); faster than about 2 m/s blends into a run.
+   */
+  _orient(dt, speed, posture) {
     const P = this.pose;
-    const A = Math.min(0.55, 0.38 * speed);           // hip swing amplitude
+    const k = this.k, run = this.run;
+    const t = this.t;
+    const breath = 0.015 * Math.sin(t * 1.7);
     const ph = this.phase;
-    const breath = 0.015 * Math.sin(this.t * 1.7);
-    P.pelvis = qy(0.06 * A * Math.sin(ph)).multiply(qx(0.03));
-    P.abdomen = qy(-0.05 * A * Math.sin(ph)).multiply(qx(0.04 + 0.08 * A + breath));
-    P.chest = qy(-0.12 * A * Math.sin(ph)).multiply(qx(0.06 + 0.05 * A));
-    P.head = qx(-0.04 - 0.04 * A).multiply(qy(this.look ?? 0));
-    for (const [side, sx, off] of [['L', 1, 0], ['R', -1, Math.PI]]) {
-      const ps = ph + off;
-      let hip = A * Math.sin(ps), knee = 0.06 + 1.25 * A * Math.max(0, Math.sin(ps + 1.35)) ** 1.4;
-      if (posture === 'sit') { hip = 1.45; knee = 1.45; }
-      P['thigh' + side] = qz(sx * 0.03).multiply(qx(-hip));
+    const L = ph, R = (ph + 0.5) % 1;
+    const idle = Math.max(0, 1 - k * 3);
+    // weight shift when standing: slow, from foot to foot
+    const shift = idle * Math.sin(t * 0.55 + this.seed);
+    const rotA = -D(4) * k * Math.cos(TAU * L);
+    const obl = D(4) * k * Math.sin(2 * TAU * L) + D(2.2) * shift;
+    const tilt = D(4) + D(1.5) * k * Math.cos(2 * TAU * L) + D(6) * run;
+    this.lateral = 0.022 * k * Math.sin(TAU * L) + 0.03 * shift;
+    P.pelvis = qy(rotA).multiply(qx(tilt * 0.6)).multiply(qz(obl));
+    P.abdomen = qy(-rotA * 0.3).multiply(qx(0.06 + D(3) * k + D(6) * run + breath)).multiply(qz(-obl * 0.6));
+    P.chest = qy(-rotA * 0.9).multiply(qx(0.08 + D(3) * k + D(7) * run + breath)).multiply(qz(-obl * 0.4));
+    // the head keeps level and looks where it means to
+    const wander = idle * (0.18 * Math.sin(t * 0.23 + this.seed) + 0.08 * Math.sin(t * 0.61));
+    P.head = qy((this.look ?? 0) + wander).multiply(qx(0.1 + D(4) * k + D(4) * run + 0.03 * idle * Math.sin(t * 0.17)));
+    for (const [side, sx, phi] of [['L', 1, L], ['R', -1, R]]) {
+      // the loaded leg straight, the other knee eased, when standing
+      const load = side === 'L' ? Math.max(0, shift) : Math.max(0, -shift);
+      let hip = D(HIP(phi)), knee = D(KNEE(phi)), ank = D(ANKLE(phi));
+      hip = D(5) + (hip - D(5)) * k + D(12) * run * Math.max(0, Math.sin(TAU * (phi - 0.6)));
+      knee = D(3) + (knee - D(3)) * k + D(45) * run * Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (phi - 0.5) / 0.45))));
+      ank *= k;
+      if (idle > 0) { hip += idle * D(4) * (1 - load); knee += idle * (D(2) + D(9) * (1 - load)); }
+      if (posture === 'sit') { hip = 1.45; knee = 1.45; ank = 0; }
+      if (posture === 'pillory') { hip = 0.12; knee = 0.1; ank = 0.05; }
+      const ab = sx * (0.03 + (posture === 'sit' ? 0.08 : 0));
+      P['thigh' + side] = qz(ab).multiply(qx(-hip));
       P['shin' + side] = P['thigh' + side].clone().multiply(qx(knee));
-      P['foot' + side] = qy(sx * 0.08).multiply(qx(posture === 'sit' ? 0 : 0.25 * A * Math.cos(ps)));
-      const arm = posture === 'sit' ? 0.5 : -0.9 * A * Math.sin(ps);
-      P['upperArm' + side] = qz(sx * 0.07).multiply(qx(-arm));
-      P['forearm' + side] = P['upperArm' + side].clone().multiply(qx(posture === 'sit' ? -1.1 : -0.18 - 0.35 * A - (this.gesture && side === 'R' ? 1.1 : 0)));
+      // foot pitch from the ankle angle: flat when the shin leans over it by the dorsiflexion
+      const shinPitch = knee - hip;
+      P['foot' + side] = qy(sx * 0.1).multiply(qx(posture === 'sit' ? 0 : shinPitch - ank));
+      // arms swing against the legs; the elbow bends more as the arm comes forward
+      const swing = -Math.cos(TAU * phi) * (D(16) * k + D(20) * run);
+      let arm = D(3) + swing, elbow = D(14) + D(8) * k + D(10) * Math.max(0, swing) / Math.max(1e-3, D(16)) * k + D(65) * run;
+      let abd = 0.07 + 0.03 * run;
+      if (posture === 'sit') { arm = 0.5; elbow = 1.1; }
+      if (posture === 'pillory') { arm = 1.25; elbow = 0.15; abd = 0.32; }
+      if (this.gesture && side === 'R' && posture !== 'pillory') { arm = Math.max(arm, 0.45); elbow += 1.0; }
+      P['upperArm' + side] = qz(sx * abd).multiply(qx(-arm));
+      P['forearm' + side] = P['upperArm' + side].clone().multiply(qx(-elbow));
     }
+    if (posture === 'pillory') {
+      // bent at the board, neck and wrists through it
+      P.pelvis = qx(0.2); P.abdomen = qx(0.55); P.chest = qx(0.75); P.head = qx(0.35);
+    }
+    void dt; void speed;
   }
 
   _fk() {
@@ -82,13 +147,35 @@ export class Walker {
    * 'walk' | 'sit' | 'lie'. groundY is the height of the ground (or seat).
    */
   update(dt, { x, y, z, yaw, speed = 0, posture = 'stand', gesture = false, look = 0 }) {
+    dt = Math.min(dt, 0.1);
     this.t = (this.t ?? 0) + dt;
-    const stride = 1.35 * this.scale;                  // m per gait cycle
-    if (speed > 0.05) this.phase += (speed / stride) * Math.PI * 2 * dt;
-    else this.phase += (0 - Math.sin(this.phase)) * Math.min(1, dt * 4) * 0.5;
+    // start and stop smoothly: speed eases in and out over about a quarter second
+    if (posture !== 'stand' && posture !== 'walk') speed = 0;
+    this.v += (speed - this.v) * Math.min(1, dt * 6);
+    const v = this.v;
+    const kWant = v < 0.05 ? 0 : Math.min(1.35, Math.pow(Math.max(0.2, v) / 1.35, 0.55));
+    this.k += (kWant - this.k) * Math.min(1, dt * 5);
+    this.run += (Math.max(0, Math.min(1, (v - 2.0) / 1.0)) - this.run) * Math.min(1, dt * 4);
+    // stride from the legs' own geometry, so the planted foot does not skate
+    if (v > 0.03) {
+      const stride = Math.max(0.25, this._strideAt(Math.max(0.3, this.k)) * (1 + 0.45 * this.run));
+      this.phase = (this.phase + (v / stride) * dt) % 1;
+    } else {
+      // come to rest at double support, feet together
+      const target = this.phase < 0.25 ? 0 : this.phase < 0.75 ? 0.5 : 1;
+      this.phase += (target - this.phase) * Math.min(1, dt * 3);
+      this.phase %= 1;
+    }
+    // lean into turns
+    if (this.lastYaw !== undefined && dt > 0) {
+      let dy = yaw - this.lastYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      const want = Math.max(-0.14, Math.min(0.14, -(dy / dt) * v * 0.05));
+      this.lean += (want - this.lean) * Math.min(1, dt * 4);
+    }
+    this.lastYaw = yaw;
     this.gesture = gesture;
     this.look = look;
-    this._orient(posture === 'sit' ? 0 : speed, posture);
+    this._orient(dt, posture === 'sit' ? 0 : v, posture);
     const pos = this._fk();
     // put the lower foot on the ground (or the seat under the pelvis)
     let shift;
@@ -96,9 +183,12 @@ export class Walker {
     else shift = y - (Math.min(pos.footL.y, pos.footR.y) - this.footRestY);
     const root = qy(yaw);
     if (posture === 'lie') root.multiply(qx(-Math.PI / 2));
+    else root.multiply(qz(this.lean));
+    const lat = posture === 'lie' || posture === 'sit' ? 0 : this.lateral;
     for (const b of this.ragdoll.list) {
       const p = pos[b.name];
       _v.copy(p);
+      _v.x += lat;
       if (posture === 'lie') { _v.y -= this.b.pelvis.userData.restPos.y; }
       _v.applyQuaternion(root);
       b.pos.set(x + _v.x, (posture === 'lie' ? y + 0.15 : shift) + _v.y, z + _v.z);
@@ -106,6 +196,21 @@ export class Walker {
     }
     this.body.update();
     this.armour.update(dt);
+  }
+
+  /** Horizontal travel of the stance foot under the hip (heel strike to toe-off), metres, divided by the stance fraction. */
+  _strideAt(k) {
+    const key = Math.round(k * 50);
+    this._strides ??= new Map();
+    if (this._strides.has(key)) return this._strides.get(key);
+    const { L1, L2 } = this.ragdoll.bones.legL;
+    const z = (phi) => {
+      const hip = D(5) + (D(HIP(phi)) - D(5)) * k, knee = D(3) + (D(KNEE(phi)) - D(3)) * k;
+      return L1 * Math.sin(hip) + L2 * Math.sin(hip - knee);
+    };
+    const v = (z(0) - z(0.6)) / 0.6;
+    this._strides.set(key, v);
+    return v;
   }
 
   dispose() {

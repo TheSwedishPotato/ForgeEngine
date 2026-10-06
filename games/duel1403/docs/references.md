@@ -62,6 +62,25 @@ Priorities for the next art passes:
 | Deserted village of Pfaffenschlag (13th–15th c.) | [Wikipedia (Czech)](https://cs.wikipedia.org/wiki/Pfaffenschlag) | Excavated house plans: the real size and layout of a Moravian village. |
 | Fortified manor (tvrz) | [Wikipedia (Czech): Tvrz](https://cs.wikipedia.org/wiki/Tvrz) | The seat of a zeman: tower house, moat, palisade. |
 
+## Law, the court and the street
+
+| What | Where | Used for |
+|---|---|---|
+| Hue and cry | [Wikipedia: Hue and cry](https://en.wikipedia.org/wiki/Hue_and_cry); the *Sachsenspiegel* (c. 1220–35) | The cry, the duty to give chase, the thief taken "with the hand-having deed" brought straight to the judge. |
+| Compurgation | [Wikipedia: Compurgation](https://en.wikipedia.org/wiki/Compurgation) | Clearing oneself on oath with oath-helpers; more helpers for graver charges. |
+| The headman's court | [cs.wikipedia: Rychtář](https://cs.wikipedia.org/wiki/Rycht%C3%A1%C5%99) | The rychtář with sworn aldermen judging under a mother town's law. |
+| Reconciliation crosses | [cs.wikipedia: Smírčí kříž](https://cs.wikipedia.org/wiki/Sm%C3%ADr%C4%8D%C3%AD_k%C5%99%C3%AD%C5%BE) | Settling a killing with the kin (*smír*). |
+| The tilt | Records of Arras 1429/30, via [Wikipedia: Jousting](https://en.wikipedia.org/wiki/Jousting) | The barrier, later than 1403; offered as the easier option. |
+
+## Movement and simulation
+
+| What | Where | Used for |
+|---|---|---|
+| Normal gait kinematics | J. Perry & J. Burnfield, *Gait Analysis* (2nd ed., 2010); D. A. Winter, *Biomechanics and Motor Control of Human Movement* | Hip, knee and ankle angles over the stride; pelvic rotation, tilt and drop. |
+| Position-based cloth | T. Jakobsen, "Advanced Character Physics" (GDC 2001); X. Provot, "Deformation constraints in a mass-spring model" (1995) | Verlet banners with stretch, shear and bending constraints. |
+| Temporal denoising | C. Schied et al., "Spatiotemporal Variance-Guided Filtering" (HPG 2017); H. Dammertz et al., "Edge-avoiding À-Trous Wavelet Transform" (HPG 2010) | History length and variance clamping for SSGI; the à-trous filter. |
+| Contact shadows | Screen-space shadow tracing, as in several shipping engines (e.g. Bend Studio's talk, SIGGRAPH 2023) | Short rays toward the sun through the depth buffer. |
+
 ## How the game uses these
 
 - The armour data (`src/data/armour.js`) cites the pieces above for shape,
@@ -69,3 +88,5 @@ Priorities for the next art passes:
 - The joust (`src/data/joust.js`) cites its rules, saddle and lance sources.
 - The realm (`src/data/society.js`) lists the estates and ranks the town's
   people will be drawn from, with what each wore and carried.
+- The town's law and court (`src/life/data.js`, `src/life/Crime.js`) cite
+  the sources above for the hue and cry, oaths and sentences.

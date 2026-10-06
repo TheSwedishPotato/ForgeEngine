@@ -5,6 +5,8 @@
  * (src/data/society.js) and Czech naming of the period (src/life/data.js).
  */
 
+import { SHOPS as SHOP_STOCK } from './data.js';
+
 function rng(seed) {
   let a = seed >>> 0;
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -95,7 +97,7 @@ const CAST = [
   { role: 'weaver', routine: 'craft', rank: 'mastercraft', sex: 'm', age: 30, home: 'weaver', work: 'weaver', trade: 'weaver', title: 'weaver', estate: 'towns', dress: 'townsman', sells: 'weaver' },
   { role: 'weaverwife', routine: 'townwife', rank: 'mastercraft', sex: 'f', age: 26, home: 'weaver', work: 'weaver', title: 'the weaver\'s wife, who spins', estate: 'towns', dress: 'woman', spouseOf: 'weaver' },
   { role: 'bathkeeper', routine: 'bathkeeper', rank: 'bathkeeper', sex: 'm', age: 38, home: 'bath', work: 'bath', trade: 'bathkeeper', title: 'bath-keeper and barber (lazebník)', estate: 'margins', dress: 'apron', sells: 'bath' },
-  { role: 'merchant', routine: 'merchant', rank: 'patrician', sex: 'm', age: 42, home: 'h13', work: 'market', title: 'cloth merchant from Prague', estate: 'towns', dress: 'burgher' },
+  { role: 'merchant', routine: 'merchant', rank: 'patrician', sex: 'm', age: 42, home: 'h13', work: 'market', title: 'cloth merchant from Prague', estate: 'towns', dress: 'burgher', sells: 'market' },
   // village
   ...[1, 2, 3, 4, 5, 7, 8, 11, 12].flatMap((n, i) => [
     { role: 'farmer', routine: i % 3 === 0 ? 'farmerTavern' : 'farmer', rank: 'sedlak', sex: 'm', age: 30 + ((i * 7) % 25), home: 'h' + n, work: 'fields', trade: 'farmer', title: 'farmer (sedlák)', estate: 'peasants', dress: 'peasant' },
@@ -152,7 +154,8 @@ export function makePeople(seed = 1403) {
       money: Math.round(({ burgrave: 4000, captain: 2400, merchant: 3000, headman: 900, innkeeper: 700, baker: 600, butcher: 600, smith: 500 }[c.role] ?? 80) * (0.6 + 0.8 * R())),
       spouseOf: c.spouseOf, spouseOfHome: c.spouseOfHome,
       // live state
-      attitude: Math.round((tr.agreeableness - 0.5) * 30), memory: [], mood: 'calm', alive: true, hurt: 0,
+      attitude: Math.round((tr.agreeableness - 0.5) * 30), memories: [], mood: 'calm', alive: true, hurt: 0, follow: null,
+      inventory: c.sells ? Object.fromEntries((SHOP_STOCK[c.sells] ?? []).map((k) => [k, 6])) : { bread: R() < 0.5 ? 1 : 0 },
       height: c.sex === 'f' ? 1.58 + R() * 0.1 : 1.66 + R() * 0.14,
     };
   });

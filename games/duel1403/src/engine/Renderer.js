@@ -20,7 +20,7 @@ export const QUALITY = {
   ultra: { renderScale: 1.0, shadowSize: 4096, cascades: 4, ssao: true, ssgi: true, ssr: true, volumetrics: 'high', probes: true, bloom: true, dof: true, motionBlur: true, maxDpr: 2, envSize: 256 },
   high: { renderScale: 0.77, shadowSize: 2048, cascades: 4, ssao: true, ssgi: true, ssr: true, volumetrics: 'high', probes: true, bloom: true, dof: true, motionBlur: true, maxDpr: 2, envSize: 256 },
   medium: { renderScale: 0.67, shadowSize: 2048, cascades: 3, ssao: true, ssgi: false, ssr: true, volumetrics: 'low', probes: true, bloom: true, dof: false, motionBlur: true, maxDpr: 1.5, envSize: 128 },
-  low: { renderScale: 0.5, shadowSize: 1024, cascades: 2, ssao: false, ssgi: false, ssr: false, volumetrics: 'off', probes: false, bloom: true, dof: false, motionBlur: false, maxDpr: 1, envSize: 128 },
+  low: { renderScale: 0.5, shadowSize: 1024, cascades: 2, ssao: false, ssgi: false, ssr: false, volumetrics: 'off', probes: false, bloom: true, dof: false, motionBlur: false, maxDpr: 1, envSize: 128, focusShadows: false, contactShadows: false },
 };
 
 export class Renderer {
@@ -56,6 +56,8 @@ export class Renderer {
 
     this.env = new Environment(gl, { size: this.q.envSize });
     this.shadows = new Shadows(gl, { size: this.q.shadowSize, cascades: 4 });
+    this.shadowFocus = null;          // {center, radius}: a sharper shadow map around what matters (see Shadows)
+    this.contactShadowLength = 0.35;  // metres of screen-space ray toward the sun
     this.lighting = postProgram(gl, LIGHTING_FS, {}, 'lighting');
     this.black = new Texture(gl, { width: 1, height: 1, format: 'rgba16f', data: new Uint16Array([0, 0, 0, 0]) });
     this.whiteF = new Texture(gl, { width: 1, height: 1, format: 'rgba8', data: new Uint8Array([255, 255, 255, 255]) });
@@ -232,10 +234,11 @@ export class Renderer {
 
     // 1. Shadows
     this.shadows.n = this.q.cascades;
+    this.shadows.focus = this.q.focusShadows === false ? null : this.shadowFocus;
     this.shadows.fit(camera, this.sunDir);
     this.shadows.render((c, i) => {
       const fr = new Frustum().setFromProjectionMatrix(c.vp);
-      this.drawItems(lists.opaque, 'depth', c.vp, { frustum: fr, shadow: true, minRadius: this.shadows.texel[i] * 2.5 });
+      this.drawItems(lists.opaque, 'depth', c.vp, { frustum: fr, shadow: true, minRadius: c.texel * 2.5 });
       this.customDraw('depth', c.vp, fr, null);
     });
     this.check('shadows');
@@ -263,6 +266,8 @@ export class Renderer {
     this.bindGBuffer(L);
     L.set('uShadowMap', this.shadows.map).set('uShadowMatrix', this.shadows.matrices).set('uShadowSplits', this.shadows.splits.map((s, i) => (i < this.shadows.n ? s : 0)))
       .set('uShadowTexel', this.shadows.texel).set('uShadowSize', this.shadows.size).set('uShadowsOn', 1)
+      .set('uShadowFocusOn', this.shadows.focusOn).set('uShadowFocusTexel', this.shadows.focusTexel)
+      .set('uContact', this.q.contactShadows === false ? 0 : this.contactShadowLength)
       .set('uEnvSpec', this.reflectionProbe?.tex ?? this.env.spec).set('uEnvLevels', this.env.levels)
       .set('uReflPos', this.reflectionProbe?.pos ?? [0, 0, 0]).set('uReflRadius', this.reflectionProbe?.radius ?? 0).set('uEnvIntensity', this.envIntensity).set('uBrdfLut', this.env.lut)
       .set('uSkySH', this.env.sh).set('uSunIrradiance', [this.sunColor.x * this.sunIntensity, this.sunColor.y * this.sunIntensity, this.sunColor.z * this.sunIntensity])
@@ -332,7 +337,7 @@ export class Renderer {
     const u = {
       ...this.skyUniforms(), uMainView: this.view,
       uSunIrradiance: [this.sunColor.x * this.sunIntensity, this.sunColor.y * this.sunIntensity, this.sunColor.z * this.sunIntensity],
-      uShadowMap: sh.map, uShadowMatrix: sh.matrices, uShadowSplits: sh.splits.map((s, i) => (i < sh.n ? s : 0)), uShadowTexel: sh.texel, uShadowSize: sh.size,
+      uShadowMap: sh.map, uShadowMatrix: sh.matrices, uShadowSplits: sh.splits.map((s, i) => (i < sh.n ? s : 0)), uShadowTexel: sh.texel, uShadowSize: sh.size, uShadowFocusOn: 0, uShadowFocusTexel: 0,
       uSkySH: this.env.sh, uProbes: this.probeTexture ?? this.dummyProbes, uProbeWeight: this.probeTexture ? 1 : 0,
     };
     if (this.probeVolume) Object.assign(u, { uProbeMin: this.probeVolume.min, uProbeMax: this.probeVolume.max, uProbeDims: this.probeVolume.dims });

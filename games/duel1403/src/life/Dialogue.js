@@ -1,6 +1,7 @@
 import { GOODS, SHOPS, LAWS, RUMOURS, fmtMoney, ARMY_RANK, WAGES } from './data.js';
 import { allRanks } from '../data/society.js';
 import { BUILDING, PLACES, TOWN_NAME } from '../world/town.js';
+import { memoryLines } from './Memory.js';
 
 const RANK = Object.fromEntries(allRanks().map((r) => [r.id, r]));
 
@@ -9,9 +10,12 @@ const RANK = Object.fromEntries(allRanks().map((r) => [r.id, r]));
  * (the artifact's `sample` capability, on the viewer's own Claude
  * account) when it is available, and through a small scripted fallback
  * when it is not. Either way the answer is the same shape:
- *   { say, attitude, mood, action: {type, ...}, remember }
- * and the game checks every action before it happens (nobody can sell what
- * they do not have or enlist you if they are not the captain).
+ *   { say, attitude, mood, actions: [{type, ...}], remember }
+ * and the game checks every action before it happens and then carries it
+ * out: money and things change hands, people come along with you, go
+ * where they said, teach, forgive, raise the hue and cry, or attack.
+ * Nobody can give what they do not have or enlist you if they are not the
+ * captain.
  */
 export class Dialogue {
   constructor(sim) {
@@ -50,34 +54,45 @@ export class Dialogue {
     const where = a.inside ? BUILDING[a.inside]?.name : PLACES[a.place]?.name ?? 'in the street';
     const spouse = p.spouse ? s.byId[p.spouse] : null;
     const sells = p.sells ? SHOPS[p.sells].map((k) => `${GOODS[k].name} at ${fmtMoney(GOODS[k].price)}`).join('; ') : null;
+    const own = Object.entries(p.inventory ?? {}).filter(([, n]) => n > 0).map(([k, n]) => `${n}× ${k}`).join(', ');
     const T = p.traits;
+    const mem = memoryLines(s, p, 10);
     const lines = [
       `You are ${p.fullName}, ${p.sex === 'f' ? 'a woman' : 'a man'} of ${p.age}, ${p.title} in ${TOWN_NAME}, a small subject town (poddanské městečko) of the lord of Skalice castle, in the Kingdom of Bohemia.`,
       `Estate: ${r?.estateName ?? p.estate}; rank: ${r?.name ?? p.rank} (precedence ${r?.rank ?? '?'} of 100: lower numbers defer to higher ones).`,
       `Character: ${p.words.join(', ')}. (Openness ${T.openness}, conscientiousness ${T.conscientiousness}, extraversion ${T.extraversion}, agreeableness ${T.agreeableness}, neuroticism ${T.neuroticism}, piety ${T.piety}, honesty ${T.honesty}, temper ${T.temper}, greed ${T.greed}, courage ${T.courage}; 0–1.)`,
       spouse ? `Married to ${spouse.fullName}, ${spouse.title}.` : '',
-      `Right now: ${a.act}, at ${where}. Mood: ${p.mood}. Money in your purse: about ${fmtMoney(p.money)}.`,
+      `Right now: ${a.act}, at ${where}. Mood: ${p.mood}.${p.hurt > 0.3 ? ' You are hurt and sore.' : ''}`,
+      `Your purse: exactly ${p.money} parvi (${fmtMoney(p.money)}). Things you have: ${own || 'nothing to speak of'}.`,
       sells ? `You sell: ${sells}. You may haggle a little according to your greed, never below cost.` : '',
       p.recruiter ? `You are the captain (hejtman) of the castle garrison and are taking on men for the lord in these troubled times: foot servants (pacholci) at ${fmtMoney(ARMY_RANK.pacholek.pay)} a day with bread, beer and a padded coat and kettle hat; you want sound, sober men who will obey, not women, not drunkards, not known thieves.` : '',
       p.watch ? 'You are a soldier of the garrison and keep the watch: you arrest lawbreakers and stop people in the street after the curfew bell.' : '',
+      p.role === 'headman' ? 'You are the lord\'s headman (rychtář): you keep the peace, collect fines, and sit in judgement with two aldermen. You know the town\'s law well.' : '',
       p.jousts ? 'You are the herald of the St Wenceslas joust in the field south of the town, and you know the rules: coronel lances, four courses, a broken lance scores.' : '',
       p.role === 'farmer' || p.role === 'headman' ? `You sometimes take on day labourers for threshing and carting at about ${fmtMoney(WAGES.labourer.pay)} a day.` : '',
-      `Your attitude to the person talking to you: ${p.attitude} (−100 hatred … +100 love).${p.memory.length ? ` What you remember of them: ${p.memory.slice(-6).join('; ')}.` : ' You have not met them before.'}`,
+      TEACH[p.role] ? `You could teach someone a little ${TEACH[p.role]} if it suited you (usually for money or as a favour to a friend).` : '',
+      p.follow ? `You are with the stranger now, walking with them${p.follow.wage ? ` in their hire at ${fmtMoney(p.follow.wage)} a day` : ' as company'}.` : '',
+      `Your attitude to the person talking to you: ${p.attitude} (−100 hatred … +100 love).`,
+      mem.length ? `What you remember about them (true memories; use them, and say where you heard things):\n  - ${mem.join('\n  - ')}` : 'You have never met them and have heard nothing about them.',
     ];
     return lines.filter(Boolean).join('\n');
   }
 
   _world() {
     const s = this.sim;
+    const news = s.justice.news.filter((n) => s.t - n.t < 72).slice(-5).map((n) => n.text);
     return [
       `Date and time: ${s.situation()}.`,
       'The world in 1403: King Wenceslas IV is held prisoner in Vienna by his brother Sigismund of Hungary; Sigismund\'s Hungarians and Cumans have raided the land; lords quarrel and robbers haunt the roads; the Prague groschen (12 parvi; 60 groschen make a kopa) has been debased. Master Jan Hus preaches in Prague. Nothing that happens after September 1403 is known to you.',
-      `The law here (the town's ordinances): ${LAWS.slice(0, 9).map((l) => `${l.name}: ${l.text}`).join(' ')}`,
+      `The law here (the town's ordinances): ${LAWS.slice(0, 9).map((l) => `${l.name}: ${l.text}`).join(' ')} A thief caught in the act is brought before the headman and two aldermen; two sworn witnesses prove a deed; otherwise the accused may clear himself on oath with oath-helpers. A killing may be settled with the kin by reconciliation (smír).`,
       `Gossip you might pass on if asked: ${RUMOURS.join(' ')}`,
-    ].join('\n');
+      news.length ? `What has happened in the town lately (you may have heard): ${news.join(' ')}` : '',
+    ].filter(Boolean).join('\n');
   }
 
   _instructions(p) {
+    const P = this.sim.player;
+    const inv = Object.entries(P.inventory).filter(([, n]) => n > 0).map(([k, n]) => `${n}× ${k}`).join(', ');
     return `You are playing one person in a historically and socially accurate simulation of Bohemian town life in 1403. Stay in character as that person at all times.
 
 ${this._world()}
@@ -87,14 +102,34 @@ ${this._persona(p)}
 
 WHO IS TALKING TO YOU
 ${this._player(p)}
+(What the game knows, not what you can see: their purse holds exactly ${P.money} parvi; they carry ${inv || 'nothing'}.)
 
 HOW TO ANSWER
 - Speak as this person would in 1403: plain words, their own concerns, the manners of their rank toward the speaker's apparent rank (deference upward, condescension or familiarity downward), their mood and temper. English, with an occasional Czech word they would naturally use (pane, paní, groš, rychta, krčma, hejtman). One to three sentences, never more than 60 words.
 - You know only what this person could know. If asked about things outside it, say you don't know, or answer from rumour.
-- You are a real person, not a guide: you may refuse, haggle, lie (if dishonest), take offence, call the watch, or end the talk.
+- You are a real person, not a guide: you may refuse, haggle, lie (if dishonest), take offence, call the watch, attack, or end the talk.
+- WORDS ARE DEEDS. If the stranger hands you something, offers payment, asks you to come along, to take them with you, to teach them, to give or lend them something, and you agree, you MUST put the matching action in "actions" — that is what makes it happen in the world. If you refuse, put no action. Never claim to give what you do not have.
 - Reply with ONLY a JSON object, no other text:
-{"say": "your words", "attitude": <integer change to your attitude, -20 to 20>, "mood": "<one word>", "action": {"type": "none" | "sell" | "enlist" | "hire_day" | "directions" | "learn_name" | "call_watch" | "leave", "item": "<goods id when selling: ${Object.keys(GOODS).join(', ')}>", "price": <parvi when selling>, "place": "<place id when giving directions: ${[...Object.keys(PLACES), ...Object.keys(BUILDING).filter((k) => !/^h\d/.test(k))].join(', ')}>"}, "remember": "<a few words worth remembering about this meeting, or empty>"}
-- Use "sell" only for goods you actually sell and only when the deal is agreed; "enlist" only if you are the captain and you accept them; "hire_day" if you agree to hire them for a day's labour now; "learn_name" when they tell you their name; "call_watch" if they threaten you or break the law before you; "leave" when you end the conversation.`;
+{"say": "your words", "attitude": <integer change to your attitude, -20 to 20>, "mood": "<one word>", "actions": [<zero or more actions>], "remember": "<what is worth remembering about this exchange, from your point of view, or empty>"}
+Actions (amounts in parvi; 12 parvi = 1 groschen):
+  {"type":"accept","money":<n>,"item":"<id or empty>"}  you take money or a thing the stranger hands or pays you (a gift, a payment, a fee, a bribe, a debt repaid)
+  {"type":"give","money":<n>,"item":"<id or empty>"}  you hand the stranger money or a thing you have (a loan, charity, change, a gift)
+  {"type":"sell","item":"<goods id>","price":<n>}  you sell one of your goods and they pay (the game moves the money)
+  {"type":"buy","item":"<goods id>","price":<n>}  you buy a thing the stranger has, and pay for it
+  {"type":"follow","wage":<n per day, 0 if out of friendship>}  you come along with the stranger now (as a hired man or for company)
+  {"type":"stop_follow"}  you stop going with them
+  {"type":"lead","place":"<place id>"}  you go to a place now and the stranger may come with you (they asked to join you, or you show them the way)
+  {"type":"go_to","place":"<place id>","hours":<n>}  you agree to meet them at a place and go there to wait
+  {"type":"teach","skill":"<${Object.keys(P.skills).join('|')}>"}  you spend an hour teaching them
+  {"type":"hire_day"}  you hire them for a day's labour now (farmers and the headman only)
+  {"type":"enlist"}  you take them into the garrison (the captain only)
+  {"type":"drop_charges"}  you forgive a wrong they did you and will not accuse them before the court
+  {"type":"call_watch"}  you raise the hue and cry against them (they threatened you, struck you, stole, or broke the law before you)
+  {"type":"attack"}  you strike them or draw on them (only if your temper and the insult or threat truly call for it)
+  {"type":"directions","place":"<place id>"}  you point the way
+  {"type":"learn_name"}  they told you their name
+  {"type":"leave"}  you end the conversation and go
+Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES), ...Object.keys(BUILDING).filter((k) => !/^h\d/.test(k))].join(', ')}.`;
   }
 
   /**
@@ -122,56 +157,140 @@ HOW TO ANSWER
       }
     }
     if (!r || typeof r !== 'object' || typeof r.say !== 'string') r = scripted(this.sim, p, text);
-    const checked = this.apply(p, r);
-    hist.push({ role: 'user', content: msg }, { role: 'assistant', content: JSON.stringify({ say: checked.say, action: checked.action }) });
+    const checked = this.apply(p, r, text);
+    hist.push({ role: 'user', content: msg }, { role: 'assistant', content: JSON.stringify({ say: checked.say, actions: checked.actions.map(({ type, money, item, place }) => ({ type, money, item, place })) }) });
     this.turns.set(p.id, hist.slice(-16));
     return checked;
   }
 
-  /** Validate and carry out what the person decided. */
-  apply(p, r) {
+  /** Validate and carry out what the person decided. Every action is checked against the world. */
+  apply(p, r, heard = '') {
     const s = this.sim, P = s.player;
-    const out = { say: String(r.say).slice(0, 400), mood: String(r.mood ?? p.mood).slice(0, 20), action: { type: 'none' }, note: null };
+    const out = { say: String(r.say).slice(0, 400), mood: String(r.mood ?? p.mood).slice(0, 20), action: { type: 'none' }, actions: [], notes: [], note: null };
     const dAtt = Math.max(-20, Math.min(20, Math.round(Number(r.attitude) || 0)));
     p.attitude = Math.max(-100, Math.min(100, p.attitude + dAtt));
     p.mood = out.mood;
-    if (r.remember) p.memory.push(String(r.remember).slice(0, 120));
-    if (p.memory.length > 12) p.memory.shift();
-    const a = r.action ?? {};
-    switch (a.type) {
-      case 'sell': {
-        const item = String(a.item ?? '');
-        const list = p.sells ? SHOPS[p.sells] : [];
-        if (!list.includes(item)) { out.note = `${p.name} has no ${GOODS[item]?.name.toLowerCase() ?? item} to sell.`; break; }
-        const base = GOODS[item].price, price = Math.max(Math.ceil(base * 0.7), Math.min(base * 3, Math.round(Number(a.price) || base)));
-        const res = s.buy(item, p, price);
-        out.action = { type: 'sell', item, price, ok: res.ok };
-        out.note = res.ok ? `You buy ${GOODS[item].name.toLowerCase()} for ${fmtMoney(price)}.` : res.why;
-        break;
+    if (r.remember) s.remember(p, { kind: 'said', text: String(r.remember).slice(0, 140), weight: 3 + Math.round(Math.abs(dAtt) / 6), att: dAtt });
+    // what the player said is remembered too, briefly, when it matters
+    if (heard && heard.length > 12 && Math.abs(dAtt) >= 6) s.remember(p, { kind: 'said', text: `said: "${heard.slice(0, 90)}"`, weight: 2 + Math.round(Math.abs(dAtt) / 5), att: dAtt });
+    let list = Array.isArray(r.actions) ? r.actions : r.action ? [r.action] : [];
+    list = list.filter((a) => a && typeof a === 'object' && a.type && a.type !== 'none').slice(0, 4);
+    const note = (t) => { if (t) out.notes.push(t); };
+    const num = (v) => Math.max(0, Math.round(Number(v) || 0));
+    const goods = (v) => (GOODS[String(v ?? '')] ? String(v) : null);
+    for (const a of list) {
+      const done = { type: a.type };
+      switch (a.type) {
+        case 'accept': {
+          const res = s.giveTo(p, { money: num(a.money), item: goods(a.item) });
+          done.ok = res.ok; done.money = num(a.money); done.item = goods(a.item);
+          note(res.ok ? `You hand over ${res.what}.` : res.why);
+          break;
+        }
+        case 'give': {
+          const res = s.takeFrom(p, { money: Math.min(num(a.money), 1200), item: goods(a.item) });
+          done.ok = res.ok; done.money = num(a.money); done.item = goods(a.item);
+          note(res.ok ? `${p.name} gives you ${res.what}.` : res.why);
+          break;
+        }
+        case 'sell': {
+          const item = goods(a.item);
+          const list2 = p.sells ? SHOPS[p.sells] : [];
+          if (!item || !list2.includes(item)) { note(`${p.name} has no ${GOODS[item]?.name.toLowerCase() ?? a.item} to sell.`); break; }
+          const base = GOODS[item].price, price = Math.max(Math.ceil(base * 0.7), Math.min(base * 3, num(a.price) || base));
+          const res = s.buy(item, p, price);
+          Object.assign(done, { item, price, ok: res.ok });
+          note(res.ok ? `You buy ${GOODS[item].name.toLowerCase()} for ${fmtMoney(price)}.` : res.why);
+          break;
+        }
+        case 'buy': {
+          const item = goods(a.item);
+          if (!item || !(P.inventory[item] > 0)) { note(`You have no ${GOODS[item]?.name.toLowerCase() ?? a.item} to sell.`); break; }
+          const price = Math.min(num(a.price) || GOODS[item].price, p.money, GOODS[item].price * 2);
+          P.inventory[item]--; p.inventory[item] = (p.inventory[item] ?? 0) + 1; p.money -= price; P.money += price;
+          s.remember(p, { kind: 'got', text: `sold me ${GOODS[item].name.toLowerCase()} for ${fmtMoney(price)}`, weight: 2 });
+          Object.assign(done, { item, price, ok: true });
+          note(`You sell ${GOODS[item].name.toLowerCase()} to ${p.name} for ${fmtMoney(price)}.`);
+          break;
+        }
+        case 'follow': {
+          const res = s.join(p, Math.min(num(a.wage), 120));
+          done.ok = res.ok; done.wage = num(a.wage);
+          note(res.ok ? `${p.name} comes with you${num(a.wage) ? ` for ${fmtMoney(num(a.wage))} a day (paid now, then each morning)` : ''}.` : res.why);
+          break;
+        }
+        case 'stop_follow': s.dismiss(p); done.ok = true; note(`${p.name} goes ${p.sex === 'f' ? 'her' : 'his'} own way.`); break;
+        case 'lead': case 'go_to': {
+          const pl = String(a.place ?? '');
+          if (!(PLACES[pl] || BUILDING[pl])) break;
+          s.sendTo(p, pl, Math.min(6, Number(a.hours) || 1.5));
+          if (a.type === 'lead') p.override.act = 'going there with you';
+          Object.assign(done, { place: pl, ok: true });
+          note(a.type === 'lead' ? `${p.name} sets off for ${(PLACES[pl] ?? BUILDING[pl]).name}. Go along.` : `${p.name} will wait for you at ${(PLACES[pl] ?? BUILDING[pl]).name}.`);
+          break;
+        }
+        case 'teach': {
+          const skill = String(a.skill ?? '');
+          if (!(skill in P.skills) || (TEACH[p.role] && !TEACH_SKILL[p.role]?.includes(skill)) || !TEACH[p.role]) { note(`${p.name} cannot teach that.`); break; }
+          if ((p.taught ?? -99) > s.t - 6) { note(`${p.name} has taught you enough for one day.`); break; }
+          p.taught = s.t;
+          s.advance(1);
+          P.skills[skill] = Math.min(100, P.skills[skill] + 3 + 2 * p.traits.conscientiousness);
+          s.remember(p, { kind: 'gave', text: `I taught them some ${skill}`, weight: 3, att: 2 });
+          Object.assign(done, { skill, ok: true });
+          note(`An hour with ${p.name}: your ${skill} improves.`);
+          break;
+        }
+        case 'enlist': {
+          if (!p.recruiter) break;
+          const res = s.enlist('pacholek');
+          done.ok = res.ok; note(res.ok ? null : res.why);
+          break;
+        }
+        case 'hire_day': {
+          if (!['farmer', 'headman'].includes(p.role)) break;
+          const res = s.work('fields');
+          done.ok = res.ok; note(res.ok ? null : res.why);
+          break;
+        }
+        case 'drop_charges': {
+          let n = 0;
+          for (const c of P.crimes) if (!c.settled && (c.victim === p.id || (p.watch && c.severity < 4 && c.seen.includes(p.id)))) {
+            c.seen = c.seen.filter((id) => id !== p.id);
+            if (c.victim === p.id) { c.seen = []; c.settled = true; }
+            n++;
+          }
+          if (!P.crimes.some((c) => !c.settled && c.seen.length)) P.wanted = 0;
+          if (n) { s.remember(p, { kind: 'met', text: 'forgave them the wrong they did me', weight: 5, att: 5 }); note(`${p.name} lets the matter rest and will not accuse you.`); }
+          done.ok = n > 0;
+          break;
+        }
+        case 'learn_name': P.knownNames.add(p.id); done.ok = true; break;
+        case 'directions': { const pl = String(a.place ?? ''); if (PLACES[pl] || BUILDING[pl]) Object.assign(done, { place: pl, ok: true }); break; }
+        case 'call_watch': {
+          const open = P.crimes.find((c) => !c.settled && c.seen.includes(p.id));
+          if (!open) s.crime('insult', { victim: p, seen: [p] });
+          P.wanted = Math.max(P.wanted, 1);
+          s.dismiss(p);
+          if (open && open.severity >= 2 && !s.justice.hue) s.justice.raiseHue(p, open);
+          done.ok = true;
+          break;
+        }
+        case 'attack': s.dismiss(p); done.ok = true; s.remember(p, { kind: 'met', text: 'I went for them', weight: 6, att: -10 }); break;
+        case 'leave': done.ok = true; break;
+        default: continue;
       }
-      case 'enlist': {
-        if (!p.recruiter) break;
-        const res = s.enlist('pacholek');
-        out.action = { type: 'enlist', ok: res.ok };
-        out.note = res.ok ? null : res.why;
-        break;
-      }
-      case 'hire_day': {
-        if (!['farmer', 'headman'].includes(p.role)) break;
-        const res = s.work('fields');
-        out.action = { type: 'hire_day', ok: res.ok };
-        out.note = res.ok ? null : res.why;
-        break;
-      }
-      case 'learn_name': P.knownNames.add(p.id); out.action = { type: 'learn_name' }; break;
-      case 'directions': { const pl = String(a.place ?? ''); if (PLACES[pl] || BUILDING[pl]) out.action = { type: 'directions', place: pl }; break; }
-      case 'call_watch': P.wanted = Math.max(P.wanted, 1); P.crimes.push({ law: 'insult', t: s.t, seen: [p.id], victim: p.id, where: P.inside ?? 'street', settled: false }); out.action = { type: 'call_watch' }; break;
-      case 'leave': out.action = { type: 'leave' }; break;
-      default: break;
+      out.actions.push(done);
     }
+    out.action = out.actions[0] ?? { type: 'none' };
+    out.note = out.notes.join(' ') || null;
     return out;
   }
 }
+
+/** Who can teach what. */
+const TEACH = { smith: 'smithing', apprentice: 'smithing', captain: 'swordsmanship and the crossbow', soldier: 'the crossbow and the spear', priest: 'reading and writing', merchant: 'trade and reckoning', herald: 'riding and heraldry', farmer: 'farm work', burgrave: 'riding and the sword', bathkeeper: 'barbering' };
+const TEACH_SKILL = { smith: ['smithing'], apprentice: ['smithing'], captain: ['sword', 'crossbow', 'riding'], soldier: ['crossbow', 'sword'], priest: ['letters'], merchant: ['trade', 'letters'], herald: ['riding', 'letters'], farmer: ['labour'], burgrave: ['riding', 'sword'], bathkeeper: ['labour'] };
 
 // ---- the scripted fallback ---------------------------------------------------------------------
 
@@ -186,6 +305,47 @@ export function scripted(sim, p, text) {
   const cold = p.attitude < -25, warm = p.attitude > 25;
   const R = (a) => a[Math.floor(Math.random() * a.length)];
   if (has(t, 'bye', 'farewell', 'god be with', 'go now')) return { say: R([`God be with you, ${sir}.`, 'Go with God.', 'Mind how you go.']), attitude: 1, mood: p.mood, action: { type: 'leave' } };
+  // giving: "here, take two groschen", "I give you a loaf"
+  const amt = parseMoney(t);
+  const item = Object.keys(GOODS).find((k) => t.includes(k) || t.includes(GOODS[k].name.toLowerCase().split(' ').pop()));
+  if (has(t, 'here', 'take this', 'take these', 'for you', 'i give', 'i hand', 'have this', 'gift', 'i pay', 'i\'ll pay you now') && (amt || (item && P.inventory[item] > 0)) && !has(t, 'a day', 'per day', 'daily')) {
+    const ok = amt ? amt <= P.money : P.inventory[item] > 0;
+    if (!ok) return { say: 'You haven\'t got it to give.', attitude: -1, mood: p.mood, actions: [] };
+    const proud = p.estate === 'knights' && amt && amt < 120;
+    if (proud) return { say: 'Keep your pennies. Do I look like a beggar?', attitude: -4, mood: 'offended', actions: [] };
+    const open = P.crimes.find((c) => !c.settled && c.victim === p.id);
+    const settles = open && amt >= (open.value || 12) * 2 && p.traits.temper < 0.8;
+    return { say: open ? (settles ? 'Well. That makes it good, I suppose. We\'ll say no more about it.' : 'That doesn\'t mend what you did.') : R([`God reward you, ${sir}.`, 'My thanks.', p.traits.greed > 0.6 ? 'Is that all?' : 'That\'s kind of you.']), attitude: settles ? 10 : 4, mood: p.mood, actions: [{ type: 'accept', money: amt, item: amt ? null : item }, ...(settles ? [{ type: 'drop_charges' }] : [])], remember: amt ? `the stranger gave me ${fmtMoney(amt)}` : `the stranger gave me ${item}` };
+  }
+  if (has(t, 'stop following', 'go home', 'leave me', 'you can go', 'dismiss')) return { say: p.follow ? 'As you like.' : 'I wasn\'t following you.', attitude: 0, mood: p.mood, actions: [{ type: 'stop_follow' }] };
+  if (has(t, 'follow me', 'come with me', 'come along', 'join me', 'walk with me', 'serve me', 'work for me', 'be my man', 'guard me')) {
+    const wage = has(t, 'a day', 'per day', 'daily', 'pay you', 'wage') ? (amt || 12) : 0;
+    if (p.watch || p.role === 'burgrave' || p.role === 'captain') return { say: 'I have my duty. I go nowhere with you.', attitude: -1, mood: p.mood, actions: [] };
+    if (wage && wage >= 10 && (p.money < 400 || p.traits.greed > 0.6)) return { say: `For ${fmtMoney(wage)} a day? Done. Lead on.`, attitude: 4, mood: 'willing', actions: [{ type: 'follow', wage }], remember: `took service with the stranger at ${fmtMoney(wage)} a day` };
+    if (!wage && (p.attitude > 25 || (p.traits.extraversion > 0.7 && p.attitude > 5)) && !/sleep|working|baking|serving|selling/.test(p.agent.act)) return { say: 'Why not? I\'ll come for a while.', attitude: 2, mood: p.mood, actions: [{ type: 'follow', wage: 0 }] };
+    return { say: wage ? 'Not for that money.' : 'I have my own work to do.', attitude: 0, mood: p.mood, actions: [] };
+  }
+  if (has(t, 'can i come', 'may i come', 'can i join', 'may i join', 'take me with', 'where are you going')) {
+    const next = p.agent.place && (PLACES[p.agent.place] || BUILDING[p.agent.place]) ? p.agent.place : 'tavern';
+    if (p.attitude < -10) return { say: 'No. Go your own way.', attitude: -1, mood: p.mood, actions: [] };
+    return { say: `I'm for ${(PLACES[next] ?? BUILDING[next]).name}. Come along if you like.`, attitude: 2, mood: p.mood, actions: [{ type: 'lead', place: next }] };
+  }
+  if (has(t, 'teach me', 'show me how', 'learn from you')) {
+    if (!TEACH[p.role]) return { say: 'What would I teach you? I know nothing worth the knowing.', attitude: 0, mood: p.mood, actions: [] };
+    const skill = TEACH_SKILL[p.role][0];
+    if (p.attitude < 15 && !amt) return { say: `My ${TEACH[p.role]} isn't given away. A groschen for an hour.`, attitude: 0, mood: p.mood, actions: [] };
+    return { say: 'Come then, watch closely.', attitude: 2, mood: p.mood, actions: [...(amt ? [{ type: 'accept', money: amt }] : []), { type: 'teach', skill }] };
+  }
+  if (has(t, 'lend me', 'give me money', 'spare a', 'alms', 'charity')) {
+    if (p.attitude > 40 && p.money > 60) return { say: 'Here. See you pay it back.', attitude: -2, mood: p.mood, actions: [{ type: 'give', money: 12 }], remember: 'lent the stranger a groschen' };
+    if (p.traits.piety > 0.7 && p.money > 12) return { say: 'For the love of God, then.', attitude: 0, mood: p.mood, actions: [{ type: 'give', money: 1 }] };
+    return { say: 'I\'ve nothing to spare.', attitude: -2, mood: p.mood, actions: [] };
+  }
+  if (has(t, 'sorry', 'forgive', 'make amends', 'make it right')) {
+    const open = P.crimes.find((c) => !c.settled && c.victim === p.id);
+    if (!open) return { say: 'For what?', attitude: 0, mood: p.mood, actions: [] };
+    return { say: p.traits.agreeableness > 0.6 ? 'Words are cheap. Make it good with money and I\'ll let it rest.' : 'Sorry won\'t do. You\'ll answer to the rychtář.', attitude: 1, mood: p.mood, actions: [] };
+  }
   if (has(t, 'my name is', "i'm ", 'i am ', 'call me')) return { say: `${p.name}. ${p.title[0].toUpperCase() + p.title.slice(1)}. ${warm ? 'Glad to know you.' : 'What do you want?'}`, attitude: 3, mood: p.mood, action: { type: 'learn_name' }, remember: 'told me their name' };
   if (has(t, 'thief', 'whore', 'bastard', 'fool', 'idiot', 'pig', 'dog')) return { say: p.traits.temper > 0.6 ? 'Say that again and I\'ll break your teeth!' : 'You\'ll answer for that to the rychtář.', attitude: -20, mood: 'angry', action: { type: p.traits.courage < 0.4 || p.watch ? 'call_watch' : 'none' }, remember: 'insulted me' };
   if (p.sells && has(t, 'buy', 'sell', 'beer', 'ale', 'bread', 'food', 'eat', 'drink', 'wine', 'meat', 'bath', 'bed', 'shoes', 'knife', 'hood', 'how much')) {
@@ -215,4 +375,14 @@ export function scripted(sim, p, text) {
   if (has(t, 'who are you', 'what do you do', 'your name')) return { say: `${p.fullName}, ${p.title}. ${p.agent.act[0].toUpperCase() + p.agent.act.slice(1)}, as you see.`, attitude: 1, mood: p.mood, action: { type: 'none' } };
   if (has(t, 'hello', 'good day', 'greetings', 'god give', 'hi')) return { say: cold ? 'What do you want?' : warm ? `God give you good day, ${sir}! What brings you?` : R([`God give you good day, ${sir}.`, 'Good day.', `${sir[0].toUpperCase() + sir.slice(1)}.`]), attitude: 2, mood: p.mood, action: { type: 'none' } };
   return { say: p.traits.extraversion > 0.6 ? R(['Eh? Say it plainly.', 'I don\'t follow you. Are you from these parts?', 'Hm. ' + R(RUMOURS)]) : R(['Hm.', 'I have work to do.', 'If you say so.']), attitude: 0, mood: p.mood, action: { type: 'none' } };
+}
+
+const NUMS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twelve: 12, twenty: 20, half: 0.5 };
+/** "two groschen", "5 gr", "a groschen", "6 parvi", "half a kopa" -> parvi. */
+export function parseMoney(t) {
+  const m = /(\d+(?:\.\d+)?|an?|one|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty|half)\s*(?:a\s+)?(kopa|groschen|grosch|groš|gr\b|parvi|pennies|penny|pence|p\b|coins?)/.exec(t);
+  if (!m) return 0;
+  const n = Number(m[1]) || NUMS[m[1]] || 1;
+  const unit = /kopa/.test(m[2]) ? 720 : /gro|gr/.test(m[2]) || /coin/.test(m[2]) ? 12 : 1;
+  return Math.round(n * unit);
 }

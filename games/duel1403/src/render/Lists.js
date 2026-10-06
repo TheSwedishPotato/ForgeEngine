@@ -11,6 +11,7 @@ import { LISTS_RADIUS } from '../knight/Knight.js';
 import { heightAt, inJoustField } from '../world/terrain.js';
 import { LODInstancer, buildLODChain } from '../engine/geometry/LOD.js';
 import { spruceGeometry, broadleafGeometry, onlookerParts } from './Foliage.js';
+import { Cloth, windAt } from './Cloth.js';
 
 /**
  * The lists below a Bohemian castle, autumn 1403: a ring fenced with
@@ -105,7 +106,7 @@ export class Lists {
       flag.position.set(x, 4.7, z);
       flag.castShadow = true;
       this.group.add(flag);
-      this.flags.push({ mesh: flag, base: geo.attributes.position.array.slice(), phase: rand() * 6 });
+      this.flags.push({ mesh: flag, cloth: new Cloth(geo, { pin: (px) => px < 0.01, widthSegments: 16, heightSegments: 4, mass: 0.2 }) });
     }
 
     // ---- judges' stand with canopy ----------------------------------------------------
@@ -377,17 +378,9 @@ export class Lists {
   update(dt, excitement = 0) {
     this.time += dt;
     const t = this.time;
-    for (const f of this.flags) {
-      const pos = f.mesh.geometry.attributes.position;
-      const b = f.base;
-      for (let i = 0; i < pos.count; i++) {
-        const x = b[i * 3];
-        const w = x / 1.2;
-        pos.array[i * 3 + 2] = Math.sin(x * 4 - t * 4 + f.phase) * 0.08 * w + Math.sin(b[i * 3 + 1] * 3 + t * 2.3) * 0.03 * w;
-      }
-      pos.needsUpdate = true;
-      f.mesh.geometry.computeVertexNormals();
-    }
+    // the banners of the kingdom stream in the wind (Verlet cloth, see Cloth.js)
+    const wind = windAt(t);
+    for (const f of this.flags) f.cloth.step(dt, wind);
     // LOD selection for the detailed scenery, from the camera.
     if (this.camera) {
       const cp = this.camera.position;

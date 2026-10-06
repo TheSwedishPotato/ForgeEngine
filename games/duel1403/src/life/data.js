@@ -19,6 +19,9 @@ export const LIFE_SOURCES = {
   warfare: { short: 'Warfare around 1400', text: 'A "lance" was a heavy horseman (usually noble), a lighter horseman (often a squire) and a servant. Infantry came from town and rural levies, the lower members of noble retinues and castle garrisons, and mercenary bands; crossbowmen behind pavises were the strength of the foot. Royal captains (hejtman) such as Racek Kobyla of Dvorce held castles for Wenceslas IV.', url: 'https://www.wulflund.com/tema/kingdom-come-deliverance/warfare-around-1400' },
   infantry: { short: 'Bohemian infantry c. 1400 (Heath)', text: 'After the Wenceslas Bible: thick quilted coats, kettle hats with brow ridges, bascinets, pavises, crossbows, flails and polearms. Prague called out its citizens two town quarters at a time (1371).', url: 'https://warfare.x10host.com/WRG/Middle_Ages_2-121-Bohemian_Infantry-c1400.htm' },
   names: { short: 'Czech names', text: 'In the 14th century saints\' names spread: Jan was by far the commonest man\'s name (15–27 %), with Petr, Mikuláš, Tomáš, Matěj, Marek; women were most often Kateřina, Anna, Dorota, Markéta, Alžběta, Klára, Ludmila, Magdaléna, Barbora.', url: 'https://heraldry.sca.org/names/lateczech.html' },
+  hue: { short: 'Hue and cry (Gerüfte)', text: 'Whoever saw a crime raised the cry ("Zeter!", "Thief!"), and all who heard it were bound to follow and help seize the wrongdoer. A thief taken in the act with the goods (the "hand-having deed", handhafte Tat) had the stolen thing tied to his back and was brought at once before the judge; against such proof no oath could help. The Sachsenspiegel opens court proceedings with the cry.', url: 'https://en.wikipedia.org/wiki/Hue_and_cry' },
+  oath: { short: 'Oath-helpers (compurgation)', text: 'Where there was no capture in the act and fewer than two witnesses, the accused could clear himself by oath, supported by oath-helpers who swore to his good character: more of them for graver charges ("with seven hands" for a capital charge in the Saxon law). Bohemian land law also turned on oaths and the number of helpers.', url: 'https://en.wikipedia.org/wiki/Compurgation' },
+  court: { short: 'The town court', text: 'In a subject town the headman (rychtář), appointed by the lord, sat in judgement with sworn aldermen (konšelé) from the town council, under the law of a mother town (Old Town Prague or Magdeburg). Petty theft brought restoration, the pillory and the whip or banishment; great theft and theft by night the gallows; killing the sword unless settled with the kin.', url: 'https://cs.wikipedia.org/wiki/Rycht%C3%A1%C5%99' },
   year1403: { short: 'The year 1403', text: 'King Wenceslas IV was a prisoner of his brother Sigismund in Vienna from 1402 until he escaped in November 1403; Sigismund\'s Hungarians, with Cumans, raided Bohemia; the lords\' leagues and robber bands made the roads unsafe.', url: 'https://www.wulflund.com/tema/kingdom-come-deliverance/bohemian-kingdom-around-1400-amidst-disorder-tricks-insecurity-and-war' },
 };
 
@@ -43,16 +46,19 @@ export const GOODS = {
   shoes: { name: 'Pair of turnshoes', price: 36, sureness: 'estimate', kind: 'item' },
   knife: { name: 'Knife', price: 18, sureness: 'estimate', kind: 'item' },
   hood: { name: 'Wool hood', price: 30, sureness: 'estimate', kind: 'item' },
+  cloth: { name: 'Ell of good Flemish cloth', price: 72, sureness: 'estimate', kind: 'item' },
+  candle: { name: 'Tallow candle', price: 1, sureness: 'estimate', kind: 'item' },
 };
 /** Who sells what, by building. */
 export const SHOPS = {
-  tavern: ['beer', 'wine', 'pottage', 'meat', 'bread', 'bed'],
+  tavern: ['beer', 'wine', 'pottage', 'meat', 'bread', 'bed', 'candle'],
   bakery: ['bread'],
   butcher: ['meat'],
   bath: ['bath'],
   cobbler: ['shoes'],
   smithy: ['knife'],
   weaver: ['hood'],
+  market: ['cloth', 'hood'],
 };
 /** Day wages, parvi. */
 export const WAGES = {
@@ -109,6 +115,8 @@ export const LAWS = [
   { id: 'fasting', name: 'Fast days', text: 'No meat on Fridays, Saturdays (in many places), in Lent and on vigils; fish, peas and bread instead. The church, not the town, punishes this, with penance.', sureness: 'general' },
   { id: 'privy', name: 'Filth in the street', text: 'Emptying privies or relieving oneself in the street or square is against the town\'s ordinance; use a privy, or go out to the fields.', fine: 2, sureness: 'general', source: 'privies' },
   { id: 'gambling', name: 'Dice', text: 'Playing at dice for money is forbidden and the stakes forfeit, though it is done in every tavern.', fine: 12, sureness: 'general' },
+  { id: 'outlaw', name: 'Breaking banishment', text: 'Whoever is banished from the town and lordship and comes back is taken and hanged without a new trial.', sureness: 'general' },
+  { id: 'perjury', name: 'False oath', text: 'Whoever swears falsely before the court loses the right to swear and pays a heavy fine; in many codes, the oath-hand.', fine: 120, sureness: 'general' },
   { id: 'insult', name: 'Insult and slander', text: 'Calling an honest man a thief or a woman a whore before witnesses: a fine and public apology, or the stocks.', fine: 12, sureness: 'general' },
 ];
 export const LAW = Object.fromEntries(LAWS.map((l) => [l.id, l]));

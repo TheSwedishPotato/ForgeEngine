@@ -8,7 +8,9 @@ import { GBUFFER_READ } from '../shaders/lighting.js';
  *   SSR   — reflections ray-marched against the depth buffer
  *   SSGI  — one-bounce diffuse light: cosine-distributed rays find the
  *           surfaces nearby and bring their (last frame's) light; denoised
- *           temporally and with an edge-aware à-trous filter.
+ *           temporally (SVGF-style history length and variance
+ *           clamping) and with an edge-aware à-trous filter.
+ * SSR is filtered temporally too (neighbourhood-clipped history).
  * SSR and SSGI read the previous frame's lit image (mip-mapped), reprojected
  * with the motion vectors.
  */
@@ -204,21 +206,74 @@ void main() {
   o = vec4(sum / float(RAYS), hits / float(RAYS));
 }`;
 
+/**
+ * Temporal accumulation for the bounce light, after SVGF (Schied et al.
+ * 2017): each pixel keeps how many frames its history holds (up to 32),
+ * blends the new estimate in at 1/n, and clamps the history to the
+ * neighbourhood's mean ± 2σ so it cannot drift when the light changes. A
+ * disocclusion (depth moved) restarts the count.
+ */
 const GI_TEMPORAL_FS = /* glsl */`
 ${COMMON}
 ${GBUFFER_READ}
-in vec2 vUv; out vec4 o;
-uniform sampler2D uCur, uHist, uHistDepth;
+in vec2 vUv;
+layout(location = 0) out vec4 o;
+layout(location = 1) out vec4 oLen;
+uniform sampler2D uCur, uHist, uHistLen, uHistDepth;
 uniform float uReset;
 void main() {
   vec4 c = texture(uCur, vUv);
+  vec2 t = 1.0 / vec2(textureSize(uCur, 0));
+  vec4 m1 = vec4(0.0), m2 = vec4(0.0);
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec4 s = texture(uCur, vUv + vec2(x, y) * t);
+    m1 += s; m2 += s * s;
+  }
+  m1 /= 9.0; m2 /= 9.0;
+  vec4 sd = sqrt(max(m2 - m1 * m1, vec4(0.0)));
+  vec2 puv = vUv - texture(uG2, vUv).xy;
+  float n = 0.0;
+  vec4 h = c;
+  if (uReset < 0.5 && all(greaterThanEqual(puv, vec2(0.0))) && all(lessThanEqual(puv, vec2(1.0)))) {
+    float d = texture(uDepth, vUv).r, pd = texture(uHistDepth, puv).r;
+    if (abs(d - pd) < 0.002 + 0.02 * (1.0 - d)) { h = texture(uHist, puv); n = texture(uHistLen, puv).r; }
+  }
+  h = clamp(h, m1 - sd * 2.0, m1 + sd * 2.0);
+  n = min(n + 1.0, 32.0);
+  o = mix(h, c, max(1.0 / n, 0.035));
+  oLen = vec4(n, 0.0, 0.0, 1.0);
+}`;
+
+/**
+ * Temporal filter for reflections: the reflecting surface's history,
+ * clipped to this frame's 3×3 neighbourhood (min/max widened a little for
+ * rough surfaces, whose rays are jittered more), blended in faster for
+ * mirrors (which change with the view) than for rough metal.
+ */
+const SSR_TEMPORAL_FS = /* glsl */`
+${COMMON}
+${GBUFFER_READ}
+in vec2 vUv; out vec4 o;
+uniform sampler2D uCur, uHist;
+uniform float uReset;
+void main() {
+  vec4 c = texture(uCur, vUv);
+  float rough = texture(uG1, vUv).z;
+  vec2 t = 1.0 / vec2(textureSize(uCur, 0));
+  vec4 mn = c, mx = c, m1 = vec4(0.0), m2 = vec4(0.0);
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec4 s = texture(uCur, vUv + vec2(x, y) * t);
+    mn = min(mn, s); mx = max(mx, s); m1 += s; m2 += s * s;
+  }
+  m1 /= 9.0; m2 /= 9.0;
+  vec4 sd = sqrt(max(m2 - m1 * m1, vec4(0.0)));
   vec2 puv = vUv - texture(uG2, vUv).xy;
   if (uReset > 0.5 || any(lessThan(puv, vec2(0.0))) || any(greaterThan(puv, vec2(1.0)))) { o = c; return; }
   vec4 h = texture(uHist, puv);
-  // disocclusion: depth moved too much
-  float d = texture(uDepth, vUv).r, pd = texture(uHistDepth, puv).r;
-  float valid = abs(d - pd) < 0.002 + 0.02 * (1.0 - d) ? 1.0 : 0.0;
-  o = mix(c, h, 0.9 * valid);
+  float widen = 0.5 + 1.5 * smoothstep(0.05, 0.5, rough);
+  h = clamp(h, max(mn, m1 - sd * widen * 2.0) - sd * 0.25, min(mx, m1 + sd * widen * 2.0) + sd * 0.25);
+  float a = mix(0.22, 0.07, smoothstep(0.04, 0.45, rough));
+  o = mix(h, c, a);
 }`;
 
 // Edge-avoiding à-trous wavelet filter (Dammertz et al. 2010).
@@ -256,6 +311,7 @@ export class ScreenSpace {
     this.pSSR = postProgram(gl, SSR_FS, {}, 'ssr');
     this.pGI = postProgram(gl, SSGI_FS, {}, 'ssgi');
     this.pGIT = postProgram(gl, GI_TEMPORAL_FS, {}, 'ssgi-temporal');
+    this.pSSRT = postProgram(gl, SSR_TEMPORAL_FS, {}, 'ssr-temporal');
     this.pAtrous = postProgram(gl, ATROUS_FS, {}, 'atrous');
     this.pCopy = postProgram(gl, COPY_FS, {}, 'copy');
   }
@@ -265,16 +321,18 @@ export class ScreenSpace {
     const mk = (W, H, fmt = 'rgba16f', filter = 'linear') => new Target(gl, { width: W, height: H, colors: [{ format: fmt, filter }] });
     if (!this.ao) {
       this.aoHalf = mk(hw, hh, 'r16f'); this.ao = mk(w, h, 'r16f');
-      this.ssr = mk(w, h);
-      this.gi = mk(hw, hh); this.giA = mk(hw, hh); this.giB = mk(hw, hh); this.giTmp = mk(hw, hh);
+      this.ssr = mk(w, h); this.ssrA = mk(w, h); this.ssrB = mk(w, h);
+      const mk2 = (W, H) => new Target(gl, { width: W, height: H, colors: [{ format: 'rgba16f', filter: 'linear' }, { format: 'r16f', filter: 'nearest' }] });
+      this.gi = mk(hw, hh); this.giA = mk2(hw, hh); this.giB = mk2(hw, hh); this.giTmp = mk(hw, hh);
       this.giDepthA = mk(hw, hh, 'r32f', 'nearest'); this.giDepthB = mk(hw, hh, 'r32f', 'nearest');
       this.prev = mk(w, h, 'rgba16f', 'mip');
     } else {
-      this.aoHalf.resize(hw, hh); this.ao.resize(w, h); this.ssr.resize(w, h);
+      this.aoHalf.resize(hw, hh); this.ao.resize(w, h); this.ssr.resize(w, h); this.ssrA.resize(w, h); this.ssrB.resize(w, h);
       for (const t of [this.gi, this.giA, this.giB, this.giTmp, this.giDepthA, this.giDepthB]) t.resize(hw, hh);
       this.prev.colors[0].alloc(w, h); this.prev.width = w; this.prev.height = h; this.prev.attach();
     }
     this.reset = true;
+    this.ssrFresh = false; this.giFresh = false;
   }
   beforeLighting(r) {
     const gl = r.gl;
@@ -295,7 +353,12 @@ export class ScreenSpace {
       this.ssr.bind();
       r.bindGBuffer(this.pSSR.use()).set('uPrevColor', this.prev.tex).set('uPrevLevels', this.prev.tex.levels).set('uFrame', r.frame);
       fullscreen(gl);
-      r.ssrTexture = this.ssr.tex;
+      this.ssrA.bind();
+      r.bindGBuffer(this.pSSRT.use()).set('uCur', this.ssr.tex).set('uHist', this.ssrB.tex).set('uReset', this.ssrFresh ? 0 : 1);
+      fullscreen(gl);
+      const t = this.ssrA; this.ssrA = this.ssrB; this.ssrB = t;
+      this.ssrFresh = true;
+      r.ssrTexture = this.ssrB.tex;
     }
     if (q.ssgi) {
       this.gi.bind();
@@ -303,7 +366,8 @@ export class ScreenSpace {
       fullscreen(gl);
       // temporal accumulation, then two à-trous iterations
       this.giA.bind();
-      r.bindGBuffer(this.pGIT.use()).set('uCur', this.gi.tex).set('uHist', this.giB.tex).set('uHistDepth', this.giDepthB.tex).set('uReset', 0);
+      r.bindGBuffer(this.pGIT.use()).set('uCur', this.gi.tex).set('uHist', this.giB.tex).set('uHistLen', this.giB.colors[1]).set('uHistDepth', this.giDepthB.tex).set('uReset', this.giFresh ? 0 : 1);
+      this.giFresh = true;
       fullscreen(gl);
       // remember depth for next frame's disocclusion test
       this.giDepthA.bind();

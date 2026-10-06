@@ -4,10 +4,21 @@ import { Texture, Target, state } from '../gl/GL.js';
 const _v = new Vector3(), _c = new Vector3(), _up = new Vector3(0, 1, 0), _p = new Vector4();
 const _view = new Matrix4(), _proj = new Matrix4(), _inv = new Matrix4();
 
+export const FOCUS = 4;   // the array layer of the focus map
+
 /**
  * Cascaded shadow maps for the sun: practical split scheme, each cascade a
  * bounding sphere of its frustum slice (rotation-invariant size) snapped to
  * whole texels so shadows do not crawl as the camera moves.
+ *
+ * On top of the cascades, an optional focus map: one more layer fitted
+ * tightly around what matters most on screen (`focus`: the fighters, the
+ * player and the people beside them). A 2048 map over a 3 m sphere gives
+ * texels of about 1.5 mm, ten times finer than the first cascade, so the
+ * shadows of a blade, fingers or a hood's edge are sharp where you look.
+ * It is the WebGL2 form of the idea behind virtual shadow maps (resolution
+ * spent where the screen needs it) without their page tables, which need
+ * compute shaders and indirect draws.
  */
 export class Shadows {
   constructor(gl, { size = 2048, cascades = 4, distance = 70 } = {}) {
@@ -15,9 +26,14 @@ export class Shadows {
     this.size = size;
     this.n = cascades;
     this.distance = distance;
-    this.map = new Texture(gl, { target: 'array', width: size, height: size, depth: cascades, format: 'depth32f', filter: 'linear', compare: true });
+    this.layers = cascades + 1;
+    this.map = new Texture(gl, { target: 'array', width: size, height: size, depth: this.layers, format: 'depth32f', filter: 'linear', compare: true });
     this.target = new Target(gl, { width: size, height: size, depth: this.map });
-    this.matrices = new Float32Array(16 * cascades);
+    this.matrices = new Float32Array(16 * (cascades + 1));
+    this.focus = null;          // {center: Vector3, radius} or null
+    this.focusOn = 0;
+    this.focusTexel = 0;
+    this.focusCascade = { view: new Matrix4(), proj: new Matrix4(), vp: new Matrix4(), center: new Vector3(), radius: 1, texel: 0 };
     this.splits = new Float32Array(4);
     this.texel = new Float32Array(4);   // world size of a texel per cascade
     this.cascades = [];
@@ -27,7 +43,7 @@ export class Shadows {
   resize(size) {
     if (size === this.size) return;
     this.size = size;
-    this.map.alloc(size, size, this.n);
+    this.map.alloc(size, size, this.layers);
     this.target.width = this.target.height = size;
   }
 
@@ -77,7 +93,35 @@ export class Shadows {
       this.matrices.set(c.vp.elements, i * 16);
       this.splits[i] = splits[i + 1];
       this.texel[i] = texel;
+      c.texel = texel;
     }
+    this._fitFocus(sunDir);
+  }
+
+  /** The focus map: a tight ortho box around `focus`, texel-snapped. */
+  _fitFocus(sunDir) {
+    const f = this.focus;
+    this.focusOn = f && f.radius > 0 ? 1 : 0;
+    if (!this.focusOn) return;
+    const c = this.focusCascade;
+    const r = Math.ceil(f.radius * 32) / 32;
+    const up = Math.abs(sunDir.y) > 0.99 ? _v3.set(1, 0, 0) : _up;
+    _view.lookAt(_v.set(0, 0, 0), _v2.copy(sunDir).negate(), up);
+    const texel = (2 * r) / this.size;
+    const ls = _c.copy(f.center).applyMatrix4(_inv.copy(_view).invert());
+    ls.x = Math.floor(ls.x / texel) * texel;
+    ls.y = Math.floor(ls.y / texel) * texel;
+    const centre = ls.applyMatrix4(_view);
+    const back = 60;
+    const eye = _v.copy(centre).addScaledVector(sunDir, back);
+    c.view.lookAt(eye, centre, up);
+    c.view.setPosition(eye);
+    c.view.invert();
+    c.proj.makeOrthographic(-r, r, r, -r, 0.1, back + r * 2);
+    c.vp.multiplyMatrices(c.proj, c.view);
+    c.center.copy(centre); c.radius = r; c.texel = texel;
+    this.matrices.set(c.vp.elements, FOCUS * 16);
+    this.focusTexel = texel;
   }
 
   /** Renders every cascade with the supplied draw callback (receives the cascade's view-projection). */
@@ -93,6 +137,12 @@ export class Shadows {
       gl.polygonOffset(1.6 + i * 0.6, 2.0 + i);
       drawCasters(this.cascades[i], i);
     }
+    if (this.focusOn) {
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.map.tex, 0, FOCUS);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.polygonOffset(1.2, 1.5);
+      drawCasters(this.focusCascade, FOCUS);
+    }
     gl.disable(gl.POLYGON_OFFSET_FILL);
     gl.colorMask(true, true, true, true);
   }
@@ -104,7 +154,8 @@ void _proj;
 /** GLSL for sampling the cascades (PCF over a rotated Poisson disk). */
 export const SHADOW_GLSL = /* glsl */`
 uniform highp sampler2DArrayShadow uShadowMap;
-uniform mat4 uShadowMatrix[4];
+uniform mat4 uShadowMatrix[5];
+uniform float uShadowFocusOn, uShadowFocusTexel;
 uniform vec4 uShadowSplits;
 uniform vec4 uShadowTexel;
 uniform float uShadowSize;
@@ -127,10 +178,38 @@ float shadowCascade(int i, vec3 wpos, vec3 n, float rot, float softness) {
   }
   return sum / 12.0;
 }
+/**
+ * The focus map, where it covers the point: 1 inside its inner part, fading
+ * to 0 at its edge (w), and the visibility it gives.
+ */
+float shadowFocus(vec3 wpos, vec3 n, float rot, out float w) {
+  w = 0.0;
+  if (uShadowFocusOn < 0.5) return 1.0;
+  vec3 p = wpos + n * uShadowFocusTexel * 2.0;
+  vec4 c = uShadowMatrix[4] * vec4(p, 1.0);
+  vec3 s = c.xyz / c.w * 0.5 + 0.5;
+  vec2 e = min(s.xy, 1.0 - s.xy);
+  w = smoothstep(0.0, 0.08, min(e.x, e.y));
+  if (w <= 0.0 || s.z > 1.0) { w = 0.0; return 1.0; }
+  // the same world-size penumbra as the first cascade, in finer texels
+  float radius = 2.2 * (uShadowTexel.x / max(uShadowFocusTexel, 1e-6)) / uShadowSize;
+  radius = min(radius, 0.02);
+  float ca = cos(rot), sa = sin(rot);
+  float sum = 0.0;
+  for (int k = 0; k < 12; k++) {
+    vec2 o = POISSON[k];
+    o = vec2(o.x * ca - o.y * sa, o.x * sa + o.y * ca);
+    sum += texture(uShadowMap, vec4(s.xy + o * radius, 4.0, s.z));
+  }
+  return sum / 12.0;
+}
 /** Sun visibility at a world position; viewDepth is positive distance along the view axis. */
 float sunShadow(vec3 wpos, vec3 n, float viewDepth, float rot) {
+  float fw;
+  float fs = shadowFocus(wpos, n, rot, fw);
   int i = viewDepth < uShadowSplits.x ? 0 : viewDepth < uShadowSplits.y ? 1 : viewDepth < uShadowSplits.z ? 2 : viewDepth < uShadowSplits.w ? 3 : 4;
-  if (i > 3) return 1.0;
+  if (i > 3) return mix(1.0, fs, fw);
+  if (fw >= 1.0) return fs;
   float sh = shadowCascade(i, wpos, n, rot, 2.2);
   // Blend into the next cascade over the last 12% of this one.
   float edge = uShadowSplits[i];
@@ -138,7 +217,7 @@ float sunShadow(vec3 wpos, vec3 n, float viewDepth, float rot) {
   float f = smoothstep(edge - (edge - start) * 0.12, edge, viewDepth);
   if (f > 0.0 && i < 3) sh = mix(sh, shadowCascade(i + 1, wpos, n, rot, 2.2), f);
   else if (f > 0.0) sh = mix(sh, 1.0, f);
-  return sh;
+  return mix(sh, fs, fw);
 }
 /** Cheap single-tap version for volumetrics. */
 float sunShadowFast(vec3 wpos, float viewDepth) {

@@ -34,6 +34,7 @@ export class JoustMode {
     this.camMode = config.joustCamera ?? 'chase';
     this.foeId = config.joustFoe ?? 'rozmberk';
     this.saddle = config.joustSaddle ?? 'hohenzeug';
+    this.tilt = config.joustTilt ?? true;
     this.mouse = new Vector2(innerWidth / 2, innerHeight / 2);
     this.keys = new Set();
     this.excitement = 0;
@@ -58,7 +59,8 @@ export class JoustMode {
     const you = { name: P.name || 'You', heraldry: P.heraldry, colors: this.playerColors(P), skill: 0.85, coat: 'bay' };
     const them = { ...foe, colors: { ...foe.colors } };
     if (them.coat === you.coat) you.coat = 'chestnut';
-    this.sim = new JoustSim({ riders: [you, them], seed: (Math.random() * 1e9) | 0, saddle: this.saddle });
+    this.sim = new JoustSim({ riders: [you, them], seed: (Math.random() * 1e9) | 0, saddle: this.saddle, tilt: this.tilt });
+    this.stage.scene.getObjectByName('joust-tilt')?.traverse((o) => { o.visible = this.tilt; });
     this.player = this.sim.a;
     this.ai = new JoustAI(this.sim, this.sim.b, { aim: foe.aim });
     this.player.ctrl.speed = HORSE.gaits.canter + 1;
@@ -89,6 +91,7 @@ export class JoustMode {
 
   dispose() {
     this._disposeMeshes();
+    this.stage.scene.getObjectByName('joust-tilt')?.traverse((o) => { o.visible = false; });
     this.el.remove();
     this.result.remove();
     for (const [t, f, o] of this._listeners) t.removeEventListener(f.type ?? f[0], f.fn ?? f[1], o);
@@ -370,8 +373,9 @@ export class JoustMode {
     } else if (mode === 'side') {
       const mid = new Vector3().addVectors(p.b.chest.pos, o.b.chest.pos).multiplyScalar(0.5);
       mid.x = Math.max(FIELD.center.x - 40, Math.min(FIELD.center.x + 40, mid.x));
-      pos.set(mid.x, 2.2, FIELD.center.z - FIELD.halfWidth + 1.2);
-      at.set(mid.x, 1.7, FIELD.center.z);
+      // above the tilt when there is one
+      pos.set(mid.x, this.tilt ? 5.0 : 2.2, FIELD.center.z - FIELD.halfWidth + 1.2);
+      at.set(mid.x, this.tilt ? 1.5 : 1.7, FIELD.center.z);
       fov = this.sim.closing() > 20 ? 50 : 42;
     } else if (mode === 'impact') {
       pos.copy(this.replay.point).add(_v2.set(0, 0.6, -6.5));
@@ -394,6 +398,7 @@ export class JoustMode {
     cam.lookAt(this.camAt);
     if (Math.abs(cam.fov - fov) > 0.1) { cam.fov += (fov - cam.fov) * Math.min(1, snap ? 1 : dt * 3); cam.updateProjectionMatrix(); }
     this.stage.focusPoint = o.b.head.pos;
+    this.stage.shadowFocus = [p.b.head.pos, p.b.footL.pos, p.horse.body.pos];
     this.stage.dofAmount = mode === 'impact' ? 0.8 : mode === 'helm' ? 0 : 0.25;
     this.stage.visor = mode === 'helm' && !p.helmOff ? 1 : 0;
   }

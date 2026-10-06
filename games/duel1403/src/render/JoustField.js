@@ -1,5 +1,5 @@
 import {
-  Group, Mesh, PlaneGeometry, BoxGeometry, CylinderGeometry, ConeGeometry, MeshStandardMaterial, Object3D, Color, DoubleSide,
+  Vector3, Group, Mesh, PlaneGeometry, BoxGeometry, CylinderGeometry, ConeGeometry, MeshStandardMaterial, Object3D, Color, DoubleSide,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { earthTexture, woodTexture, fabricTexture, heraldryTexture, rng } from './textures.js';
@@ -7,13 +7,17 @@ import { HERALDRY } from '../data/opponents.js';
 import { LODInstancer, buildLODChain } from '../engine/geometry/LOD.js';
 import { onlookerParts } from './Foliage.js';
 import { FIELD } from '../joust/JoustSim.js';
+import { Cloth, windAt } from './Cloth.js';
 
 /**
  * The joust field, laid out as a joust at large was before the tilt: an open
- * run of raked earth fenced with timber, a covered stand for the lords and
+ * run of raked earth fenced with timber (the tilt itself, a cloth-hung
+ * barrier down the middle, is shown when a joust is run with it), a covered stand for the lords and
  * ladies with the heralds and judges in the middle, the commons along the
  * far fence, banners, and the jousters' pavilions at both ends.
  */
+const _wl = new Vector3();
+
 export class JoustField {
   constructor(scene, { quality = 'high' } = {}) {
     this.group = new Group();
@@ -50,6 +54,36 @@ export class JoustField {
     const fence = new Mesh(mergeGeometries([...posts, ...rails].map((g) => g.toNonIndexed())), wood);
     fence.castShadow = true; fence.receiveShadow = true;
     this.group.add(fence);
+
+    // ---- the tilt (shown only when a joust is run with it) ---------------------------------
+    {
+      const tilt = new Group();
+      tilt.name = 'joust-tilt';
+      const len = (HL - 5) * 2, H = FIELD.tiltHeight, T = FIELD.tiltThickness;
+      const tposts = [], trails = [];
+      for (let x = -len / 2; x <= len / 2 + 0.01; x += 3) tposts.push(new BoxGeometry(0.14, H + 0.1, 0.14).translate(C.x + x, (H + 0.1) / 2, C.z));
+      for (const y of [0.25, H - 0.06]) trails.push(new BoxGeometry(len, 0.12, T).translate(C.x, y, C.z));
+      const frame = new Mesh(mergeGeometries([...tposts, ...trails].map((g) => g.toNonIndexed())), darkWood);
+      frame.castShadow = true; frame.receiveShadow = true;
+      tilt.add(frame);
+      // the toile: painted cloth hung on the frame, both faces
+      const toileTex = fabricTexture('#9a1a1e').clone(); toileTex.needsUpdate = true; toileTex.repeat.set(len / 3, 1);
+      const toileMat = new MeshStandardMaterial({ map: toileTex, roughness: 0.95, side: DoubleSide });
+      toileMat.userData.cloth = true;
+      for (const s of [-1, 1]) {
+        const cloth = new Mesh(new PlaneGeometry(len, H - 0.45, Math.ceil(len / 1.5), 2), toileMat);
+        const pos = cloth.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), y = pos.getY(i); pos.setZ(i, 0.02 * Math.sin(x * 2.1) * (0.5 - y / (H - 0.45))); }
+        cloth.geometry.computeVertexNormals();
+        cloth.position.set(C.x, 0.25 + (H - 0.45) / 2 + 0.06, C.z + s * (T / 2 + 0.02));
+        cloth.rotation.y = s > 0 ? 0 : Math.PI;
+        cloth.castShadow = true; cloth.receiveShadow = true;
+        tilt.add(cloth);
+      }
+      tilt.visible = false;
+      this.group.add(tilt);
+      this.tilt = tilt;
+    }
 
     // ---- the stand for the lords, ladies and judges (south side) ---------------------------------
     {
@@ -113,7 +147,8 @@ export class JoustField {
       flag.rotation.y = Math.PI / 2;
       flag.castShadow = true;
       this.group.add(flag);
-      this.flags.push({ mesh: flag, base: geo.attributes.position.array.slice(), phase: rand() * 6 });
+      flag.updateMatrixWorld();
+      this.flags.push({ mesh: flag, cloth: new Cloth(geo, { pin: (px, py) => py > -0.01, widthSegments: 6, heightSegments: 10, mass: 0.25 }), inv: flag.quaternion.clone().invert() });
     }
 
     // ---- pavilions at the ends: where the jousters arm ---------------------------------------------
@@ -192,14 +227,11 @@ export class JoustField {
   update(dt, { excitement = 0, focusX = 0, camera = null } = {}) {
     this.time += dt;
     const t = this.time;
-    for (const f of this.flags) {
-      const pos = f.mesh.geometry.attributes.position, b = f.base;
-      for (let i = 0; i < pos.count; i++) {
-        const y = -b[i * 3 + 1] / 1.5;
-        pos.array[i * 3 + 2] = Math.sin(b[i * 3 + 1] * 3 - t * 3 + f.phase) * 0.07 * y + Math.sin(b[i * 3] * 4 + t * 2) * 0.03 * y;
-      }
-      pos.needsUpdate = true;
-      f.mesh.geometry.computeVertexNormals();
+    // banners: cloth in the wind (only when the field is on screen, at full rate when near)
+    const near = !camera || camera.position.distanceTo(FIELD.center) < 90;
+    if (near && this.group.visible) {
+      const wind = windAt(t);
+      for (const f of this.flags) f.cloth.step(dt, _wl.copy(wind).applyQuaternion(f.inv));
     }
     this._pose(t, excitement, focusX);
     if (camera) for (const l of Object.values(this.crowd)) { l._built = false; l.update(camera.position); }

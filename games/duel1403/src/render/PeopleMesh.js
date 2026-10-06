@@ -40,6 +40,30 @@ export class PeopleMesh {
     this.time = 0;
   }
 
+  /**
+   * Where a person is in the room the player is in: their own place, or, for
+   * a companion or someone come to seize you, walking in from the door
+   * toward you.
+   */
+  posOf(p, interior, dt = 0) {
+    if (!(p.follow || p.agent.pursuit)) { this.trail?.delete(p.id); return { ...interior.spotOf(p), speed: 0 }; }
+    this.trail ??= new Map();
+    let t = this.trail.get(p.id);
+    if (!t || t.b !== interior.b.id) {
+      const d = interior.world(interior.doorLocal.x * 0.85, interior.doorLocal.z * 0.85);
+      t = { b: interior.b.id, x: d.x, z: d.z, yaw: 0, speed: 0 };
+      this.trail.set(p.id, t);
+    }
+    const P = this.sim.player;
+    const keep = p.agent.pursuit ? 0.7 : 1.2;
+    const dx = P.x - t.x, dz = P.z - t.z, dist = Math.hypot(dx, dz);
+    const sp = dist > keep ? Math.min(p.agent.pursuit ? 2.2 : 1.5, (dist - keep) / Math.max(dt, 1e-4)) : 0;
+    if (dist > 1e-3) { t.x += (dx / dist) * sp * dt; t.z += (dz / dist) * sp * dt; t.yaw = Math.atan2(dx, dz); }
+    const c = interior.clamp(t.x, t.z); t.x = c.x; t.z = c.z;
+    t.speed = sp;
+    return { x: t.x, y: interior.origin.y, z: t.z, yaw: t.yaw, posture: 'stand', speed: sp };
+  }
+
   /** interior: {building, spotOf(person) -> {x,y,z,yaw,posture}} when the player is inside. */
   _buildSome(camera, n = 2) {
     // nearest first
@@ -75,21 +99,23 @@ export class PeopleMesh {
     for (const [i, p] of this.sim.people.entries()) {
       const a = p.agent;
       let x, y, z, yaw, posture = 'stand';
+      let inSpeed = 0;
       if (interior) {
-        if (a.inside !== interior.b.id || a.route.length) continue;
-        const s = interior.spotOf(p);
-        ({ x, y, z, yaw } = s); posture = s.posture;
+        if (a.inside !== interior.b.id || (a.route.length && !p.follow && !a.pursuit)) continue;
+        const s = this.posOf(p, interior, dt);
+        ({ x, y, z, yaw } = s); posture = s.posture; inSpeed = s.speed;
       } else {
         if (a.inside || p.hiddenForWalker) continue;
         x = a.x; y = a.y; z = a.z; yaw = a.yaw;
         if (/sleeping in the porch/.test(a.act) || !p.alive) posture = 'lie';
         else if (a.speed < 0.05 && /begging|resting/.test(a.act)) posture = 'sit';
+        else if (/pillory/.test(a.act) && !a.route.length) posture = 'pillory';
       }
-      const walking = a.speed > 0.05 && !interior;
+      const walking = interior ? inSpeed > 0.05 : a.speed > 0.05;
       const W = this.walkers[i];
       if (W && (interior || Math.hypot(x - cp.x, z - cp.z) < this.detailDistance)) {
         W.mesh.visible = true;
-        W.update(dt, { x, y, z, yaw: yaw ?? 0, speed: walking ? a.speed : 0, posture, gesture: false });
+        W.update(dt, { x, y, z, yaw: yaw ?? 0, speed: walking ? (interior ? inSpeed : a.speed) : 0, posture, gesture: false });
         W.seen = true;
         continue;
       }

@@ -13,7 +13,10 @@ export const FIELD = {
   center: new Vector3(0, 0, -30),
   start: 30,          // each rider starts this far from the middle
   end: 46,            // and pulls up before this
-  lane: 0.8,          // half the distance between the horses' lines
+  lane: 0.8,          // half the distance between the horses' lines (at large)
+  tiltLane: 0.95,     // the same with the tilt between them
+  tiltHeight: 1.8,    // the barrier (about six feet; first recorded 1429/30)
+  tiltThickness: 0.12,
   halfLength: 52,
   halfWidth: 9,
 };
@@ -31,8 +34,11 @@ export function seeded(seed) {
 }
 
 /**
- * A joust of peace at large: two horses, two riders in the high saddle, two
- * coronel lances, run over a number of courses with Band scoring.
+ * A joust of peace: two horses, two riders in the high saddle, two coronel
+ * lances, run over a number of courses with Band scoring. With `tilt` a
+ * barrier runs down the middle (the later custom, first recorded 1429/30),
+ * which keeps the horses apart and on their lines; without it the course is
+ * run at large, as in 1403.
  *
  * Each rider has a controller (player or AI) that writes `ctrl`:
  *   speed   wanted horse speed (m/s)
@@ -41,8 +47,9 @@ export function seeded(seed) {
  *   brace   true on the frame he leans into the blow
  */
 export class JoustSim {
-  constructor({ riders = [{}, {}], seed = 1403, substeps = 20, saddle = 'hohenzeug' } = {}) {
+  constructor({ riders = [{}, {}], seed = 1403, substeps = 20, saddle = 'hohenzeug', tilt = true } = {}) {
     this.saddle = saddle;
+    this.tilt = tilt;
     this.world = new World({ substeps });
     this.dt = 1 / 60;
     this.time = 0;
@@ -50,6 +57,15 @@ export class JoustSim {
     const ground = new Body({ name: 'ground' });
     ground.addShape(Shape.plane(UP, 0, { friction: 0.7, restitution: 0.05, userData: { part: 'ground' } }));
     this.world.addBody(ground);
+    // The tilt: a barrier down the middle of the run. Each side of it is a
+    // half-space that only the horse and rider on that side touch.
+    if (tilt) {
+      const tb = new Body({ name: 'tilt' });
+      const zc = FIELD.center.z, half = FIELD.tiltThickness / 2;
+      tb.addShape(Shape.plane(new Vector3(0, 0, 1), zc + half, { friction: 0.3, restitution: 0.05, userData: { part: 'tilt', side: 1 } }));
+      tb.addShape(Shape.plane(new Vector3(0, 0, -1), -(zc - half), { friction: 0.3, restitution: 0.05, userData: { part: 'tilt', side: -1 } }));
+      this.world.addBody(tb);
+    }
 
     this.horses = [];
     this.riders = [];
@@ -80,6 +96,12 @@ export class JoustSim {
     // Who may touch whom: a seated rider and his own horse are one; lances are handled by hand.
     this.world.collisionFilter = (s1, s2) => {
       const u1 = s1.userData, u2 = s2.userData;
+      if (u1.part === 'tilt' || u2.part === 'tilt') {
+        const [t, o] = u1.part === 'tilt' ? [u1, u2] : [u2, u1];
+        const f = o.fighter ?? (o.horse ? o.owner : undefined);
+        if (f === undefined || o.lanceOf !== undefined || o.part === 'lance-piece') return false;
+        return Math.sign(this.laneOf(f).z - FIELD.center.z) === t.side;
+      }
       if (u1.part === 'ground' || u2.part === 'ground') return true;
       if (u1.lanceOf !== undefined || u2.lanceOf !== undefined || u1.part === 'lance-piece' || u2.part === 'lance-piece') return false;
       const f1 = u1.fighter ?? (u1.horse ? u1.owner : undefined), f2 = u2.fighter ?? (u2.horse ? u2.owner : undefined);
@@ -113,7 +135,8 @@ export class JoustSim {
     const leftZ = -d;                             // facing +X his left is -Z
     const r = this.riders[i];
     // The opponent is on his left: his own line lies to the right of the middle.
-    const half = Math.max(0.35, FIELD.lane - (r.ctrl?.lane ?? 0));
+    // With the tilt the horse cannot come closer than the barrier allows.
+    const half = this.tilt ? Math.max(FIELD.tiltLane - 0.25, FIELD.tiltLane - (r.ctrl?.lane ?? 0)) : Math.max(0.35, FIELD.lane - (r.ctrl?.lane ?? 0));
     return { d, z: FIELD.center.z - leftZ * half, yaw: d > 0 ? Math.PI / 2 : -Math.PI / 2 };
   }
 

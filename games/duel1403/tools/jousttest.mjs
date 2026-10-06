@@ -10,7 +10,7 @@ const t0 = performance.now();
 let steps = 0;
 for (let k = 0; k < N; k++) {
   const A = JOUSTERS[k % JOUSTERS.length], B = JOUSTERS[(k + 1 + Math.floor(k / JOUSTERS.length)) % JOUSTERS.length];
-  const sim = new JoustSim({ riders: [{ ...A }, { ...B }], seed: seed0 * 1000 + k, saddle: process.argv.includes('war') ? 'war' : 'hohenzeug' });
+  const sim = new JoustSim({ riders: [{ ...A }, { ...B }], seed: seed0 * 1000 + k, saddle: process.argv.includes('war') ? 'war' : 'hohenzeug', tilt: !process.argv.includes('atlarge') });
   const rand = seeded(seed0 * 77 + k);
   const ais = sim.riders.map((r, i) => new JoustAI(sim, r, { aim: [A, B][i].aim, rand }));
   sim.on((e) => {

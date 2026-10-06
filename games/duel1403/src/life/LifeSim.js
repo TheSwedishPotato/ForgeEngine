@@ -1,8 +1,11 @@
 import { NODES, BUILDING, BUILDINGS, PLACES, path, nearestNode, groundY } from '../world/town.js';
 import { makePeople, scheduled } from './people.js';
 import { NEEDS, GOODS, SHOPS, LAW, ARMY_RANKS, ARMY_RANK, START_DATE, CURFEW, DAWN, dateText, BELLS, STARTS, fmtMoney } from './data.js';
+import { Justice } from './Crime.js';
+import { remember, gossip, serializeMemories } from './Memory.js';
 
 const WALK = 1.35;            // m/s, a townsman's pace
+const RUN = 2.7, HURRY = 2.2; // m/s, chasing a thief; the watch closing in
 const PATROL = ['sq', 'n', 'sq', 'sqE', 'e1', 'sqE', 'sq', 'b', 'south', 'b', 'sq', 'sqW', 'w1', 'sqW'];
 const FEASTS = new Set(['9-28']);   // St Wenceslas
 
@@ -47,14 +50,19 @@ export class LifeSim {
       x: home ? home.door.x + Math.sign(home.door.x - home.x) * (Math.abs(home.door.x - home.x) / home.w > Math.abs(home.door.z - home.z) / home.d ? 1.6 : 0) : 0,
       z: home ? home.door.z + Math.sign(home.door.z - home.z) * (Math.abs(home.door.x - home.x) / home.w > Math.abs(home.door.z - home.z) / home.d ? 0 : 1.6) : 95,
       y: 0, yaw: home ? Math.atan2(home.door.x - home.x, home.door.z - home.z) : Math.PI, inside: null,
-      money: st.money, skills: { labour: 10, sword: 10, crossbow: 5, speech: 10, trade: 5, letters: 0, riding: 0, ...st.skills },
+      money: st.money, skills: { labour: 10, sword: 10, crossbow: 5, speech: 10, trade: 5, letters: 0, riding: 0, stealth: 5, ...st.skills },
       needs: { hunger: 25, thirst: 30, bladder: 35, bowels: 20, fatigue: 10, dirt: 20 }, health: 100, drunk: 0,
       inventory: { bread: 1 }, dress: { ...st.dress }, colors: { ...st.colors }, weapon: st.weapon ?? null, weaponDrawn: false,
       home: st.home, reputation: 0, crimes: [], wanted: 0, jailUntil: 0, army: null, renown: 0, alive: true, deathCause: null,
       knownNames: new Set(),
     };
     this.player.y = groundY(this.player.x, this.player.z);
+    this.justice = new Justice(this);
+    this.lastGossip = this.t;
   }
+
+  /** Remember something (see Memory.js). */
+  remember(p, m) { return remember(p, m, this.t); }
 
   on(fn) { this.listeners.push(fn); }
   emit(e) { e.t = this.t; this.events.push(e); if (this.events.length > 200) this.events.shift(); for (const f of this.listeners) f(e); }
@@ -83,14 +91,18 @@ export class LifeSim {
       if (crossed) this.emit({ type: 'bell', bell: b });
     }
     if (d.d !== before.d) { this.player.curfewChecked = false; this.emit({ type: 'day', date: d }); }
+    if (d.h >= 6 && (before.h < 6 || d.d !== before.d)) this._payCompanions();
     for (const p of this.people) this._updatePerson(p, dtReal, d, skipHours > 0);
     this._updatePlayer(dh, d);
-    this._watch(d, dtReal);
+    this.justice.update(dtReal, d);
+    this.justice.npcCrimes(d);
+    if (this.t - this.lastGossip > 0.2) { this.lastGossip = this.t; gossip(this); }
   }
 
   _updatePerson(p, dt, d, teleport) {
     const a = p.agent;
-    const s = a.pursuit ? { place: a.place, act: 'coming for you' } : this._schedule(p, d);
+    if (p.follow && !a.pursuit && p.alive) { this._follow(p, a, dt, teleport, d); a.y = groundY(a.x, a.z); return; }
+    const s = a.pursuit ? { place: a.place, act: a.pursuit === 'hue' ? 'running after you, shouting' : 'coming for you' } : this._schedule(p, d);
     const place = s.place;
     if (!a.pursuit && (place !== a.place || s.act !== a.act)) {
       a.act = s.act;
@@ -114,7 +126,7 @@ export class LifeSim {
       if (a.inside) { const b = BUILDING[a.inside]; a.x = b.door.x; a.z = b.door.z; a.inside = null; }
       const [tx, tz] = a.route[0];
       const dx = tx - a.x, dz = tz - a.z, dist = Math.hypot(dx, dz);
-      const step = WALK * (0.9 + 0.2 * p.traits.conscientiousness) * dt;
+      const step = (a.pursuit === 'hue' ? RUN * (0.85 + 0.2 * p.traits.courage) : a.pursuit ? HURRY : WALK * (0.9 + 0.2 * p.traits.conscientiousness)) * dt;
       if (dist <= step) {
         a.x = tx; a.z = tz; a.route.shift();
         if (!a.route.length) {
@@ -129,6 +141,106 @@ export class LifeSim {
       }
     } else a.speed = 0;
     a.y = groundY(a.x, a.z);
+  }
+
+  /** A companion keeps at your shoulder, and goes in and out of doors with you. */
+  _follow(p, a, dt, teleport, d) {
+    const P = this.player;
+    a.act = p.follow.wage ? 'in your hire, walking with you' : 'walking with you';
+    a.place = 'following';
+    a.route = [];
+    // the unhired go home at the curfew bell, or when they have had enough of you
+    if (!p.follow.wage && (this.isNight(d.h) || p.attitude < -10 || this.t - p.follow.since > 8)) {
+      p.follow = null;
+      a.place = null;
+      this.emit({ type: 'info', text: `${p.name} leaves you: ${this.isNight(d.h) ? '"It\'s past the curfew bell. I\'m for home."' : '"I have my own work to see to."'}` });
+      return;
+    }
+    if (P.inside) {
+      if (a.inside === P.inside) { a.speed = 0; return; }
+      const b = BUILDING[P.inside];
+      if (a.inside) { const o = BUILDING[a.inside]; a.x = o.door.x; a.z = o.door.z; a.inside = null; }
+      const dx = b.door.x - a.x, dz = b.door.z - a.z, dist = Math.hypot(dx, dz), step = Math.min(dist, 2.6 * dt);
+      if (teleport || dist < 0.6) { a.x = b.door.x; a.z = b.door.z; a.inside = P.inside; a.speed = 0; return; }
+      a.x += dx / dist * step; a.z += dz / dist * step; a.yaw = Math.atan2(dx, dz); a.speed = step / Math.max(1e-4, dt);
+      return;
+    }
+    if (a.inside) { const o = BUILDING[a.inside]; a.x = o.door.x; a.z = o.door.z; a.inside = null; }
+    // a place a little behind and to the side of you
+    const side = p.idx % 2 ? 1 : -1;
+    const tx = P.x - Math.sin(P.yaw) * 1.3 + Math.cos(P.yaw) * 0.8 * side, tz = P.z - Math.cos(P.yaw) * 1.3 - Math.sin(P.yaw) * 0.8 * side;
+    const dx = tx - a.x, dz = tz - a.z, dist = Math.hypot(dx, dz);
+    if (teleport || dist > 40) { a.x = tx; a.z = tz; a.speed = 0; return; }
+    if (dist < 0.35) { a.speed = 0; let e = P.yaw - a.yaw; e = Math.atan2(Math.sin(e), Math.cos(e)); a.yaw += e * Math.min(1, dt * 3); return; }
+    const sp = Math.min(dist > 5 ? 3.0 : dist > 1.5 ? 1.9 : 1.2, dist / Math.max(dt, 1e-4));
+    a.x += dx / dist * sp * dt; a.z += dz / dist * sp * dt;
+    a.yaw = Math.atan2(dx, dz); a.speed = sp;
+  }
+
+  /** Pay hired companions at dawn; the unpaid walk off. */
+  _payCompanions() {
+    const P = this.player;
+    for (const p of this.people) {
+      if (!p.follow?.wage) continue;
+      if (P.money >= p.follow.wage) { P.money -= p.follow.wage; p.money += p.follow.wage; this.emit({ type: 'info', text: `You pay ${p.name} the day's ${fmtMoney(p.follow.wage)}.` }); }
+      else { p.follow = null; p.attitude -= 15; p.agent.place = null; this.remember(p, { kind: 'done', text: 'did not pay my wage', weight: 6, att: -15 }); this.emit({ type: 'info', text: `${p.name} leaves your service: you could not pay the day's wage.` }); }
+    }
+  }
+
+  /** Someone joins you (wage in parvi a day, 0 for a friend keeping you company). */
+  join(p, wage = 0) {
+    if (!p.alive || p.watch || p.role === 'burgrave') return { ok: false, why: `${p.name} has duties and cannot leave them.` };
+    if (wage && this.player.money < wage) return { ok: false, why: `You cannot pay ${fmtMoney(wage)}.` };
+    if (wage) { this.player.money -= wage; p.money += wage; }
+    p.follow = { since: this.t, wage };
+    p.override = null;
+    this.remember(p, { kind: wage ? 'got' : 'met', text: wage ? `took service with them for ${fmtMoney(wage)} a day` : 'went along with them', weight: 4, att: 3 });
+    return { ok: true };
+  }
+
+  dismiss(p) { if (p.follow) { p.follow = null; p.agent.place = null; } }
+  companions() { return this.people.filter((p) => p.follow && p.alive); }
+
+  /** Someone goes somewhere for a while ("meet me at the tavern"). */
+  sendTo(p, place, hours = 1.5) {
+    if (!PLACES[place] && !BUILDING[place]) return false;
+    p.follow = null;
+    p.override = { place, act: 'waiting for you', until: this.t + hours };
+    return true;
+  }
+
+  // --- giving and taking --------------------------------------------------------------------------
+
+  /** Money or a thing passes from the player to someone (they accepted it). */
+  giveTo(p, { money = 0, item = null } = {}) {
+    const P = this.player;
+    money = Math.max(0, Math.round(money));
+    if (money > P.money) return { ok: false, why: `You only have ${fmtMoney(P.money)}.` };
+    if (item && !(P.inventory[item] > 0)) return { ok: false, why: `You have no ${GOODS[item]?.name.toLowerCase() ?? item}.` };
+    P.money -= money; p.money += money;
+    if (item) { P.inventory[item]--; p.inventory[item] = (p.inventory[item] ?? 0) + 1; }
+    const what = [money ? fmtMoney(money) : '', item ? GOODS[item]?.name.toLowerCase() ?? item : ''].filter(Boolean).join(' and ');
+    // a gift is worth more to the poor
+    const worth = money / Math.max(12, p.money * 0.15) + (item ? (GOODS[item]?.price ?? 4) / 20 : 0);
+    const att = Math.round(Math.min(15, 3 * worth));
+    p.attitude = Math.min(100, p.attitude + att);
+    this.remember(p, { kind: 'got', text: `gave me ${what}`, weight: Math.min(8, 2 + Math.round(worth * 2)), att });
+    this.emit({ type: 'give', to: p, text: `You give ${p.name} ${what}.` });
+    return { ok: true, what };
+  }
+
+  /** Money or a thing passes from someone to the player. */
+  takeFrom(p, { money = 0, item = null } = {}) {
+    const P = this.player;
+    money = Math.max(0, Math.min(Math.round(money), p.money));
+    if (item && !(p.inventory?.[item] > 0)) item = null;
+    if (!money && !item) return { ok: false, why: `${p.name} has nothing like that to give.` };
+    p.money -= money; P.money += money;
+    if (item) { p.inventory[item]--; P.inventory[item] = (P.inventory[item] ?? 0) + 1; }
+    const what = [money ? fmtMoney(money) : '', item ? GOODS[item]?.name.toLowerCase() ?? item : ''].filter(Boolean).join(' and ');
+    this.remember(p, { kind: 'gave', text: `I gave them ${what}`, weight: 3 + Math.min(4, Math.round(money / 60)), att: 0 });
+    this.emit({ type: 'give', from: p, text: `${p.name} gives you ${what}.` });
+    return { ok: true, what };
   }
 
   _routeTo(a, node, spot) {
@@ -185,7 +297,6 @@ export class LifeSim {
         P.army.absent += 0.5;
       }
     }
-    // at night the gates close and the watch asks questions (see _watch)
   }
 
   /** What the garrison expects of you now (if you serve). */
@@ -255,8 +366,11 @@ export class LifeSim {
   enter(b, force = false) {
     const m = this.mayEnter(b);
     if (!m.ok && !force) return m;
-    if (!m.ok && force && m.private) this.crime('housebreaking', { where: b.id });
     this.player.inside = b.id;
+    if (!m.ok && force && m.private) {
+      const owner = this.people.find((p) => p.home === b.id && p.alive && p.agent.inside === b.id);
+      this.crime('housebreaking', { victim: owner ?? null });
+    }
     this.emit({ type: 'enter', building: b });
     return { ok: true };
   }
@@ -363,72 +477,60 @@ export class LifeSim {
 
   // --- law and crime ------------------------------------------------------------------------------
 
-  crime(lawId, info = {}) {
-    const P = this.player, law = LAW[lawId];
-    const seen = info.seen ?? this.witnesses(P.x, P.z, P.inside, info.victim);
-    const c = { law: lawId, t: this.t, seen: seen.map((p) => p.id), victim: info.victim?.id, where: P.inside ?? 'street', settled: false };
-    P.crimes.push(c);
-    for (const w of seen) { w.attitude -= lawId === 'privy' ? 3 : 15; w.memory.push(`saw the stranger ${lawId === 'privy' ? 'relieve himself in the street' : 'break the law: ' + law.name.toLowerCase()}`); }
-    if (seen.length) {
-      P.reputation -= lawId === 'privy' ? 2 : 10;
-      P.wanted = Math.max(P.wanted, lawId === 'privy' || lawId === 'curfew' ? 1 : lawId === 'killing' ? 3 : 2);
-      this.emit({ type: 'crime', law, seen: seen.length, text: `${law.name}: ${seen.length} ${seen.length === 1 ? 'person' : 'people'} saw you.` });
-    }
-    return c;
-  }
+  crime(lawId, info = {}) { return this.justice.offence(lawId, info); }
 
-  /** The watch: soldiers of the garrison and the headman's men. They come for the wanted and stop night walkers. */
-  _watch(d, dt) {
-    const P = this.player;
-    if (!P.alive || P.inside || P.sleepingUntil > this.t) return;
-    const night = this.isNight(d.h);
-    for (const p of this.people) {
-      if (!p.watch || !p.alive || p.agent.inside) continue;
-      const a = p.agent, dist = Math.hypot(a.x - P.x, a.z - P.z);
-      if ((P.wanted > 0 && dist < 25) || (night && !P.army && dist < 10 && !P.curfewChecked)) {
-        // walk to the player
-        if (dist > 1.8) {
-          a.route = [[P.x, P.z]];
-          a.pursuit = true;
-          a.place = 'pursuit';
-        } else if (!this.pendingStop) {
-          this.pendingStop = { by: p, reason: P.wanted > 0 ? 'wanted' : 'curfew' };
-          this.emit({ type: 'stopped', by: p, reason: this.pendingStop.reason });
-        }
-      }
-    }
-    void dt;
-  }
-
-  /** Settle with the watch: pay the fines, take the pillory, or resist. */
-  resolveStop(choice) {
-    const P = this.player, s = this.pendingStop;
+  /**
+   * Settle with whoever stopped you. Small matters are settled on the spot
+   * (a fine, or the night in the gate tower); serious ones go before the
+   * court. choice: 'explain' | 'pay' | 'submit' | 'resist' | 'bribe'.
+   */
+  resolveStop(choice, bribe = 0) {
+    const P = this.player, s = this.pendingStop, J = this.justice;
     if (!s) return;
     this.pendingStop = null;
-    for (const p of this.people) if (p.agent.pursuit) { p.agent.pursuit = false; p.agent.place = null; p.agent.route = []; }
-    const open = P.crimes.filter((c) => !c.settled);
+    J.endHue(false);
+    const open = P.crimes.filter((c) => !c.settled && (c.seen.length || c.handhafte));
+    const serious = open.some((c) => c.severity >= 2);
     if (s.reason === 'curfew' && !open.length) {
       P.curfewChecked = true;
-      if (choice === 'explain') { this.emit({ type: 'law', text: `${s.by.name} looks you over, tells you to go home, and lets you pass this time.` }); return; }
+      const light = P.inventory.candle > 0;
+      if (choice === 'explain' && (light || s.by.attitude > -10 || P.army)) { this.emit({ type: 'law', text: light ? `You show your light and say where you are going. ${s.by.name} waves you on.` : `${s.by.name} looks you over, tells you to get home, and lets you pass this time.` }); return; }
     }
+    if (choice === 'resist') {
+      P.wanted = 3;
+      s.by.attitude -= 40;
+      this.remember(s.by, { kind: 'done', text: 'resisted arrest', weight: 7, att: -40 });
+      this.emit({ type: 'resist', by: s.by, text: `You tear free of ${s.by.name}. He goes for his weapon.` });
+      return;
+    }
+    if (choice === 'bribe') {
+      const by = s.by, max = open.reduce((m, c) => Math.max(m, c.severity), 0);
+      const takes = by.watch && max < 4 && (by.traits.greed > 0.55 || by.traits.honesty < 0.38) && bribe >= 12 * (1 + max) && P.money >= bribe;
+      if (takes) {
+        P.money -= bribe; by.money += bribe;
+        for (const c of open) if (c.severity < 4) c.settled = true;
+        if (!P.crimes.some((c) => !c.settled && c.seen.length)) P.wanted = 0;
+        P.curfewChecked = true;
+        this.remember(by, { kind: 'got', text: `bribed me with ${fmtMoney(bribe)} to look the other way`, weight: 5, att: 4 });
+        this.emit({ type: 'law', text: `${by.name} weighs the coins in his hand, looks up and down the street, and lets you go.` });
+        return;
+      }
+      by.attitude -= 12;
+      this.remember(by, { kind: 'done', text: 'tried to bribe me', weight: 5, att: -12 });
+      this.emit({ type: 'law', text: `${by.name} knocks the money out of your hand. "You'll answer for that too."` });
+    }
+    if (serious) { J.openTrial(); return; }
     const fine = open.reduce((sum, c) => sum + (LAW[c.law].fine ?? 0), 0) + (s.reason === 'curfew' && !open.length ? LAW.curfew.fine : 0);
     if (choice === 'pay' && P.money >= fine) {
       P.money -= fine; for (const c of open) c.settled = true; P.wanted = 0;
       this.emit({ type: 'law', text: `You pay ${fmtMoney(fine)} to the rychta through ${s.by.name}. The matter is closed.` });
-    } else if (choice === 'resist') {
-      P.wanted = 3;
-      s.by.attitude -= 40;
-      this.emit({ type: 'resist', by: s.by, text: `You refuse ${s.by.name}. He draws his weapon.` });
     } else {
-      // no money, or submits: the pillory for a morning, or a night in the gate tower
-      const hours = open.some((c) => c.law === 'theft') ? 6 : 8;
       for (const c of open) c.settled = true;
       P.wanted = 0;
-      P.reputation -= 6;
-      this.emit({ type: 'law', text: open.some((c) => c.law === 'theft') ? 'You stand six hours in the pillory in the square while people jeer and throw muck.' : `You spend ${hours} hours locked in the gate tower.` });
-      P.needs.dirt += 20;
-      this.advance(hours);
-      if (P.wanted === 0 && open.some((c) => c.law === 'theft')) { P.x = PLACES.pillory.x; P.z = PLACES.pillory.z + 1.5; }
+      P.reputation -= 3;
+      this.emit({ type: 'law', text: 'You spend the night locked in the gate tower and are let out at the morning bell.' });
+      const h = this.date().h;
+      this.advance(h >= 5 && h < 20 ? 6 : h >= 20 ? 29 - h : 5 - h);
     }
     P.curfewChecked = true;
   }
@@ -487,6 +589,37 @@ export class LifeSim {
       this.emit({ type: 'army', text: `The captain makes you ${next.name.toLowerCase()}. Pay: ${fmtMoney(next.pay)} a day.` });
       this.emit({ type: 'dress' });
     }
+  }
+
+  // --- saving ---------------------------------------------------------------------------------
+
+  serialize() {
+    const P = this.player;
+    return {
+      v: 1, t: this.t, lastBell: this.lastBell,
+      player: { ...P, knownNames: [...P.knownNames] },
+      people: this.people.map((p) => ({ id: p.id, attitude: p.attitude, mood: p.mood, money: p.money, alive: p.alive, hurt: p.hurt, inventory: p.inventory, follow: p.follow, override: p.override, memories: serializeMemories(p), agent: { x: p.agent.x, z: p.agent.z, inside: p.agent.inside, yaw: p.agent.yaw } })),
+      justice: this.justice.serialize(),
+    };
+  }
+
+  static restore(o, opts = {}) {
+    const sim = new LifeSim({ ...opts, start: STARTS.find((x) => x.id === o.player.start) ?? STARTS[0], name: o.player.name, sex: o.player.sex });
+    sim.t = o.t; sim.lastBell = o.lastBell ?? -1; sim.lastGossip = o.t;
+    Object.assign(sim.player, o.player, { knownNames: new Set(o.player.knownNames ?? []), sleepingUntil: 0, restrained: null, held: false });
+    sim.player.inside = null;
+    for (const q of o.people ?? []) {
+      const p = sim.byId[q.id];
+      if (!p) continue;
+      Object.assign(p, { attitude: q.attitude, mood: q.mood, money: q.money, alive: q.alive, hurt: q.hurt ?? 0, inventory: q.inventory ?? p.inventory, follow: q.follow ?? null, override: q.override ?? null, memories: (q.memories ?? []).map((m) => ({ ...m, told: m.told ?? [] })) });
+      Object.assign(p.agent, { x: q.agent.x, z: q.agent.z, inside: q.agent.inside, yaw: q.agent.yaw, route: [], place: null, pursuit: false });
+      p.agent.y = groundY(p.agent.x, p.agent.z);
+    }
+    sim.justice.restore(o.justice ?? {});
+    // you wake where you were, or at your door if you were inside somewhere
+    if (o.player.inside) { const b = BUILDING[o.player.inside]; if (b) { sim.player.x = b.door.x; sim.player.z = b.door.z; } }
+    sim.player.y = groundY(sim.player.x, sim.player.z);
+    return sim;
   }
 
   /** A short text of the town's situation for prompts and the journal. */

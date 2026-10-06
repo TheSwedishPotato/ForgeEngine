@@ -449,6 +449,7 @@ function tick(dt) {
   // a shallow depth of field for the cinematic cameras, a hint in the fight.
   const focusOn = mode === 'menu' ? sim.b : foe;
   if (focusOn) stage.focusPoint = focusOn.b.head.pos;
+  stage.shadowFocus = sim ? [sim.a.b.chest.pos, sim.b.b.chest.pos, sim.a.b.footL.pos, sim.b.b.footR.pos] : null;
   stage.dofAmount = rig.mode === 'helm' ? 0 : mode === 'menu' || mode === 'over' || (mode === 'intro' && introT < 3.4) ? 1 : 0.2;
   if (player && mode !== 'menu') {
     hud.update(player, foe);
@@ -546,6 +547,7 @@ if (params.get('joust')) {
   const c = { ...hud.config };
   if (params.get('foe')) c.joustFoe = params.get('foe');
   if (params.get('saddle')) c.joustSaddle = params.get('saddle');
+  if (params.get('tilt')) c.joustTilt = params.get('tilt') !== '0';
   if (params.get('cam')) c.joustCamera = params.get('cam');
   startJoust(c);
 }
