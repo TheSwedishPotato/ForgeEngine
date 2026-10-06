@@ -159,7 +159,7 @@ export class Attack {
     } else {
       // Swing geometry.
       const P = new Vector3(0.12 * s, -0.05 * s, 1.38 * s);
-      if (spec.key === 'zwerchhau') P.y = 1.62 * s;
+      if (spec.key === 'zwerchhau') P.z = 1.62 * s;     // cut from the hilt held high in front of the head
       if (spec.kind === 'stab') P.set(0.05 * s, -0.12 * s, 1.45 * s);
       this.P = P;
       const reverse = spec.kind === 'mord';
@@ -193,8 +193,15 @@ export class Attack {
       this.ti = ti.normalize().clone();
       this.rh = rh;
       const big = spec.kind === 'blunt' || spec.kind === 'mord';
-      this.thW = (spec.kind === 'stab' ? 95 : big ? 140 : 125) * deg;
-      this.thF = (spec.kind === 'stab' ? 25 : big ? 55 : 70) * deg;
+      // How far back the blow winds. A vertical cut starts from the sword up
+      // over the shoulder (vom Tag), well back; a horizontal one (Zwerchhau)
+      // from the hilt in front of the head, so its plane must not sweep the
+      // blade round behind the body.
+      const vert = Math.abs(this.ti.z);
+      // A rising cut (Unterhau) comes from the point low at the side, not swung round behind the hip.
+      const rise = this.ti.z > 0 ? 0.4 : 1;
+      this.thW = (spec.kind === 'stab' ? 95 : big ? 75 + 55 * vert * rise : 75 + 40 * vert * rise) * deg;
+      this.thF = (spec.kind === 'stab' ? 25 : big ? 55 : 45 + 25 * vert) * deg;   // a level cut stops before it wraps round his own side
       this.edgeSign = spec.edgeSign ?? 1;
       const windup = this.swingPose(-this.thW, {});
       this.durPrep = clamp(0.1 + 0.28 * this.start.hand.distanceTo(windup.hand) / s, 0.12, 0.38) * inertiaFactor / speed;
@@ -213,6 +220,8 @@ export class Attack {
     const along = clamp(1 - Math.abs(th) / Math.max(this.thW, 1e-3), 0, 1);
     const r = this.rh * (0.7 + 0.3 * along);
     (out.hand ??= new Vector3()).copy(this.P).addScaledVector(D, r);
+    // The hands work in front of the chest; only the blade goes back.
+    out.hand.x = Math.max(out.hand.x, 0.12 * this.k.scale);
     out.edge ??= new Vector3();
     if (this.kind === 'stab') {
       // Point leads: the blade points along the travel.
@@ -274,6 +283,7 @@ export class Attack {
       cmd.hand.lerpVectors(this.start.hand, sp.hand, u);
       lerpDir(this.start.dir, sp.dir, u, cmd.dir);
       lerpDir(this.start.edge, sp.edge, u, cmd.edge);
+      overHead(cmd, u, this.k.scale);
     } else if (t < t2) {
       // Cut through: a blow that lands keeps driving (the target, not the
       // arms, stops it).
@@ -298,6 +308,7 @@ export class Attack {
       cmd.hand.lerpVectors(this.recoverFrom.hand, g.hand, u);
       lerpDir(this.recoverFrom.dir, g.dir, u, cmd.dir);
       lerpDir(this.recoverFrom.edge, g.edge, u, cmd.edge);
+      overHead(cmd, u, this.k.scale);
       if (u >= 1) this.done = true;
     }
   }
@@ -308,6 +319,22 @@ export class Attack {
 }
 
 /** Interpolates two unit directions (slerp through the weapon rotation). */
+/**
+ * Turning from a guard over one shoulder to a blow (or back to a guard) on
+ * the other side, the straight turn would carry the blade round behind the
+ * neck. The masters lift the hilt and pass the blade over the head instead:
+ * while the commanded blade points backwards, raise it and the hands.
+ */
+function overHead(cmd, u, s) {
+  const back = Math.max(0, 0.3 - cmd.dir.x) * Math.sin(Math.PI * u);
+  if (back <= 0 || cmd.dir.z >= 0.95) return;
+  cmd.dir.z += 1.6 * back;
+  cmd.dir.normalize();
+  cmd.edge.addScaledVector(cmd.dir, -cmd.edge.dot(cmd.dir)).normalize();
+  cmd.hand.z += 0.1 * s * back;
+  cmd.hand.x = Math.max(cmd.hand.x, 0.12 * s);
+}
+
 export function lerpDir(a, b, u, out) {
   const d = Math.max(-1, Math.min(1, a.dot(b)));
   if (d > 0.9995) return out.lerpVectors(a, b, u).normalize();
