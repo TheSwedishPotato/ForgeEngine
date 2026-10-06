@@ -2,6 +2,7 @@ import { Object3D, Color, MeshStandardMaterial } from 'three';
 import { LODInstancer, buildLODChain } from '../engine/geometry/LOD.js';
 import { onlookerParts } from './Foliage.js';
 import { Walker } from '../life/Walker.js';
+import { Cape, CAPES } from './Capes.js';
 
 const SKINS = ['#e0b896', '#d2a07c', '#c48e6a', '#e8c4a4', '#b98462'];
 const _o = new Object3D(), _c = new Color();
@@ -13,7 +14,9 @@ const _o = new Object3D(), _c = new Color();
  * only the people in that room are drawn, at their places in it.
  */
 export class PeopleMesh {
-  constructor(scene, sim, { quality = 'high', detailDistance = 70 } = {}) {
+  constructor(scene, sim, { quality = 'high', detailDistance = 70, renderer = null } = {}) {
+    this.renderer = renderer;
+    this.capes = new Map();
     this.sim = sim;
     this.scene = scene;
     this.quality = quality;
@@ -80,10 +83,13 @@ export class PeopleMesh {
       w.mesh.visible = false;
       this.scene.add(w.mesh);
       this.walkers[i] = w;
+      // a cloak for the burgrave, the captain, the merchant and the priest (simulated on the GPU)
+      if (this.renderer && CAPES[p.role]) this.capes.set(i, new Cape(this.renderer, this.scene, w, CAPES[p.role]));
     }
   }
 
   dispose() {
+    for (const c of this.capes.values()) c.dispose();
     for (const w of this.walkers) w?.dispose();
     for (const l of Object.values(this.parts)) l.group.removeFromParent();
   }
@@ -116,6 +122,7 @@ export class PeopleMesh {
       if (W && (interior || Math.hypot(x - cp.x, z - cp.z) < this.detailDistance)) {
         W.mesh.visible = true;
         W.update(dt, { x, y, z, yaw: yaw ?? 0, speed: walking ? (interior ? inSpeed : a.speed) : 0, posture, gesture: false });
+        this.capes.get(i)?.update(y);
         W.seen = true;
         continue;
       }
@@ -134,6 +141,7 @@ export class PeopleMesh {
       k++;
     }
     for (const W of this.walkers) if (W) { if (!W.seen) W.mesh.visible = false; W.seen = false; }
+    for (const [i, c] of this.capes) c.cloth.visible = this.walkers[i].mesh.visible;
     for (const [name, l] of Object.entries(P)) {
       for (let j = counts[name]; j < l.count; j++) l.setInstance(j, zero.matrix);
       l._built = false;

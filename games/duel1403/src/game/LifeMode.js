@@ -9,6 +9,7 @@ import { Interior } from '../render/Interior.js';
 import { allRanks } from '../data/society.js';
 import { memorySummary } from '../life/Memory.js';
 import { GPUParticles } from '../engine/passes/GPUParticles.js';
+import { Cape, CAPES } from '../render/Capes.js';
 
 const _SHOP_KEYS = new Set(['tavern', 'bakery', 'butcher', 'bath', 'cobbler', 'smithy', 'weaver']);
 const SAVE_KEY = 'skalice-1403-save-v1';
@@ -104,7 +105,7 @@ export class LifeMode {
     start = STARTS.find((x) => x.id === this.sim.player.start) ?? STARTS[0];
     this.dialogue = new Dialogue(this.sim);
     if (save?.turns) for (const [k, v] of save.turns) this.dialogue.turns.set(k, v);
-    this.people = new PeopleMesh(this.stage.scene, this.sim, { quality: this.quality });
+    this.people = new PeopleMesh(this.stage.scene, this.sim, { quality: this.quality, renderer: this.stage.r });
     this._buildPlayer();
     this._buildHud();
     this._bind();
@@ -122,8 +123,10 @@ export class LifeMode {
   _buildPlayer() {
     const P = this.sim.player;
     this.walker?.dispose();
+    this.cape?.dispose(); this.cape = null;
     this.walker = new Walker({ name: P.name, items: P.dress, colors: P.colors, female: P.sex === 'f', headwear: P.sex === 'f' ? 'braid' : null, beard: P.sex === 'f' ? 0 : 0.15, height: P.sex === 'f' ? 1.62 : 1.75, quality: this.quality });
     this.stage.scene.add(this.walker.mesh);
+    if (P.noble && this.stage.r) this.cape = new Cape(this.stage.r, this.stage.scene, this.walker, CAPES.squire);
   }
 
   // --- HUD -------------------------------------------------------------------------------------
@@ -584,6 +587,7 @@ export class LifeMode {
     const speed = this._speed ?? 0;
     const posture = P.sleepingUntil > s.t ? 'lie' : 'stand';
     this.walker.update(dt, { x: P.x, y: P.y, z: P.z, yaw: P.yaw, speed, posture, gesture: !!this.talking });
+    this.cape?.update(P.y);
     this.people.update(dt, this.stage.camera, this.interior ? this.interior : null);
     // embers rising from the forge and the hearths (GPU particles)
     if (this.interior && GPUParticles.active) for (const L of this.interior.lights) {
@@ -700,6 +704,7 @@ export class LifeMode {
     this.stage.shadowFocus = null;
     for (const [t, ty, fn, o] of this._ls ?? []) t.removeEventListener(ty, fn, o);
     this._ls = [];
+    this.cape?.dispose(); this.cape = null;
     this.walker?.dispose();
     this.interior?.dispose();
     this.people?.dispose();

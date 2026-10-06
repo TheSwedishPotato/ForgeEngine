@@ -7,6 +7,8 @@ import { VisBuffer } from '../engine/passes/VisBuffer.js';
 import { StaticScene } from '../engine/scene/StaticScene.js';
 import { RayTracing } from '../engine/passes/RayTracing.js';
 import { VirtualShadows } from '../engine/passes/VirtualShadows.js';
+import { ClothSystem } from '../engine/passes/GPUCloth.js';
+import { windAt } from './Cloth.js';
 import { Volumetrics } from '../engine/passes/Volumetrics.js';
 import { ScreenSpace } from '../engine/passes/ScreenSpace.js';
 import { DOF, MotionBlur } from '../engine/passes/Cinematic.js';
@@ -37,6 +39,8 @@ export class MedStage {
     this.visBuffer = r.addPass(new VisBuffer());
     this.rayTracing = r.addPass(new RayTracing(), { first: true });
     this.vsm = r.addPass(new VirtualShadows());
+    this.cloth = r.addPass(new ClothSystem());
+    this.cloth.windFn = (t, out) => windAt(t, out, 0.6);
     if (new URLSearchParams(location.search).get('pathtrace')) r.pathTrace = true;
     this.volumetrics = r.addPass(new Volumetrics());
     this.screen = r.addPass(new ScreenSpace());

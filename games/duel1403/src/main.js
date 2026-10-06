@@ -197,6 +197,8 @@ function suspendLife(on) {
   life.walker.mesh.visible = !on;
   for (const l of Object.values(life.people.parts)) l.group.visible = !on;
   for (const w of life.people.walkers) if (w) w.mesh.visible = false;
+  if (life.cape) life.cape.cloth.visible = !on;
+  for (const c of life.people.capes?.values() ?? []) c.cloth.visible = false;
   life.suspended = on;
 }
 
