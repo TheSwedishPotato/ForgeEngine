@@ -20,15 +20,12 @@ import {
   MeshStandardMaterial, MeshBasicMaterial, PointLight, DoubleSide, Color, CanvasTexture, RepeatWrapping, SRGBColorSpace,
 } from 'three';
 import { townMaterials, props } from './engine.js';
+import { PLACE_TYPES, INDOOR, STYLES, WALLS, FLOORS } from './vocab.js';
+
+export { PLACE_TYPES, INDOOR, STYLES, WALLS, FLOORS };
 
 const { Batch, barrel, tub, crate, sack, woodpile, cart, bench: benchProp, stool, trough, haystack, goods, stall, well, grave, dungHeap } = props;
 
-export const PLACE_TYPES = ['tavern', 'hall', 'chamber', 'cottage', 'church', 'workshop', 'cellar', 'dungeon', 'kitchen', 'stable', 'shop',
-  'street', 'market', 'square', 'forest', 'field', 'road', 'river', 'bridge', 'castle', 'camp', 'hilltop', 'garden', 'shore', 'ship', 'cave', 'graveyard', 'gate', 'courtyard'];
-export const INDOOR = new Set(['tavern', 'hall', 'chamber', 'cottage', 'church', 'workshop', 'cellar', 'dungeon', 'kitchen', 'stable', 'shop', 'cave']);
-export const STYLES = ['bohemian', 'italian', 'english', 'japanese', 'generic'];
-export const WALLS = ['plaster', 'stone', 'timber', 'wattle', 'wood', 'brick', 'paper'];
-export const FLOORS = ['earth', 'planks', 'flagstone', 'rushes', 'tatami', 'cobbles', 'grass', 'sand', 'snow', 'mud'];
 
 const UVS = { plaster: 0.5, limewash: 0.45, stone: 0.4, rubble: 0.8, beam: 0.6, planks: 0.8, door: 1, log: 1, stave: 1.5, hay: 0.8, wattle: 1.2, tile: 0.7, shingle: 0.8, shingleProp: 0.8, thatch: 0.6 };
 

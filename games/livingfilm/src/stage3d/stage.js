@@ -36,7 +36,7 @@ export function walkerOptions(c, id) {
   const L = c.look ?? {};
   const f = c.sex === 'f';
   const st = L.hairStyle;
-  const items = { head: st === 'hood' ? 'hood' : st === 'cap' || st === 'hat' ? 'armingCap' : 'bareHead', under: L.build === 'broad' && !f ? 'gambeson' : (c.rich ? 'armingDoublet' : 'shirt'), legs: 'hose', feet: 'shoes', hands: c.gloves ? 'gloves' : 'bareHands' };
+  const items = { head: st === 'hood' ? 'hood' : st === 'cap' || st === 'hat' ? 'armingCap' : 'bareHead', under: L.build === 'broad' && !f ? 'gambeson' : (c.rich || L.rich ? 'armingDoublet' : 'shirt'), legs: 'hose', feet: 'shoes', hands: c.gloves ? 'gloves' : 'bareHands' };
   const headwear = f ? (st === 'veil' ? 'kerchief' : st === 'hood' ? null : st === 'short' ? 'kerchief' : 'braid') : null;
   const height = (f ? 1.6 : 1.72) + (L.build === 'broad' ? 0.04 : L.build === 'stout' ? -0.02 : 0) + ((c.age ?? 30) < 15 ? -0.25 : 0);
   return { id, name: c.name ?? id, height, items, colors: { skin: L.skin, hair: L.hair, cloth: cloth(L.clothes, 0.24), hose: f ? cloth(L.clothes, 0.2) : cloth(L.hose ?? L.accent ?? '#4a3a2a', 0.18) }, female: f, headwear, beard: f ? 0 : L.beard ?? 0, texSize: 1024 };
@@ -44,6 +44,7 @@ export function walkerOptions(c, id) {
 
 export class Stage3D {
   constructor(canvas, { quality = 'high' } = {}) {
+    this.canvas = canvas;
     this.stage = new MedStage(canvas, { quality });
     this.scene = this.stage.scene; this.camera = this.stage.camera; this.r = this.stage.r;
     this.sun = new DirectionalLight(0xffffff, 1);
@@ -121,6 +122,98 @@ export class Stage3D {
       const x = P.offset + m.x, z = m.z;
       if (a.placed !== P) { a.place(x, z, m.yaw, m.posture); a.placed = P; } else if (Math.hypot(a.pos.x - x, a.pos.z - z) > 0.3) a.walkTo(x, z, m.yaw, m.posture);
     }
+  }
+
+  /** Where a mark word puts someone: a named mark (hearth, table, door...), near another person, a seat, or off. */
+  _resolve(a, to) {
+    const P = this.here; if (!P) return null;
+    const B = P.built, off = P.offset;
+    if (to.startsWith('near:')) {
+      const o = this.actors.get(to.slice(5)); if (!o) return null;
+      const d = a.pos.clone().sub(o.pos).setY(0); if (d.lengthSq() < 0.01) d.set(1, 0, 0);
+      d.normalize().multiplyScalar(0.95);
+      return { x: o.pos.x + d.x, z: o.pos.z + d.z, yaw: Math.atan2(-d.x, -d.z), posture: 'stand' };
+    }
+    if (to === 'leave') {
+      const m = B.marks.door ?? B.marks.gate;
+      return m ? { x: off + m.x + (B.indoor ? 1.2 : 0), z: m.z, yaw: m.yaw, leave: true } : { x: a.pos.x + 12, z: a.pos.z + 4, leave: true };
+    }
+    if (to === 'stand') return { x: a.pos.x, z: a.pos.z, yaw: a.yawNow, posture: 'stand' };
+    if (to === 'sit') {
+      const taken = new Set([...this.actors.values()].filter((o) => o !== a && o.mesh.visible).map((o) => `${o.pos.x.toFixed(1)},${o.pos.z.toFixed(1)}`));
+      const seats = Object.entries(B.marks).filter(([k, m]) => m.posture === 'sit' || k.startsWith('seat')).map(([, m]) => m).filter((m) => !taken.has(`${(off + m.x).toFixed(1)},${m.z.toFixed(1)}`));
+      seats.sort((m1, m2) => Math.hypot(off + m1.x - a.pos.x, m1.z - a.pos.z) - Math.hypot(off + m2.x - a.pos.x, m2.z - a.pos.z));
+      const m = seats[0]; return m ? { x: off + m.x, z: m.z, yaw: m.yaw, posture: 'sit' } : null;
+    }
+    const key = Object.keys(B.marks).find((k) => k === to) ?? Object.keys(B.marks).find((k) => k.startsWith(to) || to.startsWith(k) || to.includes(k));
+    const m = key ? B.marks[key] : to === 'center' ? { x: 0, z: 0.4, yaw: Math.PI } : null;
+    return m ? { x: off + m.x, z: m.z, yaw: m.yaw, posture: m.posture ?? 'stand' } : null;
+  }
+
+  /** Someone crosses the scene: to a mark, to someone, to a seat, or out of it. */
+  moveTo(id, to) {
+    const a = this.actors.get(id); if (!a || !a.mesh.visible) return;
+    const t = this._resolve(a, to); if (!t) return;
+    if (t.posture === 'sit' && Math.hypot(a.pos.x - t.x, a.pos.z - t.z) < 0.3) { a.posture = 'sit'; return; }
+    a.walkTo(t.x, t.z, t.yaw ?? null, t.posture ?? 'stand');
+    a.leaving = !!t.leave;
+  }
+
+  /** Bystanders with their own business: made like anyone else, put on free standing places, at work. */
+  setExtras(extras) {
+    for (const [id, a] of this.actors) if (a.extra && !extras[id]) a.mesh.visible = false;
+    const P = this.here; if (!P) return;
+    const used = new Set([...this.actors.values()].filter((a) => a.mesh.visible && !a.extra).map((a) => `${a.pos.x.toFixed(1)},${a.pos.z.toFixed(1)}`));
+    const free = P.built.stands.filter((m) => !used.has(`${(P.offset + m.x).toFixed(1)},${m.z.toFixed(1)}`));
+    let k = free.length - 1;
+    for (const [id, c] of Object.entries(extras)) {
+      const a = this.actor(id, c); a.extra = true;
+      if (a.placed !== P) {
+        const m = free[k--] ?? free[0] ?? { x: 0, z: 0, yaw: 0 };
+        a.place(P.offset + m.x + (Math.random() - 0.5) * 0.4, m.z + (Math.random() - 0.5) * 0.4, m.yaw + (Math.random() - 0.5) * 0.8, 'stand'); a.placed = P;
+      }
+      a.act({ task: c.task ?? null, gesture: 'none' });
+      a.wanderAt = this.t + 6 + Math.random() * 10;
+    }
+  }
+
+  /** Where a head is on screen, for a bubble (null when off screen). */
+  headOnScreen(id) {
+    const a = this.actors.get(id); if (!a || !a.mesh.visible || !a.b?.head?.pos) return null;
+    const p = a.b.head.pos.clone(); p.y += 0.32;
+    const s = this.project(p);
+    return s && s.on ? s : null;
+  }
+
+  /**
+   * A portrait of someone from the engine itself: the camera in front of
+   * their face for a moment, a few frames for the image to settle, the
+   * picture taken, and the film's camera given back. Null if they are not on stage.
+   */
+  portrait(id) {
+    const a = this.actors.get(id);
+    if (!a || !a.mesh.visible || !a.b?.head?.pos) return null;
+    const cam = this.camera, saved = { p: cam.position.clone(), q: cam.quaternion.clone(), fov: cam.fov, focus: this.stage.focusPoint, dof: this.stage.dofAmount, from: this.cam.from };
+    const h = a.b.head.pos.clone(), fwd = new Vector3(Math.sin(a.yawNow), 0, Math.cos(a.yawNow));
+    // the sitter alone before the sky, as a painter would set them; the set and everyone else step out
+    const hidden = [];
+    for (const o of this.actors.values()) if (o !== a && o.mesh.visible) { o.mesh.visible = false; hidden.push(o.mesh); }
+    if (this.here?.built.group.visible) { this.here.built.group.visible = false; hidden.push(this.here.built.group); }
+    cam.position.copy(h).addScaledVector(fwd, 1.9).add(new Vector3(fwd.z * 0.3, -0.05, -fwd.x * 0.3));
+    cam.fov = 17; cam.updateProjectionMatrix(); cam.lookAt(h.x, h.y - 0.2, h.z);
+    this.stage.focusPoint = h; this.stage.dofAmount = 1;
+    this.cam.from = null;
+    this.key.position.copy(cam.position).add(new Vector3(-fwd.z * 0.8, 0.5, fwd.x * 0.8)); this.key.intensity = (this.keyPower ?? 1) * 0.7;
+    this.stage.taa.reset = true;
+    let url = null;
+    try {
+      for (let i = 0; i < 10; i++) this.stage.render(1 / 60, this.t + i / 60);
+      url = this.stage.r.canvas?.toDataURL?.('image/jpeg', 0.9) ?? this.canvas.toDataURL('image/jpeg', 0.9);
+    } catch { url = null; }
+    for (const m of hidden) m.visible = true;
+    cam.position.copy(saved.p); cam.quaternion.copy(saved.q); cam.fov = saved.fov; cam.updateProjectionMatrix();
+    this.stage.focusPoint = saved.focus; this.stage.dofAmount = saved.dof; this.cam.from = saved.from; this.stage.taa.reset = true;
+    return url;
   }
 
   /** Frame a beat. on: ids in shot; who: the speaker; you: the player's actor id. */
@@ -247,7 +340,21 @@ export class Stage3D {
       for (const l of this.here.built.lights) if (l.kind !== 'window') l.L.intensity = (l.base ?? l.power) * (0.86 + 0.1 * Math.sin(t * 11 + l.x) * Math.sin(t * 4.3 + l.z) + 0.04 * Math.sin(t * 23 + l.x));
     }
     const pts = [];
-    for (const a of this.actors.values()) if (a.mesh.visible) { a.tick(dt, this.t); if (a.b?.head?.pos) pts.push(a.b.head.pos); }
+    for (const a of this.actors.values()) {
+      if (!a.mesh.visible) continue;
+      a.tick(dt, this.t);
+      if (a.b?.head?.pos) pts.push(a.b.head.pos);
+      // whoever was leaving is gone once they reach the door
+      if (a.leaving && !a.target) { a.mesh.visible = false; a.leaving = false; a.placed = null; }
+      // bystanders drift about now and then: to another free place, or back to their work
+      if (a.extra && this.here && this.t > (a.wanderAt ?? Infinity) && !a.talking) {
+        a.wanderAt = this.t + 10 + Math.random() * 16;
+        if (Math.random() < 0.45) {
+          const S = this.here.built.stands, m = S[Math.floor(Math.random() * S.length)];
+          if (m) { const savedTask = a.task; a.walkTo(this.here.offset + m.x + (Math.random() - 0.5) * 0.6, m.z + (Math.random() - 0.5) * 0.6, m.yaw, 'stand'); a.task = savedTask; }
+        }
+      }
+    }
     this.stage.shadowFocus = pts.length ? pts : null;
     // rain or snow, around the camera
     const w = this.weather;

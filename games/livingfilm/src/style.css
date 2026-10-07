@@ -7,7 +7,8 @@
   color-scheme: dark;
 }
 html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); overflow: hidden; }
-#film { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#film, #stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#film[hidden], #stage[hidden] { display: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
 button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
@@ -80,3 +81,20 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--g
 .note { color: var(--ink-dim); font-size: 13px; text-align: center; line-height: 1.5; max-width: 70ch; margin: 0 auto; }
 .err { color: var(--danger); }
 @media (max-width: 600px) { .say .mode button { padding: 8px 9px; } .corner button { padding: 4px 9px; font-size: 12px; } }
+
+/* --- the 3D stage: letterbox bars and the fade to black --- */
+.bars { position: fixed; inset: 0; pointer-events: none !important; display: none; }
+body.three .bars { display: block; }
+.bars i { position: absolute; left: 0; right: 0; background: #000; }
+.bars i:first-child { top: 0; } .bars i:last-child { bottom: 0; }
+.fade { position: fixed; inset: 0; background: #000; opacity: 0; transition: opacity 0.65s; pointer-events: none !important; }
+.fade.on { opacity: 1; }
+body:not(.three) .fade { display: none; }
+.writing em { font-style: italic; margin-right: 2px; }
+.sub .act { font-style: italic; margin-right: 4px; }
+.chips button .n { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--gold-soft); color: var(--gold); font-size: 11px; margin-right: 6px; }
+.hint code { font-size: 11px; color: var(--ink-soft); background: rgba(255, 255, 255, 0.06); padding: 1px 5px; border-radius: 4px; }
+.bubbles { position: fixed; inset: 0; pointer-events: none !important; }
+.director-note { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; box-sizing: border-box; background: var(--panel); border: 1px solid var(--gold-soft); border-radius: 14px; padding: 18px 20px; z-index: 15; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.director-note b { font-family: var(--serif); font-size: 22px; font-weight: 600; color: var(--gold); }
+.director-note p { line-height: 1.55; color: var(--ink); }

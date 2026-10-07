@@ -9,13 +9,15 @@
  */
 import { Vector3, Quaternion, Color } from 'three';
 import { Walker, FACE } from './engine.js';
+import { GESTURES, TASKS } from './vocab.js';
+
+export { GESTURES, TASKS };
 
 const X = new Vector3(1, 0, 0), Z = new Vector3(0, 0, 1);
 const qx = (a) => new Quaternion().setFromAxisAngle(X, a);
 const qz = (a) => new Quaternion().setFromAxisAngle(Z, a);
 const TAU = Math.PI * 2;
 
-export const GESTURES = ['none', 'point', 'cross', 'heart', 'raise', 'beckon', 'shrug', 'drink', 'wave', 'bow', 'hilt', 'embrace', 'hips', 'clasp'];
 
 /** Arm targets per gesture and side: arm raise, elbow bend, abduction (out from the body); plus trunk bend and head. */
 function gesturePose(g, side, t) {
@@ -34,6 +36,18 @@ function gesturePose(g, side, t) {
     case 'embrace': return { arm: 1.3, elbow: 0.95, abd: 0.12 };
     case 'hips': return { arm: 0.15, elbow: 1.5, abd: 0.75 };
     case 'clasp': return { arm: 0.5, elbow: 1.6, abd: -0.2, head: 0.15 };
+    case 'reach': return R ? { arm: 1.2, elbow: 0.35, abd: 0.05, bend: 0.12 } : null;                       // a hand held out to someone
+    case 'offer': return { arm: 0.85, elbow: 0.9, abd: 0.12, bend: 0.06 };                                   // both hands out, giving or showing
+    case 'fist': return R ? { arm: 1.0 + 0.08 * s(t * 3), elbow: 1.9, abd: 0.2 } : { arm: 0.15, elbow: 0.5, abd: 0.1 };
+    case 'cover': return { arm: 1.15, elbow: 2.35, abd: -0.05, bend: 0.25, head: 0.4 };                      // hands to the face
+    case 'chin': return R ? { arm: 0.75, elbow: 2.3, abd: -0.15, head: 0.08 } : { arm: 0.5, elbow: 1.9, abd: -0.35 };   // thinking
+    case 'bless': { const u = s(t * 2.4); return R ? { arm: 1.0 + 0.25 * u, elbow: 1.2, abd: 0.05 + 0.2 * Math.cos(t * 2.4) } : null; }   // the sign of the cross
+    case 'halt': return R ? { arm: 1.35, elbow: 0.5, abd: 0.15 } : null;                                       // palm up: stop
+    case 'wring': { const u = s(t * 5); return { arm: 0.55, elbow: 1.7 + 0.12 * u, abd: -0.32, head: 0.2 }; }  // hands twisting together
+    case 'slump': return { arm: 0.05, elbow: 0.2, abd: 0.04, bend: 0.32, head: 0.45 };                        // spent, beaten
+    case 'lean': return { arm: 0.55, elbow: 0.35, abd: 0.05, bend: 0.45, head: -0.15 };                       // leaning on a table or sill
+    case 'count': return R ? { arm: 0.6, elbow: 1.6 + 0.1 * s(t * 6), abd: -0.1, head: 0.35 } : { arm: 0.55, elbow: 1.5, abd: -0.15, head: 0.35 };   // counting coin
+    case 'scratch': return R ? { arm: 2.3, elbow: 2.2 + 0.1 * s(t * 9), abd: 0.4, head: 0.1 } : null;        // scratching the head, unsure
     default: return null;
   }
 }
@@ -65,7 +79,8 @@ export class Actor extends Walker {
     if (!p || this.target || this.posture !== 'stand') return;
     this.yawWant = Math.atan2(p.x - this.pos.x, p.z - this.pos.z);
   }
-  act({ gesture, emotion, talking } = {}) {
+  act({ gesture, emotion, talking, task } = {}) {
+    if (task !== undefined) this.task = TASKS.includes(task) ? task : null;
     if (gesture !== undefined && gesture !== this.gestureName) { this.gestureName = GESTURES.includes(gesture) ? gesture : 'none'; }
     if (emotion) this.emotion = EMOTION[emotion] ? emotion : 'neutral';
     if (talking !== undefined) this.talking = talking;
@@ -85,7 +100,7 @@ export class Actor extends Walker {
     if (this.lookAt) { const a = Math.atan2(this.lookAt.x - this.pos.x, this.lookAt.z - this.pos.z) - this.yawNow; look = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(a), Math.cos(a)))); }
     this.gw += ((this.gestureName !== 'none' && speed < 0.05 ? 1 : 0) - this.gw) * Math.min(1, dt * 4);
     this._t = t;
-    this.update(dt, { x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.yawNow, speed, posture: this.posture, gesture: this.talking && this.gestureName === 'none' && this.task == null, look, task: this.talking && this.gestureName === 'none' && speed < 0.05 ? 'talk' : this.task });
+    this.update(dt, { x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.yawNow, speed, posture: this.posture, gesture: this.talking && this.gestureName === 'none' && this.task == null, look, task: speed > 0.05 ? null : this.task ?? (this.talking && this.gestureName === 'none' ? 'talk' : null) });
     this._faceTick(dt);
   }
 
