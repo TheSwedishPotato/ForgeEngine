@@ -80,6 +80,7 @@ export class Dialogue {
       TEACH[p.role] ? `You could teach someone a little ${TEACH[p.role]} if it suited you (usually for money or as a favour to a friend).` : '',
       p.follow ? `You are with the stranger now, walking with them${p.follow.wage ? ` in their hire at ${fmtMoney(p.follow.wage)} a day` : ' as company'}.` : '',
       `Your attitude to the person talking to you: ${p.attitude} (−100 hatred … +100 love).`,
+      ...(s.story?.personaLines(p) ?? []),
       mem.length ? `What you remember about them (true memories; use them, and say where you heard things):\n  - ${mem.join('\n  - ')}` : 'You have never met them and have heard nothing about them.',
     ];
     return lines.filter(Boolean).join('\n');
@@ -140,6 +141,7 @@ Actions (amounts in parvi; 12 parvi = 1 groschen):
   {"type":"attack"}  you strike them or draw on them (only if your temper and the insult or threat truly call for it)
   {"type":"directions","place":"<place id>"}  you point the way
   {"type":"learn_name"}  they told you their name
+  {"type":"thread","id":<n>,"outcome":"done|failed|progress","note":"<what happened>"}  a matter between you and the stranger (listed above, if any) is settled or moves on in this talk
   {"type":"leave"}  you end the conversation and go
 Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES), ...Object.keys(BUILDING).filter((k) => !/^h\d/.test(k))].join(', ')}.`;
   }
@@ -170,6 +172,7 @@ Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES
     }
     if (!r || typeof r !== 'object' || typeof r.say !== 'string') r = scripted(this.sim, p, text);
     const checked = this.apply(p, r, text);
+    this.sim.story?.afterTalk(p, checked.actions, text);
     hist.push({ role: 'user', content: msg }, { role: 'assistant', content: JSON.stringify({ say: checked.say, actions: checked.actions.map(({ type, money, item, place }) => ({ type, money, item, place })) }) });
     this.turns.set(p.id, hist.slice(-16));
     return checked;
@@ -290,6 +293,15 @@ Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES
         }
         case 'attack': s.dismiss(p); done.ok = true; s.remember(p, { kind: 'met', text: 'I went for them', weight: 6, att: -10 }); break;
         case 'leave': done.ok = true; break;
+        case 'thread': {
+          const x = s.story?.involving(p).find((t) => t.id === Number(a.id));
+          if (!x) break;
+          const outcome = ['done', 'failed', 'progress'].includes(a.outcome) ? a.outcome : 'progress';
+          s.story.resolve(x.id, outcome, String(a.note ?? '').slice(0, 160));
+          done.ok = true; done.id = x.id; done.outcome = outcome;
+          note(outcome === 'done' ? `Settled: ${x.title}.` : outcome === 'failed' ? `It has gone badly: ${x.title}.` : `${x.title}: it moves on.`);
+          break;
+        }
         default: continue;
       }
       out.actions.push(done);
@@ -306,7 +318,7 @@ Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES
  * (the king a prisoner, Hungarian raids, debased coin) and the round of a
  * subject town's year (Michaelmas rent, the harvest in, guild rules).
  */
-const CARES = {
+export const CARES = {
   burgrave: 'holding the castle and its lands for an absent lord while bands roam; getting the Michaelmas rents in; keeping the townsmen obedient and the garrison paid',
   captain: 'too few men and too little pay for them; Hungarian riders and robber bands on the roads; drunkenness and desertion among his pacholci',
   soldier: 'pay in arrears; the cold watch; dice and beer; whether the Hungarians will come this way',

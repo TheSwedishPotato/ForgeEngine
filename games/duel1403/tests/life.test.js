@@ -186,3 +186,38 @@ test('memories fade: trifles go in a day, grave things last', async () => {
   fade(p, 24 * 30);
   assert.equal(p.memories.length, 0);
 });
+
+test('story: matters open from the facts, the giver comes to you, paying settles, time lapses', async () => {
+  const { Story } = await import('../src/life/Story.js');
+  const s = new LifeSim({ start: STARTS[1], name: 'Jan', origin: 'native' });
+  const story = new Story(s);
+  s.t = 9;
+  await story.plan();
+  const open = story.open();
+  assert.ok(open.length >= 1 && open.length <= 3, `opened ${open.length}`);
+  const rent = open.find((x) => x.kind === 'pay');
+  assert.ok(rent, 'the rent matter');
+  const father = s.byId[rent.giver];
+  assert.equal(father.seek, rent.id);
+  // the father walks up to the player out of doors
+  s.player.inside = null;
+  father.agent.inside = null; father.agent.x = s.player.x + 20; father.agent.z = s.player.z;
+  let came = false;
+  s.on((e) => { if (e.type === 'approach' && e.by === father) came = true; });
+  for (let i = 0; i < 200 && !came; i++) s.update(0.1);
+  assert.ok(came, 'he came to find you');
+  // he is in the prompt, and paying him settles it
+  const d = new Dialogue(s);
+  assert.ok(story.personaLines(father).some((l) => l.includes(rent.title)));
+  const r = d.apply(father, { say: 'God bless you.', actions: [{ type: 'accept', money: 36 }] });
+  story.afterTalk(father, r.actions, 'Here, take three groschen for the rent.');
+  assert.equal(rent.status, 'done');
+  assert.ok(story.chronicle.some((c) => c.text.includes(rent.title)));
+  // an unattended matter lapses
+  const other = story.open()[0];
+  if (other) { s.t = other.due + 1; story._lapse(); assert.equal(other.status, 'failed'); }
+  // and the story survives a save
+  const again = new Story(new LifeSim({ start: STARTS[1], name: 'Jan' }));
+  again.restore(JSON.parse(JSON.stringify(story.serialize())));
+  assert.equal(again.threads.length, story.threads.length);
+});

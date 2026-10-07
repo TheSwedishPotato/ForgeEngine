@@ -1,9 +1,10 @@
 import { addressOf, personWho, playerWho } from '../life/address.js';
+import { Story } from '../life/Story.js';
 import { Vector3 } from 'three';
 import { LifeSim } from '../life/LifeSim.js';
 import { Dialogue } from '../life/Dialogue.js';
 import { Walker } from '../life/Walker.js';
-import { STARTS, GOODS, LAWS, LIFE_SOURCES, ARMY_RANK, fmtMoney, NEEDS, RUMOURS } from '../life/data.js';
+import { STARTS, GOODS, LAWS, LIFE_SOURCES, ARMY_RANK, fmtMoney, NEEDS, RUMOURS, dateText } from '../life/data.js';
 import { BUILDING, BUILDINGS, PLACES, TOWN_NAME, groundY, pushOut } from '../world/town.js';
 import { PeopleMesh } from '../render/PeopleMesh.js';
 import { Interior } from '../render/Interior.js';
@@ -107,6 +108,10 @@ export class LifeMode {
     start = STARTS.find((x) => x.id === this.sim.player.start) ?? STARTS[0];
     this.dialogue = new Dialogue(this.sim);
     if (save?.turns) for (const [k, v] of save.turns) this.dialogue.turns.set(k, v);
+    this.story = new Story(this.sim);
+    if (save?.story) this.story.restore(save.story);
+    this.story.on((e) => this._storyEvent(e));
+    this.dialogue.ready.then(() => { this.story.sample = this.dialogue.sample; setTimeout(() => this.story.plan(), 4000); });
     this.people = new PeopleMesh(this.stage.scene, this.sim, { quality: this.quality, renderer: this.stage.r });
     this._buildPlayer();
     this._buildHud();
@@ -457,8 +462,20 @@ export class LifeMode {
       case 'trial': this._syncInterior(); setTimeout(() => this._trial(), 50); break;
       case 'resist': this.log(e.text, 'hurt big'); this._duel(e.by, 'arrest'); break;
       case 'death': this._death(e.cause); break;
+      case 'approach': {
+        const p = e.by, P = this.sim.player;
+        this.log(`${P.knownNames.has(p.id) ? p.fullName : p.title[0].toUpperCase() + p.title.slice(1)} comes up to you: ${e.thread ? `"A word with you: ${e.thread.title}."` : '"A word with you."'} (H to talk)`, 'good');
+        this.callout(`${P.knownNames.has(p.id) ? p.name : 'Someone'} wants a word`, 'press H to talk', 2400);
+        break;
+      }
       default: break;
     }
+  }
+
+  _storyEvent(e) {
+    const s = this.sim, P = s.player, g = e.giver, who = g ? (P.knownNames.has(g.id) ? g.fullName : g.title) : 'someone';
+    if (e.type === 'thread') { this.log(`A new matter: ${e.thread.title}. ${who} will come to find you. (J: your story)`, 'good'); this.callout(e.thread.title, `a matter with ${who}`, 2600); }
+    if (e.type === 'resolved') this.log(`${e.thread.status === 'done' ? 'Settled' : 'Gone badly'}: ${e.thread.title}. ${e.thread.outcome}.`, e.thread.status === 'done' ? 'good' : 'hurt');
   }
 
   _stopped(e) {
@@ -581,6 +598,14 @@ export class LifeMode {
           <table class="jtable">${Object.entries(P.skills).map(([k, v]) => `<tr><td>${Math.round(v)}</td><td>${esc(k)}</td></tr>`).join('')}</table>
           ${P.army ? `<p class="fine">Duties: drill in the yard 5:30–8, watch at the gate 8–12, drill 13–16. Pay at 18:00. Absences are docked. Promotion comes with service and skill: ${esc(Object.values(ARMY_RANK).map((r) => r.name).join(' → '))}.</p>` : `<p class="fine">The captain, Hereš of Vrchy, takes on men in the castle yard after noon or in the tavern of an evening.</p>`}
         </section>
+        <section class="estate"><h3>Your story</h3>${(() => {
+          const st = this.story, name = (id) => { const p = s.byId[id]; return p ? (P.knownNames.has(p.id) ? p.fullName : p.title) : '?'; };
+          const open = st?.open() ?? [], past = (st?.threads ?? []).filter((x) => x.status !== 'open').slice(-6).reverse();
+          const left = (x) => { const h = Math.max(0, x.due - s.t); return h < 24 ? `${Math.round(h)} hours left` : `${Math.round(h / 24)} days left`; };
+          return `${open.length ? open.map((x) => `<p><b>${esc(x.title)}</b> · ${esc(name(x.giver))} · <i>${esc(left(x))}</i><br><small>${esc(x.summary)} <b>They ask:</b> ${esc(x.want)} <b>At stake:</b> ${esc(x.stakes)}${x.steps.length ? ` <b>So far:</b> ${esc(x.steps.map((t) => t.text).join('; '))}` : ''}</small></p>`).join('') : `<p class="fine">${st?.planning ? 'The day is taking shape…' : 'No matter open. Each morning brings its own.'}</p>`}
+            ${past.length ? `<h3>Settled and lost</h3>${past.map((x) => `<p class="fine">${x.status === 'done' ? '✓' : '✗'} <b>${esc(x.title)}</b> · ${esc(x.outcome ?? '')}</p>`).join('')}` : ''}
+            <h3>Chronicle</h3>${(st?.chronicle ?? []).slice(-14).reverse().map((c) => `<p class="fine">${esc(dateText(c.t).text)}, ${esc(dateText(c.t).clock)} · ${esc(c.text)}</p>`).join('') || '<p class="fine">Your story is just beginning.</p>'}`;
+        })()}</section>
         <section class="estate"><h3>Home and family</h3>${(() => {
           const H = BUILDING[P.home], fam = s.people.filter((p) => p.kin);
           const where = (p) => !p.alive ? 'dead' : p.agent.inside ? `in ${BUILDING[p.agent.inside]?.name ?? 'a house'}` : p.agent.act;
@@ -724,6 +749,7 @@ export class LifeMode {
     const o = this.sim.serialize();
     o.when = `${this.sim.date().text}, ${this.sim.date().clock}`;
     o.turns = [...this.dialogue.turns.entries()].map(([k, v]) => [k, v.slice(-8)]);
+    o.story = this.story?.serialize();
     return writeSave(o);
   }
 

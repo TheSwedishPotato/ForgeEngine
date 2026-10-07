@@ -126,6 +126,30 @@ export class LifeSim {
     if (this.t - this.lastGossip > 0.2) { this.lastGossip = this.t; gossip(this); }
   }
 
+  _seekFor(p, a, dt, d) {
+    const P = this.player;
+    if (!P.alive || P.inside || P.jailUntil > this.t || d.h < 7 || d.h >= 18.5 || /sleep/.test(a.act)) return false;
+    const dist = Math.hypot(P.x - a.x, P.z - a.z);
+    if (dist > 70 && !p.seekArrived) return false;
+    if (a.inside) { const b = BUILDING[a.inside]; a.x = b.door.x; a.z = b.door.z; a.inside = null; }
+    a.route = [];
+    if (dist > 1.8) {
+      const step = Math.min(dist - 1.6, HURRY * 0.8 * dt);
+      a.x += ((P.x - a.x) / dist) * step; a.z += ((P.z - a.z) / dist) * step;
+      const o = pushOut(a.x, a.z, 0.25, a.skip); a.x = o.x; a.z = o.z;
+      a.speed = step / Math.max(1e-4, dt);
+      a.act = 'coming to find you';
+    } else {
+      a.speed = 0;
+      a.act = 'waiting to speak with you';
+      if (!p.seekArrived) { p.seekArrived = this.t; this.emit({ type: 'approach', by: p, thread: this.story?.threads.find((x) => x.id === p.seek) }); }
+      else if (this.t - p.seekArrived > 0.75) { p.seek = null; p.seekArrived = 0; a.place = null; }   // he gives up for now
+    }
+    a.yaw = Math.atan2(P.x - a.x, P.z - a.z);
+    a.y = groundY(a.x, a.z);
+    return true;
+  }
+
   _updatePerson(p, dt, d, teleport) {
     const a = p.agent;
     // In conversation: he stops where he is and turns to you; his day waits.
@@ -136,6 +160,8 @@ export class LifeSim {
       a.y = groundY(a.x, a.z);
       return;
     }
+    // someone with a matter for you comes to find you, by day, when you are out of doors
+    if (p.seek && !a.pursuit && p.alive && !p.follow && this._seekFor(p, a, dt, d)) return;
     if (p.follow && !a.pursuit && p.alive) { this._follow(p, a, dt, teleport, d); a.y = groundY(a.x, a.z); return; }
     const s = a.pursuit ? { place: a.place, act: a.pursuit === 'hue' ? 'running after you, shouting' : 'coming for you' } : this._schedule(p, d);
     const place = s.place;
