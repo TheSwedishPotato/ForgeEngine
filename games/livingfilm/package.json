@@ -1,0 +1,17 @@
+{
+  "name": "living-film",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A story you live like a film: you say and do what you like, Claude directs, every line and shot written live.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node tools/artifact.mjs",
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
