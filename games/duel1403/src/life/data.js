@@ -22,7 +22,7 @@ export const LIFE_SOURCES = {
   hue: { short: 'Hue and cry (Gerüfte)', text: 'Whoever saw a crime raised the cry ("Zeter!", "Thief!"), and all who heard it were bound to follow and help seize the wrongdoer. A thief taken in the act with the goods (the "hand-having deed", handhafte Tat) had the stolen thing tied to his back and was brought at once before the judge; against such proof no oath could help. The Sachsenspiegel opens court proceedings with the cry.', url: 'https://en.wikipedia.org/wiki/Hue_and_cry' },
   oath: { short: 'Oath-helpers (compurgation)', text: 'Where there was no capture in the act and fewer than two witnesses, the accused could clear himself by oath, supported by oath-helpers who swore to his good character: more of them for graver charges ("with seven hands" for a capital charge in the Saxon law). Bohemian land law also turned on oaths and the number of helpers.', url: 'https://en.wikipedia.org/wiki/Compurgation' },
   court: { short: 'The town court', text: 'In a subject town the headman (rychtář), appointed by the lord, sat in judgement with sworn aldermen (konšelé) from the town council, under the law of a mother town (Old Town Prague or Magdeburg). Petty theft brought restoration, the pillory and the whip or banishment; great theft and theft by night the gallows; killing the sword unless settled with the kin.', url: 'https://cs.wikipedia.org/wiki/Rycht%C3%A1%C5%99' },
-  year1403: { short: 'The year 1403', text: 'King Wenceslas IV was a prisoner of his brother Sigismund in Vienna from 1402 until he escaped in November 1403; Sigismund\'s Hungarians, with Cumans, raided Bohemia; the lords\' leagues and robber bands made the roads unsafe.', url: 'https://www.wulflund.com/tema/kingdom-come-deliverance/bohemian-kingdom-around-1400-amidst-disorder-tricks-insecurity-and-war' },
+  year1403: { short: 'The year 1403', text: 'King Wenceslas IV was a prisoner of his brother Sigismund in Vienna from 1402 until he escaped in November 1403; Sigismund\'s Hungarians, with Cumans, invaded Bohemia in the winter and spring of 1403 and withdrew after May; the lords\' leagues and robber bands made the roads unsafe.', url: 'https://www.wulflund.com/tema/kingdom-come-deliverance/bohemian-kingdom-around-1400-amidst-disorder-tricks-insecurity-and-war' },
 };
 
 // ---- money ------------------------------------------------------------------------------
@@ -159,11 +159,12 @@ export const NEEDS = {
 
 /** Rumours people tell in autumn 1403 (true to the year). */
 export const RUMOURS = [
-  'The king is still Sigismund\'s prisoner in Vienna, they say, and the Hungarians do as they please on our roads.',
-  'Cumans with the Hungarian army burned villages near Kutná Hora; they ride little horses and shoot from the saddle.',
+  'The king is still Sigismund\'s prisoner in Vienna, they say. The Hungarians went home in the summer, but who\'s to say they won\'t be back?',
+  'Cumans with the Hungarian army burned villages round Kutná Hora last winter and spring; they ride little horses and shoot from the saddle.',
   'There are robbers in the woods towards the river: a band of masterless men who were soldiers once.',
   'Master Hus preaches at the Bethlehem Chapel in Prague, in Czech, and the Germans at the university don\'t like it.',
   'Tomorrow is St Wenceslas: there will be Mass, and a fair, and the burgrave\'s men have set up the lists for a joust.',
   'The groschen isn\'t what it was. My father\'s groschen weighed twice what these do.',
   'The captain at the castle is hiring men. A groschen a day, bread and beer, and a coat to wear.',
+  'St Gall\'s day is coming, and the rent with it. The headman has a long face already.',
 ];

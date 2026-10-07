@@ -1,5 +1,7 @@
 import { addressOf, personWho, playerWho } from '../life/address.js';
 import { Story } from '../life/Story.js';
+import { Deeds } from '../life/Deeds.js';
+import { ORIGINS, PARENTS, SIBLINGS, PASTS, FAITHS, LORE_SOURCES } from '../life/lore.js';
 import { Vector3 } from 'three';
 import { LifeSim } from '../life/LifeSim.js';
 import { Dialogue } from '../life/Dialogue.js';
@@ -74,16 +76,34 @@ export class LifeMode {
     const el = h(`<div class="screen ui-interactive life-create"><div class="folio">
       <div class="kicker">${esc(TOWN_NAME)} · Thursday 27 September 1403 · the eve of St Wenceslas</div>
       <h2>Who are you?</h2>
-      <p class="fine">You wake in ${esc(TOWN_NAME)}, a small market town under the lord of Skalice castle, on the eve of the feast of St Wenceslas, patron of the land. The king is a prisoner in Vienna, Hungarian riders are loose in the kingdom, and the captain at the castle is taking on men. Everyone in the town lives their own day. You can talk to any of them.</p>
+      <p class="fine">You wake in ${esc(TOWN_NAME)}, a small market town under the lord of Skalice castle, on the eve of the feast of St Wenceslas, patron of the land. The king is a prisoner in Vienna; the Hungarians who plundered the land in the spring have gone, leaving burned villages and masterless soldiers on the roads, and the captain at the castle is taking on men. St Gall\'s day, when the rent falls due, is three weeks off. Everyone in the town lives their own day. You can talk to any of them.</p>
       <label class="lrow">Name <input class="lname" maxlength="24" value="${esc(this.config?.player?.name || 'Jan')}"></label>
       <div class="lrow">Sex <label><input type="radio" name="lsex" value="m" checked> man</label> <label><input type="radio" name="lsex" value="f"> woman</label></div>
       <div class="lrow">Origin <label><input type="radio" name="lorigin" value="native" checked> born here: family, home, everyone knows you</label> <label><input type="radio" name="lorigin" value="newcomer"> a newcomer: a bed at the inn, nobody knows you</label></div>
+      <h3>Your past</h3>
+      <div class="lpast">
+        <label class="lrow lfrom">From <select class="lsel" name="lfrom">${Object.entries(ORIGINS).filter(([k]) => k !== 'skalice').map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('')}</select></label>
+        <label class="lrow">Parents <select class="lsel" name="lparents">${Object.entries(PARENTS).map(([k, v], i) => `<option value="${k}" ${i === 0 ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+        <label class="lrow">Brothers and sisters <select class="lsel" name="lsiblings">${Object.entries(SIBLINGS).map(([k, v], i) => `<option value="${k}" ${i === 0 ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+        <label class="lrow">What marks you <select class="lsel" name="lpast">${Object.entries(PASTS).map(([k, v], i) => `<option value="${k}" ${i === 0 ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+        <label class="lrow">Faith <select class="lsel" name="lfaith">${Object.entries(FAITHS).map(([k, v], i) => `<option value="${k}" ${i === 0 ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+        <p class="fine lpasttext"></p>
+        <label class="lrow lown">Your story, in your own words (optional) <textarea class="lowntext" maxlength="500" rows="3" placeholder="e.g. My mother wanted me for the Church. I ran off to the fair at Kouřim instead, and came home with a broken nose and a dog."></textarea></label>
+      </div>
       <h3>Your station</h3>
       <div class="jlist lstarts">${STARTS.map((s, i) => `<label data-sex="${s.sex}"><input type="radio" name="lstart" value="${s.id}" ${i === 0 ? 'checked' : ''}><b>${esc(s.name)} · ${fmtMoney(s.money)}</b><small>${esc(s.text)}</small></label>`).join('')}</div>
       <p class="fine lclaude">People answer through Claude when it is available to this page (you will be asked to allow it the first time); otherwise they answer from a simpler script.</p>
       <div class="actions">${readSave() ? `<button class="primary" data-a="continue">Continue · ${esc(readSave().player.name)}, ${esc(readSave().when ?? '')}</button>` : ''}<button class="${readSave() ? '' : 'primary'}" data-a="begin">Begin a new life</button><button data-a="back">Back</button></div>
     </div></div>`);
+    const pastText = () => {
+      const v = (n) => el.querySelector(`select[name=${n}]`).value;
+      const native = el.querySelector('input[name=lorigin]:checked').value === 'native';
+      el.querySelector('.lfrom').style.display = native ? 'none' : '';
+      el.querySelector('.lpasttext').textContent = [native ? ORIGINS.skalice.text : ORIGINS[v('lfrom')].text, PARENTS[v('lparents')].text, PASTS[v('lpast')].text, FAITHS[v('lfaith')].text].join(' ');
+    };
+    pastText();
     el.addEventListener('change', () => {
+      pastText();
       const female = el.querySelector('input[name=lsex]:checked').value === 'f';
       for (const l of el.querySelectorAll('.lstarts label')) { const off = female && l.dataset.sex === 'male'; l.querySelector('input').disabled = off; l.style.opacity = off ? 0.45 : 1; }
       if (el.querySelector('input[name=lstart]:checked')?.disabled) el.querySelector('input[name=lstart]:not(:disabled)').checked = true;
@@ -94,24 +114,27 @@ export class LifeMode {
       if (a === 'continue') { const o = readSave(); if (o) this.begin({ save: o }); }
       if (a === 'begin') {
         const start = STARTS.find((s) => s.id === el.querySelector('input[name=lstart]:checked').value);
-        this.begin({ name: el.querySelector('.lname').value.trim() || 'Jan', sex: el.querySelector('input[name=lsex]:checked').value, start, origin: el.querySelector('input[name=lorigin]:checked').value });
+        const v = (n) => el.querySelector(`select[name=${n}]`).value;
+        const lore = { origin: v('lfrom'), parents: v('lparents'), siblings: v('lsiblings'), past: v('lpast'), faith: v('lfaith'), own: el.querySelector('.lowntext').value.trim().slice(0, 500) };
+        this.begin({ name: el.querySelector('.lname').value.trim() || 'Jan', sex: el.querySelector('input[name=lsex]:checked').value, start, origin: el.querySelector('input[name=lorigin]:checked').value, lore });
       }
     });
     this.root.appendChild(el);
     this.createEl = el;
   }
 
-  begin({ name, sex, start, origin = 'native', seed = 1403, save = null }) {
+  begin({ name, sex, start, origin = 'native', lore = null, seed = 1403, save = null }) {
     this.createEl?.remove();
     if (save) { try { this.sim = LifeSim.restore(save, { seed }); } catch (e) { console.warn('save unreadable', e); clearSave(); this.sim = null; } }
-    if (!this.sim) this.sim = new LifeSim({ seed, start, name, sex, origin });
+    if (!this.sim) this.sim = new LifeSim({ seed, start, name, sex, origin, lore });
     start = STARTS.find((x) => x.id === this.sim.player.start) ?? STARTS[0];
     this.dialogue = new Dialogue(this.sim);
     if (save?.turns) for (const [k, v] of save.turns) this.dialogue.turns.set(k, v);
     this.story = new Story(this.sim);
     if (save?.story) this.story.restore(save.story);
     this.story.on((e) => this._storyEvent(e));
-    this.dialogue.ready.then(() => { this.story.sample = this.dialogue.sample; setTimeout(() => this.story.plan(), 4000); });
+    this.deeds = new Deeds(this.sim);
+    this.dialogue.ready.then(() => { this.story.sample = this.dialogue.sample; this.deeds.sample = this.dialogue.sample; setTimeout(() => this.story.plan(), 4000); });
     this.people = new PeopleMesh(this.stage.scene, this.sim, { quality: this.quality, renderer: this.stage.r });
     this._buildPlayer();
     this._buildHud();
@@ -123,7 +146,7 @@ export class LifeMode {
     this.lastSave = this.wall;
     if (save) this.log(`${P.name} again. ${this.sim.situation()}.`, 'info');
     else this.log(`You are ${P.name}, ${start.name.toLowerCase()}. ${start.text}`, 'info');
-    this.log('E go through a door (or talk) · H talk to someone · J journal · Esc menu.', 'info');
+    this.log('E go through a door · H talk to someone · K do something in your own words · J journal · Esc menu.', 'info');
     this.dialogue.ready.then(() => { this.hud.querySelector('.lmode').textContent = this.dialogue.mode === 'claude' ? 'people answer through Claude' : 'people answer from a script (Claude not available here)'; });
   }
 
@@ -149,7 +172,7 @@ export class LifeMode {
       <div class="lprompt"></div>
       <div class="callout"></div><div class="subcall"></div>
       <div class="lbar ui-interactive">
-        <button data-k="e">E · door</button><button data-k="h">H · talk</button><button data-k="f">F · eat</button><button data-k="q">Q · drink</button><button data-k="r">R · relieve</button><button data-k="z">Z · sleep</button><button data-k="t">T · wait 1 h</button><button data-k="x">X · drill</button><button data-k="g">G · steal</button><button data-k="v">V · strike</button><button data-k="j">J · journal</button>
+        <button data-k="e">E · door</button><button data-k="h">H · talk</button><button data-k="k">K · do (own words)</button><button data-k="f">F · eat</button><button data-k="q">Q · drink</button><button data-k="r">R · relieve</button><button data-k="z">Z · sleep</button><button data-k="t">T · wait 1 h</button><button data-k="x">X · drill</button><button data-k="g">G · steal</button><button data-k="v">V · strike</button><button data-k="j">J · journal</button>
       </div>
       <small class="lmode"></small>
     </div>`);
@@ -265,7 +288,7 @@ export class LifeMode {
       if (typing(e)) return;
       const k = e.key.toLowerCase();
       if (['w', 'a', 's', 'd', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) { this.keys.add(k); e.preventDefault(); return; }
-      if (k === 'escape') { if (this.talking) this.closeTalk(); else if (!this.journalEl.hidden) this.journalEl.hidden = true; else this._menu(); return; }
+      if (k === 'escape') { if (this.deedEl && !this.deedEl.hidden) { this.deedEl.hidden = true; this.deedCtl?.abort(); } else if (this.talking) this.closeTalk(); else if (!this.journalEl.hidden) this.journalEl.hidden = true; else this._menu(); return; }
       if (!e.repeat) this._key(k);
     });
     on(window, 'keyup', (e) => this.keys.delete(e.key.toLowerCase()));
@@ -296,6 +319,7 @@ export class LifeMode {
         if (near) return this.openTalk(near);
         break;
       }
+      case 'k': this._openDeed(); break;
       case 'h': {
         if (this.talking) return;
         const near = this._nearby()[0];
@@ -458,6 +482,7 @@ export class LifeMode {
       case 'stopped': this._stopped(e); break;
       case 'hue': this.log(e.text, 'hurt big'); this.callout('Hue and cry!', e.pursuers ? 'run, or stand and be taken' : '', 2600); this.audio?.bell?.(); break;
       case 'news': case 'give': this.log(e.text, 'info'); break;
+      case 'history': this.log(e.text, 'good big'); this.callout('News from outside', '', 2600); break;
       case 'moved': this._syncInterior(); break;
       case 'trial': this._syncInterior(); setTimeout(() => this._trial(), 50); break;
       case 'resist': this.log(e.text, 'hurt big'); this._duel(e.by, 'arrest'); break;
@@ -470,6 +495,37 @@ export class LifeMode {
       }
       default: break;
     }
+  }
+
+  // --- deeds in your own words ---------------------------------------------------------------
+
+  _openDeed() {
+    if (this.talking) return;
+    if (!this.deedEl) {
+      this.deedEl = h(`<div class="ldeed ui-interactive" hidden>
+        <div class="ldhead"><b>What do you do?</b><button type="button" class="ldclose" aria-label="Close">×</button></div>
+        <div class="ldout"></div>
+        <form class="ldform"><input class="ldinput" maxlength="400" placeholder="In your own words: I kneel before the altar… I help him load the cart… I ask the girl at the well her name…" autocomplete="off"><button class="primary">Do it</button></form>
+        <div class="ldstatus"></div></div>`);
+      this.deedEl.querySelector('.ldclose').addEventListener('click', () => { this.deedEl.hidden = true; this.deedCtl?.abort(); });
+      this.deedEl.querySelector('.ldform').addEventListener('submit', (e) => { e.preventDefault(); const i = this.deedEl.querySelector('.ldinput'); const t = i.value.trim(); if (t && !this.deedBusy) { i.value = ''; this._doDeed(t); } });
+      this.root.appendChild(this.deedEl);
+    }
+    this.deedEl.hidden = false;
+    this.deedEl.querySelector('.ldstatus').textContent = this.deeds.sample ? 'Claude narrates what happens.' : 'Plain narration (Claude not available).';
+    setTimeout(() => this.deedEl.querySelector('.ldinput').focus(), 30);
+  }
+
+  async _doDeed(text) {
+    const out = this.deedEl.querySelector('.ldout');
+    const p = h(`<p class="ldme"></p>`); p.textContent = `You: ${text}`; out.appendChild(p);
+    const r = h(`<p class="ldnarr">…</p>`); out.appendChild(r); out.scrollTop = out.scrollHeight;
+    this.deedBusy = true; this.deedCtl = new AbortController();
+    try {
+      const res = await this.deeds.act(text, { signal: this.deedCtl.signal });
+      r.textContent = res.narration + (res.notes.length ? ` (${res.notes.join('; ')})` : '') + (res.hours >= 0.5 ? ` · ${res.hours.toFixed(1)} h pass` : '');
+    } catch { r.textContent = '(nothing happens)'; }
+    this.deedBusy = false; out.scrollTop = out.scrollHeight;
   }
 
   _storyEvent(e) {
@@ -594,7 +650,7 @@ export class LifeMode {
     const J = this.journalEl.querySelector('.ljournal');
     J.innerHTML = `<div class="armoury-head"><div><div class="kicker">${esc(s.situation())}</div><h2>${esc(P.name)}</h2></div><div class="actions"><button data-a="close">Close</button></div></div>
       <div class="realm-cols">
-        <section class="estate"><h3>You</h3><p>${esc(P.startName)}${P.army ? ` · ${esc(ARMY_RANK[P.army.rank].name)} of the garrison, ${P.army.days} days' service` : ''}. Purse: ${esc(fmtMoney(P.money))}. Health ${P.health.toFixed(0)}. Reputation ${P.reputation}.</p>
+        <section class="estate"><h3>You</h3>${P.lore ? `<p class="fine"><b>From</b> ${esc(ORIGINS[P.lore.origin]?.name ?? '')}. ${esc(PARENTS[P.lore.parents]?.text ?? '')} <b>${esc(PASTS[P.lore.past]?.name ?? '')}.</b> ${esc(PASTS[P.lore.past]?.text ?? '')}${PASTS[P.lore.past]?.known === 'none' ? ' <i>(a secret)</i>' : ''} <b>Faith:</b> ${esc(FAITHS[P.lore.faith]?.name ?? '')}.${P.lore.own ? ` <i>${esc(P.lore.own)}</i>` : ''}</p>` : ''}<p>${esc(P.startName)}${P.army ? ` · ${esc(ARMY_RANK[P.army.rank].name)} of the garrison, ${P.army.days} days' service` : ''}. Purse: ${esc(fmtMoney(P.money))}. Health ${P.health.toFixed(0)}. Reputation ${P.reputation}.</p>
           <table class="jtable">${Object.entries(P.skills).map(([k, v]) => `<tr><td>${Math.round(v)}</td><td>${esc(k)}</td></tr>`).join('')}</table>
           ${P.army ? `<p class="fine">Duties: drill in the yard 5:30–8, watch at the gate 8–12, drill 13–16. Pay at 18:00. Absences are docked. Promotion comes with service and skill: ${esc(Object.values(ARMY_RANK).map((r) => r.name).join(' → '))}.</p>` : `<p class="fine">The captain, Hereš of Vrchy, takes on men in the castle yard after noon or in the tavern of an evening.</p>`}
         </section>
@@ -618,7 +674,7 @@ export class LifeMode {
         <section class="estate"><h3>The law of ${esc(TOWN_NAME)}</h3>${LAWS.map((l) => `<p class="fine"><b>${esc(l.name)}.</b> ${esc(l.text)} <i>(${esc(l.sureness)})</i></p>`).join('')}</section>
         <section class="estate"><h3>Your record</h3>${P.crimes.length ? P.crimes.slice(-8).map((c) => `<p class="fine">${c.settled ? '✓' : c.seen.length ? '<b>open</b>' : 'unseen'} · ${esc(LAWS.find((l) => l.id === c.law)?.name ?? c.law)}${c.value ? ` (${esc(fmtMoney(c.value))})` : ''}</p>`).join('') : '<p class="fine">Clean.</p>'}${P.banished > s.t ? '<p class="fine"><b>Banished from Skalice.</b> If the watch finds you in the town you hang.</p>' : ''}
           <h3>Town talk</h3>${news.length ? news.map((n) => `<p class="fine">${esc(n.text)}</p>`).join('') : '<p class="fine">Nothing of note.</p>'}</section>
-        <section class="estate"><h3>What people say</h3>${RUMOURS.map((r) => `<p class="fine">${esc(r)}</p>`).join('')}<h3>Sources</h3>${Object.values(LIFE_SOURCES).map((x) => `<p class="fine"><b>${esc(x.short)}.</b> ${esc(x.text)}</p>`).join('')}</section>
+        <section class="estate"><h3>What people say</h3>${RUMOURS.map((r) => `<p class="fine">${esc(r)}</p>`).join('')}<h3>Sources</h3>${[...Object.values(LIFE_SOURCES), ...Object.values(LORE_SOURCES)].map((x) => `<p class="fine"><b>${esc(x.short)}.</b> ${esc(x.text)}</p>`).join('')}</section>
       </div>`;
     this.journalEl.hidden = false;
   }
@@ -762,7 +818,8 @@ export class LifeMode {
     this.walker?.dispose();
     this.interior?.dispose();
     this.people?.dispose();
-    for (const el of [this.hud, this.talkEl, this.journalEl, this.modalEl, this.createEl]) el?.remove();
+    for (const el of [this.hud, this.talkEl, this.journalEl, this.modalEl, this.createEl, this.deedEl]) el?.remove();
+    this.deedEl = null;
     if (this.lists.sun) this.lists.sun.position.copy(this.lists.sun.target.position).add(new Vector3(-0.55, 0.42, 0.72).normalize().multiplyScalar(30));
     if (this.stage.r) { this.stage.r.sunIntensity = 7.5; this.stage.r.sunColor.set(1.0, 0.87, 0.7); this.stage.r.invalidateEnvironment?.(); }
     void keepScene;

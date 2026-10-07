@@ -1,3 +1,6 @@
+import { applyLore, SIBLINGS } from './lore.js';
+import { HOLY, NEWS, tOf } from './history.js';
+import { makeKin } from './people.js';
 import { NODES, BUILDING, BUILDINGS, PLACES, path, nearestNode, groundY, navRoute, doorApproach, pushOut } from '../world/town.js';
 import { makePeople, scheduled } from './people.js';
 import { NEEDS, GOODS, SHOPS, LAW, ARMY_RANKS, ARMY_RANK, START_DATE, CURFEW, DAWN, dateText, BELLS, STARTS, fmtMoney } from './data.js';
@@ -7,7 +10,7 @@ import { remember, gossip, serializeMemories } from './Memory.js';
 const WALK = 1.35;            // m/s, a townsman's pace
 const RUN = 2.7, HURRY = 2.2; // m/s, chasing a thief; the watch closing in
 const PATROL = ['sq', 'n', 'sq', 'sqE', 'e1', 'sqE', 'sq', 'b', 'south', 'b', 'sq', 'sqW', 'w1', 'sqW'];
-const FEASTS = new Set(['9-28']);   // St Wenceslas
+const FEASTS = HOLY;   // holy days, kept like Sundays (history.js)
 
 /** Where inside or outside a person stands for a place. */
 function spotFor(place, idx) {
@@ -29,7 +32,7 @@ function spotFor(place, idx) {
  * Time is in game hours from midnight before 27 September 1403.
  */
 export class LifeSim {
-  constructor({ seed = 1403, start = STARTS[0], name = 'Jan', sex = 'm', origin = 'native' } = {}) {
+  constructor({ seed = 1403, start = STARTS[0], name = 'Jan', sex = 'm', origin = 'native', lore = null } = {}) {
     this.t = START_DATE.h;
     this.rate = 1 / 60;        // game hours per real second (a game minute per second)
     this.people = makePeople(seed);
@@ -62,7 +65,8 @@ export class LifeSim {
       knownNames: new Set(),
     };
     this.player.y = groundY(this.player.x, this.player.z);
-    if (native) this._kinfolk(st);
+    if (native) this._kinfolk(st, lore ?? {});
+    applyLore(this, lore ?? {});
     this.justice = new Justice(this);
     this.lastGossip = this.t;
   }
@@ -71,20 +75,37 @@ export class LifeSim {
    * Born here: everyone knows your name and your people; those you live with
    * are your family (or your master's household), and like you accordingly.
    */
-  _kinfolk(st) {
+  _kinfolk(st, lore = {}) {
     const P = this.player, child = P.sex === 'f' ? 'daughter' : 'son';
+    // brothers and sisters live in the household where there is a family holding (a farm, a merchant house)
+    const head = this.people.find((p) => p.home === P.home && (p.role === 'farmer' || p.role === 'merchant'));
+    if (head && (st.id === 'sedlak' || st.id === 'burgher')) {
+      for (const [i, sib] of (SIBLINGS[lore.siblings]?.list ?? []).entries()) {
+        const k = makeKin(head, sib, this.people.length, 1403 + i, null);
+        this.people.push(k); this.byId[k.id] = k;
+        const sp = spotFor(this._schedule(k, this.date()).place, k.idx);
+        k.agent = { x: sp.x, z: sp.z, y: groundY(sp.x, sp.z), yaw: 0, inside: sp.inside, place: null, act: 'at home', route: [], speed: 0, wait: 0 };
+      }
+    }
+    const parentWord = (p) => {
+      const father = p.role === 'farmer' || p.role === 'merchant', mother = p.sex === 'f' && p.age > 30;
+      if (lore.parents === 'orphan') return father ? `uncle: your father's brother, who took you in when your parents died; you are like a ${child} to him` : mother ? 'aunt: who raised you after your parents died' : null;
+      if (lore.parents === 'widowed') return father ? `stepfather: your mother's second husband, since your father died` : mother ? `mother: you are her ${child}; she was widowed and married again` : null;
+      return father ? `father: you are his ${child}` : mother ? `mother: you are her ${child}` : null;
+    };
     for (const p of this.people) {
       P.knownNames.add(p.id);
       p.attitude = Math.max(-100, Math.min(100, p.attitude + 8));
       if (p.home !== P.home) continue;
+      if (p.rel) { p.attitude = Math.max(-100, Math.min(100, p.attitude + 20)); continue; }   // a brother or sister, made above
       const kin = st.id === 'sedlak' || st.id === 'burgher'
-        ? (p.role === 'farmer' || p.role === 'merchant' ? `father: you are his ${child}` : p.sex === 'f' && p.age > 30 ? `mother: you are her ${child}` : `kin`)
+        ? (parentWord(p) ?? 'kin')
         : st.id === 'podruh' ? 'the householder you lodge with'
         : st.id === 'tovarys' ? (p.role === 'smith' ? 'your master, whom you serve for wages' : 'of your master\'s household')
         : st.id === 'panos' ? (p.role === 'burgrave' ? 'your lord, in whose household you serve' : 'of the household you serve in')
         : 'of your household';
       p.kin = kin;
-      p.attitude = Math.max(-100, Math.min(100, p.attitude + (/father|mother/.test(kin) ? 55 : 25)));
+      p.attitude = Math.max(-100, Math.min(100, p.attitude + (/father|mother|uncle|aunt/.test(kin) ? 55 : 25)));
     }
   }
 
@@ -118,6 +139,8 @@ export class LifeSim {
       if (crossed) this.emit({ type: 'bell', bell: b });
     }
     if (d.d !== before.d) { this.player.curfewChecked = false; this.emit({ type: 'day', date: d }); }
+    // news from outside reaches the town
+    for (const n of NEWS) { const at = tOf(n.m, n.d) + n.arrive * 24; if (at <= this.t && !(this.newsHeard ??= new Set()).has(n.text)) { this.newsHeard.add(n.text); if (at > this.t - 30) this.emit({ type: 'history', text: n.text }); } }
     if (d.h >= 6 && (before.h < 6 || d.d !== before.d)) this._payCompanions();
     for (const p of this.people) this._updatePerson(p, dtReal, d, skipHours > 0);
     this._updatePlayer(dh, d);
@@ -701,10 +724,10 @@ export class LifeSim {
   }
 
   static restore(o, opts = {}) {
-    const sim = new LifeSim({ ...opts, start: STARTS.find((x) => x.id === o.player.start) ?? STARTS[0], name: o.player.name, sex: o.player.sex });
+    const sim = new LifeSim({ ...opts, start: STARTS.find((x) => x.id === o.player.start) ?? STARTS[0], name: o.player.name, sex: o.player.sex, origin: o.player.native === false ? 'newcomer' : 'native', lore: o.player.lore ?? null });
     sim.t = o.t; sim.lastBell = o.lastBell ?? -1; sim.lastGossip = o.t;
     Object.assign(sim.player, o.player, { knownNames: new Set(o.player.knownNames ?? []), sleepingUntil: 0, restrained: null, held: false });
-    for (const p of sim.people) p.kin = o.kin?.[p.id] ?? null;
+    for (const p of sim.people) p.kin = o.kin?.[p.id] ?? p.kin ?? null;
     sim.player.inside = null;
     for (const q of o.people ?? []) {
       const p = sim.byId[q.id];

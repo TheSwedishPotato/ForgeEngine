@@ -1,4 +1,6 @@
 import { etiquette, addressOf, personWho, playerWho } from './address.js';
+import { worldText } from './history.js';
+import { loreKnownBy } from './lore.js';
 import { GOODS, SHOPS, LAWS, RUMOURS, fmtMoney, ARMY_RANK, WAGES } from './data.js';
 import { allRanks } from '../data/society.js';
 import { BUILDING, PLACES, TOWN_NAME } from '../world/town.js';
@@ -51,7 +53,7 @@ export class Dialogue {
       ? `You have known them all their life: ${P.name}, born and raised here in ${TOWN_NAME}, ${P.startName.toLowerCase()}.${p.kin ? ` They are your own: ${p.kin}. Speak to them as family or household, with the ease, fondness, worries and old quarrels that go with it.` : ''}`
       : P.knownNames.has(p.id) ? `You know this person as ${P.name}, ${P.startName.toLowerCase()}, a newcomer to the town.` : 'A stranger, new to the town: you have never seen them before today unless your memories below say otherwise, and you do not know their name unless they tell you.';
     const crimes = P.crimes.filter((c) => c.seen.includes(p.id)).map((c) => LAWS.find((l) => l.id === c.law)?.name).filter(Boolean);
-    return `${bits.join(', ')}. ${known}${crimes.length ? ` You saw them commit: ${crimes.join(', ')}.` : ''}${P.army ? ` They serve in the castle garrison as ${ARMY_RANK[P.army.rank].name.toLowerCase()}.` : ''} Town reputation: ${P.reputation > 15 ? 'well thought of' : P.reputation < -15 ? 'a known troublemaker' : P.reputation < -5 ? 'talked about' : 'a newcomer nobody knows much about'}.`;
+    return `${bits.join(', ')}. ${known}${crimes.length ? ` You saw them commit: ${crimes.join(', ')}.` : ''}${P.army ? ` They serve in the castle garrison as ${ARMY_RANK[P.army.rank].name.toLowerCase()}.` : ''} Town reputation: ${P.reputation > 15 ? 'well thought of' : P.reputation < -15 ? 'a known troublemaker' : P.reputation < -5 ? 'talked about' : P.native ? 'one of the town\'s own, nothing much said either way' : 'a newcomer nobody knows much about'}. ${loreKnownBy(this.sim, p)}`;
   }
 
   _persona(p) {
@@ -91,7 +93,7 @@ export class Dialogue {
     const news = s.justice.news.filter((n) => s.t - n.t < 72).slice(-5).map((n) => n.text);
     return [
       `Date and time: ${s.situation()}.`,
-      'The world in 1403: King Wenceslas IV is held prisoner in Vienna by his brother Sigismund of Hungary; Sigismund\'s Hungarians and Cumans have raided the land; lords quarrel and robbers haunt the roads; the Prague groschen (12 parvi; 60 groschen make a kopa) has been debased. Master Jan Hus preaches in Prague. Nothing that happens after September 1403 is known to you.',
+      `The world as you know it: ${worldText(s.t)}`,
       `The law here (the town's ordinances): ${LAWS.slice(0, 9).map((l) => `${l.name}: ${l.text}`).join(' ')} A thief caught in the act is brought before the headman and two aldermen; two sworn witnesses prove a deed; otherwise the accused may clear himself on oath with oath-helpers. A killing may be settled with the kin by reconciliation (smír).`,
       `Gossip you might pass on if asked: ${RUMOURS.join(' ')}`,
       news.length ? `What has happened in the town lately (you may have heard): ${news.join(' ')}` : '',
@@ -119,6 +121,7 @@ HOW TO ANSWER
 - Speak as this person would in 1403: plain words, their own concerns, the manners of their rank toward the speaker's apparent rank (deference upward, condescension or familiarity downward), their mood and temper. English, with an occasional Czech word they would naturally use (groš, rychta, krčma, hejtman, and the form of address given above). One to three sentences, never more than 60 words.
 - Think as this person: what do they want from this stranger, what do they fear, what would they gain or risk? Answer the point of what was said, remember what was said before in this talk, and do not repeat yourself.
 - Keep to your station: a superior may be curt, give orders, or ignore; an inferior defers, but may grumble behind politeness. Use the form of address given above every time you address them.
+- Words between asterisks (*kneels*, *hands you a coin*) are what the stranger does, not says: react to the deed.
 - You know only what this person could know. If asked about things outside it, say you don't know, or answer from rumour.
 - You are a real person, not a guide: you may refuse, haggle, lie (if dishonest), take offence, call the watch, attack, or end the talk.
 - WORDS ARE DEEDS. If the stranger hands you something, offers payment, asks you to come along, to take them with you, to teach them, to give or lend them something, and you agree, you MUST put the matching action in "actions" — that is what makes it happen in the world. If you refuse, put no action. Never claim to give what you do not have.
@@ -315,13 +318,14 @@ Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES
 /**
  * What weighs on each kind of person this autumn of 1403: the cares that
  * drive what they want from a stranger. From the situation of the year
- * (the king a prisoner, Hungarian raids, debased coin) and the round of a
- * subject town's year (Michaelmas rent, the harvest in, guild rules).
+ * (the king a prisoner, the spring's Hungarian invasion and the masterless
+ * soldiers it left, debased coin) and the round of a subject town's year
+ * (rent on St Gall's day, 16 October; the harvest in; guild rules).
  */
 export const CARES = {
-  burgrave: 'holding the castle and its lands for an absent lord while bands roam; getting the Michaelmas rents in; keeping the townsmen obedient and the garrison paid',
-  captain: 'too few men and too little pay for them; Hungarian riders and robber bands on the roads; drunkenness and desertion among his pacholci',
-  soldier: 'pay in arrears; the cold watch; dice and beer; whether the Hungarians will come this way',
+  burgrave: 'holding the castle and its lands for an absent lord while bands roam; getting the St Gall rents in (16 October); keeping the townsmen obedient and the garrison paid',
+  captain: 'too few men and too little pay for them; masterless soldiers and robber bands left on the roads by the spring\'s invasion, and whether Sigismund\'s men will come back; drunkenness and desertion among his pacholci',
+  soldier: 'pay in arrears; the cold watch; dice and beer; whether Sigismund\'s Hungarians will come back next year',
   herald: 'a good field for the St Wenceslas joust, proper arms and lineage of every rider, and being paid by the lord for it',
   priest: 'the tithe and the parish dues, sinners who skip confession, talk from Prague of Master Hus preaching against the clergy\'s wealth',
   sexton: 'the bells at the right hours, the graves, his aching back',
@@ -339,8 +343,8 @@ export const CARES = {
   weaver: 'yarn, the merchant who buys his cloth too cheap, debts',
   weaverwife: 'spinning enough yarn, a child that is sickly, the price of bread',
   bathkeeper: 'firewood for the bath, being looked down on as a dishonourable trade, cupping and shaving customers, gossip he hears',
-  merchant: 'getting his cloth safely back to Prague past robbers and Hungarians, debased groschen, collecting what is owed',
-  farmer: 'the harvest in and the Michaelmas rent and tithe due, the plough team, the weather for winter sowing, soldiers taking his beasts',
+  merchant: 'getting his cloth safely back to Prague past robbers and masterless soldiers, debased groschen, collecting what is owed',
+  farmer: 'the harvest in, the half-year rent due on St Gall\'s day (16 October) and the tithe, the plough team, the weather for winter sowing, soldiers taking his beasts',
   farmwife: 'the house, the children, geese and hens, spinning, whether there is enough grain to last till spring',
   cottager: 'finding day work, feeding his family on almost nothing, debts to the farmer he works for',
 };

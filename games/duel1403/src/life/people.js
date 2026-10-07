@@ -203,3 +203,33 @@ export function scheduled(p, h, wd, feast = false) {
 }
 
 export { R_ as ROUTINES, describe };
+
+/**
+ * One of the player's own kin, living in the household: an elder brother
+ * who will take over the holding or the trade, a younger sister at home.
+ * Same shape as the townsfolk, so they live their days like everyone else.
+ */
+export function makeKin(head, { sex, age, rel }, idx, seed = 1403, givenName = null) {
+  const R = rng(seed * 7 + idx * 13);
+  const pick = (a) => a[Math.floor(R() * a.length)];
+  const tr = traits(R);
+  const dress = sex === 'f' ? (head?.estate === 'peasants' ? 'womanPoor' : 'woman') : head?.dress === 'burgher' ? 'townsman' : head?.dress === 'noble' ? 'townsman' : head?.estate === 'towns' ? 'townsman' : 'peasant';
+  const d = DRESS[dress];
+  const routine = sex === 'f' ? (head?.estate === 'peasants' ? 'wife' : 'townwife') : head?.routine === 'farmer' || head?.routine === 'farmerTavern' ? 'farmer' : head?.routine === 'merchant' ? 'labourer' : 'craft';
+  const byname = head?.byname ?? '';
+  const fem = (b) => !b || /^(z |of )/.test(b) ? b : b.endsWith('ý') ? b.slice(0, -1) + 'á' : b.endsWith('í') ? b : b.endsWith('a') ? b.slice(0, -1) + 'ová' : b + 'ová';
+  const name = givenName ?? pick(sex === 'f' ? WOMEN : MEN);
+  const nb = sex === 'f' ? fem(byname) : byname;
+  const what = head ? `${{ farmer: 'farmer', merchant: 'cloth merchant' }[head.role] ?? head.role}'s ${sex === 'f' ? 'daughter' : 'son'}` : sex === 'f' ? 'a young woman' : 'a young man';
+  const p = {
+    id: 'k' + idx, idx, role: sex === 'f' ? 'daughter' : 'son', name, byname: nb, fullName: `${name} ${nb}`.trim(), sex, age,
+    rank: head?.rank ?? 'podruh', estate: head?.estate ?? 'peasants', trade: head?.trade ?? null, title: `${what} (your ${rel})`, home: head?.home, work: sex === 'f' ? 'home' : head?.work ?? 'fields',
+    routine, traits: tr, words: describe(tr), dress, colors: { ...d.colors }, items: { ...d.items }, hat: 0,
+    armed: false, watch: false, recruiter: false, jousts: false, sells: null, money: Math.round(20 + 60 * R()),
+    attitude: 30 + Math.round((tr.agreeableness - 0.5) * 40), memories: [], mood: 'calm', alive: true, hurt: 0, follow: null,
+    inventory: { bread: 1 }, height: sex === 'f' ? 1.56 + R() * 0.08 : 1.68 + R() * 0.12, kin: `your ${rel}`, rel,
+    look: { skin: head?.look?.skin ?? '#d6a882', hair: head?.look?.hair ?? '#5a3c22', beard: sex === 'f' ? 0 : Math.max(0, (age - 22) / 25), headwear: sex === 'f' ? 'braid' : null },
+  };
+  if (sex === 'f') p.items.head = 'bareHead';
+  return p;
+}

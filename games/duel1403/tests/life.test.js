@@ -221,3 +221,43 @@ test('story: matters open from the facts, the giver comes to you, paying settles
   again.restore(JSON.parse(JSON.stringify(story.serialize())));
   assert.equal(again.threads.length, story.threads.length);
 });
+
+test('your past: siblings live in the house, kin labels follow the parents, secrets stay secret', async () => {
+  const { loreKnownBy } = await import('../src/life/lore.js');
+  const s = new LifeSim({ start: STARTS[1], name: 'Jan', origin: 'native', lore: { parents: 'widowed', siblings: 'both', past: 'smir', faith: 'devout', own: 'I keep bees.' } });
+  const sibs = s.people.filter((p) => p.rel);
+  assert.equal(sibs.length, 2);
+  assert.ok(sibs.every((p) => p.home === s.player.home && p.agent));
+  assert.ok(s.people.some((p) => /stepfather/.test(p.kin ?? '')));
+  assert.ok(s.player.skills.sword >= 18, 'the killing left its mark on the sword skill');
+  const stranger = s.people.find((p) => p.role === 'smith');
+  assert.ok(!loreKnownBy(s, stranger).includes('dead by your knife') && !/knife/.test(loreKnownBy(s, stranger)), 'a secret is not known to the smith');
+  const bro = sibs.find((p) => p.sex === 'm');
+  assert.ok(loreKnownBy(s, bro).includes('bees'), 'kin know your own story');
+  // siblings survive a save
+  const r = LifeSim.restore(JSON.parse(JSON.stringify(s.serialize())));
+  assert.equal(r.people.filter((p) => p.rel).length, 2);
+});
+
+test('deeds: effects are checked against the world', async () => {
+  const { Deeds } = await import('../src/life/Deeds.js');
+  const s = fresh(); s.t = 10;
+  const d = new Deeds(s);
+  const money = s.player.money, t0 = s.t;
+  const near = s.people.slice(0, 2);
+  const r = d.apply({ narration: 'You do it.', hours: 9, money: 5000, needs: { hunger: -500 }, skill: { name: 'letters', gain: 50 }, witnesses: [{ id: near[0].id, remember: 'x', attitude: 99 }, { id: 'p999', remember: 'y' }] }, near);
+  assert.ok(s.t - t0 <= 4.01, 'at most four hours');
+  assert.equal(s.player.money, money + 12, 'found money is capped');
+  assert.ok(r.narration === 'You do it.');
+  const lose = d.apply({ narration: 'x', money: -1e6 }, []);
+  assert.equal(s.player.money, 0, 'cannot spend more than you have'); void lose;
+});
+
+test('history: rent at St Gall, news arrives on its day', async () => {
+  const { tOf, newsKnown, calendarAhead, HOLY } = await import('../src/life/history.js');
+  assert.ok(HOLY.has('9-28') && HOLY.has('11-1'));
+  assert.equal(newsKnown(10).length, 0);
+  assert.ok(newsKnown(tOf(10, 8, 12)).some((n) => /Pope/.test(n.text)));
+  assert.ok(newsKnown(tOf(11, 16, 12)).some((n) => /free/.test(n.text)));
+  assert.ok(calendarAhead(tOf(10, 10, 8)).some((c) => /St Gall/.test(c.name)));
+});

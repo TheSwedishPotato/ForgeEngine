@@ -20,6 +20,8 @@
  */
 import { fmtMoney, GOODS, dateText } from './data.js';
 import { CARES } from './Dialogue.js';
+import { worldText } from './history.js';
+import { loreFull, PASTS } from './lore.js';
 import { BUILDING } from '../world/town.js';
 
 const MAX_OPEN = 3;
@@ -187,11 +189,12 @@ export class Story {
     const people = s.people.filter((p) => p.alive).map((p) => `${p.id} | ${p.fullName} | ${p.title}, ${p.age} | home ${BUILDING[p.home]?.name ?? p.home} | attitude to the player ${p.attitude}${p.kin ? ` | KIN: ${p.kin}` : ''}${CARES[p.role] ? ` | cares: ${CARES[p.role]}` : ''}`).join('\n');
     const chron = this.chronicle.slice(-30).map((c) => `[${dateText(c.t).text}, ${dateText(c.t).clock}] ${c.text}`).join('\n') || '(nothing yet: the story is just beginning)';
     const open = this.threads.slice(-12).map((x) => `#${x.id} ${x.status}: ${x.title} (giver ${x.giver})${x.outcome ? ` -> ${x.outcome}` : ''}`).join('\n') || '(none)';
-    return `You are the storyteller of an open-world role play set in Skalice, a small subject town in the Kingdom of Bohemia, autumn 1403 (King Wenceslas IV a prisoner in Vienna; Sigismund's Hungarians and Cumans raiding; debased groschen; Master Hus preaching in Prague). Everything must be true to the place, the year and the social order: no magic, no anachronism, no grand destinies. Stories are personal and local: family, debt, rent and tithe, work, love and marriage, feuds and honour, the law and its punishments, faith, the war on the roads.
+    return `You are the storyteller of an open-world role play set in Skalice, a small subject town in the Kingdom of Bohemia, autumn 1403. What is known in the town: ${worldText(s.t)} Everything must be true to the place, the year and the social order: no magic, no anachronism, no grand destinies. Stories are personal and local: family, debt, rent and tithe, work, love and marriage, feuds and honour, the law and its punishments, faith, the war on the roads.
 
 Today: ${s.situation()}.
 
-THE PLAYER
+THE PLAYER (everything, secrets included: the townsfolk know only what they would)
+${loreFull(P)}
 ${P.name}, ${P.sex === 'f' ? 'a woman' : 'a man'} of about twenty, ${P.startName}. ${P.native ? 'Born and raised in the town.' : 'A newcomer, a stranger to everyone.'} Home: ${BUILDING[P.home]?.name ?? P.home}. Purse: ${P.money} parvi (12 parvi = 1 groschen). Reputation ${P.reputation}.${P.army ? ' Serves in the castle garrison.' : ''}${P.crimes.length ? ` Crimes: ${P.crimes.map((c) => c.law + (c.settled ? ' (settled)' : '')).join(', ')}.` : ''}
 Family and household: ${fam || 'none here'}.
 
@@ -217,11 +220,17 @@ Reply with ONLY JSON:
     const s = this.sim, P = s.player, out = [];
     const by = (f) => s.people.find((p) => p.alive && f(p) && !this.threads.some((x) => x.giver === p.id));
     const parent = by((p) => /father|householder|master|lord/.test(p.kin ?? ''));
-    if (parent && P.native) out.push({ title: 'The Michaelmas rent', giver: parent.id, summary: `St Michael's day is near and the lord's rent is due. ${parent.name} is short and the headman will not wait.`, want: 'Help with 3 groschen toward the rent.', stakes: 'Paid, the household keeps its good name; unpaid, the headman will distrain a beast or the plough.', kind: 'pay', amount: 36, hours: 72 });
+    if (parent && P.native) out.push({ title: 'The rent at St Gall', giver: parent.id, summary: `The half-year rent is due to the lord on St Gall's day, and ${parent.name} is short after the bad spring. The headman will not wait.`, want: 'Help with 3 groschen toward the rent.', stakes: 'Paid, the household keeps its good name; unpaid, the headman will distrain a beast or the plough.', kind: 'pay', amount: 36, hours: 72 });
+    // what marks you comes back to you
+    const L = P.lore, seed = L && PASTS[L.past]?.seed;
+    if (seed) {
+      const who = L.past === 'sweetheart' ? s.byId[L.sweetheart] : s.people.find((p) => p.role === PASTS[L.past].who);
+      if (who && !this.threads.some((x) => x.title === seed.title)) out.unshift({ ...seed, giver: who.id, summary: `${seed.title}. ${PASTS[L.past].text.replace(/\byou\b/gi, P.name).replace(/\byour\b/gi, P.sex === 'f' ? 'her' : 'his')}` });
+    }
     const priest = by((p) => p.role === 'priest');
     if (priest && out.length < 2) out.push({ title: 'Confession before the feast', giver: priest.id, summary: 'The feast of St Wenceslas is at hand and the priest expects every soul of the parish at confession first.', want: 'Come to the church and speak with him.', stakes: 'A good name with the church, or the priest\'s displeasure from the pulpit.', kind: 'talk', hours: 48 });
     const captain = by((p) => p.role === 'captain');
-    if (captain && !P.army && !P.noble && out.length < 2) out.push({ title: 'Men for the garrison', giver: captain.id, summary: 'With Hungarians on the roads the captain needs more foot servants and has heard you are able-bodied.', want: 'Take service in the castle garrison.', stakes: 'Pay, bread and a coat, and the captain\'s favour; refused, he will not ask twice.', kind: 'enlist', hours: 96 });
+    if (captain && !P.army && !P.noble && out.length < 2) out.push({ title: 'Men for the garrison', giver: captain.id, summary: 'With masterless soldiers on the roads and fear the Hungarians will return, the captain needs more foot servants and has heard you are able-bodied.', want: 'Take service in the castle garrison.', stakes: 'Pay, bread and a coat, and the captain\'s favour; refused, he will not ask twice.', kind: 'enlist', hours: 96 });
     const smith = by((p) => p.role === 'smith');
     if (smith && out.length < 2) out.push({ title: 'Bread for the forge', giver: smith.id, summary: 'The smith cannot leave the forge with the garrison\'s order on the anvil, and his apprentice is useless.', want: 'Bring him a loaf of bread from the bakery.', stakes: 'A friend at the forge, or a grumble.', kind: 'bring', item: 'bread', hours: 10 });
     return out;
