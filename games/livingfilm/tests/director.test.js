@@ -121,3 +121,13 @@ test('the director plays beats as they stream, then hands over the whole reply',
   assert.deepEqual(seen, ['scene:lane', 'cast:j', 'beat:Snow falls.', 'beat:Hello.']);
   assert.equal(r.streamed, 2);
 });
+
+test('a reply cut short after the film played still keeps the scene, the book and the choices', async () => {
+  const s = story();
+  const text = '{"scene": {"id": "lane", "name": "Lane", "type": "street", "new": true}, "beats": [{"narration": "Snow."}], "choices": [{"kind": "say", "text": "Hello"}], "sheet": {"body": {"fat';
+  const sample = { json: async (_p, { onText }) => { onText({ text }); throw Object.assign(new Error('cut'), { code: 'invalid_json', text }); } };
+  const r = await new Director(sample).turn(s, null, {});
+  assert.ok(r.partial); assert.equal(r.beats.length, 1); assert.equal(r.choices.length, 1);
+  applyReply(s, null, r);
+  assert.equal(s.chapters.length, 1); assert.equal(s.chapters[0].scenes[0].beats.length, 1);
+});

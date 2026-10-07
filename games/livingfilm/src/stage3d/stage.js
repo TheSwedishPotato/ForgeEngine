@@ -207,7 +207,7 @@ export class Stage3D {
     this.stage.taa.reset = true;
     let url = null;
     try {
-      for (let i = 0; i < 10; i++) this.stage.render(1 / 60, this.t + i / 60);
+      for (let i = 0; i < 5; i++) this.stage.render(1 / 60, this.t + i / 60);
       url = this.stage.r.canvas?.toDataURL?.('image/jpeg', 0.9) ?? this.canvas.toDataURL('image/jpeg', 0.9);
     } catch { url = null; }
     for (const m of hidden) m.visible = true;

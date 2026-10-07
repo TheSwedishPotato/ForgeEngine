@@ -351,8 +351,13 @@ function paintedPortrait() {
 }
 
 function openSheetNow(tab = 'person') {
-  const portrait = (stage && onStage ? stage.portrait('you') : null) ?? paintedPortrait();
-  openSheet(state, { tab, portrait });
+  if (!state) return;
+  // the sheet opens at once; the engine's portrait is painted in a moment after
+  let el = null;
+  try { el = openSheet(state, { tab, portrait: paintedPortrait() }); } catch (e) { console.warn('sheet', e); note('The sheet could not open: ' + (e?.message ?? e)); return; }
+  if (stage && onStage) setTimeout(() => {
+    try { const url = stage.portrait('you'); const img = el?.querySelector('.portrait'); if (url && img?.tagName === 'IMG') img.src = url; } catch (e) { console.warn('portrait', e); }
+  }, 60);
 }
 
 // --- what you say and do ------------------------------------------------------------------------------

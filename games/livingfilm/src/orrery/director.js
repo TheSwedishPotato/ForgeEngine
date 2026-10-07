@@ -409,21 +409,35 @@ export class Director {
     let extras = state.extras ?? {};
     let scene = null;
     let n = 0;
+    const raw = { beats: [] };   // what has arrived, kept in case the reply is cut short
     const reader = new StreamReader({
       onValue: (k, v) => {
+        if (['scene', 'cast', 'extras', 'remarks', 'choices', 'turn', 'clock', 'sheet', 'chapter', 'summary'].includes(k)) raw[k] = v;
         if (k === 'scene') { scene = cleanScene(v, state.scene, cast); hooks.onScene?.(scene); }
         else if (k === 'cast' && Array.isArray(v)) { const out = {}; for (const c of v) { const cid = id(c?.id); if (cid && cid !== 'you') out[cid] = cast[cid] = cleanCast(c, cast[cid] ?? {}); } if (scene) for (const x of Object.keys(out)) if (!scene.present.includes(x)) scene.present.push(x); hooks.onCast?.(out); }
         else if (k === 'extras') { extras = cleanExtras(v); hooks.onExtras?.(extras); }
         else if (k === 'remarks' && Array.isArray(v)) hooks.onRemarks?.(v.map((m) => ({ who: id(m?.who), text: str(m?.text, 140) })).filter((m) => m.text && (cast[m.who] || extras[m.who])));
       },
       onElement: (k, v) => {
+        if (k === 'choices') { (raw.choicesPart ??= []).push(v); return; }
         if (k !== 'beats') return;
+        raw.beats.push(v);
         const b = cleanBeat(v ?? {}, cast, extras);
         if (b.narration || b.line) { n++; hooks.onBeat?.(b); }
       },
     });
-    const r = await this.sample.json(prompt ?? directorPrompt(state, input, { codexText }), { modelTier: this.tier, cache: false, signal, onText: ({ text }) => reader.feed(text) });
+    let r;
+    try {
+      r = await this.sample.json(prompt ?? directorPrompt(state, input, { codexText }), { modelTier: this.tier, cache: false, signal, onText: ({ text }) => reader.feed(text) });
+    } catch (e) {
+      // cut short or malformed after the film already played: keep what arrived, so the story, the book and the choices hold
+      if (e?.text) reader.feed(e.text);
+      if (!raw.beats.length || e?.code === 'cancelled') throw e;
+      r = { ...raw, choices: raw.choices ?? raw.choicesPart ?? [] };
+      r.partial = true;
+    }
     const c = cleanReply(r, state);
+    c.partial = !!r.partial;
     c.streamed = n;
     if (!c.beats.length && !c.director && !c.report) throw Object.assign(new Error('The director wrote nothing'), { code: 'empty' });
     return c;
