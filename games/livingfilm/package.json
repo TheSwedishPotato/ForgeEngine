@@ -13,5 +13,8 @@
   "devDependencies": {
     "vite": "^7.0.0",
     "vite-plugin-singlefile": "^2.3.0"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
   }
 }
