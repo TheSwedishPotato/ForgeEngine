@@ -2,7 +2,7 @@
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 const q = process.argv[2] ?? 'low';
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
-const page = await browser.newPage({ viewport: { width: 1100, height: 680 } });
+const page = await browser.newPage({ viewport: { width: +(process.env.W ?? 1100), height: +(process.env.H ?? 680) } });
 let errs = 0;
 page.on('pageerror', (e) => { errs++; console.log('[pageerror]', e.message, (e.stack ?? '').split('\n').slice(1, 3).join(' | ')); });
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(`[${m.type()}]`, m.text().slice(0, 240)); });
