@@ -270,3 +270,7 @@ canvas.trail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-
 .lpast .lsel { font: inherit; padding: 4px 6px; max-width: 100%; }
 .lpast .lown { flex-direction: column; align-items: stretch; }
 .lpast textarea { font: inherit; padding: 6px 8px; width: 100%; box-sizing: border-box; }
+
+/* what people say unprompted, over their heads */
+.lbubble { position: fixed; transform: translate(-50%, -100%); max-width: min(320px, 70vw); padding: 7px 11px; background: rgba(250,243,226,0.96); color: #2a1f14; border: 1px solid #a8885a; border-radius: 10px; font-size: 16px; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,0.35); pointer-events: none; z-index: 5; }
+.lbubble::after { content: ''; position: absolute; left: 50%; bottom: -7px; transform: translateX(-50%); border: 7px solid transparent; border-bottom: 0; border-top-color: rgba(250,243,226,0.96); }

@@ -117,8 +117,13 @@ RANK AND MANNERS (keep to these exactly)
 ${etiquette(p, P)}
 (What the game knows, not what you can see: their purse holds exactly ${P.money} parvi; they carry ${inv || 'nothing'}.)
 
+BE A REAL PERSON
+- You are a whole human being with an inner life, not a quest-giver. You have warmth and moods, humour and pride, fears, hopes, little vanities and kindnesses; you are tired, or cheerful, or worried about your own things. Let it show: a joke, a sigh, an aside about your aching back or your daughter, curiosity about the stranger, a flash of temper, real tenderness toward those you love. Be specific and concrete (the smell of the forge, the price of rye, last night's rain), never generic. Surprise sometimes.
+- Show what you do as well as what you say: put small deeds and gestures in the speech between asterisks, briefly (*wipes his hands on his apron*, *laughs*, *lowers her voice*).
+- Feelings carry on: if they were kind to you, warm to them; if they hurt or shamed you, it stays with you; love, grief, fear and anger show in how you speak.
+
 HOW TO ANSWER
-- Speak as this person would in 1403: plain words, their own concerns, the manners of their rank toward the speaker's apparent rank (deference upward, condescension or familiarity downward), their mood and temper. English, with an occasional Czech word they would naturally use (groš, rychta, krčma, hejtman, and the form of address given above). One to three sentences, never more than 60 words.
+- Speak as this person would in 1403: plain words, their own concerns, the manners of their rank toward the speaker's apparent rank (deference upward, condescension or familiarity downward), their mood and temper. English, with an occasional Czech word they would naturally use (groš, rychta, krčma, hejtman, and the form of address given above). One to four sentences, never more than 80 words.
 - Think as this person: what do they want from this stranger, what do they fear, what would they gain or risk? Answer the point of what was said, remember what was said before in this talk, and do not repeat yourself.
 - Keep to your station: a superior may be curt, give orders, or ignore; an inferior defers, but may grumble behind politeness. Use the form of address given above every time you address them.
 - Words between asterisks (*kneels*, *hands you a coin*) are what the stranger does, not says: react to the deed.
@@ -126,7 +131,7 @@ HOW TO ANSWER
 - You are a real person, not a guide: you may refuse, haggle, lie (if dishonest), take offence, call the watch, attack, or end the talk.
 - WORDS ARE DEEDS. If the stranger hands you something, offers payment, asks you to come along, to take them with you, to teach them, to give or lend them something, and you agree, you MUST put the matching action in "actions" — that is what makes it happen in the world. If you refuse, put no action. Never claim to give what you do not have.
 - Reply with ONLY a JSON object, no other text:
-{"say": "your words", "attitude": <integer change to your attitude, -20 to 20>, "mood": "<one word>", "actions": [<zero or more actions>], "remember": "<what is worth remembering about this exchange, from your point of view, or empty>"}
+{"say": "your words", "attitude": <integer change to your attitude, -20 to 20>, "mood": "<one word>", "actions": [<zero or more actions>], "remember": "<what is worth remembering about this exchange, from your point of view, or empty>", "suggest": ["<3 or 4 things the stranger might naturally say or do next, in their voice, each under 12 words; mix speech with a deed in asterisks; varied: warm, curious, practical, bold>"]}
 Actions (amounts in parvi; 12 parvi = 1 groschen):
   {"type":"accept","money":<n>,"item":"<id or empty>"}  you take money or a thing the stranger hands or pays you (a gift, a payment, a fee, a bribe, a debt repaid)
   {"type":"give","money":<n>,"item":"<id or empty>"}  you hand the stranger money or a thing you have (a loan, charity, change, a gift)
@@ -147,6 +152,44 @@ Actions (amounts in parvi; 12 parvi = 1 groschen):
   {"type":"thread","id":<n>,"outcome":"done|failed|progress","note":"<what happened>"}  a matter between you and the stranger (listed above, if any) is settled or moves on in this talk
   {"type":"leave"}  you end the conversation and go
 Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES), ...Object.keys(BUILDING).filter((k) => !/^h\d/.test(k))].join(', ')}.`;
+  }
+
+  /**
+   * Something a person says unprompted: as you walk into their house or the
+   * tavern, or pass them in the street. One short line (or nothing), in
+   * character, from what they know and feel about you. Resolves with the
+   * words, or '' for silence.
+   */
+  async remark(p, situation, { signal } = {}) {
+    await this.ready;
+    const P = this.sim.player;
+    if (this.sample) {
+      const prompt = `You are playing one person in a historically true, living simulation of a Bohemian town in 1403. Stay in character.
+
+${this._world()}
+
+WHO YOU ARE
+${this._persona(p)}
+
+THE PERSON IN FRONT OF YOU
+${this._player(p)}
+
+RANK AND MANNERS
+${etiquette(p, P)}
+
+RIGHT NOW: ${situation}
+
+Say one short thing aloud, as a real person would at this moment: to them, about them to someone beside you, or to yourself. Let your character, mood and feelings about them show: warmth, teasing, worry, suspicion, a joke, gossip, a complaint about your day. Specific and natural, under 20 words; a small gesture in asterisks if it fits. If you would not speak at all, give an empty string.
+Reply with ONLY JSON: {"say": "<words or empty>"}`;
+      try {
+        const r = await this.sample.json(prompt, { modelTier: 'default', cache: false, signal });
+        return typeof r?.say === 'string' ? r.say.trim().slice(0, 200) : '';
+      } catch (e) { if (e?.code === 'cancelled') throw e; }
+    }
+    // without Claude: only those who know and like you greet you
+    if (p.attitude < 15 && !p.kin) return '';
+    const sir = addressOf(personWho(p), playerWho(P)).cz;
+    return p.kin ? `There you are, ${P.name}.` : p.attitude > 40 ? `God give you good day, ${sir}!` : `Good day, ${sir}.`;
   }
 
   /**
@@ -184,7 +227,8 @@ Goods ids: ${Object.keys(GOODS).join(', ')}. Place ids: ${[...Object.keys(PLACES
   /** Validate and carry out what the person decided. Every action is checked against the world. */
   apply(p, r, heard = '') {
     const s = this.sim, P = s.player;
-    const out = { say: String(r.say).slice(0, 400), mood: String(r.mood ?? p.mood).slice(0, 20), action: { type: 'none' }, actions: [], notes: [], note: null };
+    const suggest = (Array.isArray(r.suggest) ? r.suggest : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim().slice(0, 90)).slice(0, 4);
+    const out = { suggest, say: String(r.say).slice(0, 500), mood: String(r.mood ?? p.mood).slice(0, 20), action: { type: 'none' }, actions: [], notes: [], note: null };
     const dAtt = Math.max(-20, Math.min(20, Math.round(Number(r.attitude) || 0)));
     p.attitude = Math.max(-100, Math.min(100, p.attitude + dAtt));
     p.mood = out.mood;

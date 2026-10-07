@@ -389,6 +389,62 @@ export class LifeMode {
     P.x = d.x; P.z = d.z; P.y = d.y;
     this.log(`You go into ${b.name}.`, 'info');
     this.audio?.step?.(false);
+    // someone inside looks up and says something
+    setTimeout(() => {
+      const s = this.sim, P = s.player;
+      if (P.inside !== b.id || this.talking) return;
+      const here = s.people.filter((p) => p.alive && p.agent.inside === b.id && !p.agent.route.length && !/sleep/.test(p.agent.act));
+      if (!here.length) return;
+      const score = (p) => (p.kin ? 100 : 0) + Math.abs(p.attitude) + 8 * (p.memories?.filter((m) => m.about === 'player').length ?? 0) + (p.sells ? 25 : 0) + p.traits.extraversion * 30;
+      const p = here.sort((x, y) => score(y) - score(x))[0];
+      const crowd = here.length > 1 ? ` Also here: ${here.filter((q) => q !== p).slice(0, 4).map((q) => `${q.fullName} (${q.agent.act})`).join(', ')}.` : '';
+      this._remark(p, `${s.situation()}. You are in ${b.name}, ${p.agent.act}. The stranger has just come in through the door.${crowd}`);
+    }, 900);
+  }
+
+  // --- what people say unprompted ---------------------------------------------------------------
+
+  async _remark(p, situation) {
+    if (this.remarking || this.talking || !p?.alive) return;
+    if (p.lastRemark && this.wall - p.lastRemark < 150) return;
+    this.remarking = true; p.lastRemark = this.wall; this.lastAmbient = this.wall;
+    try { const say = await this.dialogue.remark(p, situation); if (say && !this.talking) this._bubble(p, say); } catch { /* silence */ }
+    this.remarking = false;
+  }
+
+  _bubble(p, text) {
+    this.bubbles = (this.bubbles ?? []).filter((b) => (b.p === p ? (b.el.remove(), false) : true));
+    const el = h('<div class="lbubble"></div>');
+    el.textContent = text;
+    this.root.appendChild(el);
+    this.bubbles.push({ p, el, until: this.wall + Math.min(10, 4 + text.length / 16) });
+    const P = this.sim.player;
+    this.log(`${P.knownNames.has(p.id) ? p.name : p.title[0].toUpperCase() + p.title.slice(1)}: "${text}"`, 'info');
+  }
+
+  _updateBubbles() {
+    if (!this.bubbles?.length) return;
+    const cam = this.stage.camera, v = this._bv ??= new Vector3();
+    this.bubbles = this.bubbles.filter((b) => {
+      const head = this.people.walkers[b.p.idx]?.b?.head?.pos;
+      if (this.wall > b.until || !head || this.talking === b.p) { b.el.remove(); return false; }
+      v.copy(head); v.y += 0.35; v.project(cam);
+      const show = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+      b.el.style.display = show ? '' : 'none';
+      if (show) { b.el.style.left = `${((v.x + 1) / 2) * innerWidth}px`; b.el.style.top = `${((1 - v.y) / 2) * innerHeight}px`; }
+      return true;
+    });
+  }
+
+  /** Now and then someone you pass says something, if they have feelings about you. */
+  _ambient() {
+    const s = this.sim, P = s.player;
+    if (this.talking || this.remarking || !P.alive || P.sleepingUntil > s.t) return;
+    if (this.wall - (this.lastAmbient ?? -1e9) < 40) return;
+    const near = this._nearby(3.6).filter((p) => !p.seek && p !== s.talkingWith && !/sleep/.test(p.agent.act));
+    const p = near.find((q) => q.kin || Math.abs(q.attitude) >= 20 || q.memories?.some((m) => m.about === 'player')) ?? (Math.random() < 0.12 ? near[0] : null);
+    if (!p) { this.lastAmbient = this.wall - 30; return; }
+    this._remark(p, `${s.situation()}. You are ${p.agent.act}${P.inside ? ` in ${BUILDING[P.inside]?.name}` : ' in the street'}. The stranger comes past, a few steps from you.`);
   }
 
   _leave() {
@@ -414,10 +470,17 @@ export class LifeMode {
     const chips = [`God give you good day, ${adr.cz}.`, `My name is ${P.name}.`, 'What news?', 'What have you heard about me?', 'What do you sell?', 'Is there work for me?', 'Here, take a groschen.', 'Come with me.', 'Can I come with you?', 'Teach me what you know.', 'I want to serve in the garrison.', 'Farewell.'];
     if (p.follow) chips.splice(7, 2, 'You can go now.');
     if (p.jousts) chips.splice(3, 0, 'I want to ride in the joust.');
-    T.querySelector('.ltchips').innerHTML = chips.map((c) => `<button type="button">${esc(c)}</button>`).join('');
-    T.querySelectorAll('.ltchips button').forEach((b) => b.addEventListener('click', () => this.speak(b.textContent)));
+    this._chips(chips);
+    // they see you come up, and speak first
+    if (this.dialogue.mode === 'claude') setTimeout(() => { if (this.talking === p) this.speak('*comes up to you* (Greet them, or react to them, as you naturally would on seeing them now.)', { opener: true }); }, 60);
     T.querySelector('.ltstatus').textContent = this.dialogue.mode === 'claude' ? 'Claude speaks for them.' : 'Scripted answers (Claude not available).';
     setTimeout(() => T.querySelector('.ltinput').focus(), 30);
+  }
+
+  _chips(list) {
+    const C = this.talkEl.querySelector('.ltchips');
+    C.innerHTML = list.map((c) => `<button type="button">${esc(c)}</button>`).join('');
+    C.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => this.speak(b.textContent)));
   }
 
   _att() {
@@ -432,11 +495,11 @@ export class LifeMode {
     if (!keep) { this.talkEl.hidden = true; this.talking = null; this.sim.talkingWith = null; }
   }
 
-  async speak(text) {
+  async speak(text, { opener = false } = {}) {
     const p = this.talking;
     if (!p) return;
     const L = this.talkEl.querySelector('.ltlog');
-    L.append(h(`<p class="me"><b>You:</b> ${esc(text)}</p>`));
+    if (!opener) L.append(h(`<p class="me"><b>You:</b> ${esc(text)}</p>`));
     // the joust: the herald enters you
     if (p.jousts && /joust|tilt|lance|ride in/i.test(text)) {
       L.append(h(`<p><b>${esc(p.name)}:</b> ${esc('A coronel lance and a good horse are waiting for you at the end of the field. God and St Wenceslas be with you.')}</p>`));
@@ -451,6 +514,7 @@ export class LifeMode {
     try {
       const r = await this.dialogue.say(p, text, { signal: this.ctl.signal, onText: ({ text: t }) => { const m = /"say"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(t); if (m) bubble.querySelector('.say').textContent = m[1].replace(/\\"/g, '"'); } });
       bubble.querySelector('.say').textContent = r.say;
+      if (r.suggest?.length) this._chips(r.suggest);
       if (r.note) L.append(h(`<p class="note">${esc(r.note)}</p>`));
       this._att();
       for (const act of r.actions) {
@@ -698,6 +762,8 @@ export class LifeMode {
     this.walker.update(dt, { x: P.x, y: P.y, z: P.z, yaw: P.yaw, speed, posture, gesture: !!this.talking });
     this.cape?.update(P.y);
     this.people.update(dt, this.stage.camera, this.interior ? this.interior : null);
+    this._updateBubbles();
+    if ((this._ambT = (this._ambT ?? 0) + dt) > 1) { this._ambT = 0; this._ambient(); }
     // embers rising from the forge and the hearths (GPU particles)
     if (this.interior && GPUParticles.active) for (const L of this.interior.lights) {
       if (L.intensity < 8 || Math.random() > dt * (this.interior.b.kind === 'smithy' ? 10 : 3)) continue;
@@ -819,6 +885,8 @@ export class LifeMode {
     this.interior?.dispose();
     this.people?.dispose();
     for (const el of [this.hud, this.talkEl, this.journalEl, this.modalEl, this.createEl, this.deedEl]) el?.remove();
+    for (const b of this.bubbles ?? []) b.el.remove();
+    this.bubbles = [];
     this.deedEl = null;
     if (this.lists.sun) this.lists.sun.position.copy(this.lists.sun.target.position).add(new Vector3(-0.55, 0.42, 0.72).normalize().multiplyScalar(30));
     if (this.stage.r) { this.stage.r.sunIntensity = 7.5; this.stage.r.sunColor.set(1.0, 0.87, 0.7); this.stage.r.invalidateEnvironment?.(); }
