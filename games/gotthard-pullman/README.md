@@ -34,7 +34,7 @@ left side), four points to join the trip, and the picture quality.
 
 | Key | |
 | --- | --- |
-| Mouse | look around (click the view; Esc releases the mouse) |
+| Mouse | look around: click the view to hold the mouse (Esc releases it), or drag |
 | E | get up and walk the train: W A S D (Shift quicker), through the gangways, out onto the observation platform; E by your seat to sit down |
 | V | step outside and orbit the train (drag; wheel to zoom; `[` `]` change vehicle) |
 | M | your phone: the map of the line with the train's blue dot (wheel to zoom) |
