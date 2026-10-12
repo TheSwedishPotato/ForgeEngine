@@ -13,7 +13,7 @@ imported read-only). Its people are the 1403 game's figures, dressed for 2026.
 
 | The photo stop at Wassen | On the footplate: the driver at the injector valve |
 | --- | --- |
-| ![Passengers photographing the C 5/6 at Wassen](docs/photo-stop.jpg) | ![The driver's hand on the controls](docs/footplate.jpg) |
+| ![Passengers out in the snow round the C 5/6 at Wassen](docs/photo-stop.jpg) | ![The driver's hand on the controls](docs/footplate.jpg) |
 | **Overtaken at Gurtnellen by the Treno Gottardo** | **The exhaust in the frosty air** |
 | ![The Traverso passing the special](docs/overtaken.jpg) | ![The steam plume over the train](docs/steam.jpg) |
 
