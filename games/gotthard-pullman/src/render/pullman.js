@@ -40,8 +40,10 @@ export function carMaterials() {
     woodDark: new MeshPhysicalMaterial({ map: mahoganyTexture(8), color: new Color(0.55, 0.5, 0.5), roughness: 0.55, clearcoat: 0.6, clearcoatRoughness: 0.25 }),
     ceiling: new MeshStandardMaterial({ color: new Color(0.78, 0.72, 0.58), roughness: 0.85 }),
     carpet: new MeshStandardMaterial({ map: carpetTexture(), roughness: 1.0 }),
-    plush: new MeshPhysicalMaterial({ color: new Color(0.11, 0.25, 0.15), roughness: 0.9, sheen: 0.8, sheenRoughness: 0.5, sheenColor: new Color(0.3, 0.5, 0.35) }),
+    plush: new MeshPhysicalMaterial({ color: new Color(0.085, 0.17, 0.09), roughness: 0.9, sheen: 0.8, sheenRoughness: 0.5, sheenColor: new Color(0.2, 0.32, 0.2) }),
     linen: new MeshStandardMaterial({ color: new Color(0.86, 0.85, 0.82), roughness: 0.85 }),
+    leather: new MeshStandardMaterial({ color: new Color(0.12, 0.045, 0.03), roughness: 0.62 }),
+    chairWood: new MeshStandardMaterial({ map: mahoganyTexture(8), color: new Color(0.42, 0.33, 0.3), roughness: 0.6 }),
     shade: new MeshStandardMaterial({ color: new Color(0.25, 0.32, 0.22), roughness: 0.9, side: DoubleSide }),
     lamp: new MeshStandardMaterial({ color: new Color(1, 0.92, 0.75), emissive: new Color(1.0, 0.82, 0.55), emissiveIntensity: 0.0, roughness: 0.4 }),
     frosted: new MeshStandardMaterial({ color: new Color(0.7, 0.72, 0.72), roughness: 0.3, emissive: new Color(0.2, 0.22, 0.24), emissiveIntensity: 0.4 }),
@@ -210,7 +212,7 @@ export function buildCar(type, name) {
   }
   // ---- furniture
   const chairs = L.chairs.map((c) => ({ ...c }));
-  for (const c of chairs) armchair(b, c);
+  for (const c of chairs) (type === 'diner' ? diningChair : armchair)(b, c);
   for (const s of L.sofas) sofa(b, s);
   for (const tb of L.tables) table(b, tb);
   // luggage racks: brass rods above the windows along both sides of the saloon
@@ -272,26 +274,47 @@ export function buildCar(type, name) {
 }
 
 /** A revolving parlor armchair on its brass pedestal (seat 0.46 m, back 1.08 m). */
+/**
+ * The parlor car's revolving armchair (facing +x of the chair): overstuffed in green plush, with
+ * rolled arms and a loose seat cushion, the back a little reclined with a linen cloth where the
+ * head rests, on a cast brass pedestal and swivel.
+ */
 function armchair(b, c) {
   const m = new Matrix4().makeRotationY(c.yaw ?? 0).setPosition(c.x, BODY.floor, c.z);
   b.transform(m);
-  b.cylinder('brass', V(0, 0, 0), V(0, 0.05, 0), 0.22, 0.2, { segs: 12 });
-  b.cylinder('brass', V(0, 0.05, 0), V(0, 0.3, 0), 0.05, 0.05, { segs: 8 });
-  // seat cushion, back, arms (facing +x of the chair)
-  b.box('plush', [-0.3, 0.3, -0.29], [0.28, 0.46, 0.29]);
-  b.box('plush', [-0.36, 0.35, -0.3], [-0.24, 1.08, 0.3]);
-  for (const s of [-1, 1]) b.box('plush', [-0.3, 0.38, s > 0 ? 0.25 : -0.33], [0.26, 0.66, s > 0 ? 0.33 : -0.25]);
-  b.box('linen', [-0.375, 0.84, -0.2], [-0.235, 1.06, 0.2]);    // the antimacassar
+  b.lathe('brass', V(0, 0, 0), V(0, 1, 0), [[0, 0], [0.235, 0], [0.235, 0.012], [0.2, 0.03], [0.09, 0.06], [0.05, 0.09], [0.045, 0.22], [0.11, 0.25], [0.11, 0.27], [0, 0.27]], { segs: 20 });
+  b.soft('plush', [-0.31, 0.26, -0.3], [0.27, 0.4, 0.3], 0.04, { k: 1 });
+  b.soft('plush', [-0.27, 0.37, -0.25], [0.28, 0.47, 0.25], 0.045);
+  for (const s of [-1, 1]) b.soft('plush', [-0.33, 0.36, s > 0 ? 0.24 : -0.335], [0.27, 0.66, s > 0 ? 0.335 : -0.24], 0.045);
+  // the back, reclined 5 degrees about its foot
+  b.transform(m.clone().multiply(new Matrix4().makeTranslation(-0.28, 0.38, 0)).multiply(new Matrix4().makeRotationZ(0.09)).multiply(new Matrix4().makeTranslation(0.28, -0.38, 0)));
+  b.soft('plush', [-0.38, 0.36, -0.315], [-0.215, 1.08, 0.315], 0.07);
+  b.soft('linen', [-0.392, 0.85, -0.19], [-0.203, 1.092, 0.19], 0.08);     // draped over the head of the back, front and rear
   b.transform(null);
 }
 
+/** The diner's chair (facing +x): a mahogany frame, the seat and back upholstered in leather. */
+function diningChair(b, c) {
+  const m = new Matrix4().makeRotationY(c.yaw ?? 0).setPosition(c.x, BODY.floor, c.z);
+  b.transform(m);
+  for (const x of [-0.2, 0.2]) for (const z of [-0.2, 0.2]) b.box('chairWood', [x - 0.02, 0, z - 0.02], [x + 0.02, 0.42, z + 0.02]);
+  for (const z of [-0.2, 0.2]) b.box('chairWood', [-0.24, 0.42, z - 0.02], [-0.2, 0.98, z + 0.02]);     // the back legs run up as the back's stiles
+  b.box('chairWood', [-0.24, 0.92, -0.22], [-0.2, 0.98, 0.22]);                                      // the top rail
+  b.box('chairWood', [-0.22, 0.36, -0.22], [0.22, 0.42, 0.22]);                                      // the seat frame
+  b.soft('leather', [-0.21, 0.4, -0.21], [0.23, 0.47, 0.21], 0.03);
+  b.soft('leather', [-0.225, 0.52, -0.18], [-0.19, 0.9, 0.18], 0.02, { k: 1 });
+  b.transform(null);
+}
+
+/** A sofa (the drawing room's, the lounge's) or a made-up berth, facing +x. */
 function sofa(b, s) {
   const m = new Matrix4().makeRotationY(s.yaw ?? 0).setPosition(s.x, BODY.floor, s.z);
   b.transform(m);
   const w = (s.w ?? 1.5) / 2;
-  b.box('plush', [-0.32, 0.0, -w], [0.32, 0.45, w]);
-  b.box('plush', [-0.4, 0.3, -w], [-0.25, 1.0, w]);
-  if (s.berth) b.box('linen', [-0.3, 0.45, -w + 0.05], [0.3, 0.5, w - 0.05]);
+  b.soft('plush', [-0.32, 0.0, -w], [0.32, 0.4, w], 0.035, { k: 1 });
+  b.soft('plush', [-0.3, 0.36, -w + 0.04], [0.33, 0.46, w - 0.04], 0.04);
+  b.soft('plush', [-0.42, 0.3, -w], [-0.24, 1.0, w], 0.06);
+  if (s.berth) b.soft('linen', [-0.28, 0.45, -w + 0.06], [0.31, 0.5, w - 0.06], 0.02, { k: 1 });
   b.transform(null);
 }
 

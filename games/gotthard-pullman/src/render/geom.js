@@ -107,6 +107,42 @@ export class Builder {
     }
   }
 
+  /**
+   * A box with rounded edges and corners (radius r), smooth-shaded: upholstery and cushions.
+   * The surface is the inner core box grown by r, so the corners are spheres and the edges
+   * cylinders; k steps of equal angle round each edge.
+   */
+  soft(name, min, max, r, { k = 2, col = null, uvScale = 1 } = {}) {
+    const lo = min, hi = max;
+    r = Math.max(1e-4, Math.min(r, (hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2));
+    const lines = (a0, a1) => {
+      const c = [];
+      for (let j = 0; j <= k; j++) c.push(a0 + r - r * Math.tan((1 - j / k) * Math.PI / 4));
+      for (let j = 0; j <= k; j++) c.push(a1 - r + r * Math.tan((j / k) * Math.PI / 4));
+      return c;
+    };
+    const L = [lines(lo[0], hi[0]), lines(lo[1], hi[1]), lines(lo[2], hi[2])];
+    const p = this.part(name);
+    const at = (P) => {
+      const q = new Vector3(Math.min(Math.max(P[0], lo[0] + r), hi[0] - r), Math.min(Math.max(P[1], lo[1] + r), hi[1] - r), Math.min(Math.max(P[2], lo[2] + r), hi[2] - r));
+      const n = new Vector3(P[0] - q.x, P[1] - q.y, P[2] - q.z).normalize();
+      return { v: q.addScaledVector(n, r), n };
+    };
+    // each face: its axis a, side s, and the two axes across it (b x c points out)
+    const FACES = [[0, 1, 1, 2], [0, -1, 2, 1], [1, 1, 2, 0], [1, -1, 0, 2], [2, 1, 0, 1], [2, -1, 1, 0]];
+    for (const [a, s, bi, ci] of FACES) {
+      const B = L[bi], C = L[ci];
+      const pt = (i, j) => { const P = [0, 0, 0]; P[a] = s > 0 ? hi[a] : lo[a]; P[bi] = B[i]; P[ci] = C[j]; return at(P); };
+      for (let i = 0; i + 1 < B.length; i++) for (let j = 0; j + 1 < C.length; j++) {
+        if (B[i + 1] - B[i] < 1e-7 || C[j + 1] - C[j] < 1e-7) continue;
+        const A = pt(i, j), Bv = pt(i + 1, j), Cv = pt(i + 1, j + 1), D = pt(i, j + 1);
+        const u0 = B[i] * uvScale, u1 = B[i + 1] * uvScale, v0 = C[j] * uvScale, v1 = C[j + 1] * uvScale;
+        this._push(p, A.v, A.n, u0, v0, col); this._push(p, Bv.v, Bv.n, u1, v0, col); this._push(p, Cv.v, Cv.n, u1, v1, col);
+        this._push(p, A.v, A.n, u0, v0, col); this._push(p, Cv.v, Cv.n, u1, v1, col); this._push(p, D.v, D.n, u0, v1, col);
+      }
+    }
+  }
+
   /** Extrudes a 2D profile (in the y-z plane, [[z, y], ...], counter-clockwise seen from +x) from x0 to x1. */
   extrudeX(name, profile, x0, x1, { closed = true, caps = false, col = null, uvScale = 1, smooth = false } = {}) {
     const n = profile.length, m = closed ? n : n - 1;
