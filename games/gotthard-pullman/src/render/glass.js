@@ -81,7 +81,8 @@ void main() {
   vec2 m = vUv * vSize;
   float n1 = vnoise(vec2(m.x * 9.0 + vInfo.w * 7.0, 1.3)), n2 = vnoise(m * 23.0 + vInfo.w);
   float sill = uSnow.x * (0.75 + 0.5 * n1) + 0.006 * n2;
-  float cornerR = uSnow.y * 0.16 * (0.8 + 0.4 * n1);
+  // (kept above zero: smoothstep with equal edges is undefined, and GPUs return 1 - snow on the whole pane)
+  float cornerR = max(uSnow.y * 0.16 * (0.8 + 0.4 * n1), 1e-4);
   float cl = length(vec2(m.x, m.y)), cr = length(vec2(vSize.x - m.x, m.y));
   float snow = max(smoothstep(sill + 0.004, sill - 0.004, m.y), max(smoothstep(cornerR, cornerR * 0.6, cl), smoothstep(cornerR, cornerR * 0.6, cr)));
   // hoar frost: feathery growth from the corners and edges
