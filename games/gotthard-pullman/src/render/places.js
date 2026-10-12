@@ -49,6 +49,8 @@ function materials(weather) {
   _mats = {
     plaster: new MeshStandardMaterial({ map: facadeTexture(), roughness: 0.92 }),
     plaster2: new MeshStandardMaterial({ map: facadeTexture({ wall: '#cfc6b2', shutter: '#6b3a2a' }), roughness: 0.92 }),
+    plaster3: new MeshStandardMaterial({ map: facadeTexture({ wall: '#ece9e2', shutter: '#4c5d6b' }), roughness: 0.92 }),
+    plaster4: new MeshStandardMaterial({ map: facadeTexture({ wall: '#d8c39a', shutter: '#3d5434' }), roughness: 0.92 }),
     timber: new MeshStandardMaterial({ map: timberTexture(), roughness: 0.9 }),
     stone: new MeshStandardMaterial({ color: new Color(0.3, 0.29, 0.27), roughness: 0.95 }),
     roof: new MeshStandardMaterial({ color: snowy ? new Color(0.83, 0.85, 0.89) : new Color(0.09, 0.09, 0.1), roughness: snowy ? 0.7 : 0.8 }),
@@ -148,34 +150,40 @@ export class Places {
       const t = this._tile(cx, cy);
       const c = b.c ?? '';
       const h1 = hash(id);
-      const wall = /barn|farm_aux|stable|cowshed|hut|shed/.test(c) || (h1 < 0.28 && /house|detached|null|^$/.test(c) && area < 220) ? 'timber'
-        : /church|chapel|train_station|bunker/.test(c) ? 'stone' : h1 < 0.62 ? 'plaster' : 'plaster2';
+      const barn = /barn|farm_aux|stable|cowshed|hut|shed/.test(c);
+      const wall = barn || (h1 < 0.28 && /house|detached|null|^$/.test(c) && area < 220) ? 'timber'
+        : /church|chapel|train_station|bunker/.test(c) ? 'stone' : ['plaster', 'plaster2', 'plaster3', 'plaster4'][Math.floor(hash(id * 7 + 3) * 4)];
+      // the Uri house: a log storey or two (Strickbau) on a whitewashed masonry ground floor; barns
+      // on a low stone footing
+      const socle = wall !== 'timber' ? null : barn ? { mat: 'stone', h: 0.8 } : { mat: hash(id * 5 + 1) < 0.5 ? 'plaster3' : 'plaster', h: STOREY - 0.2 };
       const rectish = box.area < area * 1.25 && pts.length <= 8;
       const flat = !rectish || /industrial|warehouse|hangar|sports|parking|bunker/.test(c) || area > 900;
       if (rectish) {
         // walls on the fitted rectangle (cleaner than a noisy outline), the gable along the long side
         const P = (u, v) => [box.ux * u + box.vx * v, box.uy * u + box.vy * v];
         const corners = [P(box.u0, box.v0), P(box.u1, box.v0), P(box.u1, box.v1), P(box.u0, box.v1)];
-        this._walls(t, corners, base, eave, wall);
+        this._walls(t, corners, base, eave, wall, socle && { ...socle, top: gmin + socle.h });
         if (flat) this._flatRoof(t, corners, eave);
-        else this._gable(t, box, eave, hs.total ? gmax + hs.total : null, /barn|farm_aux|stable|cowshed/.test(c) ? 0.5 : 0.62);
+        else this._gable(t, box, eave, hs.total ? gmax + hs.total : null, /barn|farm_aux|stable|cowshed/.test(c) ? 0.5 : 0.62, wall === 'stone' ? 'plaster3' : wall);
       } else {
-        this._walls(t, pts, base, eave, wall);
+        this._walls(t, pts, base, eave, wall, socle && { ...socle, top: gmin + socle.h });
         this._flatRoof(t, pts, eave);
       }
     }
   }
 
-  _walls(t, pts, base, top, mat) {
+  /** The walls round an outline; socle: { mat, top } a different lower part (masonry under timber). */
+  _walls(t, pts, base, top, mat, socle = null) {
     const b = t.b;
     // the outline, counter-clockwise (map) so the walls face out
     if (polyArea(pts) < 0) pts = pts.slice().reverse();
+    const mid = socle ? Math.min(top - 1.0, Math.max(base + 0.3, socle.top)) : base;
     for (let i = 0; i < pts.length; i++) {
       const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
       const L = Math.hypot(bx - ax, by - ay);
-      const u1 = L / 1.3, v0 = 0, v1 = (top - base) / STOREY;
-      // stone socle under the plaster
-      b.quad(mat, this._v(t, ax, ay, base), this._v(t, bx, by, base), this._v(t, bx, by, top), this._v(t, ax, ay, top), [0, v0 - 0.15, u1, v1]);
+      const u1 = L / 1.3, vm = (mid - base) / STOREY - 0.15, v1 = (top - base) / STOREY - 0.15;
+      if (socle) b.quad(socle.mat, this._v(t, ax, ay, base), this._v(t, bx, by, base), this._v(t, bx, by, mid), this._v(t, ax, ay, mid), [0, -0.15, u1, vm]);
+      b.quad(mat, this._v(t, ax, ay, mid), this._v(t, bx, by, mid), this._v(t, bx, by, top), this._v(t, ax, ay, top), [0, vm, u1, v1]);
     }
   }
 
@@ -195,7 +203,7 @@ export class Places {
   }
 
   /** A gable roof over the fitted rectangle, ridge along its long axis, with overhanging eaves. */
-  _gable(t, box, eave, ridgeTop, pitchTan) {
+  _gable(t, box, eave, ridgeTop, pitchTan, wall = 'plaster') {
     const b = t.b;
     let { ux, uy, vx, vy, u0, u1, v0, v1 } = box;
     if (v1 - v0 > u1 - u0) { [ux, uy, vx, vy] = [vx, vy, -ux, -uy]; [u0, u1, v0, v1] = [v0, v1, -box.u1, -box.u0]; }
@@ -215,7 +223,7 @@ export class Places {
     // gable walls (the triangles under the roof at both ends)
     for (const [uu, sgn] of [[u0, -1], [u1, 1]]) {
       const a = P(uu, v0, eave), c2 = P(uu, v1, eave), r = P(uu, vm, eave + rise - 0.05);
-      if (sgn > 0) b.tri('plaster', a, r, c2, [0, 0, 0.5, rise / STOREY, 1, 0]); else b.tri('plaster', c2, r, a, [0, 0, 0.5, rise / STOREY, 1, 0]);
+      if (sgn > 0) b.tri(wall, a, r, c2, [0, 0, 0.5, rise / STOREY, 1, 0]); else b.tri(wall, c2, r, a, [0, 0, 0.5, rise / STOREY, 1, 0]);
     }
     // a chimney through the roof, a little off the ridge
     if ((u1 - u0) > 6) {
@@ -280,10 +288,46 @@ export class Places {
 
   _water() {
     const T = this.T;
+    // the rivers' real banks where the map has them (riverbank areas): the ribbon down a river's
+    // centre line takes its width, each side separately, from the banks either side of it
+    const banks = [];
+    for (const w of PLACES.water) {
+      if (w.t !== 'area' || !/river/.test(w.s ?? w.c ?? '')) continue;
+      const q = [];
+      for (let i = 0; i < w.p.length; i += 2) q.push([w.p[i], w.p[i + 1]]);
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const [x, y] of q) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+      banks.push({ q, x0, y0, x1, y1 });
+    }
+    const inside = (q, x, y) => { let c = false; for (let i = 0, j = q.length - 1; i < q.length; j = i++) { const [xi, yi] = q[i], [xj, yj] = q[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+    // the distance from (x, y) along (dx, dy) to the polygon's edge
+    const reach = (q, x, y, dx, dy) => {
+      let best = 1e9;
+      for (let i = 0, j = q.length - 1; i < q.length; j = i++) {
+        const [ax, ay] = q[j], [bx, by] = q[i], ex = bx - ax, ey = by - ay;
+        const den = dx * ey - dy * ex;
+        if (Math.abs(den) < 1e-9) continue;
+        const t = ((ax - x) * ey - (ay - y) * ex) / den, u = ((ax - x) * dy - (ay - y) * dx) / den;
+        if (t > 0 && u >= 0 && u <= 1) best = Math.min(best, t);
+      }
+      return best;
+    };
+    // the water's reach either side of the centre line: December's low water fills only part of the
+    // bed between the banks, most of the canalised channel below Amsteg, under half of the boulder
+    // bed above it (the rest lies under snow); where the map has no banks, the given half width
+    const widthAt = (x, y, rx, ry, half) => {
+      for (const B of banks) {
+        if (x < B.x0 || x > B.x1 || y < B.y0 || y > B.y1 || !inside(B.q, x, y)) continue;
+        const f = 0.6 - 0.15 * Math.min(1, Math.max(0, (T.heightAt(x, y) - 540) / 80));
+        return [Math.min(60, reach(B.q, x, y, -rx, -ry)) * f, Math.min(60, reach(B.q, x, y, rx, ry)) * f].map((v) => Math.max(2, v));
+      }
+      return [half, half];
+    };
     for (const w of PLACES.water) {
       if (w.t !== 'line' || !/river|stream|canal/.test(w.s ?? w.c ?? '')) continue;
       const big = /river/.test(w.s ?? '') ;
-      const half = big ? (/Reuss/.test(w.n ?? '') ? 9 : 5) : 1.4;
+      // where the map has no banks: the Reuss above Amsteg is a mountain torrent some 12 m across
+      const half = big ? (/Reuss/.test(w.n ?? '') ? 6 : 4) : 1.4;
       const pts = [];
       for (let i = 0; i < w.p.length; i += 2) pts.push([w.p[i], w.p[i + 1]]);
       if (pts.length < 2 || !T.inMap(pts[0][0], pts[0][1])) continue;
@@ -293,14 +337,24 @@ export class Places {
         for (let k = 0; k < n; k++) P.push([ax + (bx - ax) * (k / n), ay + (by - ay) * (k / n)]);
       }
       const t = this._tile(P[Math.floor(P.length / 2)][0], P[Math.floor(P.length / 2)][1]);
-      let prev = null;
-      for (let i = 0; i < P.length; i++) {
-        const [x, y] = P[i], [nx, ny] = P[Math.min(P.length - 1, i + 1)], [px, py] = P[Math.max(0, i - 1)];
+      // the cross-sections: the direction across, the reach to each bank (smoothed along the river)
+      const X = P.map(([x, y], i) => {
+        const [nx, ny] = P[Math.min(P.length - 1, i + 1)], [px, py] = P[Math.max(0, i - 1)];
         let dx = nx - px, dy = ny - py; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
         const rx = dy, ry = -dx;
+        const [wl, wr] = big ? widthAt(x, y, rx, ry, half) : [half, half];
+        return { x, y, rx, ry, wl, wr };
+      });
+      for (let i = 0; i < X.length; i++) {
+        let l = 0, r = 0, n = 0;
+        for (let k = Math.max(0, i - 2); k <= Math.min(X.length - 1, i + 2); k++) { l += X[k].wl; r += X[k].wr; n++; }
+        X[i].l = l / n; X[i].r = r / n;
+      }
+      let prev = null;
+      for (const { x, y, rx, ry, l, r } of X) {
         // the water lies in the lowest of the ground across the channel
-        const z = Math.min(T.heightAt(x, y), T.heightAt(x - rx * half, y - ry * half), T.heightAt(x + rx * half, y + ry * half)) + 0.25;
-        const cur = { l: this._v(t, x - rx * half, y - ry * half, z), r: this._v(t, x + rx * half, y + ry * half, z) };
+        const z = Math.min(T.heightAt(x, y), T.heightAt(x - rx * l, y - ry * l), T.heightAt(x + rx * r, y + ry * r)) + 0.25;
+        const cur = { l: this._v(t, x - rx * l, y - ry * l, z), r: this._v(t, x + rx * r, y + ry * r, z) };
         if (prev) t.b.quad('water', prev.l, prev.r, cur.r, cur.l);
         prev = cur;
       }

@@ -131,9 +131,17 @@ So the plume hangs in freezing fog and vanishes a few metres up in the dry föhn
 formation, cuttings, walls and tunnel portals. Land cover is from ESA WorldCover. Forests are
 species by altitude, and the snow line follows the weather. The track, catenary, tunnels and
 bridges are built from the line's geometry. Buildings, roads, the Reuss and the platforms come
-from OpenStreetMap/Overture. Light comes from the sun's true position for the date (NOAA), a
-physically based sky, the mountains' shadows and the sky the gorge leaves. Inside the cars,
-daylight enters only through the windows. The glass gathers snow, frost and grime.
+from OpenStreetMap/Overture. The houses follow the valley's ways: plaster in several colours with
+shutters, or dark log storeys on a whitewashed masonry ground floor, and barns on stone footings.
+The Reuss takes its width from the mapped banks. Light comes from the sun's true position for the
+date (NOAA), a physically based sky, the mountains' shadows and the sky the gorge leaves. Inside
+the cars, daylight enters only through the windows and the clerestory's deck lights. The glass
+gathers snow, frost and grime.
+
+**The cars.** The parlor and lounge armchairs are overstuffed, revolving on brass pedestals,
+with a linen cloth over the head of the back. The diner has mahogany chairs with leather seats.
+The vestibule doors open on the platform side while people get on and off, and shut before the
+right away.
 
 **The sound** (`src/audio/sound.js`). Everything is synthesised from the physics:
 
@@ -199,4 +207,6 @@ The land
 
 Where the record is silent, the game says so in the code: these are estimates. They include the
 whistle's and the horn's pitches, the cab fittings' exact positions, the passenger numbers, the
-train number, the Treno Gottardo's minutes, and the relative humidity of each weather.
+train number, the Treno Gottardo's minutes, the relative humidity of each weather, and how much
+of the Reuss's mapped bed December's low water fills (60 % of the canalised channel below
+Amsteg, 45 % of the boulder bed above).

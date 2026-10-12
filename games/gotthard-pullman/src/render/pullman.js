@@ -42,6 +42,7 @@ export function carMaterials() {
     carpet: new MeshStandardMaterial({ map: carpetTexture(), roughness: 1.0 }),
     plush: new MeshPhysicalMaterial({ color: new Color(0.085, 0.17, 0.09), roughness: 0.9, sheen: 0.8, sheenRoughness: 0.5, sheenColor: new Color(0.2, 0.32, 0.2) }),
     linen: new MeshStandardMaterial({ color: new Color(0.86, 0.85, 0.82), roughness: 0.85 }),
+    doorGlass: new MeshPhysicalMaterial({ color: new Color(0.02, 0.025, 0.03), roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.03 }),
     leather: new MeshStandardMaterial({ color: new Color(0.12, 0.045, 0.03), roughness: 0.62 }),
     chairWood: new MeshStandardMaterial({ map: mahoganyTexture(8), color: new Color(0.42, 0.33, 0.3), roughness: 0.6 }),
     shade: new MeshStandardMaterial({ color: new Color(0.25, 0.32, 0.22), roughness: 0.9, side: DoubleSide }),
@@ -155,6 +156,15 @@ export function buildCar(type, name) {
   b.extrudeX('roof', prof, bodyX0, xe, { closed: false });
   const inner = roofProfile(0.07).reverse();
   b.extrudeX('ceiling', inner, bodyX0 + 0.05, xe - 0.05, { closed: false });
+  // the deck lights: a row of small panes along both sides of the clerestory, dark glass from
+  // outside, daylight on the ceiling's slope within
+  for (let x = bodyX0 + 0.75; x < xe - 0.5; x += 1.1) for (const s of [1, -1]) {
+    const xa = x - 0.17, xb = x + 0.17, zo = s * 0.903;
+    const out = [V(xa, 3.6, zo), V(xb, 3.6, zo), V(xb, 3.78, zo), V(xa, 3.78, zo)];
+    const inn = [V(xa, 3.6, s * 0.873), V(xb, 3.6, s * 0.873), V(xb, 3.74, s * 0.829), V(xa, 3.74, s * 0.829)];
+    if (s > 0) { b.quad('doorGlass', ...out); b.quad('frosted', inn[1], inn[0], inn[3], inn[2]); }
+    else { b.quad('doorGlass', out[1], out[0], out[3], out[2]); b.quad('frosted', ...inn); }
+  }
   // ---- end walls (with the end door) and the vestibule bulkheads
   const endWall = (x, facePlus, name) => {
     wallX(b, name, x, -h, -0.42, B.sill, B.eaves, facePlus);
@@ -164,7 +174,7 @@ export function buildCar(type, name) {
     const pr = roofProfile(0);
     for (let i = 0; i + 1 < pr.length; i++) {
       const a = V(x, B.eaves, 0), p1 = V(x, pr[i][1], pr[i][0]), p2 = V(x, pr[i + 1][1], pr[i + 1][0]);
-      if (facePlus) b.tri(name, a, p1, p2); else b.tri(name, a, p2, p1);
+      if (facePlus) b.tri(name, a, p2, p1); else b.tri(name, a, p1, p2);
     }
   };
   endWall(xe, true, 'paint');
@@ -178,7 +188,7 @@ export function buildCar(type, name) {
     wallX(b, 'paint', xr, -h, -1.0, B.belt, B.winTop, false); wallX(b, 'paint', xr, 1.0, h, B.belt, B.winTop, false);
     wallX(b, 'paint', xr, -0.42, -0.36, B.belt, B.winTop, false); wallX(b, 'paint', xr, 0.36, 0.42, B.belt, B.winTop, false);
     const pr = roofProfile(0);
-    for (let i = 0; i + 1 < pr.length; i++) b.tri('paint', V(xr, B.eaves, 0), V(xr, pr[i + 1][1], pr[i + 1][0]), V(xr, pr[i][1], pr[i][0]));
+    for (let i = 0; i + 1 < pr.length; i++) b.tri('paint', V(xr, B.eaves, 0), V(xr, pr[i][1], pr[i][0]), V(xr, pr[i + 1][1], pr[i + 1][0]));
     // the open platform: floor, brass railing, an awning (the roof runs on over it)
     b.box('floorSteel', [-xe - 0.1, B.floor - 0.12, -h + 0.05], [xr, B.floor, h - 0.05]);
     for (const z of [-h + 0.1, h - 0.1]) b.cylinder('brass', V(-xe - 0.05, B.floor + 1.0, z), V(xr, B.floor + 1.0, z), 0.025, 0.025, { segs: 8 });
@@ -256,6 +266,16 @@ export function buildCar(type, name) {
     b.cylinder('brass', V(x + 0.42, 1.25, z + s * 0.06), V(x + 0.42, 2.6, z + s * 0.06), 0.014, 0.014, { segs: 6 });
   }
   const group = b.build(M);
+  // the vestibule side doors (separate: they open at the stops), hung on their car-end edges
+  const doorLeaves = [];
+  for (const x of doorsX) for (const s of [1, -1]) {
+    const dir = x > 0 ? -1 : 1;                      // from the hinge toward the free edge, along the car
+    const holder = new Group();
+    holder.position.set(x - dir * 0.38, 0, s * h);
+    holder.add(doorLeaf(M, s, dir));
+    group.add(holder);
+    doorLeaves.push({ holder, s, dir, x, open: 0 });
+  }
   // the trucks (separate: they turn under the car)
   const trucks = [B.truck, -B.truck].map((x) => { const tr = truck(M); tr.position.x = x; group.add(tr); return tr; });
   // the car's name on its side, centred under the windows (both sides)
@@ -268,12 +288,35 @@ export function buildCar(type, name) {
   const info = {
     type, name, chairs, sofas: L.sofas, lamps: L.lamps,
     windows: { right: holesR.filter((q) => !q.door), left: holesL.filter((q) => !q.door) },
-    doors: doorsX, trucks, length: 25.3, openRear: !!L.openRear,
+    doors: doorsX, doorLeaves, trucks, length: 25.3, openRear: !!L.openRear,
   };
   return { group, info };
 }
 
 /** A revolving parlor armchair on its brass pedestal (seat 0.46 m, back 1.08 m). */
+/**
+ * A vestibule's side door, shut over the step well: one steel leaf with a drop window in its upper
+ * half and a brass grab handle, opening inward. Built about its hinge: x from the hinge toward the
+ * free edge along dir, the outer face at z = 0, the leaf inward of it (s: the car's side).
+ */
+function doorLeaf(M, s, dir) {
+  const b = new Builder();
+  const W = 0.76, T = 0.045, y0 = BODY.sill, y1 = 3.02, wy0 = 2.08, wy1 = 2.82, wx0 = 0.12, wx1 = 0.64;
+  const X = (a, c) => [Math.min(dir * a, dir * c), Math.max(dir * a, dir * c)];
+  const z0 = Math.min(0, -s * T), z1 = Math.max(0, -s * T);
+  const panel = (xa, xc, ya, yc) => { const [x0, x1] = X(xa, xc); b.box('paint', [x0, ya, z0], [x1, yc, z1]); };
+  panel(0, W, y0, wy0);
+  panel(0, W, wy1, y1);
+  panel(0, wx0, wy0, wy1);
+  panel(wx1, W, wy0, wy1);
+  const [gx0, gx1] = X(wx0, wx1);
+  b.box('doorGlass', [gx0, wy0, z0 + 0.015], [gx1, wy1, z1 - 0.015]);
+  const hx = dir * (W - 0.09);
+  b.cylinder('brass', V(hx, 1.75, s * 0.035), V(hx, 2.05, s * 0.035), 0.011, 0.011, { segs: 6 });
+  for (const y of [1.75, 2.05]) b.cylinder('brass', V(hx, y, 0), V(hx, y, s * 0.035), 0.008, 0.008, { segs: 5 });
+  return b.build(M);
+}
+
 /**
  * The parlor car's revolving armchair (facing +x of the chair): overstuffed in green plush, with
  * rolled arms and a loose seat cushion, the back a little reclined with a linen cloth where the

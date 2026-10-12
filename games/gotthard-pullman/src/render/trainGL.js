@@ -72,6 +72,21 @@ export class TrainGL {
     for (const m of this.vehicles) if (m.info) m.lampPower = this.lampLevel * 0.006;
   }
 
+  /** The vestibule doors: opened on the platform side while people get on and off, shut for the right away. */
+  _doors(dt) {
+    const sim = this.sim;
+    let side = 0;
+    if (sim && !sim.boardingDone && Math.abs(this.train.speed) < 0.05 && sim.standingAt) {
+      if (this._doorStop !== sim.standingAt) { this._doorStop = sim.standingAt; this._doorSide = sim.passengers?._side(sim.standingAt) ?? 0; }
+      side = this._doorSide;
+    }
+    for (const m of this.vehicles) for (const d of m.info?.doorLeaves ?? []) {
+      const want = d.s === side ? 1 : 0;
+      d.open += Math.max(-dt * 0.6, Math.min(dt * 0.6, want - d.open));
+      d.holder.rotation.y = d.s * d.dir * 1.45 * d.open;     // inward, nearly square to the side
+    }
+  }
+
   _model(v) {
     if (v.kind === 'engine') {
       const { group, parts } = buildLocomotive();
@@ -130,6 +145,7 @@ export class TrainGL {
       m.pose = { ...pose };
     }
     this._publishCars();
+    this._doors(ddt);
     this._weatherOnGlass(ddt);
     // the engine's steam
     const eng = this.vehicles[0];

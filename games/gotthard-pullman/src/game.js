@@ -38,6 +38,7 @@ export class Game {
     onProgress('Building the valley…');
     this.stage = new GotthardStage(canvas, { quality, terrain, weather: this.weather, date: DATE });
     this.trainGL = new TrainGL(this.stage, route, sim.train);
+    this.trainGL.sim = sim;
     this.people = new PeopleGL(this.stage, this.trainGL, sim, seat);
     this.traffic = new Traffic(route);
     this.trafficGL = new TrafficGL(this.stage, this.traffic);
