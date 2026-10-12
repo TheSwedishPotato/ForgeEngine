@@ -85,7 +85,7 @@ export class Game {
     this.sim.advance(sdt);
     this._recentre();
     this.trainGL.update(sdt);
-    this.people.update(sdt, this.stage.camera);
+    this.people.update(sdt, this.stage.camera, { inside: !this.player.exposed() || this.player.mode === 'walking', car: this.player.car() });
     this.trafficGL.update(this.sim.clock, this.stage.camera);
     this._trafficNews();
     this.player.update(dt, this.stage.camera);

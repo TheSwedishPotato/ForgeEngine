@@ -36,6 +36,7 @@ import { FINE_N, FINE_STEP, FINE_TILE } from '../world/terrain.js';
 import { Glass } from './glass.js';
 import { Snowfall } from './snowfall.js';
 import { SteamPlume } from './steam.js';
+import { Wires } from './wires.js';
 
 const LAT = 46.745, LON = 8.62;
 
@@ -247,6 +248,7 @@ export class GotthardStage {
     this.taa = r.addPass(new TAA());
     r.addPass(new Upscale());
     this.motionBlur = r.addPass(new MotionBlur());
+    this.wiresPass = r.addPass(new Wires(this));
     this.steam = this.splats = r.addPass(new SteamPlume(this));
     this.glass = r.addPass(new Glass(this));
     this.exposure = r.addPass(new Exposure());
@@ -373,6 +375,7 @@ export class GotthardStage {
     this.atmosphere.setWeather(weather);
     this.terrainGL.setWeather(weather);
     this.steam.setWeather(weather);
+    this.wiresPass.setWeather(weather);
     this.snowfall.setWeather(weather);
     const p = weather.p;
     this.fogSun = p.fog ? [3.912 / Math.max(50, p.visibility), p.fogTop ?? 1e4] : [0, 0];

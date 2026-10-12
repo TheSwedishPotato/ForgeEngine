@@ -281,6 +281,13 @@ export class TrackGL {
       }
       for (const q of [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]) T.idx.push(base + q[0], base + q[1], base + q[2], base + q[0], base + q[2], base + q[3]);
     };
+    // the wires go to the line pass (wires.js), as segments in this piece's frame
+    const wireSegs = [];
+    // daylight on a span: none deep in a tunnel, falling off over the first tens of metres inside
+    const tunnels = L.id === 'run' ? this.route.tunnels : this.route.leftTunnels;
+    const daylight = (s) => { for (const t of tunnels) if (s > t.s0 && s < t.s1) return Math.exp(-Math.min(s - t.s0, t.s1 - s) / 25); return 1; };
+    let spanLight = 1;
+    const wire = (p0, p1, r) => wireSegs.push(p0.x, p0.y, p0.z, r, p1.x, p1.y, p1.z, spanLight);
     const tube = (T, p0, p1, r, segs = 4) => {
       const d = new Vector3().subVectors(p1, p0), len = d.length();
       if (len < 1e-4) return;
@@ -327,20 +334,21 @@ export class TrackGL {
       // the span to the next support: contact wire straight, messenger sagging, droppers between
       const m1 = masts[i + 1];
       if (!m1) continue;
+      spanLight = daylight((masts[i].s + m1.s) / 2);
       const f1 = frameAt(line, m1.s, {});
       const cw1 = framePoint(f1, -stagger, CW, anchor, new Vector3());
       const ms1 = framePoint(f1, 0, CW + SYS, anchor, new Vector3());
-      tube(W, cw0, cw1, 0.0065, 3);
+      wire(cw0, cw1, 0.0065);
       const nseg = 6;
       let prev = ms0.clone();
       for (let k = 1; k <= nseg; k++) {
         const t = k / nseg;
         const pnt = new Vector3().lerpVectors(ms0, ms1, t);
         pnt.y -= 4 * t * (1 - t) * (SYS - 0.45);
-        tube(W, prev, pnt, 0.0055, 3);
+        wire(prev, pnt, 0.0055);
         if (k < nseg) {
           const cwp = new Vector3().lerpVectors(cw0, cw1, t);
-          tube(W, pnt, cwp, 0.0025, 3);
+          wire(pnt, cwp, 0.0025);
         }
         prev = pnt;
       }
@@ -357,6 +365,7 @@ export class TrackGL {
       if (T === W) mesh.userData.wires = true;
       out.add(mesh);
     }
+    out.userData.wireSegs = new Float32Array(wireSegs);
     group.add(out);
     return out;
   }
@@ -365,6 +374,27 @@ export class TrackGL {
     this.stage.unanchor(pc.group);
     this.group.remove(pc.group);
     pc.group.traverse((o) => { if (o.isMesh) { o.geometry !== this._sleeperGeo && o.geometry.dispose(); o.dispose?.(); } });
+  }
+
+  /** The wires of the pieces within sight, in the world, to the line pass. */
+  _wires() {
+    const W = this.stage.wiresPass;
+    if (!W) return;
+    let n = 0;
+    for (const pc of this.pieces.values()) if (pc?.overhead && pc.wireDist < 1400) n += pc.overhead.userData.wireSegs.length / 8;
+    if (!this._wbuf || this._wbuf.length < n * 8) this._wbuf = new Float32Array(Math.ceil(n * 1.5) * 8 + 64);
+    const B = this._wbuf;
+    let k = 0;
+    for (const pc of this.pieces.values()) {
+      if (!pc?.overhead || !(pc.wireDist < 1400)) continue;
+      const S = pc.overhead.userData.wireSegs, g = pc.group.position;
+      for (let i = 0; i < S.length; i += 8) {
+        B[k] = S[i] + g.x; B[k + 1] = S[i + 1] + g.y; B[k + 2] = S[i + 2] + g.z; B[k + 3] = S[i + 3];
+        B[k + 4] = S[i + 4] + g.x; B[k + 5] = S[i + 5] + g.y; B[k + 6] = S[i + 6] + g.z; B[k + 7] = S[i + 7];
+        k += 8;
+      }
+    }
+    W.setSegments(B, k / 8);
   }
 
   /** Lays and lifts pieces near the camera; switches their detail by distance. */
@@ -387,11 +417,13 @@ export class TrackGL {
         if (pc) {
           pc.rails.visible = d < 950;
           pc.sleepers.visible = d < 320;
-          if (pc.overhead) for (const m of pc.overhead.children) m.visible = m.userData.wires ? d < 700 : d < 2400;
+          if (pc.overhead) for (const m of pc.overhead.children) m.visible = d < 2400;
+          pc.wireDist = d;
         }
       }
     }
     for (const [key, pc] of this.pieces) if (!keep.has(key)) { if (pc) this._disposePiece(pc); this.pieces.delete(key); }
+    this._wires();
     return made;
   }
 }

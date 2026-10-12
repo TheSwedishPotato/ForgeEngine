@@ -223,7 +223,7 @@ export class Sound {
       set(this.engDelay.delayTime, Math.min(1.9, p.distanceTo(cp) / SOUND_SPEED), 0.1);
     }
     // where the listener is: inside the car (muffled), outside, in a tunnel
-    const outsideView = G.player.mode === 'outside';
+    const outsideView = G.player.exposed?.() ?? G.player.mode === 'outside';
     const car = G.player.car?.();
     const sHere = car ? car.v.s : T.front;
     const tunnel = !!sim.route.inTunnel(sHere);

@@ -199,12 +199,55 @@ export class Passengers {
 
   // ---- each tenth of a second -----------------------------------------------------------------------
 
+  /**
+   * Under way after Erstfeld, the conductor goes through the train from the front, stopping by
+   * each passenger for the tickets, and comes back to the middle car.
+   */
+  _inspection() {
+    const C = this.conductor, V = this.sim.train.veh;
+    const cars = V.map((v, i) => i).filter((i) => LAYOUTS[V[i].kind]);
+    const legs = [];
+    const xe = BODY.bodyHalf - 0.4;
+    for (const car of cars) {
+      const L = LAYOUTS[V[car].kind]();
+      const people = this.list.filter((p) => p.car === car && p.state === 'seated').sort((a, b) => b.seat.x - a.seat.x);
+      legs.push({ space: 'car', car, x: xe, z: aisleZ(L, xe), jump: true });
+      let x = xe;
+      for (const p of people) {
+        // to the passenger's row, a few seconds there, on
+        const px = p.seat.x + p.seat.f.x * 0.5;
+        if (px > x) continue;
+        for (const xs of stepsAlong(x, px)) legs.push({ space: 'car', car, x: xs, z: aisleZ(L, xs) });
+        legs.push({ ticket: 3 + this.rand() * 4, who: p.id });
+        x = px;
+      }
+      const end = L.openRear ? -(BODY.bodyHalf - 1.5) : -xe;
+      for (const xs of stepsAlong(x, end)) legs.push({ space: 'car', car, x: xs, z: aisleZ(L, xs) });
+    }
+    // back to the middle car's vestibule
+    const home = this._middleCar();
+    const Lh = LAYOUTS[V[home].kind]();
+    legs.push({ space: 'car', car: home, x: -xe, z: aisleZ(Lh, -xe), jump: true });
+    for (const xs of stepsAlong(-xe, C.door.x)) legs.push({ space: 'car', car: home, x: xs, z: aisleZ(Lh, xs) });
+    legs.push({ aboard: true });
+    // (walking up to the front car first: the weight goes with them)
+    this.sim.train.passengers[C.car] -= C.mass; this.sim.train.passengers[cars[0]] += C.mass;
+    C.car = cars[0];
+    C.layout = LAYOUTS[V[cars[0]].kind]();
+    C.state = 'walking';
+    C.pos = { space: 'car', car: cars[0], x: xe, z: 0 };
+    C.plan = legs;
+    C.inspecting = true;
+    this.sim.log?.('Conductor: tickets, please.');
+  }
+
   tick(dt) {
     this._acc += dt;
     if (this._acc < 0.1) return;
     const step = this._acc;
     this._acc = 0;
     const now = this.sim.clock;
+    if (!this._inspected && this.sim.train.speed > 5 && now > hmsOf('10:18') && this.conductor.state === 'aboard') { this._inspected = true; this._inspection(); }
     if (this._callAt && now >= this._callAt) { this._callAt = null; this.sim.log?.('Conductor: all aboard, please!'); }
     let busy = false;
     for (const p of [...this.list, this.conductor]) {
@@ -215,7 +258,7 @@ export class Passengers {
     const C = this.conductor;
     // the right away: nobody left on the platform or in the vestibules, and the conductor aboard
     const ready = !busy || this.list.every((p) => p.state === 'seated' || p.state === 'gone' || p.state === 'toSeat');
-    this.sim.boardingDone = ready && (C.state === 'aboard' || !C.plan.length);
+    this.sim.boardingDone = ready && (C.state === 'aboard' || !C.plan.length || C.inspecting);
     // the conductor gets on when everyone else is aboard (or at the booked time)
     if (ready && C.plan.length && C.plan[0].conductor) C.plan[0].until = Math.min(C.plan[0].until, now + 4);
   }
@@ -228,7 +271,24 @@ export class Passengers {
       if (leg.look) { p.state = 'standing'; p.act = leg.look; p.speedNow = 0; if (now < leg.until) return; p.act = null; p.plan.shift(); continue; }
       if (leg.sit) { p.plan.shift(); p.state = 'seated'; p.pos = { space: 'car', car: p.car, x: p.seat.x, z: p.seat.z }; p.yaw = p.seat.yaw; p.speedNow = 0; continue; }
       if (leg.gone) { p.plan.shift(); p.state = 'gone'; p.pos = null; continue; }
-      if (leg.aboard) { p.plan.shift(); p.state = 'aboard'; p.pos = null; continue; }
+      if (leg.aboard) { p.plan.shift(); p.state = 'aboard'; p.pos = null; p.inspecting = false; continue; }
+      if (leg.ticket != null) {
+        // standing by a passenger while the ticket is shown
+        p.state = 'standing'; p.act = 'ticket'; p.speedNow = 0; p.ticketFor = leg.who;
+        leg.t0 ??= now;
+        if (now - leg.t0 < leg.ticket) return;
+        p.plan.shift(); p.act = null; p.ticketFor = null; p.state = 'walking';
+        continue;
+      }
+      if (leg.jump || (leg.car != null && leg.car !== p.car)) {
+        // through the gangway into the next car (and the person's weight with them)
+        const to = leg.car ?? p.car;
+        if (to !== p.car && p.aboard !== false) { this.sim.train.passengers[p.car] -= p.mass; this.sim.train.passengers[to] += p.mass; }
+        p.car = to;
+        p.pos = { space: 'car', car: p.car, x: leg.x, z: leg.z };
+        p.plan.shift();
+        continue;
+      }
       if (leg.door) {
         // the steps: wait for them to be free, then a few seconds up or down
         const key = `${p.car}:${leg.x}`;

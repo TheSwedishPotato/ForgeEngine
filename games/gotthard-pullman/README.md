@@ -11,6 +11,14 @@ the valley change as the line climbs through the spiral tunnels.
 It runs on the Med Engine, the WebGL2 deferred renderer of *Zweikampf 1403* (`games/duel1403`,
 imported read-only). Its people are the 1403 game's figures, dressed for 2026.
 
+| The photo stop at Wassen | On the footplate: the driver at the injector valve |
+| --- | --- |
+| ![Passengers photographing the C 5/6 at Wassen](docs/photo-stop.jpg) | ![The driver's hand on the controls](docs/footplate.jpg) |
+| **Overtaken at Gurtnellen by the Treno Gottardo** | **The exhaust in the frosty air** |
+| ![The Traverso passing the special](docs/overtaken.jpg) | ![The steam plume over the train](docs/steam.jpg) |
+
+![The start: the day's weather, your seat, when to join](docs/start.jpg)
+
 ## Ride
 
 ```bash
@@ -27,6 +35,7 @@ left side), four points to join the trip, and the picture quality.
 | Key | |
 | --- | --- |
 | Mouse | look around (click the view; Esc releases the mouse) |
+| E | get up and walk the train: W A S D (Shift quicker), through the gangways, out onto the observation platform; E by your seat to sit down |
 | V | step outside and orbit the train (drag; wheel to zoom; `[` `]` change vehicle) |
 | M | your phone: the map of the line with the train's blue dot (wheel to zoom) |
 | + / − | time faster or slower (the physics keeps up at 240 Hz) |
@@ -84,7 +93,12 @@ train stalls.
 
 **The passengers** (`src/people/passengers.js`). About sixty people with seats. Each walks the
 aisle, waits a turn on the steep vestibule steps, crosses the platform and stands out at the
-photo stop. The conductor gets on last and gives the right away only when everyone is aboard.
+photo stop, away from the other main line. The conductor gets on last and gives the right away
+only when everyone is aboard. Once under way, the conductor goes through the train for the
+tickets, and each passenger turns and holds up a phone. Seated, people look out, talk, read,
+doze, drink coffee in the diner, and photograph the gorges from the window. You can get up
+too: walk the aisles and corridors, through the gangways, out onto the observation car's open
+platform.
 
 **The other trains** (`src/world/traffic.js`). The hourly Treno Gottardo is the Südostbahn's
 copper-red "Traverso": eight articulated cars, 150.2 m. Going south it overtakes the special at

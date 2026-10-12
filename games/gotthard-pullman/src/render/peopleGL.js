@@ -63,9 +63,14 @@ export class PeopleGL {
 
   // ---- each frame ---------------------------------------------------------------------------------
 
-  update(dt, camera) {
+  /**
+   * viewer: { inside, car }. From inside a car only the people in it (and those out on the
+   * platform, seen through the windows) can be seen: the others are behind its end walls.
+   */
+  update(dt, camera, viewer = { inside: false, car: null }) {
     this.time += dt;
     const cam = camera.position;
+    this.viewer = viewer;
     // build a couple of figures a frame, those nearest the camera first
     if (this.queue.length) {
       this.queue.sort((a, b) => this._dist(a, cam) - this._dist(b, cam));
@@ -81,7 +86,8 @@ export class PeopleGL {
       if (!q.fig) continue;
       const p = q.p;
       const hidden = p.state === 'gone' || (p.role === 'conductor' && (p.state === 'aboard' || !p.pos));
-      const near = !hidden && this._dist(q, cam) < 90;
+      const inOther = viewer.inside && p.pos?.space !== 'out' && !p.step && this.tgl.vehicles[p.car] !== viewer.car;
+      const near = !hidden && !inOther && this._dist(q, cam) < 90;
       q.fig.mesh.visible = near;
       if (!near) continue;
       this._person(q, dt, onBridge);
@@ -116,7 +122,7 @@ export class PeopleGL {
 
   _updateCrew(dt, cam) {
     for (const c of this.crew) {
-      const near = c.model.group.position.distanceTo(cam) < 70;
+      const near = !this.viewer?.inside && c.model.group.position.distanceTo(cam) < 70;
       c.fig.mesh.visible = near;
       if (!near) continue;
       const person = this.sim.crew?.[c.role];
@@ -263,6 +269,15 @@ export class PeopleGL {
       }
       case 'doze': look = 0.25 * side; break;
       default: look = 0.3 * Math.sin(t * 0.13 + q.phase);
+    }
+    // the conductor at your seat: turn to them and hold up the ticket (on the phone, in 2026)
+    const C = this.model.conductor;
+    if (C.ticketFor === p.id && C.pos?.space === 'car' && C.car === p.car) {
+      const dx = C.pos.x - s.x, dz = C.pos.z - s.z;
+      look = Math.max(-1.2, Math.min(1.2, Math.atan2(dx * lx + dz * lz, dx * f.x + dz * f.z)));
+      const d = Math.hypot(dx, dz) || 1;
+      fig.reach.R = { x: s.x + (dx / d) * 0.38, y: eyeY - 0.28, z: s.z + (dz / d) * 0.38, w: 1 };
+      fig.reach.L = null;
     }
     q.look += (look - q.look) * Math.min(1, dt * 2.5);
     fig.update(dt, { x: s.x, y: BODY.floor, z: s.z, yaw: s.yaw, speed: 0, posture: 'sit', look: q.look, gesture });

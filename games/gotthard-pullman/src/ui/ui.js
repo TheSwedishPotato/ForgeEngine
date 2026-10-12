@@ -116,10 +116,9 @@ export class HUD {
       const g = R.run.gradeAt(s) * 1000;
       const z = R.run.pos(s).z;
       const where = placeName(sim, s);
-      const due = next?.arr ?? next?.dep;
-      const late = due ? (sim.clock - hms(due)) / 60 : 0;
+      const late = runningLate(sim, s, v);
       const stop = v < 0.3 && st?.dep ? `At ${st.name} &middot; departs ${st.dep}` : next ? `Next: ${next.name} ${next.arr ?? next.dep}` : '';
-      const lateTxt = due && Math.abs(late) > 0.5 && v > 0.3 ? ` <em>${late > 0 ? '+' : '−'}${Math.abs(late).toFixed(0)} min</em>` : '';
+      const lateTxt = Math.abs(late) >= 1 ? ` <em>${late > 0 ? `${late.toFixed(0)} min late` : `${(-late).toFixed(0)} min early`}</em>` : '';
       this.card.innerHTML = `<div class="clock">${fmt(sim.clock, true)}</div><div class="where">${where}</div><div class="next">${stop}${lateTxt}</div><div class="numbers">${v.toFixed(0)} km/h &middot; ${g >= 0 ? '↗' : '↘'} ${Math.abs(g).toFixed(0)} ‰ &middot; ${z.toFixed(0)} m${G.timeScale !== 1 ? ` &middot; ×${G.timeScale}` : ''}</div>`;
     }
     // new events of the trip as messages that fade
@@ -137,6 +136,23 @@ export class HUD {
     if (this.seen > ev.length) this.seen = ev.length;
     void total;
   }
+}
+
+/**
+ * How the train is running against the timetable (minutes, + late): between two stops, the clock
+ * against the booked time for this point (the run between the booked departure and arrival
+ * shared out by distance); standing at a stop, how long past the booked departure.
+ */
+function runningLate(sim, s, v) {
+  const stops = sim.timetable.stops, R = sim.route;
+  const at = (st) => R.stations.find((x) => x.name === st.name)?.s ?? 0;
+  const i = Math.min(stops.length - 1, sim.crew.next ?? 0);
+  const next = stops[i], prev = stops[i - 1];
+  if (v < 0.3) { const st = sim.standingAt; return st?.dep ? Math.max(0, sim.clock - hms(st.dep)) / 60 : 0; }
+  if (!prev?.dep || !next?.arr) return 0;
+  const s0 = at(prev), s1 = at(next), t0 = hms(prev.dep), t1 = hms(next.arr);
+  const k = Math.max(0, Math.min(1, (s - s0) / Math.max(1, s1 - s0)));
+  return (sim.clock - (t0 + (t1 - t0) * k)) / 60;
 }
 
 /** Where the train is, in words: the tunnel or bridge it is on, else the nearest place. */
@@ -294,6 +310,7 @@ export class Help {
     this.box = el('div', 'help');
     this.box.innerHTML = `<h3>Keys</h3><dl>
       <dt>Mouse</dt><dd>look around (click the view first; Esc lets the mouse go)</dd>
+      <dt>E</dt><dd>get up and walk the train (W A S D, Shift a bit quicker); E by your seat to sit down</dd>
       <dt>V</dt><dd>step outside: orbit the train (drag, wheel to zoom)</dd>
       <dt>[ &nbsp;]</dt><dd>outside: the vehicle to look at</dd>
       <dt>M</dt><dd>your phone, with the map (wheel to zoom it)</dd>

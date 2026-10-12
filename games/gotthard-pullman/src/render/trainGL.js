@@ -4,7 +4,7 @@
  * the grade), the wheels turning with the distance run, the engine's wheels with its crank.
  */
 import { Group, Euler, Quaternion, Vector3, Matrix4 } from 'three';
-import { buildCar, BODY } from './pullman.js';
+import { buildCar, BODY, carMaterials } from './pullman.js';
 import { buildLocomotive, animateLocomotive, animateCab, buildTender, animateTender, LOCO } from './locomotive.js';
 import { RAIL_SPACING } from '../world/route.js';
 import { CarRide } from '../physics/sway.js';
@@ -40,6 +40,10 @@ export class TrainGL {
     const p = train.weather?.p ?? {};
     this.sillSnow = (p.snowfall ?? 0) * 0.004;          // m (about half an hour's worth)
     this.lampLevel = 0;
+    // snow lies on the cars' steel roofs after their wait at Erstfeld (the roofs are not heated)
+    const roofSnow = Math.min(0.85, (p.snowfall ?? 0) * 0.45);
+    carMaterials().roof.color.setRGB(0.045 + (0.82 - 0.045) * roofSnow, 0.047 + (0.84 - 0.047) * roofSnow, 0.05 + (0.88 - 0.05) * roofSnow);
+    carMaterials().roof.roughness = 0.65 + 0.25 * roofSnow;
   }
 
   /** Snow, frost and thaw on the outside of the windows, and the lamps inside (per frame). */

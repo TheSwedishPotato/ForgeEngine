@@ -72,7 +72,8 @@ void main() {
     vec2 g = vec2(fract(vUv.x * 1.0 + 0.5), vUv.y);
     refl += vec3(1.0, 0.85, 0.6) * uLamp * 3.0 * exp(-dot(g - vec2(0.5, 0.92), g - vec2(0.5, 0.92)) * 90.0);
   } else {
-    refl = textureLod(uEnv, reflect(-V, N), 0.4).rgb;
+    // the sky and the snow mirrored (the sun's disc would whiten whole panes: held to a glint)
+    refl = min(textureLod(uEnv, reflect(-V, N), 1.2).rgb, vec3(6.0));
   }
   // grime: a faint film, heavier low down
   float grime = 0.035 + 0.05 * (1.0 - vUv.y) * (0.6 + 0.4 * hash12(floor(vUv * vec2(40.0, 20.0)) + vInfo.w));

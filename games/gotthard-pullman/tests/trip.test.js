@@ -49,7 +49,8 @@ test('the passengers ride with the train: mass in each car matches the people in
     sim.train.passengers.forEach((m, i) => assert.ok(Math.abs(m - want[i]) < 1e-6, `car ${i}: ${m.toFixed(1)} kg in the train, ${want[i].toFixed(1)} kg of people`));
   };
   check();
-  for (const t of ['10:12:30', '10:13:30', '10:20']) { while (sim.clock < hms(t)) sim.advance(0.5); check(); }
+  // every minute of the trip: boarding, the ticket round, the photo stop, everyone out at the end
+  for (let t = hms('10:12:30'); t < hms('11:40'); t += 60) { while (sim.clock < t) sim.advance(0.5); check(); }
 });
 
 test('the same seed gives the same trip', async () => {

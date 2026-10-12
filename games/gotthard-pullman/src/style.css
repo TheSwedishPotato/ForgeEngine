@@ -42,7 +42,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1016; col
 .start .opts button span { font-size: 12px; color: var(--ink-dim); }
 .start .sides, .start .quality { flex-direction: row; flex-wrap: wrap; margin-top: 6px; }
 .start .sides button, .start .quality button { flex: 1; text-align: center; }
-.start .board { margin-top: 22px; width: 100%; padding: 14px; text-align: center; font-weight: 600; font-size: 16px; letter-spacing: 0.02em;
+.start .board { position: sticky; bottom: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  margin-top: 22px; width: 100%; padding: 14px; text-align: center; font-weight: 600; font-size: 16px; letter-spacing: 0.02em;
   background: linear-gradient(180deg, #d4b06a, #b18a45); color: #1a1408; border: none; }
 .start .board:hover { background: linear-gradient(180deg, #e0bd78, #bf9750); }
 .start .fine { font-size: 12px; color: var(--ink-dim); margin: 10px 0 0; }
