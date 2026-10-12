@@ -1,0 +1,21 @@
+{
+  "name": "gotthard-pullman",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A steam-hauled Pullman train up the real Gotthard north ramp, Erstfeld to Göschenen, on Friday 11 December 2026: physics, crew, passengers, snow.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node tools/artifact.mjs",
+    "test": "node --test tests/*.test.js",
+    "trip": "node tools/trip.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
