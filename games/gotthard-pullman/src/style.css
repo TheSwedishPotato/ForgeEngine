@@ -6,6 +6,7 @@
   --teal: #1f4a52;
   --brass: #c9a35a;
   font-family: Inter, system-ui, sans-serif;
+  color-scheme: dark;                 /* one look: the night-blue of the cars, brass and cream */
 }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1016; color: var(--ink); }
 #view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }

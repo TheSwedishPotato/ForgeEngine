@@ -49,7 +49,7 @@ export class Player {
 
   _bind() {
     const canvas = this.game.canvas;
-    canvas.addEventListener('click', () => { if (!document.pointerLockElement) canvas.requestPointerLock?.(); });
+    canvas.addEventListener('click', () => { if (!document.pointerLockElement) { try { const r = canvas.requestPointerLock?.(); r?.catch?.(() => {}); } catch { /* dragging still looks */ } } });
     canvas.addEventListener('wheel', (e) => { if (this.mode === 'outside') this.orbit.dist = Math.max(4, Math.min(300, this.orbit.dist * Math.exp(e.deltaY * 0.001))); });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
@@ -60,15 +60,25 @@ export class Player {
       if (this.mode === 'outside' && e.code === 'BracketRight') this.orbit.vehicle = Math.min(this.game.trainGL.vehicles.length - 1, this.orbit.vehicle + 1);
       if (this.mode === 'outside' && e.code === 'BracketLeft') this.orbit.vehicle = Math.max(0, this.orbit.vehicle - 1);
     });
-    document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement !== canvas) return;
-      if (this.mode === 'outside') { this.orbit.yaw -= e.movementX * 0.004; this.orbit.pitch = Math.max(-0.1, Math.min(1.4, this.orbit.pitch + e.movementY * 0.004)); return; }
-      if (this.mode === 'walking') { this.walk.yaw -= e.movementX * this.sensitivity; this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch - e.movementY * this.sensitivity)); return; }
-      this.yaw -= e.movementX * this.sensitivity;
-      this.pitch -= e.movementY * this.sensitivity;
-      this.yaw = Math.max(-1.95, Math.min(1.95, this.yaw));
-      this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch));
+    // look with the captured mouse, or by dragging it (after Esc, or in a page that cannot capture it)
+    canvas.addEventListener('pointerdown', (e) => { this.dragging = true; this._px = e.clientX; this._py = e.clientY; });
+    window.addEventListener('pointerup', () => { this.dragging = false; });
+    window.addEventListener('pointercancel', () => { this.dragging = false; });
+    window.addEventListener('pointermove', (e) => {
+      if (document.pointerLockElement === canvas || !this.dragging) return;
+      const dx = e.clientX - this._px, dy = e.clientY - this._py;
+      this._px = e.clientX; this._py = e.clientY;
+      this._look(dx * 1.4, dy * 1.4);
     });
+    document.addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) this._look(e.movementX, e.movementY); });
+  }
+
+  /** Turn the head (or the orbit outside) by a mouse movement in pixels. */
+  _look(dx, dy) {
+    if (this.mode === 'outside') { this.orbit.yaw -= dx * 0.004; this.orbit.pitch = Math.max(-0.1, Math.min(1.4, this.orbit.pitch + dy * 0.004)); return; }
+    if (this.mode === 'walking') { this.walk.yaw -= dx * this.sensitivity; this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch - dy * this.sensitivity)); return; }
+    this.yaw = Math.max(-1.95, Math.min(1.95, this.yaw - dx * this.sensitivity));
+    this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch - dy * this.sensitivity));
   }
 
   /** The car model you are in (walking: the one you have walked into). */
@@ -103,16 +113,17 @@ export class Player {
     const L = LAYOUTS[m.info.type](), xe = BODY.bodyHalf;
     const inVest = Math.abs(x) > xe - BODY.vest;
     const open = L.openRear && x < -(xe - 1.3);
-    const zc = inVest || open ? 0 : aisleZ(L, x), zw = open ? 1.25 : inVest ? 1.05 : 0.38;
+    const zc = inVest || open ? 0 : aisleZ(L, x), zw = open ? 1.1 : inVest ? 1.05 : 0.38;
     z = Math.max(zc - zw, Math.min(zc + zw, z));
     // through the gangways to the next car (the cars are 25.3 m over the buffers)
     const ahead = V[W.car - 1], behind = V[W.car + 1];
     if (x > xe + 0.25) { if (ahead?.info) { W.car -= 1; x -= 25.3; z = Math.max(-0.4, Math.min(0.4, z)); } else x = xe + 0.25; }
     if (x < -(xe + 0.25)) {
-      if (L.openRear) x = Math.max(x, -(xe + 0.45));
+      if (L.openRear) x = Math.max(x, -(xe - 0.25));
       else if (behind?.info) { W.car += 1; x += 25.3; z = Math.max(-0.4, Math.min(0.4, z)); } else x = -(xe + 0.25);
     }
-    if (L.openRear) x = Math.max(x, -(xe + 0.45));
+    // the platform's railing is at the end of the car (x = -12.05): stand a body's half-width inside it
+    if (L.openRear) x = Math.max(x, -(xe - 0.25));
     W.x = x; W.z = z;
     return speed;
   }

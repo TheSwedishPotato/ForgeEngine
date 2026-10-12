@@ -309,7 +309,7 @@ export class Help {
   constructor(root) {
     this.box = el('div', 'help');
     this.box.innerHTML = `<h3>Keys</h3><dl>
-      <dt>Mouse</dt><dd>look around (click the view first; Esc lets the mouse go)</dd>
+      <dt>Mouse</dt><dd>look around: click the view to hold the mouse (Esc lets it go), or drag</dd>
       <dt>E</dt><dd>get up and walk the train (W A S D, Shift a bit quicker); E by your seat to sit down</dd>
       <dt>V</dt><dd>step outside: orbit the train (drag, wheel to zoom)</dd>
       <dt>[ &nbsp;]</dt><dd>outside: the vehicle to look at</dd>
