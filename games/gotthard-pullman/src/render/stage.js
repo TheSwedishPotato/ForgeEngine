@@ -156,6 +156,14 @@ export function patchLighting(src) {
   // a varnish or clear coat reflects what is round it: the car's inside, not the sky; dark in tunnels
   s = replaceOnce(s, 'vec3 coatRefl = mix(textureLod(uEnvSpec, reflect(-V, N), 0.6).rgb * uEnvIntensity, ssr.rgb, ssr.a);',
     'vec3 coatRefl = mix(carK >= 0 ? E * INV_PI * 0.8 : textureLod(uEnvSpec, reflect(-V, N), 0.6).rgb * uEnvIntensity * day * mix(1.0, skyLightScale(wpos), 0.6), ssr.rgb, ssr.a);');
+  // at most 16 textures (many graphics cards allow no more in one fragment shader): the engine's
+  // features this game never turns on (light probes, virtual shadow pages, ray-traced shadows)
+  // read nothing, and the BRDF's lookup table gives way to its analytic fit (Karis 2014, in COMMON)
+  s = replaceOnce(s, 'c[k] = texelFetch(uProbes, ivec2(index, k), 0).rgb;', 'c[k] = vec3(0.0);');
+  s = replaceOnce(s, 'vec4 t = texelFetch(uVsmTable, ivec2(slot.x, float(l) * 64.0 + slot.y), 0);', 'vec4 t = vec4(-1.0);');
+  s = replaceOnce(s, 'sum += texture(uVsmAtlas, vec3(uv, dref - 0.00002));', 'sum += 1.0;');
+  s = replaceOnce(s, 'mix(1.0, texture(uRTShadow, vUv).r, ', 'mix(1.0, 1.0, ');
+  s = replaceOnce(s, 'vec2 dfg = texture(uBrdfLut, vec2(NoV, rough)).rg;', 'vec2 dfg = envBRDFApprox(NoV, rough);');
   // a bad normal or a runaway value in one pixel would spread through the reflections' mip chain,
   // the temporal filter and the bloom: keep every pixel finite
   s = replaceOnce(s, 'vec3 N = decodeNormal(g1.xy);', 'vec3 N = decodeNormal(g1.xy);\n  if (!(abs(N.x) <= 1.0 && abs(N.y) <= 1.0 && abs(N.z) <= 1.0)) N = V;');
