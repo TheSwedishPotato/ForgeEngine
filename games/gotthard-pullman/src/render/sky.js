@@ -103,7 +103,8 @@ void main() {
     vec3 T = exp(-(bR * od.x + vec3(uMieExt * 1.11) * od.y + bO * od.z));
     vec3 Ts = transmittanceToSun(p + normalize(p) * 2.0);
     float cosS = max(dot(normalize(p), uSunDir), 0.0);
-    L += T * uGroundAlbedo / PI * uSunE * (Ts * cosS * 0.6 + 0.08);
+    // (much of the valley's ground lies in the mountains' shadow: about half of it sunlit)
+    L += T * uGroundAlbedo / PI * uSunE * (Ts * cosS * 0.35 + 0.035);
   }
   o = vec4(L, 1.0);
 }`;
@@ -203,7 +204,7 @@ export class SkyLUT {
     this.prog = postProgram(gl, SKY_LUT_FS, {}, 'sky-lut');
   }
   get tex() { return this.target.tex; }
-  update({ sunDir, altitude, mieExt, groundAlbedo = 0.55, ms = 1.6 }) {
+  update({ sunDir, altitude, mieExt, groundAlbedo = 0.55, ms = 0.7 }) {
     const gl = this.gl;
     this.target.bind();
     state(gl);

@@ -30,8 +30,8 @@ export const PRESETS = {
     rail: 'wet', railSun: 'wet', snowOnRail: 0, groundSnowValley: 0.0, groundSnowHigh: 0.45, qnh: 1001,
   },
   fog: {
-    label: 'Freezing fog', desc: 'Low cloud filling the valley at minus seven. Rime on every twig and wire, glaze on the rails.',
-    tempErstfeld: -7, tempGoeschenen: -6, wind: 1, windFrom: 0, snowfall: 0, visibility: 150, cloud: 1.0, fog: true,
+    label: 'Freezing fog', desc: 'Low cloud filling the valley up to about 950 m at minus seven: rime on every twig and wire, glaze on the rails. Above it, sunshine over a sea of fog.',
+    tempErstfeld: -7, tempGoeschenen: -6, wind: 1, windFrom: 0, snowfall: 0, visibility: 150, cloud: 1.0, fog: true, fogTop: 950,
     rail: 'ice', railSun: 'ice', snowOnRail: 0, groundSnowValley: 0.15, groundSnowHigh: 0.60, qnh: 1026,
   },
   blizzard: {
@@ -53,7 +53,7 @@ export class Weather {
 
   set(preset, overrides = {}) {
     this.name = preset;
-    this.p = { ...PRESETS[preset] ?? PRESETS.clear, ...overrides };
+    this.p = { id: PRESETS[preset] ? preset : 'clear', ...PRESETS[preset] ?? PRESETS.clear, ...overrides };
     this._cache = new Map();
   }
 
@@ -80,6 +80,8 @@ export class Weather {
     const tun = R.inTunnel(s);
     let tempC = this.tempAt(z);
     let rail = p.rail;
+    // above the top of the valley fog the air is dry and sunny: frost on the rails, no glaze
+    if (p.fogTop && z > p.fogTop + 30) rail = 'frost';
     if (tun) {
       const depth = Math.min(s - tun.s0, tun.s1 - s);
       const inner = Math.min(1, depth / 250);

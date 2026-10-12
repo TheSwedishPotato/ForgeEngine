@@ -1,0 +1,16 @@
+:root {
+  --ink: #f4f1ea;
+  --ink-dim: rgba(244, 241, 234, 0.72);
+  --panel: rgba(14, 22, 30, 0.78);
+  --line: rgba(244, 241, 234, 0.16);
+  --teal: #1f4a52;
+  --brass: #c9a35a;
+  font-family: Inter, system-ui, sans-serif;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1016; color: var(--ink); }
+#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+.loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 15px; color: var(--ink-dim); letter-spacing: 0.02em; }
+.loading b { display: block; font-family: 'Playfair Display', serif; font-size: 30px; color: var(--ink); margin-bottom: 10px; font-weight: 500; }
+#med-stats { position: fixed; left: 10px; top: 10px; white-space: pre; font: 12px/1.35 ui-monospace, monospace; color: #dfe; background: rgba(0, 0, 0, 0.55); padding: 8px 10px; pointer-events: none; }

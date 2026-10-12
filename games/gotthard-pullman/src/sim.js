@@ -37,7 +37,7 @@ export const DT = 1 / 240;
 
 export class Sim {
   static async create(opts = {}) {
-    const route = await Route.load();
+    const route = opts.route ?? await Route.load();
     return new Sim(route, opts);
   }
 

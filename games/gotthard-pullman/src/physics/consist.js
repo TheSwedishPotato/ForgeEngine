@@ -9,11 +9,11 @@
  */
 
 export const ENGINE = {
-  id: 'engine', kind: 'engine', name: 'C 5/6 2978', length: 12.125, mass: 86600, axles: 6,
+  id: 'engine', kind: 'engine', name: 'C 5/6 2978', length: 12.685, mass: 86600, axles: 6,
   frontalArea: 9.5, davisC: 0.0024, brakeForce: 300e3, blocks: 10, direct: true, heatCapacity: 4e5,
 };
 export const TENDER = {
-  id: 'tender', kind: 'tender', name: 'Tender', length: 7.07, mass: 41800, axles: 3,
+  id: 'tender', kind: 'tender', name: 'Tender', length: 6.51, mass: 41800, axles: 3,
   frontalArea: 9.0, davisC: 0.0005, brakeForce: 180e3, blocks: 6, direct: true, heatCapacity: 2.5e5,
 };
 

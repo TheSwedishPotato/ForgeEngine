@@ -72,70 +72,85 @@ float cover(float cls, vec2 m) {
   ivec2 i = ivec2(floor(f)); vec2 t = fract(f);
   return mix(mix(coverIs(cls, i), coverIs(cls, i + ivec2(1, 0)), t.x), mix(coverIs(cls, i + ivec2(0, 1)), coverIs(cls, i + ivec2(1, 1)), t.x), t.y);
 }
-// value noise with its gradient (for detail normals)
+// value noise with its gradient (quintic, so the gradient is smooth)
 vec3 noised(vec2 p) {
   vec2 i = floor(p), f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f), du = 6.0 * f * (1.0 - f);
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0), du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
   float a = hash12(i), b = hash12(i + vec2(1, 0)), c = hash12(i + vec2(0, 1)), d = hash12(i + vec2(1, 1));
   return vec3(a + (b - a) * u.x + (c - a) * u.y + (a - b - c + d) * u.x * u.y,
               du * vec2(b - a + (a - b - c + d) * u.y, c - a + (a - b - c + d) * u.x));
 }
-vec3 fbmd(vec2 p, int oct) {
-  vec3 s = vec3(0.0); float a = 0.5, f = 1.0;
-  for (int i = 0; i < 6; i++) { if (i >= oct) break; vec3 n = noised(p * f + float(i) * 13.7); s += a * vec3(n.x, n.yz * f); a *= 0.5; f *= 2.03; }
-  return s;
+// one octave of relief: height noise of wavelength wl (m) and amplitude amp (m) -> (value, slope x, slope y),
+// faded out where a wavelength covers too few pixels to be seen without shimmer
+uniform float uFootprint;            // metres per pixel at 1 m distance
+vec3 relief(vec2 m, float wl, float amp, float px, float seed) {
+  float vis = smoothstep(px * 3.0, px * 8.0, wl);
+  if (vis <= 0.0) return vec3(0.0);
+  vec3 n = noised(m / wl + seed);
+  return vec3(n.x - 0.5, n.yz / wl) * amp * vis;
 }
 
 void terrainMaterial(vec3 Ng, vec2 m, float h, float dist, out vec3 albedo, out vec3 N, out float rough) {
+  float px = max(uFootprint * dist, 0.02);       // size of a pixel on the ground here (m)
   // land cover
   float forest = cover(10.0, m);
   float water = cover(80.0, m);
   float bare = cover(60.0, m) + cover(70.0, m);
   float built = cover(50.0, m);
-  // detail: big lumps (10-40 m), small (1-3 m), fine grain
-  float fade = 1.0 - smoothstep(60.0, 900.0, dist);
-  vec3 big = fbmd(m / 31.0, 4);
-  vec3 small = fbmd(m / 2.7, 3) * fade;
-  float steep = 1.0 - Ng.y;                         // 0 level, 0.5 at 60 degrees
+  // large-scale variation (not filtered: it is wide)
+  vec3 big = vec3(noised(m / 31.0).x, 0.0, 0.0);
+  float big2 = noised(m / 97.0 + 3.3).x;
+  float steep = 1.0 - Ng.y;                      // 0 level, 0.5 at 60 degrees
   float rockiness = clamp(smoothstep(0.30, 0.48, steep + (big.x - 0.5) * 0.18) + bare * 0.6, 0.0, 1.0);
   // ---- snow: depth by altitude, held by slopes under ~50 degrees, blown off ridges
   float depth = mix(uSnow.x, uSnow.y, smoothstep(480.0, 1900.0, h));
-  float holds = smoothstep(0.50, 0.30, steep + (big.x - 0.5) * 0.22 + (small.x - 0.5) * 0.10);
+  float holds = smoothstep(0.50, 0.30, steep + (big.x - 0.5) * 0.22);
   float snow = clamp(depth * 9.0, 0.0, 1.0) * holds;
   // thin snow lies in patches; deep snow covers all but the steepest rock
-  snow *= smoothstep(0.0, 0.35, depth * 3.0 + big.x - 0.55 + 0.35);
+  float patchN = noised(m / 6.0 + 9.0).x * 0.6 + noised(m / 1.7).x * 0.4;
+  snow *= smoothstep(0.0, 0.25, depth * 4.0 + big.x * 0.5 + patchN * 0.6 - 0.45);
   snow *= 1.0 - water;
+  // ---- relief: wind-packed drifts and lumps on snow, broken rock, tussocks on meadows
+  // (the drifts are stretched along the valley wind)
+  vec2 mw = vec2(m.x * 0.6 + m.y * 0.35, m.y * 0.9 - m.x * 0.2);
+  vec3 r1 = relief(mw, 16.0, mix(0.6, 1.4, rockiness), px, 1.3);
+  vec3 r2 = relief(m, 3.1, mix(0.10, 0.45, rockiness), px, 7.7);
+  vec3 r3 = relief(m, 0.75, mix(0.015, 0.09, rockiness), px, 4.1);
+  vec3 r4 = relief(m * vec2(1.0, 0.6), 0.23, mix(0.004, 0.02, rockiness), px, 2.9);
+  vec2 slope = r1.yz + r2.yz + r3.yz * (1.0 - snow * 0.5) + r4.yz * (1.0 - snow * 0.7);
+  N = normalize(Ng + vec3(-slope.x, 0.0, slope.y));
+  float cavity = clamp(0.5 - (r2.x / mix(0.10, 0.45, rockiness)) * 0.8 - (r3.x / mix(0.015, 0.09, rockiness)) * 0.4, 0.0, 1.0);
   // ---- colours (linear)
-  vec3 granite = vec3(0.30, 0.295, 0.28) * (0.72 + 0.55 * big.x) * (0.85 + 0.3 * small.x);
-  granite = mix(granite, vec3(0.20, 0.21, 0.17), smoothstep(0.55, 0.8, small.y * 0.5 + 0.5) * 0.35);   // lichen
-  vec3 meadow = mix(vec3(0.20, 0.17, 0.09), vec3(0.15, 0.16, 0.08), big.x) * (0.8 + 0.4 * small.x);  // winter-brown grass
-  meadow = mix(meadow, meadow * 0.55, uGround.x);                                                     // wet from the thaw
-  vec3 litter = vec3(0.10, 0.075, 0.05) * (0.8 + 0.4 * small.x);                                       // spruce needles and earth
+  vec3 granite = vec3(0.30, 0.295, 0.28) * (0.70 + 0.55 * big.x) * (0.8 + 0.4 * big2);
+  granite *= 1.0 - cavity * 0.45;                                              // darker in the cracks
+  granite = mix(granite, vec3(0.19, 0.20, 0.16), smoothstep(0.55, 0.85, noised(m / 1.3).x) * 0.4);   // lichen
+  vec3 meadow = mix(vec3(0.20, 0.17, 0.09), vec3(0.14, 0.15, 0.08), big.x) * (0.75 + 0.5 * noised(m / 0.9).x);
+  meadow = mix(meadow, meadow * 0.55, uGround.x);                               // wet from the thaw
+  vec3 litter = vec3(0.10, 0.075, 0.05) * (0.8 + 0.4 * noised(m / 1.1).x);
   vec3 ground = mix(meadow, litter, forest);
   ground = mix(ground, granite, rockiness);
   ground = mix(ground, vec3(0.16, 0.15, 0.14), built * 0.6);
-  vec3 snowCol = vec3(0.86, 0.88, 0.92) * (0.93 + 0.07 * small.x);
-  snowCol = mix(snowCol * 0.88, snowCol, uSnow.z);                                                    // fresh snow is whiter
+  vec3 snowCol = vec3(0.87, 0.89, 0.93);
+  snowCol *= 0.94 + 0.06 * noised(m / 2.3 + 5.0).x;                              // wind crust and powder
+  snowCol = mix(snowCol * 0.86, snowCol, uSnow.z);                               // fresh snow is whiter
+  snowCol *= 1.0 - cavity * 0.06;
   albedo = mix(ground, snowCol, snow);
   // ---- forest seen from afar (near the line the trees themselves stand there)
   float far = smoothstep(uGround.y * 0.8, uGround.y * 1.1, dist) + (uLevel == 2 ? 1.0 : 0.0);
   float canopy = forest * clamp(far, 0.0, 1.0);
   if (canopy > 0.001) {
-    // crowns 6-9 m across: dark needles with snow caught on the branches, snow between
-    vec2 cp = m / 7.5;
-    float crown = smoothstep(0.38, 0.62, noised(cp).x * 0.65 + noised(cp * 2.1 + 5.0).x * 0.35);
-    vec3 needles = vec3(0.035, 0.05, 0.035) * (0.8 + 0.4 * big.x);
-    vec3 laden = mix(needles, snowCol * 0.75, clamp(uSnow.z * 0.55 + uSnow.w * 0.8, 0.0, 0.85) * (0.5 + 0.5 * small.x));
-    vec3 forestFar = mix(albedo * 0.85, laden, crown * 0.85);
+    // crowns 5-8 m across: dark needles, some snow caught on the branches, snow between
+    vec2 cp = m / 6.5;
+    float crown = smoothstep(0.30, 0.55, noised(cp).x * 0.6 + noised(cp * 2.3 + 5.0).x * 0.4);
+    vec3 needles = vec3(0.028, 0.042, 0.03) * (0.8 + 0.4 * big.x);
+    vec3 laden = mix(needles, snowCol * 0.7, clamp(uSnow.z * 0.35 + uSnow.w * 0.8, 0.0, 0.8) * noised(cp * 3.1).x);
+    vec3 forestFar = mix(albedo * 0.8, laden, crown * 0.92);
     albedo = mix(albedo, forestFar, canopy);
+    N = normalize(mix(N, Ng, canopy * 0.7));
   }
-  // ---- water: the Reuss runs dark and fast; still water freezes at the edges
+  // ---- water: the Reuss runs dark and fast
   albedo = mix(albedo, vec3(0.025, 0.035, 0.04), water * (1.0 - snow));
-  // ---- normal: detail bumps, gentle under snow, rough on rock
-  float bump = mix(0.35, 0.9, rockiness) * (1.0 - snow * 0.7);
-  vec2 grad = big.yz * (1.0 / 31.0) * 6.0 + small.yz * (1.0 / 2.7) * 0.6;
-  N = normalize(Ng + vec3(-grad.x, 0.0, grad.y) * bump * fade);
-  rough = mix(mix(0.92, 0.85, rockiness), 0.72, snow);
+  rough = mix(mix(0.92, 0.85, rockiness), 0.68 + 0.1 * noised(m / 4.0).x, snow);
   rough = mix(rough, 0.12, water * (1.0 - snow));
 }
 `;
@@ -369,7 +384,8 @@ export class TerrainGL extends Object3D {
       .set('uOriginZ', o.z).set('uMapRect', [T.x0, T.y0, T.x1, T.y1]);
     if (kind === 'gbuffer') {
       p.set('uCover', this.coverTex).set('uCoverRect', [T.lcX0, T.lcY0, T.lcStep, 0]).set('uCoverSize', [T.lcW, T.lcH])
-        .set('uSnow', this.snow).set('uGround', this.groundParams).set('uCamMap', this.camMap);
+        .set('uSnow', this.snow).set('uGround', this.groundParams).set('uCamMap', this.camMap)
+        .set('uFootprint', 2 / (r.height * r.proj.elements[5]));
     }
     if (extra) p.setAll(extra);
     gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
