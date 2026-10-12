@@ -23,8 +23,8 @@ export const LOCO = {
   driverR: 0.665, ponyR: 0.425, tenderR: 0.515,
   axles: [4.15, 5.6, 7.05, 8.5, 9.95],      // coupled axles, metres behind the front buffer face
   pony: 2.25,
-  mainAxle: 1,                               // the LP connecting rods drive the second coupled axle
-  crank: 0.32, rod: 2.8,                     // crank radius (half the 640 mm stroke), connecting rod
+  mainAxle: 2,                               // the outside LP cylinders drive the third coupled axle (the inside HP ones the second)
+  crank: 0.32, rod: 4.25,                    // crank radius (half the 640 mm stroke); connecting rod (estimated: the crosshead in its guides)
   cylY: 1.0, cylZ: 1.13, cylD: 1.5,          // outside (LP) cylinders: height, offset, distance behind the buffer face
   boilerY: 2.95,
 };

@@ -272,6 +272,11 @@ export class DebugPanel {
   toggle() { this.open = !this.open; this.box.style.display = this.open ? '' : 'none'; this.game.debug = this.open; }
 
   update(dt) {
+    // the frame rate, measured in real time (also while the panel is shut, so it is ready when opened)
+    const now = performance.now();
+    if (this._last) this._fps += (1000 / Math.max(1, now - this._last) - this._fps) * 0.05;
+    else this._fps = 0;
+    this._last = now;
     if (!this.open) return;
     this._t -= dt;
     if (this._t > 0) return;
@@ -296,6 +301,7 @@ export class DebugPanel {
       `BRAKE   handle ${B.handle}  equalising ${f(B.equalising, 2)}  BP ${B.v.map((x) => f(x.pBP, 1)).join(' ')}  BC ${B.v.map((x) => f(Math.max(x.pBC, x.pBCdirect ?? 0), 1)).join(' ')}  MR ${f(L.pMR, 2)}`,
       `RIDE    lateral ${f(felt.lat, 3)}  vertical ${f(felt.vert, 3)}  longitudinal ${f(felt.lon, 3)} m/s²`,
       `CREW    driver ${handTxt(sim.crew.driver)}  fireman ${handTxt(sim.crew.fireman)}`,
+      `FRAME   ${f(this._fps, 0)} fps  ${f(1000 / Math.max(1, this._fps), 1)} ms  quality ${G.stage.quality}  ${r.displayW}x${r.displayH}`,
       `RENDER  ${r.stats ? Object.entries(r.stats).map(([a, b]) => `${a} ${typeof b === 'number' ? f(b, 1) : b}`).join('  ') : ''}`,
     ].join('\n');
   }

@@ -170,6 +170,7 @@ The line, the stations and the structures
 
 The engine
 
+- The C 5/6's drive: the inside high-pressure cylinders to the second coupled axle, the outside low-pressure ones to the third (Märklin's documentation of its C 5/6 model). https://www.marklin.com/products/details/article/39250 · https://static.maerklin.de/damcontent/cf/7d/cf7d0040afc314acc06fbe651fdefdff1467730990.pdf
 - C 5/6 2978 data sheet (Verein Dampflok C 5/6 2978). http://voisin.ch/c_5-6_2978/c_5-6_2978_datenblatt_d.pdf · https://www.voisin.ch/c_5-6_2978/c_5-6_2978_d.html
 - en.wikipedia, *SBB C 5/6*. https://en.wikipedia.org/wiki/SBB_C_5/6
 - Eurovapor, C 5/6 2969. https://www.eurovapor.ch/fahrzeuge/dampflok-elefant-2969/
@@ -206,7 +207,7 @@ The land
 - December climate: MeteoSwiss climate normals for Altdorf and Andermatt. https://www.meteoswiss.admin.ch/
 
 Where the record is silent, the game says so in the code: these are estimates. They include the
-whistle's and the horn's pitches, the cab fittings' exact positions, the passenger numbers, the
+whistle's and the horn's pitches, the cab fittings' exact positions, the connecting rods' length, the passenger numbers, the
 train number, the Treno Gottardo's minutes, the relative humidity of each weather, and how much
 of the Reuss's mapped bed December's low water fills (60 % of the canalised channel below
 Amsteg, 45 % of the boulder bed above).
