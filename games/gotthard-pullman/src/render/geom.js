@@ -4,7 +4,7 @@
  * Coordinates of the vehicles: x along the vehicle (forward +), y up from the rail head,
  * z across (right of forward +). (Rotated into the world when placed.)
  */
-import { BufferGeometry, Float32BufferAttribute, Mesh, Group, Vector3, Matrix4, Quaternion } from 'three';
+import { BufferGeometry, Float32BufferAttribute, Mesh, Group, Vector3, Matrix3, Matrix4, Quaternion } from 'three';
 
 const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _n = new Vector3();
 
@@ -18,10 +18,10 @@ export class Builder {
   }
 
   /** Applies a transform (Matrix4) to everything added until cleared (null). */
-  transform(m) { this.xf = m; this.nxf = m ? new Matrix4().copy(m).invert().transpose() : null; return this; }
+  transform(m) { this.xf = m; this.nxf = m ? new Matrix3().getNormalMatrix(m) : null; return this; }
 
   _push(p, v, n, u, w, col) {
-    if (this.xf) { v = _a.copy(v).applyMatrix4(this.xf); n = _n.copy(n).applyMatrix4(this.nxf).normalize(); }
+    if (this.xf) { v = _a.copy(v).applyMatrix4(this.xf); n = _n.copy(n).applyMatrix3(this.nxf).normalize(); }
     p.P.push(v.x, v.y, v.z); p.N.push(n.x, n.y, n.z); p.UV.push(u, w);
     p.C.push(col ? col[0] : 1, col ? col[1] : 1, col ? col[2] : 1);
   }

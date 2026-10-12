@@ -8,6 +8,7 @@ import { buildCar, BODY } from './pullman.js';
 import { buildLocomotive, animateLocomotive, buildTender, animateTender, LOCO } from './locomotive.js';
 import { RAIL_SPACING } from '../world/route.js';
 import { CarRide } from '../physics/sway.js';
+import { feedSteam } from './steam.js';
 
 const _e = new Euler(0, 0, 0, 'YZX');
 
@@ -34,6 +35,37 @@ export class TrainGL {
     stage.scene.add(this.group);
     this.vehicles = train.veh.map((v) => this._model(v));
     for (const m of this.vehicles) this.group.add(m.group);
+    stage.glass?.setPanes(this.vehicles.filter((m) => m.info).slice(0, 8).map((m) => m.info));
+    // the weather on the windows: what has gathered while the train stood in Erstfeld, then the trip's own
+    const p = train.weather?.p ?? {};
+    this.sillSnow = (p.snowfall ?? 0) * 0.004;          // m (about half an hour's worth)
+    this.lampLevel = 0;
+  }
+
+  /** Snow, frost and thaw on the outside of the windows, and the lamps inside (per frame). */
+  _weatherOnGlass(dt) {
+    const g = this.stage.glass, T = this.train;
+    if (!g) return;
+    const p = T.weather?.p ?? {}, here = T.weather?.at?.(T.front, T.time);
+    const inTunnel = !!here?.tunnel;
+    // snow driven against the car sticks on the sill and in the corners (more with wind and speed), melts above 0 °C
+    const temp = here?.tempC ?? 0;
+    const rate = (p.snowfall ?? 0) * 0.01 / 3600 * (0.6 + Math.min(1.5, (Math.abs(T.speed) + (p.wind ?? 0)) / 12));
+    if (!inTunnel) this.sillSnow += rate * dt;
+    if (temp > 0.5) this.sillSnow -= dt * 0.002 / 60 * temp;
+    this.sillSnow = Math.max(0, Math.min(0.09, this.sillSnow));
+    const frost = p.id === 'fog' ? 0.75 : temp < -8 ? 0.35 : temp < -2 ? 0.12 : 0.0;
+    const wet = p.id === 'foehn' ? 0.6 : temp > -1.5 && (p.snowfall ?? 0) > 0 ? 0.3 : 0;
+    g.snow = [this.sillSnow, Math.min(1, this.sillSnow * 25 + ((p.snowfall ?? 0) > 0 ? 0.25 : 0)), frost, wet];
+    g.speed = Math.abs(T.speed);
+    // the lamps: on in the tunnels and on dark days
+    const dark = inTunnel || ['heavy', 'blizzard', 'fog'].includes(p.id);
+    this.lampLevel += ((dark ? 1 : 0) - this.lampLevel) * Math.min(1, dt * 3);
+    g.lamp = this.lampLevel;
+    const sh = this.stage.r.env.sh;
+    const k = 0.282095 / Math.PI * (inTunnel ? 0.0 : 0.06);
+    g.interior = [sh[0] * k + this.lampLevel * 0.004, sh[1] * k + this.lampLevel * 0.0035, sh[2] * k + this.lampLevel * 0.0027];
+    for (const m of this.vehicles) if (m.info) m.lampPower = this.lampLevel * 0.006;
   }
 
   _model(v) {
@@ -94,6 +126,17 @@ export class TrainGL {
       m.pose = { ...pose };
     }
     this._publishCars();
+    this._weatherOnGlass(ddt);
+    // the engine's steam
+    const eng = this.vehicles[0];
+    if (eng?.kind === 'engine' && this.stage.steam) {
+      const h = eng.pose.heading, v = eng.v.v;
+      eng.group.updateMatrixWorld();
+      const vel = { x: Math.sin(h) * v, y: 0, z: -Math.cos(h) * v };
+      const here = this.train.weather?.at?.(eng.v.s, this.train.time);
+      if (here) this.stage.steam.setAir(here.tempC, here.tunnel, vel);
+      feedSteam(this.stage.steam, this.train.loco, eng.group, vel, ddt || 1 / 60);
+    }
   }
 
   /** The cars' frames and window bands, for the interior lighting. */

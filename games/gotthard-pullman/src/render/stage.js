@@ -28,60 +28,20 @@ import { COMMON, SKY } from '../../../duel1403/src/engine/shaders/common.js';
 import { CUBE_DIR } from '../../../duel1403/src/engine/passes/Environment.js';
 import { Target, Texture, postProgram, fullscreen, state } from '../../../duel1403/src/engine/gl/GL.js';
 import { SKY_GLSL, SkyLUT, skyParams, sunTransmittance, SUN_E0 } from './sky.js';
-import { TERRAIN_LIGHT_GLSL, TerrainLight } from './terrainLight.js';
+import { TERRAIN_LIGHT_GLSL, GROUND_GLSL, TerrainLight } from './terrainLight.js';
 import { Atmosphere } from './atmosphere.js';
 import { TerrainGL } from './terrainGL.js';
 import { sunPosition, sunVector, utcMs } from './sun.js';
 import { FINE_N, FINE_STEP, FINE_TILE } from '../world/terrain.js';
+import { Glass } from './glass.js';
+import { Snowfall } from './snowfall.js';
+import { SteamPlume } from './steam.js';
 
 const LAT = 46.745, LON = 8.62;
 
 // ---------------------------------------------------------------------------------------------
 // the lighting pass, with the valley's light
 
-const GROUND_GLSL = /* glsl */`
-uniform highp sampler2D uFineAtlas, uFineIndex;
-uniform ivec2 uFineIndexSize;
-uniform vec4 uFineRect;            // map x0, y0, tile size, sample step
-uniform int uFineCols, uFineN;     // atlas columns, samples per tile side (with border)
-uniform vec2 uFogSun;              // valley fog: extinction (1/m), top (m)
-/** The ground's height under a map point: the 5 m tiles along the line, else the 25 m map. */
-float groundAt(vec2 m) {
-  vec2 tf = (m - uFineRect.xy) / uFineRect.z;
-  ivec2 ti = ivec2(floor(tf));
-  if (all(greaterThanEqual(ti, ivec2(0))) && all(lessThan(ti, uFineIndexSize))) {
-    float slot = texelFetch(uFineIndex, ti, 0).r;
-    if (slot > 0.5) {
-      int k = int(slot + 0.5) - 1;
-      ivec2 base = ivec2(k % uFineCols, k / uFineCols) * uFineN;
-      vec2 f = (m - (uFineRect.xy + vec2(ti) * uFineRect.z)) / uFineRect.w + 1.0;
-      ivec2 i = clamp(ivec2(floor(f)), ivec2(0), ivec2(uFineN - 2));
-      vec2 w = f - vec2(i);
-      float a = texelFetch(uFineAtlas, base + i, 0).r, b = texelFetch(uFineAtlas, base + i + ivec2(1, 0), 0).r;
-      float c = texelFetch(uFineAtlas, base + i + ivec2(0, 1), 0).r, d = texelFetch(uFineAtlas, base + i + 1, 0).r;
-      return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
-    }
-  }
-  return terrainLightAt(m).z;
-}
-/** Daylight reaching a point: none a few metres under the ground (inside a tunnel). */
-float daylightAt(vec3 wpos) {
-  if (uTLOn < 0.5) return 1.0;
-  vec2 m = vec2(wpos.x + uOrigin.x, -wpos.z + uOrigin.y);
-  float h = wpos.y + uOrigin.z;
-  return smoothstep(-6.0, -2.5, h - groundAt(m));
-}
-/** The sun through the valley fog above a point. */
-float fogSun(vec3 wpos) {
-  float h = wpos.y + uOrigin.z;
-  return exp(-uFogSun.x * max(0.0, uFogSun.y - h) / max(uSunDir.y, 0.05));
-}
-/** Sky light in the gorge: what the mountains leave of the sky, plus their snow lit by it. */
-float skyLightScale(vec3 wpos) {
-  float s = terrainSvf(wpos);
-  return s + (1.0 - s) * 0.45;
-}
-`;
 
 const CAR_GLSL = /* glsl */`
 // ---- inside the cars: daylight only through the windows, the lamps, the light the panelling throws back
@@ -162,6 +122,11 @@ export function patchLighting(src) {
     'vec3 carQ; int carK = carAt(wpos, carQ);\n  vec3 E = carK >= 0 ? carInterior(carK, carQ, N, day) : irradianceAt(wpos, N) * skyLightScale(wpos) * day * g3.a;');
   s = replaceOnce(s, 'vec3 envL = textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity;',
     'vec3 envL = carK >= 0 ? E * INV_PI * 0.8 : textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity * day * mix(1.0, skyLightScale(wpos), 0.6);');
+  // a bad normal or a runaway value in one pixel would spread through the reflections' mip chain,
+  // the temporal filter and the bloom: keep every pixel finite
+  s = replaceOnce(s, 'vec3 N = decodeNormal(g1.xy);', 'vec3 N = decodeNormal(g1.xy);\n  if (!(abs(N.x) <= 1.0 && abs(N.y) <= 1.0 && abs(N.z) <= 1.0)) N = V;');
+  s = replaceOnce(s, 'vec3 color = direct + indirectDiffuse + indirectSpec + emissive;',
+    'vec3 color = direct + indirectDiffuse + indirectSpec + emissive;\n  if (!(color.r + color.g + color.b < 1e30)) color = vec3(0.0);\n  color = min(color, vec3(6e4));');
   return s;
 }
 
@@ -276,12 +241,14 @@ export class GotthardStage {
     // passes, in pipeline order
     this.screen = r.addPass(new ScreenSpace());
     this.atmosphere = r.addPass(new Atmosphere(this));
-    this.splats = r.addPass(new GaussianSplats({ max: 3000, range: 600 }));
+    this.snowfall = r.addPass(new Snowfall(this));
     this.dof = r.addPass(new DOF());
     this.dof.amount = 0;
     this.taa = r.addPass(new TAA());
     r.addPass(new Upscale());
     this.motionBlur = r.addPass(new MotionBlur());
+    this.steam = this.splats = r.addPass(new SteamPlume(this));
+    this.glass = r.addPass(new Glass(this));
     this.exposure = r.addPass(new Exposure());
     this.exposure.minEV = -6; this.exposure.maxEV = 7; this.exposure.key = 0.16;
     this.bloom = r.addPass(new Bloom());
@@ -349,11 +316,16 @@ export class GotthardStage {
     this.atlasInfo = { cols, N, size: [tw, th], rect: [T.x0, T.y0, FINE_TILE, FINE_STEP] };
   }
 
-  _bindLighting(L) {
+  /** The ground and its light (terrain shadows, sky view, the fine tiles, the valley fog) on a program with GROUND_GLSL. */
+  bindGround(L) {
     this.terrainLight.bind(L, this.origin);
     const A = this.atlasInfo;
     L.set('uFineAtlas', this.atlas).set('uFineIndex', this.atlasIndex).set('uFineIndexSize', A.size).set('uFineRect', A.rect)
       .set('uFineCols', A.cols).set('uFineN', A.N).set('uFogSun', this.fogSun ?? [0, 0]);
+  }
+
+  _bindLighting(L) {
+    this.bindGround(L);
     // the cars' interiors (set by the train renderer each frame)
     const C = this.cars;
     L.set('uCarCount', C ? C.count : 0);
@@ -382,8 +354,11 @@ export class GotthardStage {
   recentre(map, limit = 400) {
     const o = this.origin;
     if (Math.abs(map.x - o.x) < limit && Math.abs(map.y - o.y) < limit && Math.abs(map.z - o.z) < limit) return false;
+    const ox = o.x, oy = o.y, oz = o.z;
     o.x = Math.round(map.x); o.y = Math.round(map.y); o.z = Math.round(map.z);
     for (const obj of this.anchored) this._place(obj);
+    // things that live in world coordinates move with the origin
+    this.steam?.shift(-(o.x - ox), -(o.z - oz), o.y - oy);
     this.taa.reset = true;
     return true;
   }
@@ -397,6 +372,8 @@ export class GotthardStage {
     this.sky.clouds = sp.clouds;
     this.atmosphere.setWeather(weather);
     this.terrainGL.setWeather(weather);
+    this.steam.setWeather(weather);
+    this.snowfall.setWeather(weather);
     const p = weather.p;
     this.fogSun = p.fog ? [3.912 / Math.max(50, p.visibility), p.fogTop ?? 1e4] : [0, 0];
     this.sky.drift = [Math.sin((p.windFrom ?? 0) * Math.PI / 180 + Math.PI) * (p.wind ?? 2) * 4, Math.cos((p.windFrom ?? 0) * Math.PI / 180 + Math.PI) * (p.wind ?? 2) * 4];

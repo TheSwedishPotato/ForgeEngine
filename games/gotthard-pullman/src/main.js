@@ -15,6 +15,8 @@ import { TrackGL } from './render/track.js';
 import { TrainGL } from './render/trainGL.js';
 import { Sim } from './sim.js';
 import { Game } from './game.js';
+import { Structures } from './render/structures.js';
+import { Places } from './render/places.js';
 import { DATE, hms } from './sim.js';
 
 const params = new URLSearchParams(location.search);
@@ -36,6 +38,7 @@ async function ride() {
   });
   game.timeScale = Number(params.get('speed') ?? 1);
   if (params.get('skip')) game.sim.advance(Number(params.get('skip')));
+  if (params.get('cam') === 'out') game.player.setOutside(true, { vehicle: Number(params.get('veh') ?? 0), dist: Number(params.get('dist') ?? 18), yaw: Number(params.get('oyaw') ?? 50) * Math.PI / 180, pitch: Number(params.get('opitch') ?? 10) * Math.PI / 180 });
   if (params.get('yaw')) game.player.yaw = Number(params.get('yaw')) * Math.PI / 180;
   if (params.get('pitch')) game.player.pitch = Number(params.get('pitch')) * Math.PI / 180;
   ui.querySelector('.loading')?.remove();
@@ -93,6 +96,9 @@ async function boot() {
   if (forest) { const t0 = performance.now(); while (forest.update(stage.camera.position, 4)); console.log(`forest ${JSON.stringify(forest.stats())} in ${(performance.now() - t0).toFixed(0)} ms`); }
   const track = new TrackGL(stage, route, terrain, weather);
   { const t0 = performance.now(); while (track.update(stage.camera.position, 50)); console.log(`track ${track.pieces.size} pieces in ${(performance.now() - t0).toFixed(0)} ms`); }
+  await Structures.create(stage, route, terrain, weather);
+  const places = new Places(stage, terrain, route, weather);
+  console.log(`places in ${places.buildMs.toFixed(0)} ms, ${places.tiles.size} tiles`);
   const sim = await Sim.create({ route, weather: params.get('w') ?? 'clear' });
   if (params.get('ts')) { const d = Number(params.get('ts')) - sim.train.front; for (const v of sim.train.veh) v.s += d; }
   const trainGL = new TrainGL(stage, route, sim.train);

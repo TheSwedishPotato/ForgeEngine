@@ -175,7 +175,7 @@ export class Terrain {
    * Each track segment pushes a lower bound (embankment) and an upper bound (cutting) onto the
    * grid points around it; the ground is the natural height clamped between them.
    */
-  _carveGrid(H, gx0, gy0, step, nw, nh, natural, wallsOut = null) {
+  _carveGrid(H, gx0, gy0, step, nw, nh, natural, wallsOut = null, tunnelOut = null) {
     const S = this.samples;
     const xa = gx0 - CARVE_RADIUS, ya = gy0 - CARVE_RADIUS, xb = gx0 + (nw - 1) * step + CARVE_RADIUS, yb = gy0 + (nh - 1) * step + CARVE_RADIUS;
     const segs = this._segmentsIn(xa, ya, xb, yb);
@@ -187,7 +187,9 @@ export class Terrain {
     for (const k of segs) {
       const a = k * 4, b = a + 4;
       const kind = Math.max(S[a + 3], S[b + 3]);
-      if (kind === 2 && S[a + 3] === 2 && S[b + 3] === 2) continue;     // inside a tunnel: the mountain stays
+      const inTunnel = kind === 2 && S[a + 3] === 2 && S[b + 3] === 2;
+      // inside a tunnel the mountain stays; where the DEM (30 m, smoothing steep slopes) has too little
+      // rock over the bore, it gets at least the vault plus 1.5 m, falling away at 1:1 to the sides
       const ax = S[a], ay = S[a + 1], bx = S[b], by = S[b + 1], az = S[a + 2], bz = S[b + 2];
       const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
       const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - CARVE_RADIUS - gx0) / step)), i1 = Math.min(nw - 1, Math.ceil((Math.max(ax, bx) + CARVE_RADIUS - gx0) / step));
@@ -203,6 +205,12 @@ export class Terrain {
           if (d > CARVE_RADIUS) continue;
           const zf = az + (bz - az) * t;
           const idx = j * nw + i;
+          if (inTunnel) {
+            if (tunnelOut && d < 6.0) tunnelOut[idx] = Math.max(tunnelOut[idx], zf + FORMATION);
+            const cover = zf + FORMATION + 8.2 - Math.max(0, d - 5) * 1.0;
+            if (cover > lower[idx]) { lower[idx] = cover; touched[idx] = 1; if (d < nearD[idx]) { nearD[idx] = d; nearZ[idx] = cover; } }
+            continue;
+          }
           const e = Math.max(0, d - HALF_WIDTH);
           touched[idx] = 1;
           if (d < nearD[idx]) { nearD[idx] = d; nearZ[idx] = zf; }
@@ -358,7 +366,8 @@ export class Terrain {
     const H = new Float32Array(n * n);
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) H[j * n + i] = this.natural(bx + i * FINE_STEP, by + j * FINE_STEP);
     const walls = [];
-    this._carveGrid(H, bx, by, FINE_STEP, n, n, (x, y, idx) => H[idx], walls);
+    const tun = new Float32Array(n * n).fill(-1e4);
+    this._carveGrid(H, bx, by, FINE_STEP, n, n, (x, y, idx) => H[idx], walls, tun);
     // Where the neighbouring tile is never fine (no track near it), the edge takes the coarse
     // surface exactly and the last rings blend toward it, so the coarse chunk meets it without a
     // step. Between two fine tiles nothing is needed: both compute the same heights on the edge.
@@ -376,7 +385,7 @@ export class Terrain {
         H[j * n + i] = H[j * n + i] * w + this.coarseAt(bx + i * FINE_STEP, by + j * FINE_STEP) * (1 - w);
       }
     }
-    t = { ti, tj, x0, y0, n, H, walls, version: 1 };
+    t = { ti, tj, x0, y0, n, H, walls, tunnel: tun, version: 1 };
     this.fine.set(key, t);
     return t;
   }

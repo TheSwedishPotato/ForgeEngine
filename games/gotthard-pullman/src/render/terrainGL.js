@@ -16,7 +16,10 @@
  * water. Every input is real: the DEM, the ESA WorldCover classes, the weather.
  */
 import { Object3D, Box3, Vector3 } from 'three';
-import { Program, Texture } from '../../../duel1403/src/engine/gl/GL.js';
+import { Program, Texture, FMT } from '../../../duel1403/src/engine/gl/GL.js';
+
+// a two-channel float format for the fine tiles (height, tunnel); the engine's table is extended, not changed
+FMT.rg32f ??= ['RG32F', 'RG', 'FLOAT'];
 import { COMMON } from '../../../duel1403/src/engine/shaders/common.js';
 import { FINE_N, FINE_STEP, FINE_TILE } from '../world/terrain.js';
 
@@ -155,13 +158,26 @@ void terrainMaterial(vec3 Ng, vec2 m, float h, float dist, out vec3 albedo, out 
 }
 `;
 
+const TUNNEL_HOLE_GLSL = /* glsl */`
+uniform highp sampler2D uHeightTex;   // the fine tile (r: height, g: rail height of a tunnel under it)
+uniform vec2 uTileMap0;               // map coordinates of the tile's texel 0
+uniform float uTileCell;
+bool inTunnelTube(vec2 m, float h) {
+  ivec2 t = ivec2(floor((m - uTileMap0) / uTileCell + 0.5));
+  float tz = texelFetch(uHeightTex, clamp(t, ivec2(0), textureSize(uHeightTex, 0) - 1), 0).g;
+  return h < tz + 7.3;
+}
+`;
+
 const GBUFFER_FS = /* glsl */`
 ${COMMON}
 ${MATERIAL_GLSL}
+${TUNNEL_HOLE_GLSL}
 in vec3 vWorld; in vec3 vNormal; in vec2 vMap; in float vHeight; in vec4 vCur; in vec4 vPrev;
 layout(location = 0) out vec4 g0; layout(location = 1) out vec4 g1; layout(location = 2) out vec4 g2; layout(location = 3) out vec4 g3;
 void main() {
   if (uLevel == 2 && vMap.x > uMapRect.x && vMap.x < uMapRect.z && vMap.y > uMapRect.y && vMap.y < uMapRect.w) discard;
+  if (uLevel == 0 && inTunnelTube(vMap, vHeight)) discard;
   vec3 Ng = normalize(vNormal);
   float dist = length(vec3(vMap.x - uCamMap.x, vHeight - uCamMap.z, vMap.y - uCamMap.y));
   vec3 albedo, N; float rough;
@@ -177,11 +193,13 @@ void main() {
 }`;
 
 const DEPTH_FS = /* glsl */`
+${TUNNEL_HOLE_GLSL}
 in vec3 vWorld; in vec3 vNormal; in vec2 vMap; in float vHeight; in vec4 vCur; in vec4 vPrev;
 uniform int uLevel; uniform vec4 uMapRect;
 out vec4 o;
 void main() {
   if (uLevel == 2 && vMap.x > uMapRect.x && vMap.x < uMapRect.z && vMap.y > uMapRect.y && vMap.y < uMapRect.w) discard;
+  if (uLevel == 0 && inTunnelTube(vMap, vHeight)) discard;
   o = vec4(1.0);
 }`;
 
@@ -314,7 +332,9 @@ export class TerrainGL extends Object3D {
     for (const key of T.fineWanted) {
       const [ti, tj] = key.split(',').map(Number);
       const t = T.fineTile(ti, tj);
-      const tex = new Texture(gl, { width: N, height: N, format: 'r32f', filter: 'nearest', data: t.H });
+      const rg = new Float32Array(N * N * 2);
+      for (let k = 0; k < N * N; k++) { rg[k * 2] = t.H[k]; rg[k * 2 + 1] = t.tunnel ? t.tunnel[k] : -1e4; }
+      const tex = new Texture(gl, { width: N, height: N, format: 'rg32f', filter: 'nearest', data: rg });
       const get = (i, j) => t.H[Math.min(N - 1, j) * N + Math.min(N - 1, i)];
       const list = [];
       for (let sj = 0; sj < per; sj++) for (let si = 0; si < per; si++) {
@@ -322,7 +342,7 @@ export class TerrainGL extends Object3D {
         let lo = 1e9, hi = -1e9;
         for (let j = j0; j <= j0 + sub; j++) for (let i = i0; i <= i0 + sub; i++) { const h = get(i, j); lo = Math.min(lo, h); hi = Math.max(hi, h); }
         list.push({
-          level: 0, tex, texel0: [i0, j0], texMax: [N - 1, N - 1], cell: FINE_STEP, n: sub,
+          level: 0, tex, texel0: [i0, j0], texMax: [N - 1, N - 1], cell: FINE_STEP, n: sub, tileX0: t.x0, tileY0: t.y0,
           map0: [t.x0 + si * sub * FINE_STEP, t.y0 + sj * sub * FINE_STEP], size: sub * FINE_STEP, lo, hi, skirt: 6,
           strides: [1, 2, 5], errs: TerrainGL._errors(get, i0, j0, sub, [1, 2, 5]),
         });
@@ -395,7 +415,11 @@ export class TerrainGL extends Object3D {
       const c = it.c;
       if (frustum && !frustum.intersectsBox(this._box(c, _box))) continue;
       if (kind === 'depth' && c.level === 2) continue;           // the far ring never reaches the cascades
-      if (c.tex !== curTex) { p.set('uHeight', c.tex).set('uTexMax', c.texMax).set('uCell', c.cell); curTex = c.tex; }
+      if (c.tex !== curTex) {
+        p.set('uHeight', c.tex).set('uTexMax', c.texMax).set('uCell', c.cell);
+        if (c.level === 0) p.set('uHeightTex', c.tex).set('uTileMap0', [c.tileX0 - c.cell, c.tileY0 - c.cell]).set('uTileCell', c.cell);
+        curTex = c.tex;
+      }
       if (c.level !== curLevel) { p.set('uLevel', c.level); curLevel = c.level; }
       p.set('uTexel0', c.texel0).set('uStride', it.stride).set('uSkirt', c.skirt)
         .set('uAnchor', [c.map0[0] - o.x, 0, -(c.map0[1] - o.y)]).set('uMap0', c.map0);

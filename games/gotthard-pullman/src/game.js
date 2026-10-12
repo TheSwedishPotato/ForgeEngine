@@ -10,6 +10,8 @@ import { TrackGL } from './render/track.js';
 import { TrainGL } from './render/trainGL.js';
 import { Sim, DATE, hms } from './sim.js';
 import { Player } from './player.js';
+import { Structures } from './render/structures.js';
+import { Places } from './render/places.js';
 
 export class Game {
   static async create(canvas, { weather = 'clear', quality = 'high', startClock = hms('10:12'), seat = {}, onProgress = () => {} } = {}) {
@@ -18,7 +20,10 @@ export class Game {
     onProgress('Raising the mountains…');
     const terrain = await Terrain.load(route);
     const sim = await Sim.create({ route, weather, startClock });
-    return new Game(canvas, { route, terrain, sim, quality, seat, onProgress });
+    const game = new Game(canvas, { route, terrain, sim, quality, seat, onProgress });
+    onProgress('Boring the tunnels, building the bridges…');
+    game.structures = await Structures.create(game.stage, route, terrain, sim.weather);
+    return game;
   }
 
   constructor(canvas, { route, terrain, sim, quality, seat, onProgress }) {
@@ -35,6 +40,7 @@ export class Game {
     this.stage.setTime(sim.clock, { now: true });
     this.forest = new Forest(this.stage, terrain, route, this.weather);
     this.track = new TrackGL(this.stage, route, terrain, this.weather);
+    this.places = new Places(this.stage, terrain, route, this.weather);
     this.trainGL.update(0);
     this.player.update(0, this.stage.camera);
     while (this.forest.update(this.stage.camera.position, 8));
@@ -60,6 +66,7 @@ export class Game {
     this.player.update(dt, this.stage.camera);
     this.forest.update(this.stage.camera.position, 2);
     this.track.update(this.stage.camera.position, 4);
+    this.places.update(this.stage.camera.position);
     this.stage.setTime(this.sim.clock);
     this.stage.render(dt);
   }

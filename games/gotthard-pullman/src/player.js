@@ -26,8 +26,15 @@ export class Player {
   _bind() {
     const canvas = this.game.canvas;
     canvas.addEventListener('click', () => { if (!document.pointerLockElement) canvas.requestPointerLock?.(); });
+    canvas.addEventListener('wheel', (e) => { if (this.mode === 'outside') this.orbit.dist = Math.max(4, Math.min(300, this.orbit.dist * Math.exp(e.deltaY * 0.001))); });
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyV') this.setOutside(this.mode !== 'outside', this.orbit ?? {});
+      if (this.mode === 'outside' && e.code === 'BracketRight') this.orbit.vehicle = Math.min(this.game.trainGL.vehicles.length - 1, this.orbit.vehicle + 1);
+      if (this.mode === 'outside' && e.code === 'BracketLeft') this.orbit.vehicle = Math.max(0, this.orbit.vehicle - 1);
+    });
     document.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== canvas) return;
+      if (this.mode === 'outside') { this.orbit.yaw -= e.movementX * 0.004; this.orbit.pitch = Math.max(-0.1, Math.min(1.4, this.orbit.pitch + e.movementY * 0.004)); return; }
       this.yaw -= e.movementX * this.sensitivity;
       this.pitch -= e.movementY * this.sensitivity;
       this.yaw = Math.max(-1.95, Math.min(1.95, this.yaw));
@@ -38,8 +45,31 @@ export class Player {
   /** The car model you are in. */
   car() { return this.game.trainGL.vehicles.find((m) => m.info?.type === this.carKind); }
 
+  /** The outside camera: orbit a vehicle (index into the train) at a distance, yaw and pitch. */
+  setOutside(on, { vehicle = 0, dist = 18, yaw = 0.9, pitch = 0.18 } = {}) {
+    this.mode = on ? 'outside' : 'seated';
+    this.orbit = { vehicle, dist, yaw, pitch };
+  }
+
+  _outside(camera) {
+    const O = this.orbit, m = this.game.trainGL.vehicles[O.vehicle] ?? this.game.trainGL.vehicles[0];
+    m.group.updateMatrixWorld();
+    const c = new Vector3(0, 2.2, 0).applyMatrix4(m.group.matrixWorld);
+    const h = m.pose.heading;
+    // yaw measured from the vehicle's right side, round toward its front
+    const a = O.yaw, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
+    const dx = rx * Math.cos(a) + fx * Math.sin(a), dz = rz * Math.cos(a) + fz * Math.sin(a);
+    camera.position.set(c.x + dx * O.dist * Math.cos(O.pitch), c.y + O.dist * Math.sin(O.pitch), c.z + dz * O.dist * Math.cos(O.pitch));
+    // keep the eye above the ground
+    const map = this.game.stage.toMap(camera.position);
+    const g = this.game.terrain.heightAt(map.x, map.y) + 1.6;
+    if (map.z < g) camera.position.y += g - map.z;
+    camera.lookAt(c);
+  }
+
   /** Places the camera (call after the train's poses are up to date). */
   update(dt, camera) {
+    if (this.mode === 'outside') return this._outside(camera);
     const m = this.car();
     if (!m) return;
     const chair = m.info.chairs[this.chairIndex] ?? m.info.chairs[0];

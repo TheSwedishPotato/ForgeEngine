@@ -125,6 +125,55 @@ void main() {
   o = vec4(svf / 16.0, h0 - 1.5, 0.0, 1.0);
 }`;
 
+/**
+ * The ground under any point (the 5 m tiles along the line, else the map), and what it means for the
+ * light there: daylight (none inside a tunnel), the sun through the valley fog, the sky the gorge leaves.
+ * Needs TERRAIN_LIGHT_GLSL before it and uSunDir declared; the fine-tile uniforms are bound by the stage.
+ */
+export const GROUND_GLSL = /* glsl */`
+uniform highp sampler2D uFineAtlas, uFineIndex;
+uniform ivec2 uFineIndexSize;
+uniform vec4 uFineRect;            // map x0, y0, tile size, sample step
+uniform int uFineCols, uFineN;     // atlas columns, samples per tile side (with border)
+uniform vec2 uFogSun;              // valley fog: extinction (1/m), top (m)
+/** The ground's height under a map point: the 5 m tiles along the line, else the 25 m map. */
+float groundAt(vec2 m) {
+  vec2 tf = (m - uFineRect.xy) / uFineRect.z;
+  ivec2 ti = ivec2(floor(tf));
+  if (all(greaterThanEqual(ti, ivec2(0))) && all(lessThan(ti, uFineIndexSize))) {
+    float slot = texelFetch(uFineIndex, ti, 0).r;
+    if (slot > 0.5) {
+      int k = int(slot + 0.5) - 1;
+      ivec2 base = ivec2(k % uFineCols, k / uFineCols) * uFineN;
+      vec2 f = (m - (uFineRect.xy + vec2(ti) * uFineRect.z)) / uFineRect.w + 1.0;
+      ivec2 i = clamp(ivec2(floor(f)), ivec2(0), ivec2(uFineN - 2));
+      vec2 w = f - vec2(i);
+      float a = texelFetch(uFineAtlas, base + i, 0).r, b = texelFetch(uFineAtlas, base + i + ivec2(1, 0), 0).r;
+      float c = texelFetch(uFineAtlas, base + i + ivec2(0, 1), 0).r, d = texelFetch(uFineAtlas, base + i + 1, 0).r;
+      return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
+    }
+  }
+  return terrainLightAt(m).z;
+}
+/** Daylight reaching a point: none a few metres under the ground (inside a tunnel). */
+float daylightAt(vec3 wpos) {
+  if (uTLOn < 0.5) return 1.0;
+  vec2 m = vec2(wpos.x + uOrigin.x, -wpos.z + uOrigin.y);
+  float h = wpos.y + uOrigin.z;
+  return smoothstep(-6.0, -2.5, h - groundAt(m));
+}
+/** The sun through the valley fog above a point. */
+float fogSun(vec3 wpos) {
+  float h = wpos.y + uOrigin.z;
+  return exp(-uFogSun.x * max(0.0, uFogSun.y - h) / max(uSunDir.y, 0.05));
+}
+/** Sky light in the gorge: what the mountains leave of the sky, plus their snow lit by it. */
+float skyLightScale(vec3 wpos) {
+  float s = terrainSvf(wpos);
+  return s + (1.0 - s) * 0.45;
+}
+`;
+
 export class TerrainLight {
   constructor(stage, terrain) {
     this.stage = stage;
