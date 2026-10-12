@@ -153,6 +153,13 @@ export class Route {
     });
     this.stations = R.stations.map((st) => ({ name: st.name, s: st.sRun, km: st.km, z: st.z ?? st.zFit }));
     this._stops();
+    // names OpenStreetMap leaves out, where the order and lengths of the line's structures make
+    // them certain (de.wikipedia "Gotthardbahn" and "Chärstelenbachbrücke": south of Amsteg the
+    // Windgällentunnel, 183 m, the bridge at km 47.9, then the Bristentunnel, 709 m)
+    for (const [name, km, len] of [['Windgällentunnel', 47.7, 183], ['Bristentunnel', 48.4, 709]]) {
+      const t = this.tunnels.find((x) => !x.name && Math.abs(this.kmAt(x.s0) - km) < 0.35 && Math.abs((x.s1 - x.s0) - len) < len * 0.2);
+      if (t) t.name = name;
+    }
   }
 
   /**

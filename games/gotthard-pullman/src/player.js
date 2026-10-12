@@ -46,15 +46,15 @@ export class Player {
   car() { return this.game.trainGL.vehicles.find((m) => m.info?.type === this.carKind); }
 
   /** The outside camera: orbit a vehicle (index into the train) at a distance, yaw and pitch. */
-  setOutside(on, { vehicle = 0, dist = 18, yaw = 0.9, pitch = 0.18 } = {}) {
+  setOutside(on, { vehicle = 0, dist = 18, yaw = 0.9, pitch = 0.18, along = 0, height = 2.2 } = {}) {
     this.mode = on ? 'outside' : 'seated';
-    this.orbit = { vehicle, dist, yaw, pitch };
+    this.orbit = { vehicle, dist, yaw, pitch, along, height };
   }
 
   _outside(camera) {
     const O = this.orbit, m = this.game.trainGL.vehicles[O.vehicle] ?? this.game.trainGL.vehicles[0];
     m.group.updateMatrixWorld();
-    const c = new Vector3(0, 2.2, 0).applyMatrix4(m.group.matrixWorld);
+    const c = new Vector3(O.along ?? 0, O.height ?? 2.2, 0).applyMatrix4(m.group.matrixWorld);
     const h = m.pose.heading;
     // yaw measured from the vehicle's right side, round toward its front
     const a = O.yaw, fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);

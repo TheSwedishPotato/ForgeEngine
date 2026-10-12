@@ -432,8 +432,11 @@ export function feedSteam(plume, loco, model, vel, dt) {
   // the chimney top (engine coordinates: x forward from the middle, y up from the rail, z right)
   const chimney = at(6.3425 - 1.75, 4.55, 0);
   const blastV = (strength) => Math.max(6, Math.min(90, 0.4 * Math.sqrt((2 * Math.max(0, strength) * 1e5) / 0.6)));
-  while (q.length) {
-    const ev = q.shift();
+  // the queue is shared (the sound reads it too): take the beats newer than the last one seen
+  const last = plume._lastBeat ?? 0;
+  for (const ev of q) {
+    if (!(ev.n > last)) continue;
+    plume._lastBeat = ev.n;
     if (ev.type !== 'beat' || (loco.time ?? 0) - (ev.t ?? 0) > 0.5) continue;   // (not the backlog of a skip)
     const m = Math.max(0.01, ev.mass ?? 0.1), vb = blastV(ev.strength ?? 0.2);
     // the beat as a short column: the head of the blast fastest

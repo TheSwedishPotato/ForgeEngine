@@ -16,6 +16,7 @@
 import { Group, Vector3, Matrix4, MeshStandardMaterial, MeshPhysicalMaterial, Color } from 'three';
 import { Builder } from './geom.js';
 import { letteringTexture } from './carArt.js';
+import { CONTROLS } from '../crew/cab.js';
 
 export const LOCO = {
   length: 12.685, half: 12.685 / 2,
@@ -27,7 +28,8 @@ export const LOCO = {
   cylY: 1.0, cylZ: 1.13, cylD: 1.5,          // outside (LP) cylinders: height, offset, distance behind the buffer face
   boilerY: 2.95,
 };
-const X = (d) => LOCO.half - d;              // distance behind the front buffer face -> x
+const X = (d) => LOCO.half - d;
+const CONTROLS_POS = Object.fromEntries(Object.entries(CONTROLS).map(([k, v]) => [k, v.pos]));              // distance behind the front buffer face -> x
 const V = (x, y, z) => new Vector3(x, y, z);
 
 let _mats = null;
@@ -163,24 +165,16 @@ export function buildLocomotive() {
   b.extrudeX('black', roof, X(c1 + 0.25), X(c0 - 0.05), { closed: false });
   b.extrudeX('cabpaint', roof.map(([z, y]) => [z * 0.97, y - 0.03]).reverse(), X(c1 + 0.2), X(c0), { closed: false });
   b.box('floor', [X(c1), cy0, -cw], [X(c0), cy0 + 0.05, cw]);
-  // the backhead: firebox back plate, firedoor (with the glow), gauges, water glasses, regulator, reverser
+  // the backhead plate; its fittings are where the crew's hands find them (cab.js), see cabFittings
   b.box('black', [X(c0 + 0.12), cy0, -0.95], [X(c0 + 0.05), by + 0.95, 0.95]);
-  b.box('steel', [X(c0 + 0.14), 1.95, -0.32], [X(c0 + 0.12), 2.45, 0.32]);                                                 // firedoor
-  b.box('fire', [X(c0 + 0.141), 2.02, -0.25], [X(c0 + 0.135), 2.38, 0.25]);
-  for (const [z, y] of [[-0.35, 3.45], [0.0, 3.6], [0.35, 3.45]]) { b.cylinder('brass', V(X(c0 + 0.14), y, z), V(X(c0 + 0.2), y, z), 0.11, 0.11, { segs: 16 }); b.cylinder('gauge', V(X(c0 + 0.2), y, z), V(X(c0 + 0.205), y, z), 0.095, 0.095, { segs: 16 }); }
-  for (const z of [-0.62, 0.62]) b.cylinder('brass', V(X(c0 + 0.2), 2.7, z), V(X(c0 + 0.2), 3.1, z), 0.025, 0.025, { segs: 8 });   // water gauge glasses
-  b.cylinder('copper', V(X(c0 + 0.2), 3.2, -0.95), V(X(c0 + 0.2), 3.2, 0.95), 0.025, 0.025, { segs: 8 });                       // steam manifold
-  // regulator handle (right, the driver's side), reverser wheel, the driver's brake valve
-  b.cylinder('steel', V(X(c0 + 0.16), 3.05, 0.55), V(X(c0 + 0.62), 2.85, 0.75), 0.022, 0.022, { segs: 6 });
-  b.cylinder('steel', V(X(c0 + 0.95), 2.05, 1.05), V(X(c0 + 1.0), 2.05, 1.05), 0.2, 0.2, { segs: 20, open: true });          // reverser wheel rim
-  b.box('black', [X(c0 + 1.1), 1.67, 0.98], [X(c0 + 0.9), 2.05, 1.12]);
-  b.box('black', [X(c0 + 1.25), 2.3, 1.15], [X(c0 + 1.05), 2.5, 1.35]);                                                     // brake valve
+  const controls = cabFittings(b, M);
   b.box('cabwood', [X(c0 + 1.9), 2.2, 0.85], [X(c0 + 1.5), 2.26, 1.35]);                                                    // driver's seat
   b.box('cabwood', [X(c0 + 1.9), 2.2, -1.35], [X(c0 + 1.5), 2.26, -0.85]);                                                  // fireman's seat
   // ---- the pony truck frame and the rods' fixed parts are below; the wheels are separate (they turn)
   const group = b.build(M);
   group.name = 'C 5/6 2978';
-  const parts = { wheels: [], pony: null, rods: [], crossheads: [], mainRods: [] };
+  const parts = { wheels: [], pony: null, rods: [], crossheads: [], mainRods: [], controls };
+  for (const g of Object.values(controls)) group.add(g);
   // coupled wheelsets
   for (const d of LOCO.axles) {
     const ws = new Builder();
@@ -241,6 +235,141 @@ export function animateLocomotive(parts, theta, s) {
     mr.position.set(px, py, mr.userData.z);
     mr.rotation.z = Math.atan2(LOCO.cylY - py, chx - px);
   }
+}
+
+// ---- the footplate -------------------------------------------------------------------------------
+
+/** cab.js's frame on the engine: its origin 11.37 m behind the front buffer face, on the cab floor. */
+export const CAB = { d0: 11.37, floor: 1.67 };
+/** A point of cab.js's frame (x right, y up from the floor, z toward the boiler) in the engine model. */
+export const cabToModel = ([x, y, z]) => V(X(CAB.d0 - z), CAB.floor + y, x);
+
+/** A small handwheel facing the cab (axis fore and aft), as its own group so it can turn. */
+function handwheel(M, r, { spokes = 4, mat = 'steel', knob = false } = {}) {
+  const w = new Builder();
+  w.cylinder(mat, V(-0.012, 0, 0), V(0.012, 0, 0), r, r, { segs: 18, open: true });
+  w.cylinder(mat, V(-0.016, 0, 0), V(0.016, 0, 0), r * 0.18, r * 0.18, { segs: 8 });
+  for (let i = 0; i < spokes; i++) {
+    const a = (i / spokes) * Math.PI * 2;
+    w.cylinder(mat, V(0, Math.cos(a) * r * 0.15, Math.sin(a) * r * 0.15), V(0, Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95), r * 0.06 + 0.004, r * 0.06 + 0.004, { segs: 5 });
+  }
+  if (knob) w.cylinder('cabwood', V(0, r, 0), V(-0.09, r, 0), 0.016, 0.016, { segs: 8 });
+  return w.build(M);
+}
+
+/**
+ * The fittings of 2978's backhead and footplate at the positions of cab.js: what turns or swings
+ * is a group of its own (returned by name), the rest goes into the engine's builder.
+ */
+function cabFittings(b, M) {
+  const P = cabToModel;
+  const out = {};
+  const at = (g, p, name) => { g.position.copy(P(p)); g.name = name; out[name] = g; return g; };
+  const face = X(CAB.d0 - 1.15);                       // the backhead plate's face, toward the cab
+  // fire door: the firehole ring, the fire behind it, the door on its hinge (left edge)
+  const fy0 = CAB.floor + 0.79, fy1 = CAB.floor + 1.11;
+  for (const [y0, y1, z0, z1] of [[fy1, fy1 + 0.07, -0.3, 0.3], [fy0 - 0.07, fy0, -0.3, 0.3], [fy0, fy1, -0.3, -0.22], [fy0, fy1, 0.22, 0.3]]) b.box('steel', [face - 0.03, y0, z0], [face, y1, z1]);
+  b.box('fire', [face - 0.004, fy0, -0.22], [face - 0.002, fy1, 0.22]);
+  {
+    const d = new Builder();
+    d.box('steel', [-0.027, -0.2, 0], [0, 0.2, 0.46]);
+    d.box('brass', [-0.05, -0.03, 0.36], [-0.027, 0.03, 0.42]);          // the handle
+    const g = at(d.build(M), [-0.23, 0.95, 1.15], 'firedoor');
+    g.position.x = face - 0.031;
+  }
+  // the manifold across the top of the firebox with the steam valves on it
+  b.cylinder('copper', P([-0.7, 1.62, 1.1]), P([0.7, 1.62, 1.1]), 0.03, 0.03, { segs: 8 });
+  for (const [name, r] of [['startingValve', 0.055], ['injectorR', 0.06], ['injectorL', 0.06], ['steamHeat', 0.05], ['blower', 0.05]]) {
+    const p = CONTROLS_POS[name];
+    b.cylinder('brass', P([p[0], p[1], 1.1]), P([p[0], p[1], p[2] + 0.04]), 0.018, 0.018, { segs: 6 });
+    const g = at(handwheel(M, r, { mat: name === 'blower' ? 'brass' : 'steel' }), p, name);
+    g.userData.turns = name === 'blower' ? 3 : 1.5;
+  }
+  // regulator: the shaft boss high on the backhead and the handle swinging across it
+  b.cylinder('brass', P([0.0, 2.1, 1.15]), P([0.0, 2.1, 1.08]), 0.06, 0.06, { segs: 14 });
+  {
+    const h = new Builder();
+    h.box('steel', [-0.075, -0.33, -0.018], [-0.045, 0.04, 0.018]);
+    h.cylinder('cabwood', V(-0.06, -0.32, 0), V(-0.2, -0.32, 0), 0.02, 0.02, { segs: 8 });
+    const g = at(h.build(M), [0.0, 2.1, 1.08], 'regulator');
+    g.position.x = face - 0.02;
+  }
+  // gauges: boiler pressure in the middle, the receiver and the brake (duplex) beside it
+  for (const [p, r] of [[[0.0, 2.05, 1.06], 0.1], [[-0.34, 1.95, 1.08], 0.075], [[0.62, 1.88, 1.08], 0.075]]) {
+    b.cylinder('brass', P([p[0], p[1], 1.15]), P([p[0], p[1], p[2] - 0.02]), r + 0.012, r + 0.012, { segs: 18 });
+    b.cylinder('gauge', P([p[0], p[1], p[2] - 0.02]), P([p[0], p[1], p[2] - 0.024]), r, r, { segs: 18 });
+  }
+  // the gauge glasses either side of the fire door
+  for (const x of [-0.22, 0.22]) {
+    b.cylinder('brass', P([x, 1.38, 1.1]), P([x, 1.42, 1.1]), 0.022, 0.022, { segs: 8 });
+    b.cylinder('glass', P([x, 1.42, 1.1]), P([x, 1.68, 1.1]), 0.012, 0.012, { segs: 8 });
+    b.cylinder('brass', P([x, 1.68, 1.1]), P([x, 1.72, 1.1]), 0.022, 0.022, { segs: 8 });
+  }
+  // the reversing screw on its pedestal, its handwheel facing the driver
+  {
+    const p = CONTROLS_POS.reverser;
+    b.box('black', [X(CAB.d0 - p[2]) - 0.05, CAB.floor, p[0] - 0.06], [X(CAB.d0 - p[2]) + 0.25, CAB.floor + p[1] - 0.16, p[0] + 0.06]);
+    b.cylinder('steel', P([p[0], p[1], p[2] + 0.02]), P([p[0], p[1], p[2] + 0.32]), 0.03, 0.03, { segs: 8 });
+    const g = at(handwheel(M, 0.16, { spokes: 4, knob: true }), p, 'reverser');
+    g.userData.turns = 12;
+  }
+  // the driver's brake valve on its bracket by the right side window, the direct brake below
+  for (const [name, r, len] of [['trainBrake', 0.07, 0.24], ['directBrake', 0.05, 0.18]]) {
+    const p = CONTROLS_POS[name];
+    b.cylinder('black', P([p[0], p[1] - 0.18, p[2]]), P([p[0], p[1] - 0.02, p[2]]), r, r, { segs: 14 });
+    b.cylinder('black', P([p[0], 0, p[2]]), P([p[0], p[1] - 0.18, p[2]]), 0.025, 0.025, { segs: 8 });
+    const h = new Builder();
+    h.cylinder('steel', V(0, -0.02, 0), V(0, 0.02, 0), 0.03, 0.03, { segs: 10 });
+    h.box('steel', [-0.012, 0, -0.012], [len, 0.02, 0.012]);
+    h.cylinder('cabwood', V(len - 0.01, 0.02, 0), V(len - 0.01, 0.1, 0), 0.016, 0.016, { segs: 8 });
+    at(h.build(M), [p[0], p[1], p[2]], name);
+  }
+  // sander and drain-cock levers, the dampers lever on the fireman's side
+  for (const [name, len] of [['sander', 0.2], ['drainCocks', 0.55], ['dampers', 0.45]]) {
+    const p = CONTROLS_POS[name];
+    const h = new Builder();
+    h.box('steel', [-0.012, 0, -0.012], [0.012, len, 0.012]);
+    h.cylinder('cabwood', V(0, len, 0), V(0, len + 0.08, 0), 0.016, 0.016, { segs: 8 });
+    const base = name === 'sander' ? [p[0], p[1] - 0.2, p[2]] : [p[0], 0, p[2]];
+    const g = at(h.build(M), base, name);
+    if (name === 'sander') b.cylinder('black', P([p[0], p[1] - 0.24, p[2]]), P([p[0], p[1] - 0.19, p[2]]), 0.03, 0.03, { segs: 8 });
+    g.userData.len = len;
+  }
+  // the whistle's pull handle on its rod from the roof
+  {
+    const p = CONTROLS_POS.whistle;
+    const h = new Builder();
+    h.cylinder('steel', V(0, 0, 0), V(0, 0.5, 0), 0.006, 0.006, { segs: 5 });
+    h.box('cabwood', [-0.06, -0.02, -0.015], [0.06, 0.0, 0.015]);
+    at(h.build(M), p, 'whistle');
+  }
+  return out;
+}
+
+/** Sets the footplate's handles and wheels from the controls (loco.c) and the brake. */
+export function animateCab(controls, c, brake, dt) {
+  const C = controls;
+  if (!C) return;
+  const ease = (o, key, v, rate = 8) => { o.userData[key] = (o.userData[key] ?? v) + (v - (o.userData[key] ?? v)) * Math.min(1, dt * rate); return o.userData[key]; };
+  // regulator: closed hanging down-left, wide open swung across to the right
+  if (C.regulator) C.regulator.rotation.x = -(0.44 + 1.22 * ease(C.regulator, 'v', c.regulator));
+  if (C.reverser) C.reverser.rotation.x = ease(C.reverser, 'v', c.reverser, 3) * C.reverser.userData.turns * Math.PI * 2;
+  for (const k of ['startingValve', 'injectorR', 'injectorL', 'steamHeat', 'blower']) {
+    const g = C[k]; if (!g) continue;
+    const v = k === 'injectorL' ? +c.injector[0] : k === 'injectorR' ? +c.injector[1] : +(c[k] ?? 0);
+    g.rotation.x = ease(g, 'v', v, 3) * g.userData.turns * Math.PI * 2;
+  }
+  if (C.firedoor) C.firedoor.rotation.y = -1.35 * ease(C.firedoor, 'v', c.firedoor ? 1 : 0, 5);
+  if (C.trainBrake && brake) {
+    const h = brake.handle;
+    const a = h === 'release' ? -0.9 : h === 'running' ? -0.45 : h === 'lap' ? 0 : h === 'emergency' ? 1.35 : 0.25 + 0.75 * Math.max(0, Math.min(1, (5.0 - 0.4 - brake.serviceTarget) / 1.1));
+    C.trainBrake.rotation.y = -ease(C.trainBrake, 'v', a, 6);
+  }
+  if (C.directBrake && brake) C.directBrake.rotation.y = -ease(C.directBrake, 'v', (brake.direct ?? 0) * 1.3, 6);
+  if (C.sander) C.sander.rotation.z = -ease(C.sander, 'v', c.sander ? 0.5 : 0, 6);
+  if (C.drainCocks) C.drainCocks.rotation.z = -ease(C.drainCocks, 'v', c.drainCocks ? 0.45 : -0.1, 6);
+  if (C.dampers) C.dampers.rotation.z = -ease(C.dampers, 'v', (c.dampers ?? 1) * 0.5 - 0.1, 4);
+  if (C.whistle) { const u = C.whistle.userData; u.y0 ??= C.whistle.position.y; C.whistle.position.y = u.y0 - 0.05 * ease(C.whistle, 'v', c.whistle ?? 0, 12); }
 }
 
 /** The tender: 6.51 m over the buffers, three axles, a tank for 18 m³ and a coal space for 8 t. */

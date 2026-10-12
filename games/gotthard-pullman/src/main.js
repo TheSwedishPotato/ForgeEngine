@@ -17,7 +17,8 @@ import { Sim } from './sim.js';
 import { Game } from './game.js';
 import { Structures } from './render/structures.js';
 import { Places } from './render/places.js';
-import { DATE, hms } from './sim.js';
+import { DATE, hms, fmt } from './sim.js';
+import { startScreen, HUD, Phone, DebugPanel, Help } from './ui/ui.js';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('view');
@@ -32,25 +33,49 @@ function loading(text) {
 }
 
 async function ride() {
+  // the start screen, unless the address already says how to ride (or a test drives the page)
+  let opts = { weather: params.get('w') ?? 'clear', quality: params.get('q') ?? 'high', car: params.get('car') ?? 'parlor', chair: Number(params.get('chair') ?? 12), t: params.get('t') ?? '10:12' };
+  if (!manual && !params.get('go') && !params.get('w')) opts = await startScreen(ui, opts);
+  loading('Laying the line…');
+  const join = hms(opts.t);
   const game = await Game.create(canvas, {
-    weather: params.get('w') ?? 'clear', quality: params.get('q') ?? 'high', startClock: hms(params.get('t') ?? '10:12'),
-    seat: { car: params.get('car') ?? 'parlor', chair: Number(params.get('chair') ?? 12) }, onProgress: (t) => loading(t),
+    weather: opts.weather, quality: opts.quality, startClock: Math.min(join, hms('10:12')),
+    seat: { car: opts.car, chair: opts.chair }, onProgress: (t) => loading(t),
   });
   game.timeScale = Number(params.get('speed') ?? 1);
+  // joining later: the physics runs ahead (the crew drives the whole way, as it would)
+  if (join > game.sim.clock) {
+    loading(`Running ahead to ${opts.t}…`);
+    await new Promise((r) => setTimeout(r, 30));
+    while (game.sim.clock < join) { game.sim.advance(Math.min(30, join - game.sim.clock)); if ((game.sim.clock | 0) % 120 < 30) { loading(`Running ahead to ${opts.t}… ${fmt(game.sim.clock)}`); await new Promise((r) => setTimeout(r, 0)); } }
+  }
   if (params.get('skip')) game.sim.advance(Number(params.get('skip')));
-  if (params.get('cam') === 'out') game.player.setOutside(true, { vehicle: Number(params.get('veh') ?? 0), dist: Number(params.get('dist') ?? 18), yaw: Number(params.get('oyaw') ?? 50) * Math.PI / 180, pitch: Number(params.get('opitch') ?? 10) * Math.PI / 180 });
+  if (params.get('cam') === 'out') game.player.setOutside(true, { vehicle: Number(params.get('veh') ?? 0), dist: Number(params.get('dist') ?? 18), yaw: Number(params.get('oyaw') ?? 50) * Math.PI / 180, pitch: Number(params.get('opitch') ?? 10) * Math.PI / 180, along: Number(params.get('oal') ?? 0), height: Number(params.get('oh') ?? 2.2) });
   if (params.get('yaw')) game.player.yaw = Number(params.get('yaw')) * Math.PI / 180;
   if (params.get('pitch')) game.player.pitch = Number(params.get('pitch')) * Math.PI / 180;
   ui.querySelector('.loading')?.remove();
   window.game = { game, stage: game.stage, sim: game.sim, ready: true, advance(dt) { const n = Math.max(1, Math.round(dt * 30)); for (let i = 0; i < n; i++) game.frame(dt / n); } };
+  // the screens around the view
+  const hud = new HUD(ui, game), phone = new Phone(ui, game), debug = new DebugPanel(ui, game), help = new Help(ui);
+  game.ui = { hud, phone, debug, help };
+  if (manual && params.get('hud') !== '1') hud.toggle();
+  if (params.get('phone') === '1') phone.toggle();
+  if (params.get('dbg') === '1') debug.toggle();
+  game.onFrame = (dt) => { hud.update(dt); phone.update(dt); debug.update(dt); };
   if (!manual) {
+    game.sound.attach(window);
     let last = performance.now();
-    const loop = (now) => { const dt = (now - last) / 1000; last = now; game.frame(dt); requestAnimationFrame(loop); };
+    const loop = (now) => { const dt = (now - last) / 1000; last = now; game.frame(game.paused ? 0 : dt); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
   }
   window.addEventListener('keydown', (e) => {
     if (e.key === '+' || e.key === '=') game.timeScale = Math.min(64, game.timeScale * 2);
     if (e.key === '-') game.timeScale = Math.max(1, game.timeScale / 2);
+    if (e.code === 'KeyM') phone.toggle();
+    if (e.code === 'KeyT') hud.toggle();
+    if (e.code === 'KeyH') help.toggle();
+    if (e.code === 'KeyP') game.paused = !game.paused;
+    if (e.code === 'F3') { e.preventDefault(); debug.toggle(); }
   });
 }
 

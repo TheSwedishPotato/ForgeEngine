@@ -5,7 +5,7 @@
  */
 import { Group, Euler, Quaternion, Vector3, Matrix4 } from 'three';
 import { buildCar, BODY } from './pullman.js';
-import { buildLocomotive, animateLocomotive, buildTender, animateTender, LOCO } from './locomotive.js';
+import { buildLocomotive, animateLocomotive, animateCab, buildTender, animateTender, LOCO } from './locomotive.js';
 import { RAIL_SPACING } from '../world/route.js';
 import { CarRide } from '../physics/sway.js';
 import { feedSteam } from './steam.js';
@@ -114,7 +114,7 @@ export class TrainGL {
       }
       _e.set((m.roll ?? pose.roll) + (sw?.roll ?? 0), pose.yaw, pose.pitch + (sw?.pitch ?? 0), 'YZX');
       m.group.rotation.copy(_e);
-      if (m.kind === 'engine') animateLocomotive(m.parts, this.train.loco.theta, s);
+      if (m.kind === 'engine') { animateLocomotive(m.parts, this.train.loco.theta, s); animateCab(m.parts.controls, this.train.loco.c, this.train.brake, ddt); }
       if (m.kind === 'tender') animateTender(m.parts, s);
       // the trucks follow the track under the body
       for (const [k, tr] of m.trucks.entries()) {

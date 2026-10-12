@@ -5,7 +5,8 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 // (Zweikampf 1403 is left as it is). One copy of three.js serves both.
 export default defineConfig(({ mode }) => ({
   base: './',
-  server: { host: '127.0.0.1', port: 5176, fs: { allow: ['..'] } },
+  // (NOHMR=1 PORT=5177: a second server for the headless screenshots, which edits must not reload)
+  server: { host: '127.0.0.1', port: Number(process.env.PORT ?? 5176), strictPort: !!process.env.PORT, hmr: process.env.NOHMR ? false : undefined, fs: { allow: ['..'] } },
   resolve: { dedupe: ['three'] },
   worker: { format: 'es' },
   plugins: mode === 'single' ? [viteSingleFile()] : [],

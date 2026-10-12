@@ -252,7 +252,7 @@ export class SteamLocomotive {
         const a1 = (((this.theta + cy.phase) - relPhi) % TAU + TAU) % TAU;
         if (this.omega > 0.05 && a1 < a0 && a0 - a1 > Math.PI) {
           const pRel = pAdmLP * Math.pow((evLP.cut + S.lp.clearance) / (evLP.rel + S.lp.clearance), nLP);
-          const ev = { type: 'beat', cyl: cy.name, strength: Math.max(0, pRel - pBlastBack), mass: mEndLP, t: this.time };
+          const ev = { type: 'beat', cyl: cy.name, strength: Math.max(0, pRel - pBlastBack), mass: mEndLP, t: this.time, n: (this._evN = (this._evN ?? 0) + 1) };
           o.events.push(ev);
           // kept for the renderer and the sound, which read them once a frame
           (this.queue ??= []).push(ev);

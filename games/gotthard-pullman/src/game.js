@@ -12,6 +12,8 @@ import { Sim, DATE, hms } from './sim.js';
 import { Player } from './player.js';
 import { Structures } from './render/structures.js';
 import { Places } from './render/places.js';
+import { PeopleGL } from './render/peopleGL.js';
+import { Sound } from './audio/sound.js';
 
 export class Game {
   static async create(canvas, { weather = 'clear', quality = 'high', startClock = hms('10:12'), seat = {}, onProgress = () => {} } = {}) {
@@ -19,7 +21,7 @@ export class Game {
     const route = await Route.load();
     onProgress('Raising the mountains…');
     const terrain = await Terrain.load(route);
-    const sim = await Sim.create({ route, weather, startClock });
+    const sim = await Sim.create({ route, weather, startClock, seat });
     const game = new Game(canvas, { route, terrain, sim, quality, seat, onProgress });
     onProgress('Boring the tunnels, building the bridges…');
     game.structures = await Structures.create(game.stage, route, terrain, sim.weather);
@@ -34,7 +36,9 @@ export class Game {
     onProgress('Building the valley…');
     this.stage = new GotthardStage(canvas, { quality, terrain, weather: this.weather, date: DATE });
     this.trainGL = new TrainGL(this.stage, route, sim.train);
+    this.people = new PeopleGL(this.stage, this.trainGL, sim, seat);
     this.player = new Player(this, seat);
+    this.sound = new Sound(this);
     // start centred on the player's car, with the sun and the world made around it
     this._recentre(0);
     this.stage.setTime(sim.clock, { now: true });
@@ -63,11 +67,14 @@ export class Game {
     this.sim.advance(sdt);
     this._recentre();
     this.trainGL.update(sdt);
+    this.people.update(sdt, this.stage.camera);
     this.player.update(dt, this.stage.camera);
     this.forest.update(this.stage.camera.position, 2);
     this.track.update(this.stage.camera.position, 4);
     this.places.update(this.stage.camera.position);
     this.stage.setTime(this.sim.clock);
     this.stage.render(dt);
+    this.sound.update(dt);
+    this.onFrame?.(dt);
   }
 }

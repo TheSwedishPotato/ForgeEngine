@@ -9,6 +9,7 @@ import { Weather } from './world/weather.js';
 import { Train } from './physics/train.js';
 import { makeConsist, HELPER } from './physics/consist.js';
 import { Crew } from './crew/crew.js';
+import { Passengers } from './people/passengers.js';
 
 export const DATE = { year: 2026, month: 12, day: 11, weekday: 'Friday', utcOffset: 1 };   // CET
 
@@ -41,7 +42,7 @@ export class Sim {
     return new Sim(route, opts);
   }
 
-  constructor(route, { weather = 'clear', weatherOverrides = {}, cars, startClock = hms('10:00'), seed = 1, log = null } = {}) {
+  constructor(route, { weather = 'clear', weatherOverrides = {}, cars, startClock = hms('10:00'), seed = 1, log = null, seat } = {}) {
     this.route = route;
     this.weather = new Weather(route, weather, weatherOverrides);
     this.timetable = TIMETABLE;
@@ -59,6 +60,10 @@ export class Sim {
     // a warm engine standing ready: fire built up, steam near the mark, pipe charged
     const L = this.train.loco;
     L.fire.burning = 240; L.c.blower = 0.25; L.c.drainCocks = true;
+    // the people: seated, and at Erstfeld the last few still coming along the platform
+    this.passengers = new Passengers(this, { seed: 1211 + seed - 1, player: seat });
+    const first = this.timetable.stops[0];
+    if (this.clock < hms(first.dep) - 40) this.passengers.startAtErstfeld(first);
   }
 
   log(text) {
@@ -88,6 +93,7 @@ export class Sim {
     this.arrivals[stop.name] = this.clock;
     const late = stop.arr ? this.clock - hms(stop.arr) : 0;
     this.log(`Arrived ${stop.name} ${fmt(this.clock, true)}${stop.arr ? ` (booked ${stop.arr}, ${late >= 0 ? '+' : ''}${(late / 60).toFixed(1)} min)` : ''}.`);
+    this.passengers?.onArrive(stop);
     this.onArrive?.(stop);
   }
 
@@ -140,6 +146,7 @@ export class Sim {
       this._acc -= DT;
       this.clock += DT;
       this.crew.tick(DT);
+      this.passengers.tick(DT);
       this._assistTick();
       this.train.step(DT);
     }

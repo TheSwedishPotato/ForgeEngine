@@ -21,7 +21,7 @@ export const CONTROLS = {
   steamHeat: { pos: [0.18, 1.70, 1.05], size: 0.05, side: 'driver', kind: 'valve', label: 'train heating valve' },
   // fireman (left side)
   firedoor: { pos: [0.0, 0.95, 1.12], size: 0.25, side: 'fireman', kind: 'door', label: 'fire door' },
-  shovelPlate: { pos: [-0.25, 0.75, -0.95], size: 0.30, side: 'fireman', kind: 'coal', label: 'coal' },
+  shovelPlate: { pos: [-0.25, 0.12, -0.95], size: 0.30, side: 'fireman', kind: 'coal', label: 'coal' },   // the tender's shovelling plate, at floor level
   blower: { pos: [-0.30, 1.75, 1.03], size: 0.05, side: 'fireman', kind: 'valve', label: 'blower' },
   injectorL: { pos: [-0.55, 1.60, 1.00], size: 0.05, side: 'fireman', kind: 'valve', label: 'left injector' },
   dampers: { pos: [-0.60, 0.45, 0.95], size: 0.08, side: 'fireman', kind: 'lever', label: 'damper' },
