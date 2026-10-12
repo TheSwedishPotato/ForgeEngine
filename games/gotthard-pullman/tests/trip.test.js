@@ -93,3 +93,18 @@ test('steam: a blast stops within a second, and hangs in fog but vanishes in the
   assert.ok(fog.tAlive > 40, `in freezing fog it lasts ${fog.tAlive.toFixed(0)} s`);
   assert.ok(foehn.tAlive < 10, `in the föhn it is gone after ${foehn.tAlive.toFixed(1)} s`);
 });
+
+test('the Treno Gottardo overtakes at Gurtnellen and comes down past the photo stop at Wassen', async () => {
+  const { Traffic } = await import('../src/world/traffic.js');
+  const traffic = new Traffic(route);
+  const sim = new Sim(route, { weather: 'clear', startClock: hms('10:12') });
+  const near = (tr, s) => { const p = route.run.pos(s); let bd = 1e18, bt = null; for (let i = 0; i < tr.t.length; i += 2) { const q = tr.path.pos(i * 2); const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (d < bd) { bd = d; bt = tr.t[i]; } } return { d: Math.sqrt(bd), t: bt }; };
+  const [south, north] = traffic.trains;
+  while (sim.clock < hms('11:12') && sim.crew.phase !== 'arrived') sim.advance(1);
+  const g = sim.route.stations.find((x) => x.name === 'Gurtnellen'), w = sim.route.stations.find((x) => x.name === 'Wassen');
+  const pg = near(south, g.s), pw = near(north, w.s);
+  const depG = hms('10:49'), arrW = sim.arrivals.Wassen;
+  assert.ok(pg.d > 3 && pg.d < 7, `it passes on the other track (${pg.d.toFixed(1)} m across)`);
+  assert.ok(pg.t > sim.arrivals.Gurtnellen && pg.t < depG, 'while the special waits at Gurtnellen');
+  assert.ok(pw.d > 3 && pw.d < 7 && pw.t > arrW + 60 && pw.t < hms('11:15'), 'and the northbound one passes the photo stop while people are out');
+});

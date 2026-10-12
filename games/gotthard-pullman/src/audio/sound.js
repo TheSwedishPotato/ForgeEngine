@@ -75,6 +75,10 @@ export class Sound {
     this.drains = this._noiseLayer({ type: 'bandpass', f: 2600, Q: 0.8 }, this.engBus);
     this.whistle = this._whistle(this.engBus);
     this.murmur = this._babble(this.inside);
+    // another train going by: the roar of its wheels and the rush of air
+    this.passby = this._noiseLayer({ type: 'bandpass', f: 420, Q: 0.6 }, this.outside);
+    this.passbyHi = this._noiseLayer({ type: 'highpass', f: 1800, Q: 0.5 }, this.outside);
+    this.horn = this._tone([370, 440], this.outside);   // a two-tone horn (the pitches are an estimate)
     this.heating = this._noiseLayer({ type: 'highpass', f: 4000, Q: 0.5 }, this.inside);
   }
 
@@ -264,6 +268,20 @@ export class Sound {
     // the brake blocks sing in the last metres before a stand
     const bc = T.brake?.v?.[Math.min(T.brake.v.length - 1, Math.max(0, G.trainGL.vehicles.indexOf(car)))]?.pBC ?? 0;
     set(this.brakeSing.g.gain, bc > 0.4 && v > 0.2 && v < 6 ? Math.min(0.08, bc * 0.02) * (1 - v / 6) : 0, 0.08);
+
+    // ---- the Treno Gottardo going by, and its driver's greeting for the steam train
+    const nt = G.trafficGL?.nearest(cp);
+    if (nt) {
+      const a = G.traffic.at(sim.clock).find((x) => x.train === G.traffic.trains[nt.i]);
+      const vv = a?.v ?? 0, near = 1 / (1 + Math.max(0, nt.d - 6) / 14);
+      set(this.passby.g.gain, Math.min(1.2, near * Math.pow(vv / 22, 1.4) * 1.2), 0.08);
+      set(this.passbyHi.g.gain, Math.min(0.5, near * near * Math.pow(vv / 22, 2) * 0.6), 0.05);
+      const eDist = eng ? nt.pos.distanceTo(eng.group.position) : 1e9;
+      const key = `${nt.i}:${Math.round(sim.clock / 600)}`;
+      if (eDist < 160 && vv > 3 && this._hornFor !== key) { this._hornFor = key; this._hornT = 1.4; }
+    } else { set(this.passby.g.gain, 0, 0.2); set(this.passbyHi.g.gain, 0, 0.2); }
+    this._hornT = Math.max(0, (this._hornT ?? 0) - dt);
+    set(this.horn.g.gain, this._hornT > 0.75 || (this._hornT > 0 && this._hornT < 0.5) ? 0.22 : 0, 0.02);
 
     // ---- inside the car
     const inCar = !outsideView;

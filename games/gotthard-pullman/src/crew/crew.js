@@ -328,6 +328,8 @@ export class Crew {
       }
       case 'run': {
         this._handleSlip();
+        // (if she was quick off the mark, the cylinder cocks are still open: shut them now)
+        if (c.drainCocks && !this.busy(this.driver, 'drainCocks')) this.work(this.driver, 'drainCocks', { to: 0 });
         const vt = this._speedPlan();
         this.targetSpeed = vt;
         // stopping: shut off when the gradient and a light brake can stop her at the mark

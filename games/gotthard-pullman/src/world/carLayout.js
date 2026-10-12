@@ -39,14 +39,17 @@ export const LAYOUTS = {
   },
   diner: () => {
     const dining = winSaloon(9, 6.6, 1.32, 0.95);
+    // tables for four on both sides of the aisle, the diners facing each other across them, the
+    // chairs of neighbouring tables back to back: a bay of 1.7 m (0.6 m table, two chairs)
+    const tableX = Array.from({ length: 7 }, (_, k) => 6.55 - 1.7 * k);
     return {
       right: [...dining, { x: -8.2, w: 0.55, y0: 2.2, y1: 2.8, frosted: true }, { x: -9.6, w: 0.55, y0: 2.2, y1: 2.8, frosted: true }],
       left: [...dining, { x: -8.2, w: 0.7, y0: BODY.belt, y1: BODY.winTop }, { x: -9.6, w: 0.7, y0: BODY.belt, y1: BODY.winTop }],
       partitions: [{ x: 7.4, z0: -BODY.half, z1: BODY.half, door: [-0.35, 0.35] }, { x: -4.6, z0: -0.62, z1: BODY.half, door: null }, { x: -10.85, z0: -BODY.half, z1: BODY.half, door: [-1.1, -0.45] }],
       corridors: [{ x0: -10.85, x1: -4.6, z: -0.62 }],
-      chairs: dining.flatMap((w, i) => (w.x > -4.4 ? [{ x: w.x + 0.42, z: 1.0, yaw: -Math.PI / 2 }, { x: w.x - 0.42, z: 1.0, yaw: Math.PI / 2 }, { x: w.x + 0.42, z: -1.0, yaw: -Math.PI / 2 }, { x: w.x - 0.42, z: -1.0, yaw: Math.PI / 2 }] : [])),
+      chairs: tableX.flatMap((x) => [1, -1].flatMap((sz) => [{ x: x + 0.58, z: sz * 1.0, yaw: Math.PI }, { x: x - 0.58, z: sz * 1.0, yaw: 0 }])),
       sofas: [],
-      tables: dining.filter((w) => w.x > -4.4).flatMap((w) => [{ x: w.x, z: 1.0, w: 0.9, d: 0.8 }, { x: w.x, z: -1.0, w: 0.9, d: 0.8 }]),
+      tables: tableX.flatMap((x) => [{ x, z: 0.98, w: 0.6, d: 0.8 }, { x, z: -0.98, w: 0.6, d: 0.8 }]),
       lamps: [-3.5, -0.4, 2.7, 5.8],
       kitchen: { x0: -10.85, x1: -4.6 },
     };

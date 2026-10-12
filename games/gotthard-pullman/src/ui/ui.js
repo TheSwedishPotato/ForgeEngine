@@ -78,7 +78,7 @@ export function startScreen(root, defaults = {}) {
       if (b.classList.contains('board')) {
         page.remove();
         // a window seat on the chosen side (the chairs come in pairs, right then left)
-        const chair = s.car === 'parlor' ? 12 + (s.side === 'left' ? 1 : 0) : s.car === 'observation' ? 4 + (s.side === 'left' ? 1 : 0) : 2 + (s.side === 'left' ? 2 : 0);
+        const chair = s.car === 'parlor' ? 12 + (s.side === 'left' ? 1 : 0) : s.car === 'observation' ? 4 + (s.side === 'left' ? 1 : 0) : 1 + (s.side === 'left' ? 2 : 0);          // the diner: facing the way the train goes
         resolve({ ...s, chair });
       }
     });

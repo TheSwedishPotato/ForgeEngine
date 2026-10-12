@@ -133,7 +133,7 @@ void main() {
   vec3 n = normalize(vec3(sv, sqrt(max(0.0, 1.0 - dot(sv, sv)))));
   float dense = smoothstep(0.8, 5.0, vTau);
   // the sun on this side of the puff, diffused through it from its sunward surface (and lumpy)
-  float path = vTau * (1.0 - dot(n, vLv)) * (1.3 - 0.6 * f);
+  float path = tau * (1.0 - dot(n, vLv)) * (1.3 - 0.6 * f);   // (the thin edges let the light through)
   float lit = mix(0.85, 1.15 / (1.0 + ${(0.75 * 0.15).toFixed(4)} * path), dense);
   float thin = exp(-tau);
   vec3 sun = vSun * (lit + 0.25 * max(vFwd - 1.0, 0.0) * thin);

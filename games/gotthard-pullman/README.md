@@ -86,6 +86,13 @@ train stalls.
 aisle, waits a turn on the steep vestibule steps, crosses the platform and stands out at the
 photo stop. The conductor gets on last and gives the right away only when everyone is aboard.
 
+**The other trains** (`src/world/traffic.js`). The hourly Treno Gottardo is the Südostbahn's
+copper-red "Traverso": eight articulated cars, 150.2 m. Going south it overtakes the special at
+Gurtnellen on the other main line, crossing over before the station and back after; the
+Gotthard's double track is signalled for either direction. The northbound one comes down past
+the Wassen photo stop. Their speed follows the curves and the grade, and their driver gives the
+steam train a toot. Their times are estimates.
+
 **The ride** (`src/physics/sway.js`). Track irregularities come from a PSD-shaped spectrum
 (alignment, level, cross-level) passed through each car's body modes (lateral and roll ~0.8 Hz,
 bounce ~1.2 Hz, pitch ~1.5 Hz). The player's head lags those accelerations.
@@ -137,6 +144,7 @@ The line, the stations and the structures
 - Gotthardmodell, *Zahlen und Fakten*. https://www.gotthardmodell.ch/der-gotthard/zahlen-und-fakten/
 - SOB, Treno Gottardo and Wassen. https://unterwegs.sob.ch/en/stories/wassen · https://www.myswitzerland.com/en-us/experiences/treno-gottardo/
 - Gemeinde Erstfeld, figures. https://erstfeld.ch/portrait/zahlen-fakten
+- en.wikipedia, *SOB Traverso* (RABe 526: 150.2 m, eight cars in two halves, 160 km/h), and railpictures.net captions (5.2 MW, 359 seats; hourly over the mountain line since December 2020). https://en.wikipedia.org/wiki/SOB_Traverso · https://railpictures.net/photo/680109
 
 The engine
 
@@ -176,5 +184,5 @@ The land
 - December climate: MeteoSwiss climate normals for Altdorf and Andermatt. https://www.meteoswiss.admin.ch/
 
 Where the record is silent, the game says so in the code: these are estimates. They include the
-whistle's pitch, the cab fittings' exact positions, the passenger numbers, the train number, and
-the relative humidity of each weather.
+whistle's and the horn's pitches, the cab fittings' exact positions, the passenger numbers, the
+train number, the Treno Gottardo's minutes, and the relative humidity of each weather.

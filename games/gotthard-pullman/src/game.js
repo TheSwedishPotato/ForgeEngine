@@ -14,6 +14,8 @@ import { Structures } from './render/structures.js';
 import { Places } from './render/places.js';
 import { PeopleGL } from './render/peopleGL.js';
 import { Sound } from './audio/sound.js';
+import { Traffic } from './world/traffic.js';
+import { TrafficGL } from './render/trafficGL.js';
 
 export class Game {
   static async create(canvas, { weather = 'clear', quality = 'high', startClock = hms('10:12'), seat = {}, onProgress = () => {} } = {}) {
@@ -37,6 +39,8 @@ export class Game {
     this.stage = new GotthardStage(canvas, { quality, terrain, weather: this.weather, date: DATE });
     this.trainGL = new TrainGL(this.stage, route, sim.train);
     this.people = new PeopleGL(this.stage, this.trainGL, sim, seat);
+    this.traffic = new Traffic(route);
+    this.trafficGL = new TrafficGL(this.stage, this.traffic);
     this.player = new Player(this, seat);
     this.sound = new Sound(this);
     // start centred on the player's car, with the sun and the world made around it
@@ -60,6 +64,20 @@ export class Game {
 
   _recentre(limit = 300) { this.stage.recentre(this._carMap(), limit); }
 
+  /** A word on the trip's log when one of the other trains goes by the special. */
+  _trafficNews() {
+    const eng = this.trainGL.vehicles[0];
+    if (!eng) return;
+    const n = this.trafficGL.nearest(eng.group.position);
+    if (!n || n.d > 40) return;
+    const tr = this.traffic.trains[n.i];
+    this._passed ??= new Set();
+    if (this._passed.has(tr)) return;
+    this._passed.add(tr);
+    const standing = Math.abs(this.sim.train.speed) < 0.2;
+    this.sim.log(tr.name.includes('south') ? (standing ? 'The Treno Gottardo overtakes us on the other track.' : 'The Treno Gottardo goes by on the other track.') : 'The northbound Treno Gottardo comes down past us.');
+  }
+
   /** One frame of real time dt (s). */
   frame(dt) {
     dt = Math.min(dt, 0.1);
@@ -68,6 +86,8 @@ export class Game {
     this._recentre();
     this.trainGL.update(sdt);
     this.people.update(sdt, this.stage.camera);
+    this.trafficGL.update(this.sim.clock, this.stage.camera);
+    this._trafficNews();
     this.player.update(dt, this.stage.camera);
     this.forest.update(this.stage.camera.position, 2);
     this.track.update(this.stage.camera.position, 4);

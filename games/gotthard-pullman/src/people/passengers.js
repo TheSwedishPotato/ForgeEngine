@@ -86,10 +86,24 @@ export class Passengers {
 
   // ---- the plans --------------------------------------------------------------------------------
 
-  /** The platform side at a stop (+1 right of the direction of travel). */
+  /**
+   * The platform side at a stop (+1 right of the direction of travel). Where there is no platform
+   * the train stands on the left (uphill) main line, and people get out on its left, away from the
+   * other main line, on which the northbound trains run.
+   */
   _side(stop) {
-    const st = this.sim.route.stations.find((x) => x.name === stop.name);
-    return st?.platformSide ?? 1;
+    const R = this.sim.route, st = R.stations.find((x) => x.name === stop.name);
+    if (st?.platformSide) return st.platformSide;
+    // which side the other main line is on here (+1 right of the direction of travel): go the other way
+    const s = this.sim.train.veh[0].s, p = R.run.pos(s), h = R.run.headingAt(s);
+    let other = 0;
+    for (const T of [R.left, R.right]) {
+      const q = T.locate(p.x, p.y, null, 1e9);
+      if (q.d < 1.5) continue;                       // the line the special stands on
+      const r = T.pos(q.s);
+      other = Math.sign((r.x - p.x) * Math.cos(h) - (r.y - p.y) * Math.sin(h));
+    }
+    return other ? -other : -1;
   }
 
   _platformH(stop) { return stop.name === 'Wassen' ? 0.05 : PLATFORM_H; }
