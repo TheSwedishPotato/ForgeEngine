@@ -26,7 +26,9 @@ import { Debug } from '../../../duel1403/src/engine/passes/Debug.js';
 import { LIGHTING_FS } from '../../../duel1403/src/engine/shaders/lighting.js';
 import { COMMON, SKY } from '../../../duel1403/src/engine/shaders/common.js';
 import { CUBE_DIR } from '../../../duel1403/src/engine/passes/Environment.js';
-import { Target, Texture, postProgram, fullscreen, state } from '../../../duel1403/src/engine/gl/GL.js';
+import { Target, Texture, Program, postProgram, fullscreen, state } from '../../../duel1403/src/engine/gl/GL.js';
+import { GEOMETRY_VS, GBUFFER_FS, DEPTH_FS } from '../../../duel1403/src/engine/shaders/geometry.js';
+import { CAPTURE_FS } from '../../../duel1403/src/engine/gi/ProbeVolume.js';
 import { SKY_GLSL, SkyLUT, skyParams, sunTransmittance, SUN_E0 } from './sky.js';
 import { TERRAIN_LIGHT_GLSL, GROUND_GLSL, TerrainLight } from './terrainLight.js';
 import { Atmosphere } from './atmosphere.js';
@@ -114,6 +116,30 @@ function replaceOnce(src, a, b) {
   return src.slice(0, i) + b + src.slice(i + a.length);
 }
 
+/**
+ * The skinned bodies (the passengers, the crew) ride in moving cars. The engine puts a skinned
+ * vertex where it was last frame at prevModel * bindInverse(now) * prevBones; a body bound in
+ * the 'attached' way has its bind inverse following its own world matrix, and its bones are in
+ * the world already, so that counts the car's motion over the frame twice (0.3 m at 35 km/h):
+ * the temporal filter and the motion blur then smear every face. The last frame's place is
+ * model(now) * bindInverse(now) * prevBones: the bones' own motion only.
+ */
+const GEOMETRY_VS_RIDING = replaceOnce(GEOMETRY_VS, '  pp = skinMatrix(uPrevBones) * p;', '  pp = skinMatrix(uPrevBones) * p;\n  prevModel = uModel;');
+
+function patchGeometry(r) {
+  r.programs.clear();
+  r.program = function (kind, defines, key) {
+    const k = kind + ':' + key;
+    let p = this.programs.get(k);
+    if (!p) {
+      const fs = kind === 'gbuffer' ? GBUFFER_FS : kind === 'capture' ? CAPTURE_FS : DEPTH_FS;
+      p = new Program(this.gl, GEOMETRY_VS_RIDING, fs, defines, `${kind}[${key}]`);
+      this.programs.set(k, p);
+    }
+    return p;
+  };
+}
+
 export function patchLighting(src) {
   let s = replaceOnce(src, SKY, SKY_GLSL + TERRAIN_LIGHT_GLSL + GROUND_GLSL);
   s = replaceOnce(s, 'in vec2 vUv;\nout vec4 o;', CAR_GLSL + 'in vec2 vUv;\nout vec4 o;');
@@ -123,6 +149,13 @@ export function patchLighting(src) {
     'vec3 carQ; int carK = carAt(wpos, carQ);\n  vec3 E = carK >= 0 ? carInterior(carK, carQ, N, day) : irradianceAt(wpos, N) * skyLightScale(wpos) * day * g3.a;');
   s = replaceOnce(s, 'vec3 envL = textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity;',
     'vec3 envL = carK >= 0 ? E * INV_PI * 0.8 : textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity * day * mix(1.0, skyLightScale(wpos), 0.6);');
+  // skin: the light scattered under the skin is the sun's, so it goes where the sun reaches (not into
+  // a car's shade, where the engine's outdoor allowance for self-shadow turned every face orange)
+  s = replaceOnce(s, 'vec3 sss = vec3(0.95, 0.32, 0.16) * max(w - NoL, 0.0) * mix(0.35, 1.0, vis);',
+    'vec3 sss = vec3(0.95, 0.32, 0.16) * max(w - NoL, 0.0) * vis;');
+  // a varnish or clear coat reflects what is round it: the car's inside, not the sky; dark in tunnels
+  s = replaceOnce(s, 'vec3 coatRefl = mix(textureLod(uEnvSpec, reflect(-V, N), 0.6).rgb * uEnvIntensity, ssr.rgb, ssr.a);',
+    'vec3 coatRefl = mix(carK >= 0 ? E * INV_PI * 0.8 : textureLod(uEnvSpec, reflect(-V, N), 0.6).rgb * uEnvIntensity * day * mix(1.0, skyLightScale(wpos), 0.6), ssr.rgb, ssr.a);');
   // a bad normal or a runaway value in one pixel would spread through the reflections' mip chain,
   // the temporal filter and the bloom: keep every pixel finite
   s = replaceOnce(s, 'vec3 N = decodeNormal(g1.xy);', 'vec3 N = decodeNormal(g1.xy);\n  if (!(abs(N.x) <= 1.0 && abs(N.y) <= 1.0 && abs(N.z) <= 1.0)) N = V;');
@@ -230,6 +263,7 @@ export class GotthardStage {
     this.quality = quality;
     this.date = date;
     const r = (this.r = new Renderer(canvas, { quality }));
+    patchGeometry(r);
     this.scene = new Scene();
     this.camera = new PerspectiveCamera(62, innerWidth / innerHeight, 0.08, 120000);
     this.origin = { x: 0, y: 0, z: 0 };

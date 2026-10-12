@@ -122,6 +122,9 @@ export function makeFigure(name, looks, { quality = 'low', texSize = 256 } = {})
     beard: looks.beard ?? 0, quality, texSize, headwear: looks.headwear ?? null,
   });
   if (looks.gown === false && f.body.gownMesh) f.body.gownMesh.visible = false;
+  // the body mesh tints the cloth's texture (already in the cloth's colour) with that colour again,
+  // which turns every top nearly black: the texture alone carries it
+  f.body.clothMat?.color.set('#ffffff');
   if (looks.cap) addCap(f, looks.cap);
   f.mesh.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
   return f;
