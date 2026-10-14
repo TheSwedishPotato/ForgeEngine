@@ -100,6 +100,8 @@ void main() {
   float a = clamp(max(cover, grime + streak * 0.3), 0.0, 1.0);
   // premultiplied: the scene behind keeps (1 - a) of itself, minus what the glass reflects back
   o = vec4(col, a + F * (1.0 - a) * 0.5);
+  if (!(abs(o.r) + abs(o.g) + abs(o.b) + abs(o.a) < 1e30)) o = vec4(0.0);
+  o = clamp(o, vec4(0.0), vec4(6e4, 6e4, 6e4, 1.0));
 }`;
 
 export class Glass {

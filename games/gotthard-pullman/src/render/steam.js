@@ -140,6 +140,8 @@ void main() {
   vec3 nw = transpose(mat3(uView)) * n;
   vec3 sky = mix(vSkyDown, vSkyUp, clamp(0.5 + 0.5 * mix(0.6, nw.y, dense), 0.0, 1.0));
   o = vec4((sun + sky) * a, a);
+  if (!(abs(o.r) + abs(o.g) + abs(o.b) + abs(o.a) < 1e30)) o = vec4(0.0);
+  o = clamp(o, vec4(0.0), vec4(6e4, 6e4, 6e4, 1.0));
 }`;
 
 /** A small deterministic generator, so a run looks the same every time. */

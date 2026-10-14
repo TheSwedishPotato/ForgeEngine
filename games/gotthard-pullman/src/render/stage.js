@@ -67,19 +67,22 @@ int carAt(vec3 wpos, out vec3 lp) {
   return -1;
 }
 /** Lambert's form factor from a point (normal n) to a polygon a-b-c-d (all relative to the point). */
+// (safe where two corners line up with the point: normalize(0) is NaN on most graphics cards)
+vec3 safeDir(vec3 v) { return v * inversesqrt(max(dot(v, v), 1e-12)); }
+float edgeFF(vec3 n, vec3 a, vec3 b) {
+  vec3 c = cross(a, b);
+  float l2 = dot(c, c);
+  return l2 > 1e-12 ? acos(clamp(dot(a, b), -1.0, 1.0)) * dot(n, c) * inversesqrt(l2) : 0.0;
+}
 float polyFF(vec3 n, vec3 a, vec3 b, vec3 c, vec3 d) {
-  vec3 v0 = normalize(a), v1 = normalize(b), v2 = normalize(c), v3 = normalize(d);
-  float s = 0.0;
-  s += acos(clamp(dot(v0, v1), -1.0, 1.0)) * dot(n, normalize(cross(v0, v1)));
-  s += acos(clamp(dot(v1, v2), -1.0, 1.0)) * dot(n, normalize(cross(v1, v2)));
-  s += acos(clamp(dot(v2, v3), -1.0, 1.0)) * dot(n, normalize(cross(v2, v3)));
-  s += acos(clamp(dot(v3, v0), -1.0, 1.0)) * dot(n, normalize(cross(v3, v0)));
-  return max(0.0, abs(s) > 0.0 ? s / (2.0 * PI) : 0.0);
+  vec3 v0 = safeDir(a), v1 = safeDir(b), v2 = safeDir(c), v3 = safeDir(d);
+  float s = edgeFF(n, v0, v1) + edgeFF(n, v1, v2) + edgeFF(n, v2, v3) + edgeFF(n, v3, v0);
+  return clamp(s / (2.0 * PI), 0.0, 1.0);
 }
 /** Irradiance on an interior surface (world normal N) at car-local point q of car k. */
 vec3 carInterior(int k, vec3 q, vec3 Nw, float day) {
   mat3 toCar = mat3(uCarInv[k]);
-  vec3 n = normalize(toCar * Nw);
+  vec3 n = safeDir(toCar * Nw);
   vec4 B = uCarBand[k], I = uCarInfo[k];
   float w = I.y + 0.06;
   // the window bands on the right (z = +w) and left (z = -w) walls, relative to the point
@@ -102,7 +105,7 @@ vec3 carInterior(int k, vec3 q, vec3 Nw, float day) {
       if (float(i) >= Lm.w) break;
       vec3 d = vec3(Lm.y + Lm.z * float(i), 3.5, 0.0) - q;
       float d2 = dot(d, d);
-      E += vec3(1.0, 0.86, 0.66) * Lm.x * (max(dot(n, d * inversesqrt(d2)), 0.0) + 0.15) / (d2 + 0.05);
+      E += vec3(1.0, 0.86, 0.66) * Lm.x * (max(dot(n, d * inversesqrt(max(d2, 1e-6))), 0.0) + 0.15) / (d2 + 0.05);
     }
   }
   return E;

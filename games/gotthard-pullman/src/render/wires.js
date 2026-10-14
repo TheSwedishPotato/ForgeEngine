@@ -66,6 +66,8 @@ void main() {
   float a = vCover * e * vFade;
   if (a < 0.004) discard;
   o = vec4(uColor * vLight * a, a);
+  if (!(abs(o.r) + abs(o.g) + abs(o.b) + abs(o.a) < 1e30)) o = vec4(0.0);
+  o = clamp(o, vec4(0.0), vec4(6e4, 6e4, 6e4, 1.0));
 }`;
 
 export class Wires {
