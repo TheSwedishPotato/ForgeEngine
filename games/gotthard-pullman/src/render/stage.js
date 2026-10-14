@@ -167,6 +167,11 @@ export function patchLighting(src) {
   s = replaceOnce(s, 'sum += texture(uVsmAtlas, vec3(uv, dref - 0.00002));', 'sum += 1.0;');
   s = replaceOnce(s, 'mix(1.0, texture(uRTShadow, vUv).r, ', 'mix(1.0, 1.0, ');
   s = replaceOnce(s, 'vec2 dfg = texture(uBrdfLut, vec2(NoV, rough)).rg;', 'vec2 dfg = envBRDFApprox(NoV, rough);');
+  // the screen-space inputs (occlusion, bounce light, reflections) can come back invalid on some
+  // graphics cards (phones): an invalid one counts as none, instead of blacking the pixel out
+  s = replaceOnce(s, 'float ao = texture(uAO, vUv).r;', 'float ao = texture(uAO, vUv).r;\n  if (!(ao >= 0.0 && ao <= 1.0)) ao = 1.0;');
+  s = replaceOnce(s, 'vec4 gi = texture(uSSGI, vUv);', 'vec4 gi = texture(uSSGI, vUv);\n  if (!(abs(gi.r) + abs(gi.g) + abs(gi.b) + abs(gi.a) < 1e30)) gi = vec4(0.0);\n  gi = clamp(gi, vec4(0.0), vec4(6e4, 6e4, 6e4, 1.0));');
+  s = replaceOnce(s, 'vec4 ssr = texture(uSSR, vUv);', 'vec4 ssr = texture(uSSR, vUv);\n  if (!(abs(ssr.r) + abs(ssr.g) + abs(ssr.b) + abs(ssr.a) < 1e30)) ssr = vec4(0.0);\n  ssr = clamp(ssr, vec4(0.0), vec4(6e4, 6e4, 6e4, 1.0));');
   // a bad normal or a runaway value in one pixel would spread through the reflections' mip chain,
   // the temporal filter and the bloom: keep every pixel finite
   s = replaceOnce(s, 'vec3 N = decodeNormal(g1.xy);', 'vec3 N = decodeNormal(g1.xy);\n  if (!(abs(N.x) <= 1.0 && abs(N.y) <= 1.0 && abs(N.z) <= 1.0)) N = V;');

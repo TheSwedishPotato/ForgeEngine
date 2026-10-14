@@ -28,7 +28,9 @@ const SEATS = [
 /** Shows the start screen; resolves with { weather, quality, car, chair, t } when you board. */
 export function startScreen(root, defaults = {}) {
   return new Promise((resolve) => {
-    const s = { weather: 'clear', quality: 'high', car: 'parlor', side: 'right', t: '10:12', ...defaults };
+    // phones and tablets start on low: their graphics run the screen-space effects badly (and slowly)
+    const handheld = (navigator.maxTouchPoints ?? 0) > 0 && /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent + (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 ? ' iPad' : ''));
+    const s = { weather: 'clear', quality: handheld ? 'low' : 'high', car: 'parlor', side: 'right', t: '10:12', ...defaults };
     const page = el('div', 'start');
     page.innerHTML = `
       <div class="start-head">
