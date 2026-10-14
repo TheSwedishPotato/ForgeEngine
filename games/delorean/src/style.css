@@ -1,0 +1,19 @@
+:root {
+  --ink: #f2efe8;
+  --ink-dim: rgba(242, 239, 232, 0.7);
+  --panel: rgba(12, 14, 18, 0.8);
+  --line: rgba(242, 239, 232, 0.16);
+  --red: #ff3b2f;
+  --green: #3dff6e;
+  --amber: #ffb12a;
+  --steel: #c9ccd1;
+  font-family: Inter, system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: #07080a; color: var(--ink); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+.loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 15px; color: var(--ink-dim); letter-spacing: 0.02em; }
+.loading b { display: block; font-size: 28px; color: var(--ink); margin-bottom: 10px; font-weight: 600; letter-spacing: 0.04em; }
+#med-stats { position: fixed; left: 10px; top: 10px; white-space: pre; font: 12px/1.35 ui-monospace, monospace; color: #dfe; background: rgba(0, 0, 0, 0.55); padding: 8px 10px; pointer-events: none; }

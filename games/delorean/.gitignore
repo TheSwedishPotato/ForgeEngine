@@ -1,0 +1,6 @@
+node_modules/
+dist/
+dist-single/
+shots/
+tools/geodata/.cache/
+__pycache__/
