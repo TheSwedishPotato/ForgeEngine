@@ -28,6 +28,7 @@ import { CUBE_DIR } from '../../../duel1403/src/engine/passes/Environment.js';
 import { Target, postProgram, fullscreen, state } from '../../../duel1403/src/engine/gl/GL.js';
 import { SKY_GLSL, SkyLUT, transmittance, SUN_E0 } from './sky.js';
 import { Glass } from './glass.js';
+import { Effects } from './effects.js';
 import { sunPosition, moonPosition, skyVector, equatorialToWorld, moonIlluminance } from '../astro.js';
 
 export const MAX_POINTS = 24, MAX_SPOTS = 4;
@@ -102,7 +103,10 @@ export function patchLighting(src) {
   s = replaceOnce(s, 'vec3 L = uSunDir;', 'vec3 L = uLightDir;');
   s = replaceOnce(s, '  // --- indirect', SPOT_LOOP + '\n  // --- indirect');
   // the cabin: the roof shades the sky light and what the interior reflects
-  s = replaceOnce(s, 'vec3 E = irradianceAt(wpos, N);', 'float inCabin; float cab = cabinShade(wpos, N, inCabin);\n  vec3 E = irradianceAt(wpos, N) * cab;');
+  s = replaceOnce(s, '  // --- point lights (fire) ----------------------------------------------------',
+    '  float inCabin; float cab = cabinShade(wpos, N, inCabin);\n  // the lamps outside reach the cabin only through its glass (point lights cast no shadows)\n  float lampIn = mix(1.0, 0.1 + 0.45 * uCabinMin.w, inCabin);\n  // --- point lights (fire) ----------------------------------------------------');
+  s = replaceOnce(s, 'direct += (dB + sp) * saturate(dot(N, Lp)) * fall * uPointColor[i].rgb;', 'direct += (dB + sp) * saturate(dot(N, Lp)) * fall * uPointColor[i].rgb * lampIn;');
+  s = replaceOnce(s, 'vec3 E = irradianceAt(wpos, N);', 'vec3 E = irradianceAt(wpos, N) * cab;');
   s = replaceOnce(s, 'vec3 envL = textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity;',
     'vec3 envL = textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity * mix(1.0, cab * 0.6, inCabin);');
   // at most 16 textures in one shader (the limit of many graphics cards): the engine's features
@@ -232,11 +236,12 @@ export class TimeStage {
     this.taa = r.addPass(new TAA());
     r.addPass(new Upscale());
     this.motionBlur = r.addPass(new MotionBlur());
+    this.fx = r.addPass(new Effects());
     this.glass = r.addPass(new Glass());
     this.exposure = r.addPass(new Exposure());
     this.exposure.minEV = -6; this.exposure.maxEV = 10.5; this.exposure.key = 0.16;
     this.bloom = r.addPass(new Bloom());
-    this.bloom.strength = 0.05;
+    this.bloom.strength = 0.035;
     this.composite = r.addPass(new NightComposite());
     this.debugDraw = r.addPass(new DebugDraw());
     const dbg = new URLSearchParams(location.search).get('debug');

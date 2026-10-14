@@ -100,7 +100,7 @@ export function buildDetails(M) {
     lineStrip(doorB(side), 'rubber', 4, DIM.doorHigh[0], DIM.doorHigh[1], { w: 0.022, dir: 1, centred: false, side, lift: 0.004 });
     lineStrip(doorB(side), 'trim', 5, DIM.doorHigh[0], DIM.header + 0.01, { w: 0.03, dir: -1, centred: false, side, lift: 0.004 });
     // --- the windscreen's frame: the A-pillar (on the body)
-    lineStrip(bb, 'trim', 5, DIM.header, DIM.cowl, { w: 0.045, dir: 1, centred: true, side, lift: 0.004 });
+    lineStrip(bb, 'trim', 5, DIM.header, DIM.cowl, { w: 0.075, dir: 1, centred: true, side, lift: 0.004 });
     // --- the seams round the door (on the body, just outside its edges)
     sideSeam(bb, 'well', DIM.doorLow[1] + 0.004, 2, 4, side);
     sideSeam(bb, 'well', DIM.doorLow[0] - 0.004, 2, 4, side);

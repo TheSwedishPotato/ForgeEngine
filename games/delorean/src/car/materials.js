@@ -20,7 +20,7 @@ export function carMaterials() {
     bumper: std({ color: new Color(0.035, 0.036, 0.038), roughness: 0.62, normalMap: fine, normalScale: { x: 0.3, y: 0.3 } }),
     tailPanel: std({ color: new Color(0.02, 0.02, 0.021), roughness: 0.5 }),
     grille: std({ color: new Color(0.02, 0.02, 0.021), roughness: 0.5 }),
-    trim: std({ color: new Color(0.012, 0.012, 0.013), roughness: 0.38 }),
+    trim: std({ color: new Color(0.012, 0.012, 0.013), roughness: 0.38, side: DoubleSide }),
     rubber: std({ color: new Color(0.015, 0.015, 0.015), roughness: 0.75 }),
     under: std({ color: new Color(0.03, 0.03, 0.032), roughness: 0.85 }),
     well: std({ color: new Color(0.012, 0.012, 0.012), roughness: 0.95, side: DoubleSide }),

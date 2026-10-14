@@ -149,7 +149,7 @@ export class Vehicle {
       // shift points
       if (this.shiftTimer <= 0 && typeof this.gear === 'number') {
         const wr = this._wheelRpm();
-        if (wr > 6100 && this.gear < 5) this.shift(this.gear + 1);
+        if (wr > 5900 && this.gear < 5) this.shift(this.gear + 1);
         else if (this.gear > 1 && wr < (inp.throttle > 0.7 ? 3100 : 1700)) this.shift(this.gear - 1);
       }
       // from rest: first forward, reverse when held back
