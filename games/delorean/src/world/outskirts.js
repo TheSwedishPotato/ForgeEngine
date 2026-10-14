@@ -127,12 +127,12 @@ export function buildMall(M, state) {
   colliders.push({ type: 'circle', x: pyX, z: pyZ, r: 0.4, hard: true }, { type: 'circle', x: pyX + 6, z: pyZ, r: 0.4, hard: true });
   g.add(b.build(M));
   const name = state.mall ?? 'Twin Pines';
-  const sm = signMaterial(`${name.toUpperCase()} MALL`, { bg: '#f3efe2', fg: '#1d4b2a', font: 'bold 120px Georgia, serif', border: '#1d4b2a' }, { glow: 0.9 });
+  const sm = signMaterial(`${name.toUpperCase()} MALL`, { bg: '#f3efe2', fg: '#1d4b2a', font: 'bold 120px Georgia, serif', border: '#1d4b2a' }, { glow: 0.08 });
   const sign = new Mesh(new BoxGeometry(8, 2.2, 0.4), sm);
   sign.position.set(pyX + 3, 7.6, pyZ);
   g.add(sign);
   lights.push({ pos: V(pyX + 3, 6, pyZ + 2), color: new Color(1, 0.95, 0.85), power: 0.01, range: 10 });
-  const ds = signMaterial('HILL VALLEY DEPT. STORE', { bg: '#1a1a1a', fg: '#f1f1f1', font: 'bold 92px Arial, sans-serif' }, { glow: 1.4 });
+  const ds = signMaterial('HILL VALLEY DEPT. STORE', { bg: '#1a1a1a', fg: '#f1f1f1', font: 'bold 92px Arial, sans-serif' }, { glow: 0.1 });
   const dsign = new Mesh(new BoxGeometry(26, 2.6, 0.2), ds);
   dsign.position.set(MALL.x1 - 45, 9.5, MALL.z1 + 4.2);
   g.add(dsign);

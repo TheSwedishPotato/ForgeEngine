@@ -15,6 +15,7 @@ import { MAIN_Z, MAIN_W, MAIN_X0, MAIN_X1, ROAD_W, COUNTY_X1, SQUARE, SIDE_STREE
 import { buildCourthouse, buildStorefronts, setClock } from './town.js';
 import { buildFarm, buildMall, buildPines } from './outskirts.js';
 import { streetLamp, oak } from './props.js';
+import { buildRig } from './rig.js';
 
 const V = (x, y, z) => new Vector3(x, y, z);
 
@@ -144,8 +145,10 @@ export class World {
   setTime(utc, local) {
     const s = this.timeline.at(utc, local.y);
     this.state = s;
-    const key = JSON.stringify([s.era, s.courthouse, s.clock, s.pines, s.farm, s.mall, s.lamps, s.paved]);
+    s.rig = local.y === 1955 && local.mo === 11 && local.d === 12 && local.h >= 17;
+    const key = JSON.stringify([s.era, s.courthouse, s.clock === 'none', s.pines, s.farm, s.mall, s.lamps, s.paved, s.rig]);
     if (key !== this.key) { this.key = key; this._build(s, local.y); }
+    if (this.clock) this.clock.stopped = s.clock === 'stopped';
     // the clock's hands, the lamps by the hour
     const hours = local.h + local.mi / 60 + (local.s ?? 0) / 3600;
     setClock(this.clock, hours);
@@ -227,6 +230,7 @@ export class World {
       oak(b, x, z, 0.8 + r() * 0.6, k + 100);
       this.colliders.push({ type: 'circle', x, z, r: 0.5, hard: true });
     }
+    if (s.rig) for (const l of buildRig(b)) this._lamp(l);
     this.era.add(b.build(M));
     // --- buildings ---------------------------------------------------------------------------
     const ch = buildCourthouse(M, s);
@@ -249,9 +253,20 @@ export class World {
     this.lamps.push(p);
   }
 
+  /** Rain on the roads: darker, glossy, less grip. */
+  setWet(w) {
+    if (Math.abs((this._wet ?? -1) - w) < 0.02) return;
+    this._wet = w;
+    const M = this.M;
+    for (const [k, r] of [['asphalt', 0.82], ['asphaltNew', 0.7], ['asphaltOld', 0.88], ['concrete', 0.85], ['dirt', 0.95]]) {
+      M[k].roughness = r + (0.18 - r) * w;
+      M[k].color.setScalar(1 - 0.45 * w);
+    }
+  }
+
   /** The ground under (x, z): its friction and rolling resistance. */
   surfaceAt(x, z) {
-    for (const r of this.roads ?? []) if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return SURFACE[r.kind];
+    for (const r of this.roads ?? []) if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return (this._wet ?? 0) > 0.3 && r.kind === 'asphalt' ? SURFACE.wet : SURFACE[r.kind];
     for (const f of this.fields ?? []) if (x >= f.x0 && x <= f.x1 && z >= f.z0 && z <= f.z1) return SURFACE.field;
     return SURFACE.grass;
   }

@@ -103,6 +103,9 @@ export class Effects {
     this.arcs = [];          // [{ points: [[x,y,z],...], b (brightness), life }]
     this.arcColor = [0.75, 0.88, 1.6];
     this.arcScale = 1;
+    this.rain = 0;                     // 0..1
+    this.rainColor = [0.01, 0.01, 0.012];
+    this.time = 0;
   }
 
   init(r) {
@@ -157,7 +160,8 @@ export class Effects {
 
   afterLighting(r, color) {
     const P = this.particles, A = this.arcs;
-    if (!P.length && !A.length) return color;
+    this.time += r.dt ?? 0.016;
+    if (!P.length && !A.length && !(this.rain > 0)) return color;
     const gl = r.gl;
     this.target.bind();
     state(gl);
@@ -195,7 +199,7 @@ export class Effects {
       gl.disable(gl.BLEND);
       gl.bindVertexArray(null);
     }
-    if (A.length) {
+    if (A.length || this.rain > 0) {
       const D = this.arcData;
       let n = 0;
       const push = (p, d, s, b) => { if (n >= 60000) return; const o = n * 8; D[o] = p[0]; D[o + 1] = p[1]; D[o + 2] = p[2]; D[o + 3] = d[0]; D[o + 4] = d[1]; D[o + 5] = d[2]; D[o + 6] = s; D[o + 7] = b; n++; };
@@ -208,6 +212,23 @@ export class Effects {
           push(p0, d, -1, b); push(p1, d, 1, b); push(p0, d, 1, b);
         }
       }
+      const nArcs = n;
+      // the rain: streaks in a box about the camera, falling at 9 m/s, slanted by the wind
+      if (this.rain > 0) {
+        const cp = r.cameraPos, N = Math.floor(2200 * this.rain), H = 14, S = 16, t = this.time;
+        const vx = 1.4, vy = -9, vz = 0.6, len = 0.045;
+        for (let i = 0; i < N; i++) {
+          const h1 = Math.sin(i * 12.9898) * 43758.5453, h2 = Math.sin(i * 78.233) * 12345.678, h3 = Math.sin(i * 39.425) * 24634.633;
+          const fx = h1 - Math.floor(h1), fz = h2 - Math.floor(h2), fy = h3 - Math.floor(h3);
+          // a fixed lattice in the world, wrapped round the camera, so the drops do not ride along with it
+          const x = cp.x + ((((fx * S * 2 - cp.x) % (S * 2)) + S * 3) % (S * 2)) - S;
+          const z = cp.z + ((((fz * S * 2 - cp.z) % (S * 2)) + S * 3) % (S * 2)) - S;
+          const y = cp.y - H / 2 + ((((fy * H - t * -vy) % H) + H) % H);
+          const p0 = [x + vx * (y - cp.y) / 9, y, z + vz * (y - cp.y) / 9], d = [vx * len, vy * len, vz * len], p1 = [p0[0] + d[0], p0[1] + d[1], p0[2] + d[2]];
+          push(p0, d, -1, 1); push(p1, d, -1, 1); push(p1, d, 1, 1);
+          push(p0, d, -1, 1); push(p1, d, 1, 1); push(p0, d, 1, 1);
+        }
+      }
       gl.bindBuffer(gl.ARRAY_BUFFER, this.arcBuf);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, D, 0, n * 8);
       const prog = this.arcProg.use();
@@ -215,7 +236,8 @@ export class Effects {
         .set('uWidth', 0.018 * this.arcScale).set('uColor', this.arcColor);
       gl.bindVertexArray(this.arcVao);
       gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-      gl.drawArrays(gl.TRIANGLES, 0, n);
+      if (nArcs) gl.drawArrays(gl.TRIANGLES, 0, nArcs);
+      if (n > nArcs) { prog.set('uWidth', 0.0045).set('uColor', this.rainColor); gl.drawArrays(gl.TRIANGLES, nArcs, n - nArcs); }
       gl.disable(gl.BLEND);
       gl.bindVertexArray(null);
     }

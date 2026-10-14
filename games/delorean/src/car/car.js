@@ -63,6 +63,15 @@ export class Car {
     this.wheels = buildWheels(M, DIM);
     for (const w of Object.values(this.wheels)) this.root.add(w.steer);
     this.cabin = { matrixInverse: new Matrix4(), min: [-0.92, 0.2, -0.8], max: [0.62, 1.12, 0.8], open: 0 };
+    // the pole with the hook, for the lightning (12 November 1955): on the back bumper, its hook at 4 m
+    const hb = new Builder();
+    hb.cylinder('aluminium', new Vector3(-2.24, 0.45, 0), new Vector3(-2.24, 3.92, 0), 0.025, 0.02, { segs: 8 });
+    hb.cylinder('aluminium', new Vector3(-2.24, 3.92, 0), new Vector3(-1.95, 4.08, 0), 0.015, 0.015, { segs: 6 });
+    hb.cylinder('aluminium', new Vector3(-1.95, 4.08, 0), new Vector3(-1.9, 3.98, 0), 0.015, 0.015, { segs: 6 });
+    hb.box('blackBox', [-2.32, 0.4, -0.12], [-2.18, 0.62, 0.12]);
+    this.hook = hb.build(M);
+    this.hook.visible = false;
+    this.body.add(this.hook);
     // the springs: pitch, roll, heave and their rates
     this.susp = { p: 0, pv: 0, r: 0, rv: 0, h: 0, hv: 0 };
     this.t = 0;
@@ -209,6 +218,9 @@ export class Car {
   }
 
   pressKey(label) { this.keyAnim.set(label, 0.14); }
+
+  /** Where the hook is (world). */
+  hookTip() { return new Vector3(-1.95, 4.0, 0).applyMatrix4(this.body.matrixWorld); }
 
   /** Frost on the metal after a jump (0..1): whiter, rough, no longer a mirror. */
   setFrost(f) {

@@ -87,11 +87,14 @@ export class TimeTravel {
       tr.age += dt;
       const strength = Math.max(0, 1 - tr.age / 7);
       if (strength <= 0) continue;
-      for (const [x, z] of tr.pts) {
-        if (Math.random() > dt * 14 * strength) continue;
+      const pts = tr.pts;
+      for (let i = 0; i + 1 < pts.length; i++) {
+        // flames all along each stretch of the track, low and licking
+        if (Math.random() > dt * 40 * strength) continue;
+        const t = Math.random(), x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, z = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t;
         const kf = this.k * 1.4;
-        fx.emit({ x: x + (Math.random() - 0.5) * 0.1, y: 0.06, z: z + (Math.random() - 0.5) * 0.1, vx: 0, vy: 0.9 + Math.random() * 1.4, vz: 0, life: 0.35 + Math.random() * 0.35, size: 0.08 + strength * 0.1, grow: 0.4, color: [3.5 * kf, 1.25 * kf, 0.3 * kf], alpha: 0.85 * strength, drag: 1.5, rise: 1.4, cool: true, kind: 'add', soft: 0.15 });
-        if (Math.random() < 0.06) fx.emit({ x, y: 0.5, z, vx: 0, vy: 1.0, vz: 0, life: 2.5, size: 0.3, grow: 1.0, color: [0.3, 0.3, 0.3], alpha: 0.25 * strength, drag: 0.8, rise: 0.4, kind: 'mix', soft: 0.6, lit: true });
+        fx.emit({ x: x + (Math.random() - 0.5) * 0.08, y: 0.04, z: z + (Math.random() - 0.5) * 0.08, vx: 0, vy: 0.5 + Math.random() * 0.9, vz: 0, life: 0.3 + Math.random() * 0.35, size: 0.06 + strength * 0.07, grow: 0.5, color: [3.5 * kf, 1.25 * kf, 0.3 * kf], alpha: 0.8 * strength, drag: 1.5, rise: 1.0, cool: true, kind: 'add', soft: 0.12 });
+        if (Math.random() < 0.04) fx.emit({ x, y: 0.4, z, vx: 0, vy: 0.9, vz: 0, life: 2.5, size: 0.3, grow: 1.0, color: [0.3, 0.3, 0.3], alpha: 0.2 * strength, drag: 0.8, rise: 0.4, kind: 'mix', soft: 0.6, lit: true });
       }
     }
     this.trails = this.trails.filter((t) => t.age < 7.5);

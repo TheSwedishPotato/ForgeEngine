@@ -20,6 +20,7 @@ import { collide } from './collide.js';
 import { localToUtc, utcToLocal } from '../astro.js';
 import { START } from '../world/map.js';
 import { TimeTravel } from '../time/travel.js';
+import { Storm, STRIKE_UTC } from '../time/lightning.js';
 
 export class Game {
   static async create(canvas, opts = {}) {
@@ -38,7 +39,7 @@ export class Game {
     this.listeners = [];
   }
 
-  async init({ start = { y: 1985, mo: 10, d: 26, h: 1, mi: 20 }, version = 'part1', place = START, destination = { y: 1955, mo: 11, d: 5, h: 6, mi: 0 } } = {}) {
+  async init({ start = { y: 1985, mo: 10, d: 26, h: 1, mi: 20 }, version = 'part1', place = START, destination = { y: 1955, mo: 11, d: 5, h: 6, mi: 0 }, empty = false, gearbox = 'auto' } = {}) {
     const st = this.stage;
     this.utc = localToUtc(start);
     this.car = new Car({ version });
@@ -49,6 +50,9 @@ export class Game {
     this.veh.reset({ x: place.x, z: place.z, heading: place.heading });
     this.tc = new TimeCircuits({ presentUtc: this.utc, destination, power: version === 'part2' ? 'fusion' : 'plutonium', charges: 2 });
     this.tc.lastDeparted = null;
+    if (empty) { this.tc.charge = 0; this.tc.spare = 0; }
+    this.veh.auto = gearbox !== 'manual';
+    this.version = version;
     this.input = new Input(this.canvas);
     this.rig = new CameraRig(st.camera);
     this.headlights = 1;
@@ -58,7 +62,24 @@ export class Game {
     this._sky();
     this.car.pose(this.veh, 0);
     this.travel = new TimeTravel(this);
+    this.storm = new Storm(this);
+    this.startOpts = { start, place, destination, empty, version };
   }
+
+  /** The lightning run again: back to the end of Main Street, two minutes before the strike. */
+  retryLightning() {
+    const o = this.startOpts;
+    this.utc = STRIKE_UTC - 150 * 1000;
+    this.veh.reset({ x: o.place.x, z: o.place.z, heading: o.place.heading });
+    this.storm.reset();
+    this.tc.presentUtc = this.utc;
+    this.world.setTime(this.utc, this.local);
+    this._sky();
+    this.emit({ type: 'retry' });
+  }
+
+  /** Seconds to the strike (on the storm night, before it), or null. */
+  get toStrike() { const t = (STRIKE_UTC - this.utc) / 1000; return this.storm.active(this.local) && t > -2 ? t : null; }
 
   on(f) { this.listeners.push(f); }
   emit(e) { for (const f of this.listeners) f(e); }
@@ -103,16 +124,27 @@ export class Game {
     }
     this.tc.presentUtc = this.utc;
     this.tc.tick(dt);
-    for (const e of this.tc.drain()) this.emit({ type: 'tc', ...e });
+    for (const e of this.tc.drain()) this.emit({ ...e, type: 'tc', ev: e.type });
     const mph = veh.speedoMph;
     // --- 88 miles per hour ------------------------------------------------------------------------
     if (this.tc.armed && mph >= TRIGGER_MPH && !this.travel.busy) { this.departedFrom = this.local; this.travel.depart(); this.emit({ type: 'depart', from: this.departedFrom, to: { ...this.tc.destination } }); }
+    this.storm.update(dt, this.local);
+    this.car.hook.visible = !!this.world.state?.rig;
+    if (this.tc.on && this.tc.destination && !this.tc.powered && mph >= TRIGGER_MPH) this.emit({ type: 'empty' });
     this.travel.update(dt, { mph, armed: this.tc.armed });
     this.stage.fx.step(dt);
     // --- the world on this date ----------------------------------------------------------------
     const local = this.local;
     this.world.setTime(this.utc, local);
     if (!this._skyT || (this._skyT -= dt) <= 0) { this._sky(); this._skyT = 0.5; }
+    const rain = this.air?.rain ?? 0;
+    this.stage.fx.rain = rain;
+    this.world.setWet(rain > 0 ? Math.min(1, rain * 1.2) : 0);
+    this.stage.glass.rain = rain;
+    if (rain > 0) { const sh = this.stage.r.env.sh, a = (sh[0] + sh[1] + sh[2]) / 3 * 0.09 + 0.00012 * (this.stage.night ?? 0); this.stage.fx.rainColor = [a * 0.9, a * 0.95, a * 1.1]; }
+    // the storm's flashes light the whole sky for an instant
+    const sf = this.storm.skyFlash;
+    if (!this.travel.busy) this.stage.composite.flash = [sf * 0.05, sf * 0.055, sf * 0.07];
     // --- the car ---------------------------------------------------------------------------------
     car.pose(veh, dt);
     const night = this.stage.night ?? 0;
@@ -179,6 +211,13 @@ export class Game {
   toggleHeadlights() { this.headlights = (this.headlights + 1) % 3; return this.headlights; }
   toggleDoor(side) { const t = this.car.toggleDoor(side); this.emit({ type: 'door', side, open: t > 0.5 }); return t; }
   loadPlutonium() { const ok = this.tc.load(); this.emit({ type: 'plutonium', ok }); return ok; }
+  /** F: a pellet into the reactor (Part I, at a stop), or rubbish into Mr. Fusion (Part II). */
+  refuel() {
+    if (this.veh.speed > 1) { this.emit({ type: 'refuel', ok: false, why: 'moving' }); return false; }
+    const ok = this.tc.power === 'fusion' ? this.tc.feedFusion() : this.tc.load();
+    this.emit({ type: 'refuel', ok, fusion: this.tc.power === 'fusion', why: ok ? null : this.tc.charge ? 'full' : 'none' });
+    return ok;
+  }
 }
 
 export { MPH };

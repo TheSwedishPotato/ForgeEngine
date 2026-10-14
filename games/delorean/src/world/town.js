@@ -156,7 +156,7 @@ export function buildCourthouse(M, state) {
     const sign = new Mesh(new BoxGeometry(14, 1.6, 0.05), m); sign.position.set(C.x, 9.5, z1 + 0.6); g.add(sign);
   }
   if (state.era === 'future') {
-    const m = signMaterial('COURTHOUSE MALL', { bg: '#0b1a2c', fg: '#7fe0ff', font: 'bold 110px Arial, sans-serif' }, { glow: 1.5 });
+    const m = signMaterial('COURTHOUSE MALL', { bg: '#0b1a2c', fg: '#7fe0ff', font: 'bold 110px Arial, sans-serif' }, { glow: 0.12 });
     const sign = new Mesh(new BoxGeometry(12, 1.4, 0.1), m); sign.position.set(C.x, 14.2, pz1 + 0.2); g.add(sign);
   }
   g.add(b.build(M));
@@ -282,7 +282,7 @@ export function buildStorefronts(M, state, mats) {
     const name = names[lot.seed % names.length];
     const styles = SIGN_STYLE[frontierish ? 'frontier' : era];
     const st = styles[lot.seed % styles.length];
-    const glow = (era === 'future' ? 1.2 : era === 'classic' && r() < 0.4 ? 0.6 : 0);
+    const glow = (era === 'future' ? 0.12 : era === 'classic' && r() < 0.4 ? 0.07 : 0);
     const sm = signMaterial(name, { ...st, font: `bold ${name.length > 14 ? 76 : 110}px ${frontierish ? 'Georgia, serif' : 'Arial, sans-serif'}` }, { glow });
     const sw = Math.min(lot.w - 1.2, 9), sh = sw / 4.6;
     const sign = new Mesh(new BoxGeometry(sw, sh, 0.08), sm);

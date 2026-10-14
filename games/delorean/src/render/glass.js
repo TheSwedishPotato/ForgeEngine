@@ -36,7 +36,7 @@ uniform vec3 uCameraPos;
 uniform vec3 uInterior;     // radiance of the cabin, mirrored in the glass from inside
 uniform vec4 uBand;         // shade band: object-space y where it starts, where it is full, its strength, 0
 uniform vec3 uTint;         // transmitted colour
-uniform float uFrost, uDirt, uSeed, uEnvScale;
+uniform float uFrost, uDirt, uSeed, uEnvScale, uRain;
 out vec4 o;
 void main() {
   vec2 ndc = vClip.xy / vClip.w;
@@ -62,6 +62,22 @@ void main() {
   vec3 frostCol = (inside ? uInterior * 2.0 + refl * 0.2 : textureLod(uEnv, N, 4.0).rgb * uEnvScale * 0.9) + vec3(0.002);
   vec3 col = refl * F;
   float a = F * 0.5 + 0.06 + band * 0.55 + dirt * 0.12;
+  // raindrops on the outside: beads of water, each a little lens catching the sky and the lights
+  if (uRain > 0.0) {
+    vec3 q = vObj * 38.0 + uSeed;
+    vec3 cell = floor(q), f = fract(q);
+    float h = hash13(cell);
+    if (h < uRain * 0.75) {
+      vec3 c = vec3(hash13(cell + 1.7), hash13(cell + 3.1), hash13(cell + 5.3)) * 0.6 + 0.2;
+      float r = 0.18 + 0.2 * hash13(cell + 7.7);
+      float d = length(f - c) / r;
+      if (d < 1.0) {
+        vec3 drop = min(textureLod(uEnv, reflect(-V, normalize(N + (f - c) * 1.5)), 2.0).rgb * uEnvScale, vec3(4.0)) * 0.35 + uInterior * 0.5;
+        col = mix(col, drop, 0.6 * smoothstep(1.0, 0.6, d));
+        a = mix(a, 0.55, smoothstep(1.0, 0.75, d));
+      }
+    }
+  }
   vec3 absorbed = vec3(0.0);
   col = mix(col, frostCol, frost);
   a = mix(a, 0.93, frost);
@@ -77,6 +93,7 @@ export class Glass {
     this.panes = [];           // { mesh, band: [y0, y1, k, 0], tint, dirt }
     this.frost = 0;
     this.interior = [0.002, 0.002, 0.002];
+    this.rain = 0;
   }
 
   init(r) {
@@ -127,7 +144,7 @@ export class Glass {
       .set('uEnv', r.env.spec).set('uInterior', this.interior).set('uEnvScale', r.envIntensity ?? 1);
     for (const p of panes) {
       const v = this._vao(p.mesh.geometry);
-      P.set('uModel', p.mesh.matrixWorld).set('uBand', p.band).set('uTint', p.tint).set('uFrost', p.frosts ? this.frost : 0).set('uDirt', p.dirt).set('uSeed', p.seed);
+      P.set('uModel', p.mesh.matrixWorld).set('uBand', p.band).set('uTint', p.tint).set('uFrost', p.frosts ? this.frost : 0).set('uDirt', p.dirt).set('uSeed', p.seed).set('uRain', p.frosts ? this.rain : 0);
       gl.bindVertexArray(v.vao);
       gl.drawArrays(gl.TRIANGLES, 0, v.count);
     }

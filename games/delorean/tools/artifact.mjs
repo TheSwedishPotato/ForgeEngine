@@ -18,6 +18,6 @@ html = html
 // Move the (inline module) script after the markup it drives.
 const script = html.match(/<script type="module"[\s\S]*?<\/script>/)[0];
 html = html.replace(script, '');
-html = `${title}\n${html.trim()}\n${script}\n`;
+html = `${title}\n<meta name="claude:viewport-fit-sides" content="cover">\n${html.trim()}\n${script}\n`;
 writeFileSync('dist-single/time-machine.html', html);
 console.log('artifact page:', (html.length / 1024 / 1024).toFixed(1), 'MB');
