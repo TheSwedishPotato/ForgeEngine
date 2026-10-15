@@ -133,12 +133,15 @@ export class Dynamics {
   step(dt, ctx) {
     const { mass, sea } = ctx;
     const f = [0, 0, 0], mo = [0, 0, 0];               // body force and moment about the origin
+    const dbg = this.debug ? (this.dbg = {}) : null;
+    const snap = (k) => { if (dbg) dbg[k] = [f[0], f[1], f[2], mo[0], mo[1], mo[2]]; };
     const R1 = qrotInv(this.q, [0, 1, 0]);             // world up in body axes
     const up = R1;
     // ---- gravity
     const W = mass.m * G;
     const fg = [-up[0] * W, -up[1] * W, -up[2] * W];
     addF(f, mo, fg, mass.rg);
+    snap('gravity');
     // ---- buoyancy, the water plane and the cross-flow, slice by slice
     let Vsub = 0, B = 0, cbx = 0, cby = 0, cbz = 0, wet = 0, subAll = 0;
     const tmpW = [0, 0, 0], tmpB = [0, 0, 0], vl = [0, 0, 0];
@@ -201,6 +204,7 @@ export class Dynamics {
         s.mz = rho * Math.PI * (hull / 2) ** 2 * frac + rho * Math.PI * (s.ssH / 2) ** 2 * ssWet * 0.5;
       } else { s.uy = s.uz = 0; s.my = s.mz = 0; s.ycz = 0; }
     }
+    snap('buoyancy+crossflow');
     // ---- slender-body lift (potential flow, Munk), with the flow separating off the tapering stern:
     // f(x) = -U d(m_a v)/dx over the hull ahead of the separation, nothing behind it.
     {
@@ -215,6 +219,7 @@ export class Dynamics {
         py = fy; pz = fz;
       }
     }
+    snap('slender');
     this.out.awash = deckN ? awashDeck / deckN : 0;
     const subFrac = subAll / this.totalVolume();
     this.out.subFrac = subFrac;
@@ -237,6 +242,7 @@ export class Dynamics {
     const R = Rv * Math.sign(u);
     f[0] -= R;
     this.out.R = Rv; this.out.Re = Re; this.out.Fn = Fn; this.out.CF = CF; this.out.CW = CW; this.out.wetted = S;
+    snap('resistance');
     // ---- the screws
     for (let i = 0; i < this.screws.length; i++) {
       const sc = this.screws[i], T = ctx.screws?.[i]?.T ?? 0;
@@ -244,8 +250,10 @@ export class Dynamics {
       const ft = [sc.dir[0] * T, sc.dir[1] * T, sc.dir[2] * T];
       addF(f, mo, ft, sc.pos);
     }
+    snap('screws');
     // ---- the planes and the rudder
     for (const sf of this.surfaces) this._surface(sf, f, mo, ctx);
+    snap('surfaces');
     // ---- roll damping (the hull's sections, the keel, the superstructure): linear, an estimate
     mo[0] -= this.rollDamp * this.w[0] * (0.4 + 0.6 * subFrac);
     // ---- the seabed
