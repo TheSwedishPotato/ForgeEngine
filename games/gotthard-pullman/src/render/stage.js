@@ -61,7 +61,7 @@ int carAt(vec3 wpos, out vec3 lp) {
     vec3 q = (uCarInv[k] * vec4(wpos, 1.0)).xyz;
     vec4 I = uCarInfo[k];
     float az = abs(q.z);
-    float ceil = az < 0.85 ? 3.9 : 3.48 - (az - 0.85) / 0.52 * 0.23;
+    float ceil = az < 0.85 ? 3.94 : 3.52 - (az - 0.85) / 0.52 * 0.23;
     if (abs(q.x) < I.x && az < I.y && q.y > 1.27 && q.y < ceil) { lp = q; return k; }
   }
   return -1;
@@ -149,7 +149,7 @@ export function patchLighting(src) {
   s = replaceOnce(s, 'float vis = uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0;',
     'float day = daylightAt(wpos);\n  float vis = (uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0) * terrainSun(wpos) * fogSun(wpos) * day;');
   s = replaceOnce(s, 'vec3 E = irradianceAt(wpos, N);',
-    'vec3 carQ; int carK = carAt(wpos, carQ);\n  vec3 E = carK >= 0 ? carInterior(carK, carQ, N, day) : irradianceAt(wpos, N) * skyLightScale(wpos) * day * g3.a;');
+    'vec3 carQ; int carK = carAt(wpos + N * 0.08, carQ);\n  vec3 E = carK >= 0 ? carInterior(carK, carQ, N, day) : irradianceAt(wpos, N) * skyLightScale(wpos) * day * g3.a;');
   s = replaceOnce(s, 'vec3 envL = textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity;',
     'vec3 envL = carK >= 0 ? E * INV_PI * 0.8 : textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity * day * mix(1.0, skyLightScale(wpos), 0.6);');
   // skin: the light scattered under the skin is the sun's, so it goes where the sun reaches (not into

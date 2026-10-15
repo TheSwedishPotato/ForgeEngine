@@ -19,7 +19,7 @@ uniform vec3 uWind;            // the air's velocity (m/s), with the fall
 uniform vec3 uBox;             // box size (m)
 uniform float uTime, uShutter, uCount;
 uniform vec3 uOriginShift;     // floating origin (map), so the flakes do not jump when it moves
-out float vAlpha; out vec2 vQ;
+out float vAlpha; out vec2 vQ; out float vDist;
 void main() {
   int id = gl_VertexID / 6, corner = gl_VertexID % 6;
   if (float(id) >= uCount) { gl_Position = vec4(2.0); return; }
@@ -48,10 +48,11 @@ void main() {
   gl_Position = vec4(sp * mix(a.w, b.w, q.x), mix(a.z, b.z, q.x), mix(a.w, b.w, q.x));
   vAlpha = (0.55 + 0.45 * h.z) * smoothstep(0.25, 1.0, dist) * (1.0 - smoothstep(uBox.x * 0.35, uBox.x * 0.5, dist)) / (1.0 + len * 40.0);
   vQ = q;
+  vDist = mix(a.w, b.w, q.x);
 }`;
 
 const FS = /* glsl */`
-in float vAlpha; in vec2 vQ;
+in float vAlpha; in vec2 vQ; in float vDist;
 uniform highp sampler2D uDepth;
 uniform mat4 uInvProj;
 uniform vec3 uLight;
@@ -60,6 +61,12 @@ void main() {
   vec2 uv = gl_FragCoord.xy / vec2(textureSize(uDepth, 0));
   float a = vAlpha * (1.0 - vQ.y * vQ.y);
   if (a < 0.004) discard;
+  // behind something nearer (the car's walls and roof, a tunnel, the ground)? hidden
+  float z = texture(uDepth, uv).r;
+  if (z < 1.0) {
+    vec4 sp = uInvProj * vec4(uv * 2.0 - 1.0, z * 2.0 - 1.0, 1.0);
+    if (-sp.z / sp.w < vDist - 0.02) discard;
+  }
   o = vec4(uLight * a, a);
 }`;
 

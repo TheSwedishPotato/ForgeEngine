@@ -57,6 +57,8 @@ uniform vec2 uResolution;
 uniform vec3 uSunIrradiance, uCameraPos;
 uniform vec3 uSkySH[9];
 uniform float uFogExt;
+uniform mat4 uCarInv[8];
+uniform int uCarCount;
 out vec2 vQ, vAx;
 out float vTau, vFade, vDepth, vSoft, vFwd, vSeed;
 out vec3 vSun, vSkyUp, vSkyDown, vLv;
@@ -91,6 +93,12 @@ void main() {
   vTau = aCenter.w;
   vSeed = aLight.x;
   vFade = near * exp(-uFogExt * d);          // seen through the fog and the falling snow
+  // steam does not drift through the cars' bodies: a puff inside one is not drawn
+  for (int k = 0; k < 8; k++) {
+    if (k >= uCarCount) break;
+    vec3 cq = (uCarInv[k] * vec4(aCenter.xyz, 1.0)).xyz;
+    if (abs(cq.x) < 12.7 && abs(cq.z) < 1.55 && cq.y > 0.0 && cq.y < 4.15) vFade = 0.0;
+  }
   // light: the sun past the mountains, out of a tunnel, through the valley fog and the plume
   vec3 wpos = aCenter.xyz;
   float day = daylightAt(wpos);
@@ -408,7 +416,7 @@ export class SteamPlume {
     prog.set('uView', r.view).set('uViewProj', r.viewProj).set('uInvProj', r.invProj)
       .set('uFocal', [P[0] * W * 0.5, P[5] * H * 0.5]).set('uResolution', [W, H])
       .set('uSunDir', r.sunDir).set('uSunIrradiance', [sc.x * si, sc.y * si, sc.z * si]).set('uCameraPos', r.cameraPos)
-      .set('uSkySH', r.env.sh).set('uDepth', r.depth).set('uFogExt', this.fogExt).set('uTime', (this.time = (this.time ?? 0) + dt));
+      .set('uSkySH', r.env.sh).set('uDepth', r.depth).set('uCarInv', this.stage.cars?.inv ?? new Float32Array(128)).set('uCarCount', this.stage.cars?.count ?? 0).set('uFogExt', this.fogExt).set('uTime', (this.time = (this.time ?? 0) + dt));
     this.stage.bindGround?.(prog);
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, m);
