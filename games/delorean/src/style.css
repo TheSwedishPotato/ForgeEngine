@@ -13,7 +13,9 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #07080a; color: var(--ink); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
 #view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
-#ui > * { pointer-events: auto; }
+/* The overlay's panels take the pointer; :where() keeps this rule weightless, so the layers that
+   must let it through to the view (.hud, .msgs, .touch) can still say pointer-events: none. */
+:where(#ui > *) { pointer-events: auto; }
 .loading { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; font-size: 15px; color: var(--ink-dim); letter-spacing: 0.02em; }
 .loading b { display: block; font-size: 28px; color: var(--ink); margin-bottom: 10px; font-weight: 600; letter-spacing: 0.04em; }
 #med-stats { position: fixed; left: 10px; top: 10px; white-space: pre; font: 12px/1.35 ui-monospace, monospace; color: #dfe; background: rgba(0, 0, 0, 0.55); padding: 8px 10px; pointer-events: none; }
@@ -75,7 +77,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07080a; col
 
 /* ---- the keypad and the help ------------------------------------------------------------------ */
 .keypad, .help { position: absolute; right: max(12px, env(safe-area-inset-right)); top: calc(max(12px, env(safe-area-inset-top)) + 44px); width: min(640px, calc(100vw - 24px)); max-height: calc(100vh - 140px); overflow: auto;
-  background: rgba(14, 15, 18, 0.94); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-sizing: border-box; padding: 10px 14px 14px; }
+  background: rgba(14, 15, 18, 0.94); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-sizing: border-box; padding: 10px 14px 14px;
+  z-index: 2; /* over the touch buttons */ touch-action: pan-y; }
 .hidden { display: none !important; }
 .kp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .kp-head b { letter-spacing: 0.08em; text-transform: uppercase; font-size: 13px; }
@@ -112,3 +115,5 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07080a; col
 .touch .tbtns { position: absolute; right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 52vw; }
 .touch .tbtns button { font: 600 11px/1 Inter, sans-serif; letter-spacing: 0.05em; color: var(--ink); background: rgba(14, 15, 18, 0.72); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
 @media (hover: hover) and (pointer: fine) { .touch .steer, .touch .pedals { display: none; } }
+/* a phone held upright: the buttons go down the right edge, clear of the time circuits card */
+@media (max-width: 600px) { .touch .tbtns { flex-direction: column; align-items: stretch; max-width: none; } }

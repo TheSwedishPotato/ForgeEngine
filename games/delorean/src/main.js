@@ -6,7 +6,7 @@
  */
 import './style.css';
 import { Game } from './game/game.js';
-import { startScreen, HUD, Keypad, Help, Touch, longDate } from './ui/ui.js';
+import { startScreen, HUD, Keypad, Help, Touch, longDate, keyName } from './ui/ui.js';
 import { Sound } from './audio/sound.js';
 import { START, MAIN_Z } from './world/map.js';
 
@@ -58,7 +58,7 @@ async function play() {
   if (manual && params.get('hud') !== '1') { hud.root.classList.add('hidden'); touch.root.classList.add('hidden'); }
   wireEvents(game, hud, sound);
   game.onFrame = (dt) => {
-    hud.update(); keypad.update();
+    hud.update(); keypad.update(); touch.update();
     const v = game.veh;
     sound.update({
       rpm: v.rpm, throttle: v.input.throttle, running: v.running, speed: v.speed, skid: Math.max(...v.wheels.map((w) => w.skid)),
@@ -118,7 +118,7 @@ async function play() {
     const m = /^(Digit|Numpad)([0-9])$/.exec(e.code);
     if (m) { if (!game.tc.on) game.toggleTimeCircuits(); game.keypad(m[2]); }
   });
-  hud.say(game.tc.destination ? 'Press <b>T</b> for the time circuits, then bring her up to 88 mph' : 'Set a destination: <b>K</b>', '', 6);
+  hud.say(game.tc.destination ? `Press <b>${keyName('T')}</b> for the time circuits, then bring her up to 88 mph` : `Set a destination: <b>${keyName('K')}</b>`, '', 6);
   if (!manual) {
     let last = performance.now();
     const loop = (now) => { const dt = (now - last) / 1000; last = now; game.frame(dt); requestAnimationFrame(loop); };

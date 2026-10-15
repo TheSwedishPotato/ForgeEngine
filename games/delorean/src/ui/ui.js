@@ -13,6 +13,11 @@ const pad = (n, k = 2) => String(n).padStart(k, '0');
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+/** Phones and tablets have the on-screen buttons, not the keys: hints name what there is to press. */
+const TOUCH_FIRST = typeof matchMedia === 'function' && !matchMedia('(hover: hover) and (pointer: fine)').matches;
+const BUTTONS = { T: 'TIME CKT', K: 'KEYPAD', F: 'FUEL', R: 'RETRY' };
+export function keyName(k) { return TOUCH_FIRST ? BUTTONS[k] ?? k : k; }
+
 export function longDate(t) {
   if (!t) return '';
   const h12 = ((t.h + 11) % 12) + 1;
@@ -116,11 +121,11 @@ export class HUD {
     let h = '';
     const ts = g.toStrike;
     if (g.travel.busy) h = '';
-    else if (ts != null && ts > 0 && !tc.powered) h = `Lightning in <b>${Math.floor(ts / 60)}:${pad(Math.floor(ts % 60))}</b> — be under the cable at 88 mph at 10:04:00${ts < 40 ? '' : ' (R: start again)'}`;
-    else if (ts != null && ts <= 0 && !tc.powered && !g.storm.powered) h = 'Missed it. <b>R</b> to try again';
-    else if (!tc.on) h = 'Turn the time circuits on: <b>T</b>';
-    else if (!tc.destination) h = 'Set a destination on the keypad: <b>K</b>';
-    else if (!tc.powered) h = tc.power === 'fusion' ? 'Refuel Mr. Fusion: <b>F</b>' : tc.spare ? 'Load plutonium (stopped): <b>F</b>' : 'No power. Only a bolt of lightning delivers 1.21 gigawatts…';
+    else if (ts != null && ts > 0 && !tc.powered) h = `Lightning in <b>${Math.floor(ts / 60)}:${pad(Math.floor(ts % 60))}</b> — be under the cable at 88 mph at 10:04:00${ts < 40 ? '' : ` (${keyName('R')}: start again)`}`;
+    else if (ts != null && ts <= 0 && !tc.powered && !g.storm.powered) h = `Missed it. <b>${keyName('R')}</b> to try again`;
+    else if (!tc.on) h = `Turn the time circuits on: <b>${keyName('T')}</b>`;
+    else if (!tc.destination) h = `Set a destination on the keypad: <b>${keyName('K')}</b>`;
+    else if (!tc.powered) h = tc.power === 'fusion' ? `Refuel Mr. Fusion: <b>${keyName('F')}</b>` : tc.spare ? `Load plutonium (stopped): <b>${keyName('F')}</b>` : 'No power. Only a bolt of lightning delivers 1.21 gigawatts…';
     else if (mph < 88) h = `Bring her up to <b>88 mph</b>`;
     if (h !== this._h) { this.hint.innerHTML = h; this._h = h; }
   }
@@ -222,7 +227,7 @@ export class Touch {
       <div class="pedals"><button class="brake">BRAKE</button><button class="gas">GAS</button></div>
       <div class="tbtns">
         <button data-a="cam">VIEW</button><button data-a="tc">TIME CKT</button><button data-a="pad">KEYPAD</button>
-        <button data-a="fuel">FUEL</button><button data-a="lights">LIGHTS</button><button data-a="door">DOOR</button><button data-a="help">?</button>
+        <button data-a="fuel">FUEL</button><button data-a="lights">LIGHTS</button><button data-a="door">DOOR</button><button data-a="retry" class="hidden">RETRY</button><button data-a="help">?</button>
       </div>`;
     ui.append(root);
     const steer = root.querySelector('.steer'), knob = root.querySelector('.knob');
@@ -243,8 +248,14 @@ export class Touch {
     };
     pedal(root.querySelector('.gas'), 'throttle');
     pedal(root.querySelector('.brake'), 'brake');
-    const act = { cam: () => game.rig.cycle(), tc: () => game.toggleTimeCircuits(), pad: () => game.ui.keypad.toggle(), fuel: () => game.refuel(), lights: () => game.toggleHeadlights(), door: () => game.toggleDoor('left'), help: () => game.ui.help.toggle() };
+    const act = { cam: () => game.rig.cycle(), tc: () => game.toggleTimeCircuits(), pad: () => game.ui.keypad.toggle(), fuel: () => game.refuel(), lights: () => game.toggleHeadlights(), door: () => game.toggleDoor('left'), help: () => game.ui.help.toggle(), retry: () => { if (game.storm.active(game.local)) game.retryLightning(); } };
     root.querySelectorAll('.tbtns button').forEach((b) => { b.onclick = () => act[b.dataset.a]?.(); });
+    this.retry = root.querySelector('[data-a="retry"]');
     void canvas;
+  }
+  /** The storm night's RETRY (the R key) is shown only on that night. */
+  update() {
+    const show = !!this.g.local && this.g.storm.active(this.g.local);
+    if (show !== this._retry) { this.retry.classList.toggle('hidden', !show); this._retry = show; }
   }
 }
