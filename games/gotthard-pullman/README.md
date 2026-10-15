@@ -44,6 +44,42 @@ left side), four points to join the trip, and the picture quality.
 | T | the travel card (time, place, next stop, delay) |
 | F3 | the physics of the engine and the train |
 | H | the keys |
+| F | on the footplate: take over and drive the engine yourself (F again hands back to the driver) |
+
+**Driving.** Press F and you are at the driver's side of the cab, at his controls. The physics is
+the same; only the hand on the controls is yours:
+
+| Key | Control |
+| --- | --- |
+| W / S | regulator open / close (hold) |
+| Q / A | reversing screw: wind into forward gear / back (hold); full gear is 75 % cut-off |
+| ] / [ | train brake valve one notch on / off: release, running, lap, service 0–100 %, emergency |
+| Backspace | emergency brake |
+| . / , | direct (engine) brake on / off (hold) |
+| G | starting valve: live steam to the low-pressure cylinders for a heavy start (hold) |
+| X | sanders (hold) |
+| C | cylinder drain cocks open / shut (open them while she is cold, shut them once running) |
+| I | right-hand injector on / off (the fireman still minds the left one, the fire and the blower) |
+| J | train steam heating on / off |
+| Space | whistle (hold) |
+| K | acknowledge a Signum warning |
+
+The backhead gauges read the simulation:
+
+- boiler pressure (red line at 15 bar);
+- the low-pressure receiver;
+- the duplex air gauge (main reservoir and brake pipe);
+- the engine's brake cylinder;
+- the train-heating pipe;
+- the Hasler speed recorder (0–90 km/h).
+
+The gauge glasses show the water level, swinging with the grade and the brakes. On a phone, a
+Drive button and a button panel do the same.
+
+Drive as the real crew had to. Brake hard with a low glass and the water runs off the firebox
+crown: hold that long enough and the fusible plug melts, and she is finished. On the 26 ‰ bank a
+450 t restart is at the limit of adhesion. Ease the start with sand, full gear and the starting
+valve. The signals are real: a red signal stops you.
 
 The address can set everything directly (for testing): `?w=fog&q=high&t=10:52&car=observation&chair=5`
 (weathers `clear snowfall heavy foehn fog blizzard`; `cam=out&veh=0&dist=20` starts outside).
@@ -106,6 +142,23 @@ Gurtnellen on the other main line, crossing over before the station and back aft
 Gotthard's double track is signalled for either direction. The northbound one comes down past
 the Wassen photo stop. Their speed follows the curves and the grade, and their driver gives the
 steam train a toot. Their times are estimates.
+
+**The signals** (`src/world/signals.js`, `src/render/signalsGL.js`). SBB "System L" light
+signals on both main lines:
+
+- An entry signal before each station and an exit signal after it.
+- Block signals between stations, at most about 3.5 km apart.
+- A distant signal 900 m before each main signal.
+
+A main signal shows red "Halt" while the section beyond it is occupied, or at a station until
+the special's booked departure with everyone aboard; otherwise it shows green "Fahrt". A distant
+signal shows two orange lights "Warnung" or two green lights "Fahrt".
+
+Integra-Signum protects the train, as on 2978. Passing a distant signal at Warnung, you have 4 s
+to acknowledge (K), or the brakes go on. Passing a red signal brakes the train at once. The
+Treno Gottardo runs live under the same signals, so it waits behind the special if it has to.
+The signals' exact positions are estimates by those rules, as the line's signalling plans were
+not available.
 
 **The ride** (`src/physics/sway.js`). Track irregularities come from a PSD-shaped spectrum
 (alignment, level, cross-level) passed through each car's body modes (lateral and roll ~0.8 Hz,
@@ -195,6 +248,7 @@ Physics
 - Steam plumes: Morton, Taylor & Turner (1956) on turbulent thermals (entrainment); the mixing-line (Schmidt–Appleman) argument for condensation; Magnus saturation (Alduchov & Eskridge 1996); droplet extinction 3/(2 ρw r) (Stephens 1978); diffusion through scattering layers (Bohren 1987).
 - Track: Zug canton track cross-sections (B91 sleepers at 0.6 m, ballast). https://cdn.zg.ch/dam/jcr:3752755f-8855-4f8e-9acc-5ff443051ae4/11.02.04_-_FbE27_Litti-Baar_Gleis_300-400_-_Querprofil_2_signed.pdf
 - Clearances and overhead line: BayEBOA §21. https://www.gesetze-bayern.de/Content/Document/BayEBOA-21 · ICE-Treff. https://www.ice-treff.de/index.php?id=65150 (the contact wire height of 5.3 m and the system height of 1.4 m are assumptions)
+- Signals: Swiss signalling rules FDV R 300.2 (System L light signals). Overview: Schweizer Eisenbahnsignale. https://de.wikipedia.org/wiki/Schweizer_Eisenbahnsignale · Integra-Signum train protection. https://de.wikipedia.org/wiki/Integra-Signum (signal positions on the ramp are estimates by the rules)
 
 The land
 
@@ -207,7 +261,7 @@ The land
 - December climate: MeteoSwiss climate normals for Altdorf and Andermatt. https://www.meteoswiss.admin.ch/
 
 Where the record is silent, the game says so in the code: these are estimates. They include the
-whistle's and the horn's pitches, the cab fittings' exact positions, the connecting rods' length, the passenger numbers, the
+whistle's and the horn's pitches, the cab fittings' exact positions, the signals' positions, the connecting rods' length, the passenger numbers, the
 train number, the Treno Gottardo's minutes, the relative humidity of each weather, and how much
 of the Reuss's mapped bed December's low water fills (60 % of the canalised channel below
 Amsteg, 45 % of the boulder bed above).

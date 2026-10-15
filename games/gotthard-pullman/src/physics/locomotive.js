@@ -242,7 +242,7 @@ export class SteamLocomotive {
     const pumpSteam = this.pumpOn ? 0.035 * c.airPump : 0;
     o.exhaustRate = mLP + o.drainFlow * 0;        // LP exhaust up the blast pipe
     const chimneySteam = mLP + blowerFlow + pumpSteam * 0.8;
-    o.draft = 275 * Math.pow(mLP, 1.85) + 900 * Math.pow(blowerFlow / 0.09, 1.6) * (blowerFlow > 0 ? 1 : 0) + 25;   // Pa of smokebox vacuum
+    o.draft = 275 * Math.pow(Math.max(0, mLP), 1.85) + 900 * Math.pow(Math.max(0, blowerFlow) / 0.09, 1.6) + 25;   // (a whisper of backflow, coasting, draws nothing)   // Pa of smokebox vacuum
     // exhaust beats: each LP release
     for (let k = 2; k < 4; k++) {
       const cy = this.cyl[k];

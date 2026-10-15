@@ -165,3 +165,20 @@ test('you can drive: the regulator moves her, the brake valve stops her', async 
   assert.ok(!T.loco.failed, 'the boiler survives the stop');
   assert.ok(T.speed > 4, `she moves again (${(T.speed * 3.6).toFixed(0)} km/h)`);
 });
+
+test('leaving before the booked time: the exit signal is at Halt and Signum stops the train', async () => {
+  globalThis.window ??= { addEventListener() {} };
+  const { Driving } = await import('../src/drive.js');
+  const sim = new Sim(route, { weather: 'clear', startClock: hms('10:12') });
+  sim.advance(5);
+  const D = new Driving({ sim, player: { setCab() {} } });
+  D.toggle();
+  const run = (sec) => { for (let i = 0; i < sec * 10; i++) { D.update(0.1); sim.advance(0.1); } };
+  assert.equal(sim.signals.ahead(sim.train.front, { kind: 'main' }).aspect, 'stop');
+  D.press('KeyQ', true); run(6); D.press('KeyQ', false);
+  D.press('KeyW', true); run(2); D.press('KeyW', false);
+  D.press('Comma', true); run(2); D.press('Comma', false);
+  run(80);
+  assert.match(sim.signals.signum.tripped?.why ?? '', /Erstfeld exit at danger/);
+  assert.ok(Math.abs(sim.train.speed) < 0.1 && sim.train.brake.handle === 'emergency', `braked to a stand (${(sim.train.speed * 3.6).toFixed(1)} km/h, ${sim.train.brake.handle})`);
+});

@@ -88,14 +88,19 @@ export class Signals {
   /** Sets every aspect from the occupancy and the special's departures. */
   update() {
     const occ = (this._occ = this._occupancy()), sim = this.sim;
-    const crew = sim.crew, stop = sim.timetable?.stops?.[crew?.next];
+    const crew = sim.crew, stops = sim.timetable?.stops ?? [], stop = stops[crew?.next];
+    // the station master clears the special's exit signal at the booked time, everyone aboard; until
+    // then it stays at Halt, even if the engine creeps up to it
+    this._dep ??= new Map(stops.filter((x) => x.dep).map((x) => [x.name, sim.hms?.(x.dep) ?? 0]));
+    const standing = crew && ['prep', 'stopped'].includes(crew.phase);
+    const released = (name) => sim.clock >= this._dep.get(name) && (!standing || stop?.name !== name || !!sim.readyToStart?.());
+    const front = sim.train.front;
     for (const m of this.mains) {
       const a = Math.min(m.s, m.end), b = Math.max(m.s, m.end);
       let free = !occ[m.track].some(([x, y]) => y > a + 1 && x < b - 1);
-      // the exit at a station where the special stands: cleared at the booked time, everyone aboard
-      if (free && m.track === 'L' && m.role === 'exit' && m.station === stop?.name && crew && ['prep', 'stopped'].includes(crew.phase)) {
-        free = !!(sim.departureDue?.() && sim.readyToStart?.()) || !stop.dep;
-      }
+      // (held for the special only: when it is the next train to come to that exit)
+      if (free && m.track === 'L' && m.role === 'exit' && this._dep.has(m.station) && !released(m.station)
+        && front < m.s + 1 && m.s - front < 1500 && !occ.L.slice(1).some(([x, y]) => y > front && x < m.s)) free = false;
       m.aspect = free ? 'clear' : 'stop';
     }
     for (const d of this.list) if (d.kind === 'distant') d.aspect = d.main.aspect === 'stop' ? 'warning' : 'clear';

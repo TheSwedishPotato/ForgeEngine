@@ -17,6 +17,7 @@ import { PeopleGL } from './render/peopleGL.js';
 import { Sound } from './audio/sound.js';
 import { Traffic } from './world/traffic.js';
 import { TrafficGL } from './render/trafficGL.js';
+import { SignalsGL } from './render/signalsGL.js';
 
 export class Game {
   static async create(canvas, { weather = 'clear', quality = 'high', startClock = hms('10:12'), seat = {}, onProgress = () => {} } = {}) {
@@ -43,6 +44,7 @@ export class Game {
     this.people = new PeopleGL(this.stage, this.trainGL, sim, seat);
     this.traffic = sim.traffic;
     this.trafficGL = new TrafficGL(this.stage, this.traffic);
+    this.signalsGL = new SignalsGL(this.stage, route, sim.signals);
     this.player = new Player(this, seat);
     this.driving = new Driving(this);
     this.sound = new Sound(this);
@@ -83,7 +85,7 @@ export class Game {
 
   /** One frame of real time dt (s). */
   frame(dt) {
-    dt = Math.min(dt, 0.1);
+    dt = Math.min(Math.max(dt, 0), 0.1);      // (a first frame's timestamp can precede the clock read before it)
     const sdt = dt * this.timeScale;
     this.driving.update(sdt);
     this.sim.advance(sdt);
@@ -91,6 +93,7 @@ export class Game {
     this.trainGL.update(sdt);
     this.people.update(sdt, this.stage.camera, { inside: !this.player.exposed() || this.player.mode === 'walking', car: this.player.car(), driving: this.driving.on });
     this.trafficGL.update(this.sim.clock, this.stage.camera);
+    this.signalsGL.update(this.stage.camera);
     this._trafficNews();
     this.player.update(dt, this.stage.camera);
     this.forest.update(this.stage.camera.position, 2);
