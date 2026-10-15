@@ -68,7 +68,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07080a; col
 .hud .pu.warn { color: var(--red); }
 .hud .hint { margin-top: 5px; font-size: 12px; color: var(--ink); }
 .hud .hint b { color: var(--amber); }
-.msgs { position: absolute; left: 50%; top: max(18px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(560px, 60vw); }
+.msgs { position: absolute; left: 50%; top: max(18px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none; width: min(560px, 60vw); z-index: 3; }
 .msg { background: rgba(10, 10, 12, 0.82); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-size: 14px; text-align: center; transition: opacity 0.6s; }
 .msg.big { font-size: 18px; font-weight: 600; }
 .msg.when { font-family: 'Share Tech Mono', ui-monospace, monospace; color: var(--green); font-size: 17px; }
@@ -80,7 +80,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07080a; col
   background: rgba(14, 15, 18, 0.94); border: 1px solid var(--line); border-radius: 14px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-sizing: border-box; padding: 10px 14px 14px;
   z-index: 2; /* over the touch buttons */ touch-action: pan-y; }
 .hidden { display: none !important; }
-.kp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+/* the head stays put while the panel scrolls, so its × is always there */
+.kp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; position: sticky; top: -10px; z-index: 1; background: rgb(14, 15, 18); margin-top: -10px; padding-top: 10px; }
 .kp-head b { letter-spacing: 0.08em; text-transform: uppercase; font-size: 13px; }
 .kp-head .close { font-size: 22px; background: none; border: none; color: var(--ink); cursor: pointer; }
 .kp-body { display: grid; grid-template-columns: 230px 1fr; gap: 14px; }
@@ -114,6 +115,23 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #07080a; col
 .touch .pedals button.on { background: rgba(255, 140, 50, 0.45); }
 .touch .tbtns { position: absolute; right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 52vw; }
 .touch .tbtns button { font: 600 11px/1 Inter, sans-serif; letter-spacing: 0.05em; color: var(--ink); background: rgba(14, 15, 18, 0.72); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
+/* only the buttons take the touch: the empty space between them belongs to the view */
+.touch > .tbtns, .touch > .pedals { pointer-events: none; }
+.touch .tbtns button, .touch .pedals button { pointer-events: auto; }
 @media (hover: hover) and (pointer: fine) { .touch .steer, .touch .pedals { display: none; } }
 /* a phone held upright: the buttons go down the right edge, clear of the time circuits card */
-@media (max-width: 600px) { .touch .tbtns { flex-direction: column; align-items: stretch; max-width: none; } }
+@media (max-width: 600px) and (orientation: portrait) {
+  .touch .tbtns { flex-direction: column; align-items: stretch; max-width: none; }
+  /* the panels open beside the column, so KEYPAD and ? still close them */
+  .keypad, .help { left: max(12px, env(safe-area-inset-left)); right: calc(max(10px, env(safe-area-inset-right)) + 88px); width: auto; top: max(12px, env(safe-area-inset-top)); max-height: calc(100vh - 180px); }
+  .hud { max-width: calc(100vw - 118px); }
+}
+@media (max-width: 350px) and (orientation: portrait) {
+  .hud { padding: 7px 9px 8px; }
+  .hud .tcr { font-size: 12px; gap: 4px; }
+  .hud .tcr i { width: 56px; font-size: 7px; }
+  .hud .drive { gap: 4px; }
+  .hud .mph { font-size: 24px; min-width: 36px; }
+  .hud .pu { font-size: 10px; }
+  .touch .tbtns button { padding: 9px 7px; font-size: 10px; letter-spacing: 0.02em; }
+}

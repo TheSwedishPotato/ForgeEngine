@@ -46,7 +46,7 @@ The start screen offers four moments:
 | K | the keypad: digits 0–9 type, Enter sets, Backspace clears |
 | F | load a plutonium pellet (stopped), or feed Mr. Fusion |
 | C | view: driver, chase, orbit, passenger |
-| Mouse / drag | look round; the wheel zooms outside |
+| Mouse / drag | look round; the wheel zooms in the orbit view |
 | L | headlamps: off, dipped, main |
 | G / J | open or shut the left / right gull-wing door |
 | M | automatic or manual; Q / E change down / up |

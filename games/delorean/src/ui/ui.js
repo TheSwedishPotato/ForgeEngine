@@ -176,7 +176,7 @@ export class Keypad {
     this.lever = k.querySelector('.lever b');
   }
   get open() { return !this.root.classList.contains('hidden'); }
-  toggle(v = !this.open) { this.root.classList.toggle('hidden', !v); }
+  toggle(v = !this.open) { this.root.classList.toggle('hidden', !v); if (v) this.g.ui?.help.toggle(false); }
   update() {
     const tc = this.g.tc;
     this.lever.textContent = tc.on ? 'ON' : 'OFF';
@@ -200,18 +200,19 @@ export class Help {
         <tr><td>K</td><td>the keypad; digits 0-9 type, Enter sets, Backspace clears</td></tr>
         <tr><td>F</td><td>load plutonium (stopped) / feed Mr. Fusion</td></tr>
         <tr><td>C</td><td>view: driver, chase, orbit, passenger</td></tr>
-        <tr><td>Mouse / drag</td><td>look round; wheel zooms outside</td></tr>
+        <tr><td>Mouse / drag</td><td>look round; the wheel zooms in the orbit view</td></tr>
         <tr><td>L</td><td>headlamps: off, dipped, main</td></tr>
         <tr><td>G / J</td><td>open or shut the left / right door</td></tr>
         <tr><td>M</td><td>automatic or manual; Q / E change down / up</td></tr>
         <tr><td>N</td><td>sound</td></tr><tr><td>P</td><td>pause</td></tr><tr><td>+ / −</td><td>the clock faster / slower</td></tr>
         <tr><td>R</td><td>on the night of the storm: back to the end of Main Street for another run at the cable</td></tr>
       </table>
+      ${TOUCH_FIRST ? '<p class="fine">On the screen: drag the round pad at the lower left to steer; GAS and BRAKE at the lower right; VIEW, TIME CKT, KEYPAD, FUEL, LIGHTS and DOOR down the side; drag the view to look round.</p>' : ''}
       <p class="fine">Reach 88 mph with the circuits on, a destination set and 1.21 gigawatts at the flux capacitor, and you arrive at the destination time — at the same place. Mind what stands there then.</p>`);
     ui.append(this.root);
     this.root.querySelector('.close').onclick = () => this.toggle(false);
   }
-  toggle(v = this.root.classList.contains('hidden')) { this.root.classList.toggle('hidden', !v); }
+  toggle(v = this.root.classList.contains('hidden')) { this.root.classList.toggle('hidden', !v); if (v) this.onOpen?.(); }
 }
 
 // ---------------------------------------------------------------------------------------------

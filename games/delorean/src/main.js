@@ -53,6 +53,7 @@ async function play() {
   const hud = new HUD(ui, game), keypad = new Keypad(ui, game), help = new Help(ui);
   const touch = new Touch(ui, game, canvas);
   game.ui = { hud, keypad, help, touch };
+  help.onOpen = () => keypad.toggle(false);
   const sound = (game.sound = new Sound());
   sound.attach(window);
   if (manual && params.get('hud') !== '1') { hud.root.classList.add('hidden'); touch.root.classList.add('hidden'); }
