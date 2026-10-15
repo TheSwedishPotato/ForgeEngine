@@ -16,7 +16,7 @@
  *  hatch      a hatch: 0 shut and dogged .. 1 open
  *  button     a push button held for a time (the alarms)
  */
-import { DECK, LEVELS, DOOR_LIST, HATCHES, OBS_DECK, frameX } from './layout.js';
+import { DECK, LEVELS, DOOR_LIST, HATCHES, OBS_DECK, frameX, halfWidth, onWall } from './layout.js';
 
 const D = DECK;
 const C = [];
@@ -38,8 +38,8 @@ const HM = [
 HM.forEach(([id, label], i) => add({ id, label, comp: 'cr', pos: [13.25 - i * 0.075, D + 1.05, P + 0.08], face: 'port', kind: 'lever', states: ['shut', 'open'], init: 'shut', size: 0.03, group: 'hydraulicManifold' }));
 
 // the diving station: the bow planes' wheel forward, the stern planes' aft; the planesmen sit facing outboard
-add({ id: 'cr.bowPlanes', label: 'bow planes', comp: 'cr', pos: [11.95, D + 1.05, -1.42], face: 'port', kind: 'wheel', min: -25, max: 25, rate: 12, size: 0.4, init: 0, seat: true });
-add({ id: 'cr.sternPlanes', label: 'stern planes', comp: 'cr', pos: [11.10, D + 1.05, -1.42], face: 'port', kind: 'wheel', min: -25, max: 25, rate: 12, size: 0.4, init: 0, seat: true });
+add({ id: 'cr.bowPlanes', label: 'bow planes', comp: 'cr', pos: [11.95, D + 1.05, -1.42], face: 'port', kind: 'wheel', min: -25, max: 25, rate: 12, size: 0.34, init: 0, seat: true });
+add({ id: 'cr.sternPlanes', label: 'stern planes', comp: 'cr', pos: [11.10, D + 1.05, -1.42], face: 'port', kind: 'wheel', min: -25, max: 25, rate: 12, size: 0.34, init: 0, seat: true });
 add({ id: 'cr.bowPlanesRig', label: 'bow plane rigging', comp: 'cr', pos: [11.52, D + 1.30, -1.78], face: 'port', kind: 'lever', states: ['in', 'out'], init: 'in', size: 0.04 });
 add({ id: 'cr.divingAlarm', label: 'diving alarm (control room)', comp: 'cr', pos: [12.35, D + 1.45, -1.80], face: 'port', kind: 'button', size: 0.03 });
 
@@ -156,6 +156,18 @@ add({ id: 'ftr.mbt1VentHand', label: 'No. 1 main vent, hand gear', comp: 'ftr', 
 const OB = LEVELS.obs.y;
 add({ id: 'obs.floodlights', label: 'observation deck floodlights', comp: 'obs', level: 'obs', pos: [OBS_DECK.x + 1.2, OB + 1.0, 0.7], face: 'stbd', kind: 'switch', size: 0.03 });
 add({ id: 'obs.lamps', label: 'observation deck lamps', comp: 'obs', level: 'obs', pos: [OBS_DECK.x + 1.2, OB + 1.12, 0.7], face: 'stbd', kind: 'switch', size: 0.03, init: 1 });
+
+// Fittings on the hull's sides follow its curve: the pressure hull is a circle, so higher up a
+// manifold or a gauge board sits further inboard (16 ft inside diameter less the frames).
+for (const c of C) {
+  if ((c.level ?? 'main') !== 'main' || Math.abs(c.pos[2]) < 0.9 || c.kind === 'door' || c.kind === 'hatch') continue;
+  if (c.kind === 'wheel') continue;                       // the planes' wheels stand on their own columns
+  const inset = 0.19 + (c.size ?? 0.05) * 0.6;
+  if (Math.abs(c.pos[2]) > halfWidth(c.pos[0], c.pos[1]) - inset - 0.05) {
+    const w = onWall(c.pos[0], c.pos[1], Math.sign(c.pos[2]), inset);
+    c.pos[1] = w.pos[1]; c.pos[2] = w.pos[2]; c.normal = w.normal; c.onWall = true;
+  }
+}
 
 export const CONTROLS = C;
 export const CONTROL = Object.fromEntries(C.map((c) => [c.id, c]));

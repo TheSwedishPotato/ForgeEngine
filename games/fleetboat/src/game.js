@@ -1,0 +1,45 @@
+/**
+ * The running game: the simulation (sim.js), the world drawn round it (the boat, the sea floor,
+ * the sea and sky on the Med Engine) and you aboard, advanced together each frame.
+ */
+import { FleetStage } from './render/stage.js';
+import { BoatGL } from './render/boatGL.js';
+import { SeabedGL } from './render/seabedGL.js';
+import { Sim } from './sim.js';
+import { Player } from './player.js';
+
+export class Game {
+  constructor(canvas, { quality = 'high', start = 'dive', clock, player = {} } = {}) {
+    this.canvas = canvas;
+    this.sim = new Sim({ start, clock });
+    this.timeScale = 1;
+    this.stage = new FleetStage(canvas, { quality, sea: this.sim.sea });
+    this.boatGL = new BoatGL(this.stage, this.sim.plant);
+    this.seabedGL = new SeabedGL(this.stage, this.sim.bed);
+    this.player = new Player(this, player);
+    this._place();
+  }
+
+  _place() {
+    const d = this.sim.plant.dyn;
+    this.stage.recentre(d.pos[0], d.pos[2], 0);
+    this.seabedGL.update(d.pos[0], d.pos[2]);
+    this.boatGL.update();
+    this.stage.setTime(this.sim.utcMs);
+  }
+
+  /** One frame of real time dt (s). */
+  frame(dt) {
+    dt = Math.min(Math.max(dt, 0), 0.1);
+    this.sim.advance(dt * this.timeScale);
+    const d = this.sim.plant.dyn;
+    this.stage.recentre(d.pos[0], d.pos[2]);
+    this.seabedGL.update(d.pos[0], d.pos[2]);
+    this.boatGL.update(dt);
+    this.player.update(dt, this.stage.camera);
+    this.stage.adapt(this.player.lookingAtSea?.() ?? 1, dt);
+    this.stage.setTime(this.sim.utcMs);
+    this.stage.render(dt);
+    this.onFrame?.(dt);
+  }
+}

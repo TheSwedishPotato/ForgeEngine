@@ -29,6 +29,23 @@ export function hullRadiusAt(x) {
   return r;
 }
 
+/** Half-width (m) of the inside of the pressure hull at station x and height y (0 above or below it). */
+export function halfWidth(x, y) {
+  const r = hullRadiusAt(x);
+  return Math.sqrt(Math.max(0, r * r - (y - AXIS) ** 2));
+}
+
+/**
+ * A point on the hull's side at x, y (side -1 port, +1 starboard), `inset` metres in from the
+ * plating along its normal, and the inward normal there: where a fitting mounted on the hull is.
+ */
+export function onWall(x, y, side, inset = 0.05) {
+  const r = hullRadiusAt(x);
+  const a = Math.asin(Math.max(-1, Math.min(1, (y - AXIS) / r)));
+  const n = [0, -Math.sin(a), -side * Math.cos(a)];
+  return { pos: [x, AXIS + (r - inset) * Math.sin(a), side * (r - inset) * Math.cos(a)], normal: n };
+}
+
 /** Levels people stand on. */
 export const LEVELS = {
   main: { y: DECK, x0: COMPARTMENTS[COMPARTMENTS.length - 1].x1 + 0.4, x1: COMPARTMENTS[0].x0 - 0.5 },
