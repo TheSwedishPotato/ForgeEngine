@@ -44,6 +44,7 @@ async function go() {
   game.onFrame = (dt) => hud.update(dt);
   window.game = { game, stage: game.stage, sim: game.sim, ready: true, advance(dt) { const n = Math.max(1, Math.round(dt * 30)); for (let i = 0; i < n; i++) game.frame(dt / n); } };
   if (!manual) {
+    game.sound.attach(window);
     let last = performance.now();
     const loop = (now) => { const dt = (now - last) / 1000; last = now; game.frame(game.paused ? 0 : dt); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);

@@ -8,6 +8,8 @@ import { SeabedGL } from './render/seabedGL.js';
 import { Sim } from './sim.js';
 import { Player } from './player.js';
 import { CrewGL } from './render/crewGL.js';
+import { LifeGL } from './render/lifeGL.js';
+import { Sound } from './audio/sound.js';
 import { Vector3 } from 'three';
 
 const _c = new Vector3();
@@ -21,6 +23,8 @@ export class Game {
     this.boatGL = new BoatGL(this.stage, this.sim.plant);
     this.seabedGL = new SeabedGL(this.stage, this.sim.bed);
     this.crewGL = new CrewGL(this.boatGL, this.sim.crew);
+    this.life = new LifeGL(this.stage, this.sim);
+    this.sound = new Sound(this);
     this.player = new Player(this, player);
     this._place();
   }
@@ -41,12 +45,15 @@ export class Game {
     this.stage.recentre(d.pos[0], d.pos[2]);
     this.seabedGL.update(d.pos[0], d.pos[2]);
     this.boatGL.update(dt);
+    this.life.update(dt * this.timeScale);
     this.player.update(dt, this.stage.camera);
+    this.stage.particles.step(dt * this.timeScale, this.sim.plant, this.sim.sea);
     this.stage.adapt(this.player.lookingAtSea?.() ?? 1, dt);
     _c.copy(this.stage.camera.position).applyMatrix4(this.stage.boatInv);
     this.crewGL.update(dt, _c, this.player.mode === 'walk' ? this.player.p.level : 'outside');
     this.stage.setTime(this.sim.utcMs);
     this.stage.render(dt);
+    this.sound.update(dt);
     this.onFrame?.(dt);
   }
 }

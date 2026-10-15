@@ -25,11 +25,11 @@ function onBattery(P, field = 1) {
 }
 
 /** Surfaced, rigged for diving, running on the battery: the dive is the next thing (the default start). */
-export function surfacedRiggedForDive(P, { keelDepth = 4.65, heading = 0 } = {}) {
+export function surfacedRiggedForDive(P, { keelDepth = 4.65, heading = 0, x = 0, z = 0 } = {}) {
   atSea(P);
   onBattery(P, 1);
   P.boat.setBallast({ safety: 1, negative: 0 });
-  P.boat.place({ keelDepth, heading });
+  P.boat.place({ keelDepth, heading, x, z });
   P.boat.initTanks(P.sea);
   P.compensate();
   // the hatch open to the bridge, the induction shut (on the battery the engines are secured)
@@ -42,10 +42,10 @@ export function surfacedRiggedForDive(P, { keelDepth = 4.65, heading = 0 } = {})
 }
 
 /** Surfaced on the diesels: two engines on propulsion, the induction open, the bridge manned. */
-export function surfacedOnDiesels(P, { keelDepth = 4.65, heading = 0 } = {}) {
+export function surfacedOnDiesels(P, { keelDepth = 4.65, heading = 0, x = 0, z = 0 } = {}) {
   atSea(P);
   P.boat.setBallast({ safety: 1, negative: 0 });
-  P.boat.place({ keelDepth, heading });
+  P.boat.place({ keelDepth, heading, x, z });
   P.boat.initTanks(P.sea);
   P.compensate();
   P.setAll({ 'hatch.ctUpper': 1, 'hatch.ctLower': 1, 'hatch.galley': 1, 'hm.induction': 'open', 'fer.induction': 1, 'aer.induction': 1, 'fer.hullSupply': 1, 'hm.hullVent': 'open', 'fer.ventBlowers': 1 });
@@ -60,11 +60,11 @@ export function surfacedOnDiesels(P, { keelDepth = 4.65, heading = 0 } = {}) {
 }
 
 /** Submerged at a keel depth, trimmed, on the battery, rigged for red if night. */
-export function submerged(P, { keelDepth = 60 * FT, heading = 0, speed = 3.0 } = {}) {
+export function submerged(P, { keelDepth = 60 * FT, heading = 0, speed = 3.0, x = 0, z = 0 } = {}) {
   atSea(P);
   onBattery(P, 1);
   P.boat.setBallast({ mbt: 'flooded', safety: 1, negative: 0 });
-  P.boat.place({ keelDepth, heading });
+  P.boat.place({ keelDepth, heading, x, z });
   P.boat.initTanks(P.sea);
   P.compensate(keelDepth);
   P.dyn.v[0] = speed;

@@ -344,3 +344,25 @@ function* moveWater(C, from, to, gallons) {
 /** Rig for red (at night, so eyes are dark-adapted for the periscope and the bridge) or white. */
 export function* rigForRed(C) { yield C.done(C.do('crWatch', 'cr.lights', 'red') ?? C.do('divingOfficer', 'cr.lights', 'red')); C.say('crWatch', 'Rigged for red.'); }
 export function* rigForWhite(C) { yield C.done(C.do('crWatch', 'cr.lights', 'white') ?? C.do('divingOfficer', 'cr.lights', 'white')); C.say('crWatch', 'Rigged for white.'); }
+
+/** Water in the bilges: the drain pump in the pump room, till they are dry. */
+export function* pumpBilges(C) {
+  const P = C.plant, F = P.flood;
+  const who = C.man('pumpRoom') ? 'pumpRoom' : 'crWatch';
+  const wet = F.comps.reduce((a, q) => (q.water > a.water ? q : a), F.comps[0]);
+  C.say(who, `Water in the ${wet.name.toLowerCase().replace(/ \(.*\)/, '')} bilges, about ${Math.round(wet.water / GAL / 10) * 10} gallons. Starting the drain pump.`);
+  yield C.done(C.do(who, 'pr.drain', 1));
+  yield within(C, 3600, () => F.total < 0.05);
+  yield C.done(C.do(who, 'pr.drain', 0));
+  C.say(who, 'Bilges pumped dry.');
+}
+
+/** Flooding: report it, and if she is submerged, blow everything and get her up. */
+export function* flooding(C, { where }) {
+  C.say('divingOfficer', `Flooding in the ${where}!`);
+  if (C.plant.g.depth > 30) {
+    C.say('captain', 'Emergency surface! Blow all main ballast!');
+    C.order('surface');
+  }
+  yield 1;
+}

@@ -61,7 +61,7 @@ const HULL_SUPPLY = { x: frameX(59), y: 25.0 * FT, CdA: 0.10 };
 const HULL_EXHAUST = { x: frameX(57), y: 24.5 * FT, CdA: 0.08 };
 const HATCH_CdA = 0.19;                                               // a 25" hatch, open
 const EXHAUST_OUT = { 1: { x: frameX(90), z: 1.6 }, 2: { x: frameX(90), z: -1.6 }, 3: { x: frameX(101), z: 1.5 }, 4: { x: frameX(101), z: -1.5 }, 0: { x: frameX(102), z: -1.4 } };
-const EXHAUST_Y = 16.5 * FT, EXHAUST_CdA = 0.05;
+const EXHAUST_Y = 18.5 * FT, EXHAUST_CdA = 0.05;     // the outlets on the casing's sides aft, above the surfaced waterline
 
 /** What each electrical auxiliary takes from the battery bus (W, estimates from the motors' ratings). */
 const LOADS = { hotel: 32e3, lightsWhite: 9e3, lightsRed: 3e3, trimPump: 19e3, drainPump: 7.5e3, imo: 11e3, imoUnloaded: 2e3, compressor: 45e3, lpBlower: 82e3, ventBlowers: 9e3, batFan: 2e3, scope: 12e3, rig: 8e3, obsFlood: 6e3, obsLamps: 0.8e3 };
@@ -411,6 +411,12 @@ export class Plant {
     const g = this.g, d = this.dyn, b = this.boat, air = b.air, at = d.attitude;
     const pKeel = this.seaP(frameX(55), 0);
     g.depth = Math.max(0, (pKeel - ATM) / (RHO_GAUGE * G)) / FT;        // feet, keel depth as the gauges read it
+    // the fathometer: a sound pulse from the keel to the bottom and back, timed, read at the
+    // instrument's 4,800 ft/s (the real sound speed in this warm water is about 5,000: it reads shallow)
+    const kw = d.toWorld([frameX(55), -YA, 0]);
+    const under = this.sea.floor(kw[0], kw[2]) - (this.sea.eta(kw[0], kw[2]) - kw[1]);
+    const c = this.sea.column.soundAt?.(Math.max(1, under / 2)) ?? 1530;
+    g.fathometer = Math.max(0, under) * (4800 * FT / c) / FT;            // feet under the keel
     g.pitch = at.pitch / DEG; g.heel = at.heel / DEG; g.heading = ((at.heading / DEG) % 360 + 360) % 360;
     g.bubble = clamp(g.pitch, -15, 15);
     const u = d.v[0];

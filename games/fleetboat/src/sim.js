@@ -23,7 +23,9 @@ export class Sim {
     this.sea = new Sea({ column, wind, windFrom: 60, floor: (X, Z) => this.bed.depth(X, Z) });
     this.plant = new Plant({ sea: this.sea });
     crewWeight(this.plant);
-    (CONDITIONS[start] ?? CONDITIONS.dive)(this.plant, { heading: 330 * Math.PI / 180 });
+    // a mile and a half off the beach, over the sand shelf and its patch reefs in about 45 m of
+    // water, heading north-north-west along the coast
+    (CONDITIONS[start] ?? CONDITIONS.dive)(this.plant, { heading: 340 * Math.PI / 180, x: 1400, z: 0 });
     this.log = [];
     this.plant.step(1e-4);
     this.crew = new Crew(this, { condition: start === 'submerged' ? 'submerged' : 'surfaced' });

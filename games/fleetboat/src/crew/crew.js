@@ -187,8 +187,56 @@ export class Crew {
     // the continuous watchstanders, twice a second
     this._tick += dt;
     if (this._tick >= 0.5) { const T = this._tick; this._tick = 0; this._planesmen(T); this._helmsman(T); this._controllermen(T); }
+    this._navTick = (this._navTick ?? 0) + dt;
+    if (this._navTick >= 3) { this._navTick = 0; this._navigator(); }
     // their weight where they are (the trim feels a crowd going forward)
     P.people = this.men.map((m) => ({ kg: (m.female ? 68 : 82) + 8, x: m.x, y: LEVEL_Y[m.level] + (m.posture === 'lie' ? 0.2 : 0.9), z: m.z, work: m.work }));
+  }
+
+  /**
+   * The quartermaster keeps an eye on the fathometer: shoaling water is reported, and the captain
+   * slows her and comes round toward the deepest water; an ordered depth the bottom will not allow
+   * (less than 20 ft under the keel) is cut short.
+   */
+  _navigator() {
+    const P = this.plant, g = P.g, ctl = P.ctl, O = this.orders;
+    const fath = g.fathometer;
+    if (fath == null || !Number.isFinite(fath)) return;
+    const bell = ctl['ct.telegraph.port'] ?? 'stop';
+    const ahead = !['stop', 'back1', 'back2', 'backFull', 'backEmergency'].includes(bell);
+    if (fath < 35 && ahead && !this._shoal) {
+      this._shoal = true;
+      this.say('quartermaster', `Fathometer shows ${Math.round(fath)} feet under the keel and shoaling!`);
+      // the deepest water a couple of hundred metres round her
+      const d = P.dyn, bed = this.sim.bed;
+      let best = O.heading, bd = -1;
+      for (let k = 0; k < 16; k++) {
+        const h = (k / 16) * Math.PI * 2;
+        const depth = bed.depth(d.pos[0] + Math.sin(h) * 300, d.pos[2] - Math.cos(h) * 300);
+        if (depth > bd) { bd = depth; best = (h * 180) / Math.PI; }
+      }
+      this.say('captain', fath < 18 ? 'All back full! Right full rudder!' : 'All ahead one third. Come about to seaward.');
+      this.order('speed', { bell: fath < 18 ? 'backFull' : 'ahead1' });
+      this.order('course', { heading: best, rudder: 30 });
+    }
+    if (fath > 70) this._shoal = false;
+    // the bilges, and flooding
+    const F = P.flood;
+    if (F.total > 0.3 && !this.running('pumpBilges') && !(P.trim.drainPump)) this.order('pumpBilges');
+    const inflow = Object.values(F.inflow ?? {}).reduce((a, q) => a + q, 0) + (F.leak ?? 0);
+    if (inflow > 0.05 && !this._flooding) {
+      this._flooding = true;
+      const wet = F.comps.reduce((a, q) => (q.water > a.water ? q : a), F.comps[0]);
+      this.order('flooding', { where: wet.name.toLowerCase().replace(/ \(.*\)/, '') });
+    }
+    if (inflow < 0.005) this._flooding = false;
+    if (g.depth > 30) {
+      const room = g.depth + fath - 20;
+      if (O.depth / FT > room) {
+        O.depth = Math.max(60, room) * FT;
+        this.say('divingOfficer', `Not enough water, sir: the bottom is ${Math.round(g.depth + fath)} feet. Holding ${Math.round(O.depth / FT)} feet.`);
+      }
+    }
   }
 
   /** Keeps a hand on a wheel (or rheostat) and puts it at `to`. */

@@ -41,6 +41,7 @@ import { OBS_DECK } from '../physics/mass.js';
 import { Surface } from './surface.js';
 import { WATER, RAY_BOAT_GLSL } from './water.js';
 import { Acrylic } from './acrylic.js';
+import { Particles } from './particles.js';
 
 import { PLACE, DATE } from '../data/place.js';
 export { PLACE, DATE };
@@ -375,6 +376,7 @@ export class FleetStage {
     r.addPass(new Upscale());
     this.motionBlur = r.addPass(new MotionBlur());
     this.surface = r.addPass(new Surface(this));
+    this.particles = r.addPass(new Particles(this));
     this.acrylic = r.addPass(new Acrylic(this));
     this.exposure = r.addPass(new Exposure());
     this.exposure.minEV = -9; this.exposure.maxEV = 7; this.exposure.key = 0.16;

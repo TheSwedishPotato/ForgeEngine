@@ -34,6 +34,7 @@ export const GAUGES = [
   ...[['fwdTrim', 'FWD TRIM', 6500], ['fwdWRT', 'FWD W.R.T.', 1400], ['aux1', 'AUX No. 1', 8200], ['aux2', 'AUX No. 2', 8200], ['aftWRT', 'AFT W.R.T.', 1400], ['aftTrim', 'AFT TRIM', 5500], ['negative', 'NEGATIVE', 2200], ['safety', 'SAFETY', 6400]].map(([t, label, max], i) => ({
     id: `tank.${t}`, label, unit: 'GALLONS', pos: [10.55 - i * 0.155, D + 1.78, -1.84], face: 'port', r: 0.065, min: 0, max, major: max / 4, minor: max / 20, sweep: 270, read: (g) => g.tanks?.[t] ?? 0,
   })),
+  { id: 'fathometer', label: 'FATHOMETER', unit: 'FEET UNDER KEEL', pos: [9.0, D + 1.6, -1.84], face: 'port', r: 0.075, min: 0, max: 600, major: 100, minor: 20, sweep: 300, red: 50, read: (g) => g.fathometer },
   { id: 'trimFlow', label: 'TRIM PUMP', unit: 'G.P.M.', pos: [9.32, D + 1.62, -1.84], face: 'port', r: 0.06, min: 0, max: 400, major: 100, minor: 20, sweep: 270, read: (g) => g.trimFlow },
   // starboard: the air banks, the manifolds, the hydraulic oil, the boat's barometer
   ...[1, 2, 3, 4, 5].map((n, i) => ({ id: `bank${n}`, label: `No. ${n} BANK`, unit: 'P.S.I.', pos: [12.8 - i * 0.24, D + 1.95, 1.84], face: 'stbd', r: 0.09, min: 0, max: 4000, major: 1000, minor: 200, sweep: 270, red: 3000, read: (g) => g.banks?.[i] ?? 0 })),
@@ -66,6 +67,7 @@ export const GAUGES = [
   { id: 'obs.depth', label: 'DEPTH', unit: 'FEET', pos: [-2.85, OBY + 0.85, 0.45], face: 'aft', r: 0.09, min: 0, max: 450, major: 50, minor: 10, sweep: 300, read: (g) => g.depth },
   { id: 'obs.speed', label: 'SPEED', unit: 'KNOTS', pos: [-2.85, OBY + 0.85, 0.0], face: 'aft', r: 0.07, min: 0, max: 25, major: 5, minor: 1, sweep: 270, read: (g) => g.speed },
   { id: 'obs.gyro', kind: 'compass', label: 'HEADING', pos: [-2.85, OBY + 0.85, -0.45], face: 'aft', r: 0.08, read: (g) => g.heading },
+  { id: 'obs.bottom', label: 'BOTTOM', unit: 'FEET BELOW', pos: [-2.85, OBY + 0.66, 0.22], face: 'aft', r: 0.06, min: 0, max: 600, major: 100, minor: 20, sweep: 300, red: 50, read: (g) => g.fathometer },
 ];
 
 function dialTexture(d) {
