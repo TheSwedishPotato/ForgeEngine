@@ -7,12 +7,18 @@
  *
  * V steps outside for a free look at her from any side (drag to turn, wheel to come closer),
  * above or under the sea.
+ *
+ * Your hands work the boat's controls as the crew's do: look at one within reach, then hold the
+ * left button to open a valve, turn a wheel, throw a lever to its next position, switch on; the
+ * right button to shut, turn back, throw back, switch off. At a person's speed: a valve's
+ * handwheel goes round a turn or so a second, a big valve takes its time.
  */
 import { Vector3, Quaternion, Matrix4 } from 'three';
 import { DECK, AXIS, LEVELS, LADDERS, DOOR_LIST, hullRadiusAt, compartmentAt, corridorAt } from './data/layout.js';
 import { HULL, FT } from './data/boat.js';
 import { OBS_DECK } from './physics/mass.js';
 import { fairHalf } from './render/hullGL.js';
+import { CONTROLS } from './data/controls.js';
 
 const EYE = 1.62;
 const _v = new Vector3(), _d = new Vector3(), _u = new Vector3(), _m = new Matrix4(), _q = new Quaternion();
@@ -45,8 +51,12 @@ export class Player {
       if (e.code === 'KeyV') this.mode = this.mode === 'orbit' ? 'walk' : 'orbit';
       if (e.code === 'KeyE' && this.mode === 'walk' && !this.climb) this.ladder();
     });
-    canvas.addEventListener('pointerdown', (e) => { this.dragging = true; this._px = e.clientX; this._py = e.clientY; });
-    window.addEventListener('pointerup', () => { this.dragging = false; });
+    canvas.addEventListener('pointerdown', (e) => {
+      this.dragging = true; this._px = e.clientX; this._py = e.clientY;
+      if (this.mode === 'walk' && this.aim && (document.pointerLockElement === canvas || e.button === 2 || e.shiftKey)) { this.working = e.button === 2 ? -1 : 1; this._throw = 0; }
+    });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('pointerup', () => { this.dragging = false; this.working = 0; });
     window.addEventListener('pointermove', (e) => {
       if (document.pointerLockElement === canvas || !this.dragging) return;
       const dx = e.clientX - this._px, dy = e.clientY - this._py;
@@ -60,6 +70,51 @@ export class Player {
     if (this.mode === 'orbit') { this.orbit.yaw -= dx * 0.004; this.orbit.pitch = Math.max(-1.2, Math.min(1.4, this.orbit.pitch + dy * 0.004)); return; }
     this.yaw += dx * this.sens;
     this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch - dy * this.sens));
+  }
+
+  /** The control you are looking at, within reach (boat coordinates). */
+  _aim(eyeY) {
+    const p = this.p;
+    const cp = Math.cos(this.pitch), dir = [cp * Math.cos(this.yaw), Math.sin(this.pitch), cp * Math.sin(this.yaw)];
+    let best = null, bestA = 0.2;
+    for (const c of CONTROLS) {
+      if ((c.level ?? 'main') !== p.level) continue;
+      const v = [c.pos[0] - p.x, c.pos[1] - eyeY, c.pos[2] - p.z];
+      const d = Math.hypot(...v);
+      if (d > 1.45 || d < 0.05) continue;
+      const cos = (v[0] * dir[0] + v[1] * dir[1] + v[2] * dir[2]) / d;
+      const a = Math.acos(Math.max(-1, Math.min(1, cos))) - Math.atan((c.size ?? 0.05) * 1.6 / d);
+      if (a < bestA) { bestA = a; best = c; }
+    }
+    return best;
+  }
+
+  /** Works the control in your hands (dir +1 open / on / next, -1 shut / off / back). */
+  _work(dt, c, dir) {
+    const ctl = this.game.sim.plant.ctl, v = ctl[c.id];
+    if (c.kind === 'lever' || c.kind === 'telegraph') {
+      this._throw -= dt;
+      if (this._throw > 0) return;
+      const st = c.states, i = st.indexOf(v), k = Math.max(0, Math.min(st.length - 1, i + dir));
+      ctl[c.id] = st[k];
+      this._throw = 0.55;
+      return;
+    }
+    if (c.kind === 'switch') { ctl[c.id] = dir > 0 ? 1 : 0; this.working = 0; return; }
+    if (c.kind === 'button') { ctl[c.id] = dir > 0 ? 1 : 0; return; }
+    const rate = c.kind === 'valve' ? (c.rate ?? 1) / Math.max(0.1, c.turns ?? 1) : c.kind === 'wheel' ? c.rate ?? 12 : c.kind === 'rheostat' ? c.rate ?? 0.25 : c.kind === 'door' ? 1 / 3.5 : 1 / 3;
+    const lo = c.kind === 'wheel' ? c.min ?? -25 : 0, hi = c.kind === 'wheel' ? c.max ?? 25 : 1;
+    ctl[c.id] = Math.max(lo, Math.min(hi, (+v || 0) + dir * rate * dt));
+  }
+
+  /** What a control shows: its label and setting, as you would read it. */
+  static describe(c, v) {
+    if (c.kind === 'valve' || c.kind === 'door' || c.kind === 'hatch') { const k = +v || 0; return `${c.label}: ${k <= 0.001 ? 'shut' : k >= 0.999 ? 'open' : `${Math.round(k * 100)}% open`}`; }
+    if (c.kind === 'switch') return `${c.label}: ${+v > 0.5 ? 'on' : 'off'}`;
+    if (c.kind === 'wheel') return `${c.label}: ${Math.abs(+v || 0) < 0.5 ? 'zero' : `${Math.abs(Math.round(+v))}° ${c.id.includes('helm') ? (+v > 0 ? 'right' : 'left') : (+v > 0 ? 'rise' : 'dive')}`}`;
+    if (c.kind === 'rheostat') return `${c.label}: ${Math.round((+v || 0) * 100)}%`;
+    if (c.kind === 'button') return `${c.label}`;
+    return `${c.label}: ${v}`;
   }
 
   /** How much of the view is the sea (for the eye's adaptation): outside or in the observation deck, all of it. */
@@ -159,8 +214,13 @@ export class Player {
     const moved = Math.hypot(cx - p.x, cz - p.z);
     p.x = cx; p.z = cz;
     this.bob += moved * 3.2;
+    // what you are looking at, and working it
+    this.aim = this._aim(LEVEL_Y[p.level] + EYE);
+    if (this.aim && this.working) this._work(dt, this.aim, this.working);
+    if (!this.working && this.aim?.kind === 'button') this.game.sim.plant.ctl[this.aim.id] = 0;
     const n = this.nearLadder();
-    this.hint = n ? `E: climb ${LEVEL_Y[n.to] > LEVEL_Y[p.level] ? 'up' : 'down'} to the ${n.to === 'main' ? 'main deck' : n.to === 'ct' ? 'conning tower' : n.to === 'obs' ? 'observation deck' : n.to === 'pump' ? 'pump room' : 'bridge'}` : '';
+    if (this.aim) { this.hint = `${Player.describe(this.aim, this.game.sim.plant.ctl[this.aim.id])}   ·   left button: ${this.aim.kind === 'valve' || this.aim.kind === 'door' || this.aim.kind === 'hatch' ? 'open' : this.aim.kind === 'switch' ? 'on' : this.aim.kind === 'wheel' ? 'turn' : 'push'}, right: ${this.aim.kind === 'valve' || this.aim.kind === 'door' || this.aim.kind === 'hatch' ? 'shut' : this.aim.kind === 'switch' ? 'off' : 'back'}`; }
+    else this.hint = n ? `E: climb ${LEVEL_Y[n.to] > LEVEL_Y[p.level] ? 'up' : 'down'} to the ${n.to === 'main' ? 'main deck' : n.to === 'ct' ? 'conning tower' : n.to === 'obs' ? 'observation deck' : n.to === 'pump' ? 'pump room' : 'bridge'}` : '';
     // ducking through a door's coaming
     let duck = 0;
     if (p.level === 'main') for (const d of DOOR_LIST) duck = Math.max(duck, Math.max(0, 1 - Math.abs(p.x - d.x) / 0.5) * 0.32);

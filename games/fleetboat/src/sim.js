@@ -8,6 +8,7 @@ import { Seabed } from './world/seabed.js';
 import { WaterColumn } from './physics/seawater.js';
 import { Plant } from './physics/plant.js';
 import { CONDITIONS, crewWeight } from './sim/conditions.js';
+import { Crew } from './crew/crew.js';
 import { DATE } from './data/place.js';
 
 export const hms = (s) => { const [h, m = 0, sec = 0] = String(s).split(':').map(Number); return h * 3600 + m * 60 + sec; };
@@ -24,6 +25,10 @@ export class Sim {
     crewWeight(this.plant);
     (CONDITIONS[start] ?? CONDITIONS.dive)(this.plant, { heading: 330 * Math.PI / 180 });
     this.log = [];
+    this.plant.step(1e-4);
+    this.crew = new Crew(this, { condition: start === 'submerged' ? 'submerged' : 'surfaced' });
+    this.crew.step(0);
+    this.plant.compensate(start === 'submerged' ? undefined : undefined);
     this.dt = 1 / 60;
     this.acc = 0;
   }

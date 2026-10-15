@@ -7,6 +7,10 @@ import { BoatGL } from './render/boatGL.js';
 import { SeabedGL } from './render/seabedGL.js';
 import { Sim } from './sim.js';
 import { Player } from './player.js';
+import { CrewGL } from './render/crewGL.js';
+import { Vector3 } from 'three';
+
+const _c = new Vector3();
 
 export class Game {
   constructor(canvas, { quality = 'high', start = 'dive', clock, player = {} } = {}) {
@@ -16,6 +20,7 @@ export class Game {
     this.stage = new FleetStage(canvas, { quality, sea: this.sim.sea });
     this.boatGL = new BoatGL(this.stage, this.sim.plant);
     this.seabedGL = new SeabedGL(this.stage, this.sim.bed);
+    this.crewGL = new CrewGL(this.boatGL, this.sim.crew);
     this.player = new Player(this, player);
     this._place();
   }
@@ -38,6 +43,8 @@ export class Game {
     this.boatGL.update(dt);
     this.player.update(dt, this.stage.camera);
     this.stage.adapt(this.player.lookingAtSea?.() ?? 1, dt);
+    _c.copy(this.stage.camera.position).applyMatrix4(this.stage.boatInv);
+    this.crewGL.update(dt, _c, this.player.mode === 'walk' ? this.player.p.level : 'outside');
     this.stage.setTime(this.sim.utcMs);
     this.stage.render(dt);
     this.onFrame?.(dt);

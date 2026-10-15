@@ -34,11 +34,10 @@ export function surfacedRiggedForDive(P, { keelDepth = 4.65, heading = 0 } = {})
   P.compensate();
   // the hatch open to the bridge, the induction shut (on the battery the engines are secured)
   P.setAll({ 'hatch.ctUpper': 1, 'hatch.ctLower': 1, 'hatch.galley': 1, 'ct.telegraph.port': 'standard', 'ct.telegraph.stbd': 'standard', 'man.answer.port': 'standard', 'man.answer.stbd': 'standard' });
-  // negative flooded (rigged for dive)
+  // negative flooded and its flood valve left open (rigged for dive: blown to the mark at 40 feet)
   P.set('hm.flood.negative', 'open');
   P.boat.tank.negative.set(1, P.boat.tank.negative.pAir);
   P.ram['hm.flood.negative'] = 1;
-  P.set('hm.flood.negative', 'shut');
   return P;
 }
 

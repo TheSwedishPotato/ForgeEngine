@@ -8,6 +8,7 @@ import './style.css';
 import { Game } from './game.js';
 import { hms, fmt } from './sim.js';
 import { HUD } from './ui/hud.js';
+import { Orders } from './ui/orders.js';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('view');
@@ -30,11 +31,15 @@ async function go() {
   if (params.get('yaw')) game.player.yaw = Number(params.get('yaw')) * Math.PI / 180;
   if (params.get('pitch')) game.player.pitch = Number(params.get('pitch')) * Math.PI / 180;
   if (params.get('cam') === 'out') { game.player.mode = 'orbit'; Object.assign(game.player.orbit, { yaw: Number(params.get('oyaw') ?? 140) * Math.PI / 180, pitch: Number(params.get('opitch') ?? 12) * Math.PI / 180, dist: Number(params.get('dist') ?? 70) }); }
+  if (params.get('order')) game.sim.crew.order(params.get('order'), params.get('depth') ? { depth: Number(params.get('depth')) * 0.3048 } : {});
   if (params.get('skip')) game.sim.advance(Number(params.get('skip')));
   if (params.get('dbgsurf')) game.stage.surface.debug = true;
   for (const k of ['surface', 'fog', 'acrylic', 'bloom', 'motionBlur', 'screen']) if (params.get('no' + k)) game.stage[k].enabled = false;
   ui.querySelector('.loading')?.remove();
   const hud = new HUD(ui, game);
+  const orders = new Orders(ui, game);
+  if (!manual) { const x = document.createElement('div'); x.className = 'crosshair'; ui.append(x); }
+  void orders;
   if (manual && params.get('hud') !== '1') hud.toggle();
   game.onFrame = (dt) => hud.update(dt);
   window.game = { game, stage: game.stage, sim: game.sim, ready: true, advance(dt) { const n = Math.max(1, Math.round(dt * 30)); for (let i = 0; i < n; i++) game.frame(dt / n); } };
