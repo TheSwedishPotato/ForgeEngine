@@ -327,6 +327,7 @@ export class Help {
       <dt>N</dt><dd>sound on or off</dd>
       <dt>T</dt><dd>the travel card</dd>
       <dt>F3</dt><dd>the physics of the engine and the train</dd>
+      <dt>F</dt><dd>drive the engine yourself (W/S regulator, Q/A reverser, [ ] brake valve, . , engine brake, Space whistle, X sand, G starting valve, C cocks, I injector, J heating, Backspace emergency, K acknowledge Signum)</dd>
       <dt>H</dt><dd>this list</dd></dl>`;
     this.box.style.display = 'none';
     root.append(this.box);
@@ -345,6 +346,7 @@ export class TouchControls {
     this.stand = btn('Stand up', () => (P.mode === 'walking' ? P.toggleStand({ anywhere: true }) : P.mode === 'seated' ? P.toggleStand() : null));
     this.out = btn('Outside', () => P.setOutside(P.mode !== 'outside', P.orbit ?? {}));
     btn('Map', () => phone.toggle());
+    this.drive = btn('Drive', () => game.driving.toggle());
     // hold to walk on (or back) the way you look; drag the view to turn
     this.pad = el('div', 'walkpad');
     for (const [label, code] of [['&#9650;', 'KeyW'], ['&#9660;', 'KeyS']]) {
@@ -362,6 +364,51 @@ export class TouchControls {
     this.stand.textContent = P.mode === 'walking' ? 'Sit down' : 'Stand up';
     this.out.textContent = P.mode === 'outside' ? 'Inside' : 'Outside';
     this.pad.hidden = P.mode !== 'walking';
+    this.drive.textContent = this.game.driving?.on ? 'Stop driving' : 'Drive';
+    this.stand.hidden = P.mode === 'cab';
+  }
+}
+
+// ---- driving: what the gauges say and where the handles are (and buttons on a touch screen) ------
+
+export class DrivePanel {
+  constructor(root, game, { touch = false } = {}) {
+    this.game = game;
+    this.box = el('div', 'drive');
+    this.box.hidden = true;
+    this.read = el('pre', 'drive-read');
+    this.box.append(this.read);
+    if (touch) {
+      const grid = el('div', 'drive-btns');
+      for (const [label, code] of [['Reg +', 'KeyW'], ['Reg −', 'KeyS'], ['Fwd', 'KeyQ'], ['Back', 'KeyA'], ['Brake +', 'BracketRight'], ['Brake −', 'BracketLeft'],
+        ['Eng. brake +', 'Period'], ['Eng. brake −', 'Comma'], ['Whistle', 'Space'], ['Sand', 'KeyX'], ['Start valve', 'KeyG'], ['Cocks', 'KeyC'], ['Injector', 'KeyI'], ['Heating', 'KeyJ'], ['Signum ack', 'KeyK'], ['EMERG.', 'Backspace']]) {
+        const b = el('button', null, label);
+        const up = () => game.driving.press(code, false);
+        b.addEventListener('pointerdown', (e) => { e.stopPropagation(); game.driving.press(code, true); b.setPointerCapture?.(e.pointerId); });
+        b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+        grid.append(b);
+      }
+      this.box.append(grid);
+    }
+    root.append(this.box);
+    this._t = 0;
+  }
+
+  update(dt) {
+    const D = this.game.driving;
+    this.box.hidden = !D?.on;
+    if (!D?.on) return;
+    this._t -= dt; if (this._t > 0) return; this._t = 0.15;
+    const sim = this.game.sim, T = sim.train, L = T.loco, c = L.c, B = T.brake, f = (x, d = 1) => Number(x).toFixed(d);
+    const sig = sim.signals?.ahead?.(T.front), sg = sim.signals?.signum;
+    this.read.textContent = [
+      `${f(Math.abs(T.speed) * 3.6, 0).padStart(3)} km/h   boiler ${f(L.p - 1.013)} bar   water ${f(L.out.level ?? 0, 0)} mm`,
+      `regulator ${f(c.regulator * 100, 0)} %   cut-off ${f(c.reverser * 100, 0)} %${c.reverser < 0 ? ' (back)' : ''}   chest ${f(L.pChest - 1.013)} bar`,
+      `brake valve ${D.brakeText()}   pipe ${f(B.v[0].pBP)} bar   engine brake ${f(B.direct * 100, 0)} %`,
+      `${c.drainCocks ? 'cocks OPEN' : 'cocks shut'} · ${c.sander ? 'SAND' : 'sand'} · ${c.startingValve ? 'START VALVE' : 'start valve'} · injector ${c.injector[1] ? 'ON' : 'off'} · heating ${c.steamHeat > 0.5 ? 'on' : 'off'}`,
+      sig ? `next signal ${sig.name}: ${sig.aspectText} in ${f(sig.dist, 0)} m` : '',
+      sg?.pending ? `SIGNUM WARNING - press K within ${f(Math.max(0, sg.deadline - T.time), 1)} s` : '',
+    ].filter(Boolean).join('\n');
   }
 }
 

@@ -43,6 +43,8 @@ export class PathLine {
         pts[j].v = Math.min(pts[j].v, 40 / 3.6);   // a crossover is taken at 40 km/h
       }
     }
+    this.legs = legs;
+    this.legOf = Uint8Array.from(pts.map((p) => p.leg));
     this.n = pts.length;
     this.length = (this.n - 1) * STEP;
     this.xyz = new Float64Array(this.n * 3);
@@ -80,6 +82,16 @@ class Scheduled {
     const lim = new Float64Array(n);
     for (let i = 0; i < n; i++) lim[i] = Math.min(vmax, path.vlim[i]);
     const stopAt = new Map(stops.map((st) => [Math.round(st.u / STEP), st]));
+    // the free-running profile (no stops): what the live run aims at between them
+    const vf = new Float64Array(n);
+    vf[0] = Math.min(vEnter, lim[0]);
+    for (let i = 0; i + 1 < n; i++) {
+      const vi = Math.max(0.5, vf[i]);
+      const a = Math.min(fmax, power / vi) / mass - G * path.grade[i] - (2000 + 30 * vi * vi) / mass;
+      vf[i + 1] = Math.min(lim[i + 1], Math.sqrt(Math.max(0, vf[i] * vf[i] + 2 * Math.max(0.05, a) * STEP)));
+    }
+    for (let i = n - 2; i >= 0; i--) vf[i] = Math.min(vf[i], Math.sqrt(vf[i + 1] * vf[i + 1] + 2 * 0.6 * STEP));
+    this.vFree = vf; this.lim = Float64Array.from(lim); this.stops = stops; this.mass = mass; this.power = power; this.fmax = fmax;
     for (const i of stopAt.keys()) lim[i] = 0;
     // forward: as fast as the power and the grade allow; backward: brake in time (0.6 m/s²)
     const v = new Float64Array(n);
@@ -139,7 +151,20 @@ export class Traffic {
     const north = new PathLine(route, [{ track: 'right', s0: R.length, s1: 0 }], { name: 'IR 26 north' });
     const nGoe = uOf(north, 'right', on('right', 'Göschenen')), nErst = uOf(north, 'right', on('right', 'Erstfeld'));
     this.trains.push(new Scheduled(north, { name: 'Treno Gottardo (northbound)', start: hm(11, 2, 40), vEnter: 12, stops: [{ u: nGoe, dwell: 50, dep: hm(11, 4) }, { u: nErst, dwell: 60 }] }));
+    // the rest of the hourly service around the trip (estimated times): the one down an hour
+    // earlier, which meets the special at Erstfeld, and the next one up, which follows it on its
+    // own track (all the way on the left-hand line) and is kept back by the signals if need be
+    this.trains.push(new Scheduled(north, { name: 'Treno Gottardo (northbound, an hour earlier)', start: hm(10, 2, 40), vEnter: 12, stops: [{ u: nGoe, dwell: 50, dep: hm(10, 4) }, { u: nErst, dwell: 60 }] }));
+    const south2 = new PathLine(route, [{ track: 'left', s0: 0, s1: L.length }], { name: 'IR 26 south (next)' });
+    const u2E = uOf(south2, 'left', on('left', 'Erstfeld')), u2G = uOf(south2, 'left', on('left', 'Göschenen'));
+    this.trains.push(new Scheduled(south2, { name: 'Treno Gottardo (southbound, the next hour)', start: hm(11, 31, 20), vEnter: 14, stops: [{ u: u2E, dwell: 50, dep: hm(11, 33) }, { u: u2G, dwell: 60 }] }));
   }
+
+  /** The live runs (made on first use): the trains driving under the signals. */
+  get runs() { return (this._runs ??= this.trains.map((tr) => new Run(this.route, tr))); }
+
+  /** One step of the live traffic (s), under the signals. */
+  step(dt, clock, signals) { for (const r of this.runs) r.step(dt, clock, signals); }
 
   /** A chainage near s on a track that is not in a tunnel (crossovers are in the open). */
   _openTrack(track, s) {
@@ -150,10 +175,87 @@ export class Traffic {
     return s;
   }
 
-  /** Each train's state now: { train, s (path chainage of the front), v } for those on the map. */
+  /** Each train's state now: { train, s (path chainage of the front), v } for those on the map (live when running). */
   at(clock) {
     const out = [];
+    if (this._runs) { for (const r of this._runs) if (r.onMap) out.push({ train: r.train, s: r.u, v: r.v }); return out; }
     for (const tr of this.trains) { const a = tr.at(clock); if (a) out.push({ train: tr, ...a }); }
     return out;
   }
 }
+
+/**
+ * A train driven live along its path: its timetable's profile between the stops, a dwell at each
+ * stop until it is due out, and the signals - it brakes (service, 0.6 m/s²) to stop before a main
+ * signal at Halt and goes on when it clears. Power-limited acceleration against the grade.
+ */
+class Run {
+  constructor(route, train) {
+    this.train = train; this.u = 0; this.v = 0; this.onMap = false; this.done = false; this.next = 0; this.dwellUntil = null;
+    // where each path sample lies on the signalled tracks: L (the special's line, run chainage) or R
+    const P = train.path, n = P.n;
+    this.track = new Array(n); this.ts = new Float64Array(n);
+    let hint = null;
+    for (let i = 0; i < n; i++) {
+      const leg = P.legs[P.legOf[i]], x = P.xyz[i * 3], y = P.xyz[i * 3 + 1];
+      const id = leg.track === 'right' ? 'R' : 'L';
+      if (i > 0 && this.track[i - 1] !== id) hint = null;
+      const q = (id === 'R' ? route.right : route.run).locate(x, y, hint, hint == null ? 1e9 : 60);
+      hint = q.s;
+      // on the special's own rails only where its line and the left main line are the same track
+      // (in Erstfeld and Göschenen it stands at a platform of its own): elsewhere an unsignalled 'X'
+      this.track[i] = id === 'L' && q.d > 1.5 ? 'X' : id; this.ts[i] = q.s;
+    }
+  }
+
+  _i(u) { return Math.max(0, Math.min(this.train.path.n - 1, Math.round(u / STEP))); }
+
+  /** The stretches of track it covers: [[track, a, b]]. */
+  occupies() {
+    const i = this._i(this.u), j = this._i(this.u - this.train.length);
+    if (this.track[i] === this.track[j]) return [[this.track[i], this.ts[i], this.ts[j]]];
+    const dir = Math.sign(this.ts[Math.min(i + 1, this.ts.length - 1)] - this.ts[i]) || 1;
+    return [[this.track[i], this.ts[i], this.ts[i] - dir * this.train.length], [this.track[j], this.ts[j], this.ts[j] + dir * 20]];
+  }
+
+  step(dt, clock, signals) {
+    const tr = this.train;
+    if (this.done) return;
+    if (!this.onMap) { if (clock < tr.t[0]) return; this.onMap = true; this.u = 0; this.v = tr.vFree[0]; }
+    if (this.dwellUntil != null) {
+      if (clock < this.dwellUntil) { this.v = 0; return; }
+      this.dwellUntil = null; this.next++;
+    }
+    const i = this._i(this.u);
+    let vt = tr.vFree[i];
+    const stop = tr.stops[this.next];
+    if (stop) {
+      const d = stop.u - this.u;
+      vt = Math.min(vt, Math.sqrt(2 * 0.6 * Math.max(0, d - 1)));
+      if (d < 2 && this.v < 0.6) { this.v = 0; this.dwellUntil = Math.max(clock + (stop.dwell ?? 60), stop.dep ?? 0); return; }
+    }
+    // the signals on its track in its direction (none for the wrong-road run of the overtaking)
+    const track = this.track[i], j = Math.min(i + 3, this.ts.length - 1), dir = Math.sign(this.ts[j] - this.ts[i]);
+    if (signals && ((track === 'L' && dir > 0) || (track === 'R' && dir < 0))) {
+      const auth = signals.authority(this.ts[i], track);
+      if (auth < Infinity) vt = Math.min(vt, Math.sqrt(2 * 0.6 * Math.max(0, auth - 20)));
+    }
+    // joining the special's line from a track of its own: the junction signal shows Halt while the
+    // block it leads into is occupied
+    if (signals && track !== 'L') {
+      for (let k = i + 1; k < Math.min(this.ts.length, i + 300); k++) {
+        if (this.track[k] !== 'L') continue;
+        const blk = signals.mains.find((m) => m.track === 'L' && this.ts[k] >= Math.min(m.s, m.end) && this.ts[k] <= Math.max(m.s, m.end));
+        if (blk && signals.blockOccupied(blk)) vt = Math.min(vt, Math.sqrt(2 * 0.6 * Math.max(0, (k - i) * STEP - 20)));
+        break;
+      }
+    }
+    const vi = Math.max(0.5, this.v);
+    const a = Math.min(tr.fmax, tr.power / vi) / tr.mass - G * tr.path.grade[i] - (2000 + 30 * vi * vi) / tr.mass;
+    if (this.v < vt) this.v = Math.min(vt, this.v + Math.max(0.05, a) * dt);
+    else this.v = Math.max(vt, this.v - 1.0 * dt);
+    this.u += this.v * dt;
+    if (this.u >= tr.path.length) { this.done = true; this.onMap = false; }
+  }
+}
+

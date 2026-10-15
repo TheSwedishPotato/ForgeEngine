@@ -189,10 +189,18 @@ export class Crew {
 
   // ---------------------------------------------------------------------------
 
+  /** You take the driver's place (true) or give it back: his hands leave the controls. */
+  setManual(on) {
+    this.manual = !!on;
+    for (const h of Object.values(this.driver.hands)) h.queue.length = 0;
+    if (!on && this.phase === 'run') this.decideIn = 0;
+    this.log(on ? 'You take over the regulator; the driver stands back.' : 'The driver takes over again.');
+  }
+
   tick(dt) {
     this._updateHands(dt);
     this.decideIn -= dt; this.fireDecideIn -= dt;
-    if (this.decideIn <= 0) { this.decideIn = 0.25; this._driverThink(); }
+    if (this.decideIn <= 0) { this.decideIn = 0.25; if (this.manual) this._manualThink(); else this._driverThink(); }
     if (this.fireDecideIn <= 0) { this.fireDecideIn = 0.5; this._firemanThink(); }
   }
 
@@ -207,6 +215,39 @@ export class Crew {
     // where the front of the engine should come to rest
     const sFront = station.stopFront ?? station.stopCentre + this.sim.train.length / 2;
     return { ...st, station, sFront };
+  }
+
+  /**
+   * You are driving: the driver only keeps the book - where she stands, when she starts, the stops -
+   * from what the train actually does, so the stations, the passengers and the timetable go on.
+   */
+  _manualThink() {
+    const T = this.sim.train, v = T.speed, t = T.time;
+    const stop = this._stopTarget();
+    const d = stop ? stop.sFront - T.front : 1e9;
+    switch (this.phase) {
+      case 'prep': case 'stopped': {
+        if (this.phase === 'stopped' && this.next >= this.sim.timetable.stops.length - 1) { this.phase = 'arrived'; break; }
+        if (v > 0.3) {
+          const early = !this.sim.departureDue?.(), notReady = !this.sim.readyToStart?.();
+          this.log(early ? 'Driver: we are not due out yet!' : notReady ? 'Conductor: not everyone is aboard!' : 'Driver: right away.');
+          this.next++; this.phase = 'run'; this._t0 = t;
+        }
+        break;
+      }
+      case 'starting': case 'run': case 'approach': case 'drawup': {
+        if (this.phase !== 'approach' && stop && d < 1600) this.phase = 'approach';
+        if (Math.abs(v) < 0.05 && stop && Math.abs(d) < 40) {
+          this.phase = 'stopped'; this.stoppedAt = t;
+          this.log(`Stopped at ${stop.name}, ${d >= 0 ? d.toFixed(1) + ' m short of' : (-d).toFixed(1) + ' m past'} the mark.`);
+          this.sim.arrived?.(stop);
+        } else if (stop && d < -250) {
+          this.log(`Through ${stop.name} without stopping.`);
+          this.next++; this.phase = 'run';
+        }
+        break;
+      }
+    }
   }
 
   /** Speed the driver wants now: line, curves and engine limits ahead, with braking curves. */
@@ -232,6 +273,9 @@ export class Crew {
       if (s <= front) vt = Math.min(vt, lim);
       else vt = Math.min(vt, Math.sqrt(lim * lim + 2 * b * (s - front)));
     }
+    // the signals: stop before a main signal at Halt (warned by its distant signal)
+    const auth = this.sim.signals?.authority(front) ?? Infinity;
+    if (auth < Infinity) vt = Math.min(vt, Math.sqrt(2 * 0.35 * Math.max(0, auth - 30)));
     return vt;
   }
 
@@ -326,7 +370,17 @@ export class Crew {
         }
         break;
       }
+      case 'signal': {
+        // standing at a signal at Halt: steam off, the engine brake holding her on the bank
+        if (c.regulator > 0 && !this.busy(this.driver, 'regulator')) this.work(this.driver, 'regulator', { to: 0, rate: 0.6 });
+        if (B.direct < 0.7 && !this.busy(this.driver, 'directBrake')) this.work(this.driver, 'directBrake', { to: 0.85, rate: 1.5 });
+        if (B.handle !== 'running' && v < 0.05 && !this.busy(this.driver, 'trainBrake')) this.work(this.driver, 'trainBrake', { to: 'running' });
+        const auth = this.sim.signals?.authority(T.front) ?? Infinity;
+        if (auth > 120) { this.phase = 'starting'; this._t0 = t; this._odo0 = undefined; this._slipping = false; this.log('Driver: the signal is off - away.'); }
+        break;
+      }
       case 'run': {
+        if (v < 0.3 && (this.sim.signals?.authority(T.front) ?? Infinity) < 90) { this.phase = 'signal'; this.log('Driver: stopped at a signal at danger.'); break; }
         this._handleSlip();
         // (if she was quick off the mark, the cylinder cocks are still open: shut them now)
         if (c.drainCocks && !this.busy(this.driver, 'drainCocks')) this.work(this.driver, 'drainCocks', { to: 0 });

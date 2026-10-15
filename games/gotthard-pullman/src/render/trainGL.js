@@ -5,7 +5,7 @@
  */
 import { Group, Euler, Quaternion, Vector3, Matrix4 } from 'three';
 import { buildCar, BODY, carMaterials } from './pullman.js';
-import { buildLocomotive, animateLocomotive, animateCab, buildTender, animateTender, LOCO } from './locomotive.js';
+import { buildLocomotive, animateLocomotive, animateCab, animateGauges, buildTender, animateTender, LOCO } from './locomotive.js';
 import { RAIL_SPACING } from '../world/route.js';
 import { CarRide } from '../physics/sway.js';
 import { feedSteam } from './steam.js';
@@ -133,7 +133,7 @@ export class TrainGL {
       }
       _e.set((m.roll ?? pose.roll) + (sw?.roll ?? 0), pose.yaw, pose.pitch + (sw?.pitch ?? 0), 'YZX');
       m.group.rotation.copy(_e);
-      if (m.kind === 'engine') { animateLocomotive(m.parts, this.train.loco.theta, s); animateCab(m.parts.controls, this.train.loco.c, this.train.brake, ddt); }
+      if (m.kind === 'engine') { animateLocomotive(m.parts, this.train.loco.theta, s); animateCab(m.parts.controls, this.train.loco.c, this.train.brake, ddt); animateGauges(m.parts.controls, this.train.loco, this.train.brake, this.train.speed, ddt); }
       if (m.kind === 'tender') animateTender(m.parts, s);
       // the trucks follow the track under the body: they stay on the rails while the body moves on
       // its springs (so the body's sway, bounce, roll and pitch are taken out of them again)

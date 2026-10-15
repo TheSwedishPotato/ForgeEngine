@@ -123,7 +123,7 @@ export class PeopleGL {
   _updateCrew(dt, cam) {
     for (const c of this.crew) {
       const near = !this.viewer?.inside && c.model.group.position.distanceTo(cam) < 70;
-      c.fig.mesh.visible = near;
+      c.fig.mesh.visible = near && !(c.role === 'driver' && this.viewer?.driving);     // you are in his place
       if (!near) continue;
       const person = this.sim.crew?.[c.role];
       const st = STATIONS[c.role];

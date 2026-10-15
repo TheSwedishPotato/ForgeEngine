@@ -4,6 +4,8 @@
  * Physics runs at a fixed 240 Hz; the crew decide in their own time; the
  * timetable, the conductor and the signals decide when the train may go.
  */
+import { Traffic } from './world/traffic.js';
+import { Signals } from './world/signals.js';
 import { Route } from './world/route.js';
 import { Weather } from './world/weather.js';
 import { Train } from './physics/train.js';
@@ -62,6 +64,10 @@ export class Sim {
     L.fire.burning = 240; L.c.blower = 0.25; L.c.drainCocks = true;
     // the people: seated, and at Erstfeld the last few still coming along the platform
     this.passengers = new Passengers(this, { seed: 1211 + seed - 1, player: seat });
+    // the other trains and the signals (both run in the physics' time, so joining late, or a test, sees them)
+    this.traffic = new Traffic(route);
+    this.signals = new Signals(this);
+    this._sigAcc = 0;
     const first = this.timetable.stops[0];
     if (this.clock < hms(first.dep) - 40) this.passengers.startAtErstfeld(first);
   }
@@ -149,6 +155,8 @@ export class Sim {
       this.passengers.tick(DT);
       this._assistTick();
       this.train.step(DT);
+      this._sigAcc += DT;
+      if (this._sigAcc >= 0.1) { this.traffic.step(this._sigAcc, this.clock, this.signals); this.signals.step(this._sigAcc); this._sigAcc = 0; }
     }
   }
 }

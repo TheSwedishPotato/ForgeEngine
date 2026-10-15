@@ -10,6 +10,7 @@
  */
 import { Vector3, Quaternion, Euler, Matrix4 } from 'three';
 import { BODY } from './render/pullman.js';
+import { cabToModel } from './render/locomotive.js';
 import { LAYOUTS, aisleZ } from './world/carLayout.js';
 
 const _v = new Vector3(), _q = new Quaternion(), _e = new Euler(0, 0, 0, 'YXZ'), _m = new Matrix4();
@@ -55,10 +56,10 @@ export class Player {
     window.addEventListener('blur', () => this.keys.clear());
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
-      if (e.code === 'KeyE') this.toggleStand();
+      if (e.code === 'KeyE' && this.mode !== 'cab') this.toggleStand();
       if (e.code === 'KeyV') this.setOutside(this.mode !== 'outside', this.orbit ?? {});
-      if (this.mode === 'outside' && e.code === 'BracketRight') this.orbit.vehicle = Math.min(this.game.trainGL.vehicles.length - 1, this.orbit.vehicle + 1);
-      if (this.mode === 'outside' && e.code === 'BracketLeft') this.orbit.vehicle = Math.max(0, this.orbit.vehicle - 1);
+      if (this.mode === 'outside' && !this.game.driving?.on && e.code === 'BracketRight') this.orbit.vehicle = Math.min(this.game.trainGL.vehicles.length - 1, this.orbit.vehicle + 1);
+      if (this.mode === 'outside' && !this.game.driving?.on && e.code === 'BracketLeft') this.orbit.vehicle = Math.max(0, this.orbit.vehicle - 1);
     });
     // look with the captured mouse, or by dragging it (after Esc, or in a page that cannot capture it)
     canvas.addEventListener('pointerdown', (e) => { this.dragging = true; this._px = e.clientX; this._py = e.clientY; });
@@ -77,7 +78,8 @@ export class Player {
   _look(dx, dy) {
     if (this.mode === 'outside') { this.orbit.yaw -= dx * 0.004; this.orbit.pitch = Math.max(-0.1, Math.min(1.4, this.orbit.pitch + dy * 0.004)); return; }
     if (this.mode === 'walking') { this.walk.yaw -= dx * this.sensitivity; this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch - dy * this.sensitivity)); return; }
-    this.yaw = Math.max(-1.95, Math.min(1.95, this.yaw - dx * this.sensitivity));
+    const yl = this.mode === 'cab' ? 2.8 : 1.95;
+    this.yaw = Math.max(-yl, Math.min(yl, this.yaw - dx * this.sensitivity));
     this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch - dy * this.sensitivity));
   }
 
@@ -87,7 +89,7 @@ export class Player {
 
   /** Out in the open air: the outside camera, or standing on the observation car's open platform. */
   exposed() {
-    if (this.mode === 'outside') return true;
+    if (this.mode === 'outside' || this.mode === 'cab') return true;
     if (this.mode !== 'walking') return false;
     const m = this.car();
     return !!m?.info?.openRear && this.walk.x < -(BODY.bodyHalf - 1.3);
@@ -130,7 +132,7 @@ export class Player {
 
   /** The outside camera: orbit a vehicle (index into the train) at a distance, yaw and pitch. */
   setOutside(on, { vehicle = 0, dist = 18, yaw = 0.9, pitch = 0.18, along = 0, height = 2.2 } = {}) {
-    this.mode = on ? 'outside' : 'seated';
+    this.mode = on ? 'outside' : this.game.driving?.on ? 'cab' : 'seated';
     this.orbit = { vehicle, dist, yaw, pitch, along, height };
   }
 
@@ -150,9 +152,28 @@ export class Player {
     camera.lookAt(c);
   }
 
+  /** On the footplate at the driver's place (true), or back to your seat. */
+  setCab(on) {
+    if (on && this.mode === 'walking') this.walk = null;
+    this.mode = on ? 'cab' : 'seated';
+    this.yaw = 0; this.pitch = on ? -0.1 : 0;
+  }
+
+  /** The footplate: standing where the driver stands, looking ahead past the boiler. */
+  _cab(dt, camera) {
+    const m = this.game.trainGL.vehicles[0];
+    m.group.updateMatrixWorld();
+    camera.position.copy(cabToModel([0.62, 1.66, 0.2])).applyMatrix4(m.group.matrixWorld);
+    _e.set(this.pitch, this.yaw - Math.PI / 2, 0, 'YXZ');
+    _q.setFromEuler(_e);
+    m.group.getWorldQuaternion(camera.quaternion);
+    camera.quaternion.multiply(_q);
+  }
+
   /** Places the camera (call after the train's poses are up to date). */
   update(dt, camera) {
     if (this.mode === 'outside') return this._outside(camera);
+    if (this.mode === 'cab') return this._cab(dt, camera);
     if (this.mode === 'walking') return this._walking(dt, camera);
     const m = this.car();
     if (!m) return;

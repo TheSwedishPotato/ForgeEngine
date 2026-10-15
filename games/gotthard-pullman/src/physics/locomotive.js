@@ -320,8 +320,10 @@ export class SteamLocomotive {
     // the firebox crown sheet: covered by the water at the firebox end (tilt counts there, about 2.5 m from the middle)
     o.crownCover = lv.true + 2500 * ((env.grade ?? 0) + this._accS / G);
     if (o.crownCover < 0) this.crownExposed = (this.crownExposed ?? 0) + dt; else this.crownExposed = Math.max(0, (this.crownExposed ?? 0) - dt * 0.2);
-    // the crown sheet bare and red hot for long: the lead plugs in it melt (they are there to save the boiler)
-    if (!this.failed && this.crownExposed > 8 && o.crownCover < -40) { this.failed = 'fusible plug'; o.events.push({ type: 'fusible plug', t: this.time }); }
+    // the crown sheet bare and red hot for long: the lead plugs in it melt (they are there to save the boiler).
+    // A sheet bared for a few seconds by a brake application is still wet and splashed; the copper has
+    // to heat through before the lead core runs, which takes the better part of a minute.
+    if (!this.failed && this.crownExposed > 40 && o.crownCover < -40) { this.failed = 'fusible plug'; o.events.push({ type: 'fusible plug', t: this.time }); }
 
     // ---- coupled wheels against the rail
     const N = env.normalDrivers;

@@ -109,3 +109,59 @@ test('the Treno Gottardo overtakes at Gurtnellen and comes down past the photo s
   assert.ok(pg.t > sim.arrivals.Gurtnellen && pg.t < depG, 'while the special waits at Gurtnellen');
   assert.ok(pw.d > 3 && pw.d < 7 && pw.t > arrW + 60 && pw.t < hms('11:15'), 'and the northbound one passes the photo stop while people are out');
 });
+
+test('the signals hold a following train behind the special, and the AI never trips Signum', { timeout: 600000 }, async () => {
+  globalThis.window ??= { addEventListener() {} };
+  const { Driving } = await import('../src/drive.js');
+  // you take over on the climb out of Erstfeld and stop her on the open line
+  const sim = new Sim(route, { weather: 'clear', startClock: hms('10:12') });
+  while (sim.clock < hms('10:20')) sim.advance(1);
+  const D = new Driving({ sim, player: { setCab() {} } });
+  D.toggle();
+  D.press('KeyS', true); for (let i = 0; i < 40; i++) { D.update(0.1); sim.advance(0.1); } D.press('KeyS', false);
+  for (let i = 0; i < 6; i++) D.press('BracketRight', true);
+  const T = sim.train, tg = sim.traffic.runs[0];               // the Treno Gottardo coming up behind
+  let minGap = 1e9, held = false;
+  while (sim.clock < hms('10:55')) {
+    D.update(0.5); sim.advance(0.5);
+    const k = tg._i(tg.u);
+    if (tg.onMap && tg.track[k] === 'L' && tg.ts[k] < T.front) {
+      minGap = Math.min(minGap, T.rear - tg.ts[k]);
+      if (tg.v < 0.1) held = true;
+    }
+  }
+  assert.ok(Math.abs(T.speed) < 0.1, 'the special stands');
+  assert.ok(minGap > 0, `the following train never reaches the special (closest ${minGap.toFixed(0)} m)`);
+  assert.ok(held, 'it is stopped at a signal behind it');
+  // an ordinary trip: the driver obeys every signal (Signum never has to brake)
+  const r = await trip('clear');
+  assert.equal(r.sim.signals.signum.tripped, null, 'no Signum intervention on the driver\'s trip');
+});
+
+test('you can drive: the regulator moves her, the brake valve stops her', async () => {
+  globalThis.window ??= { addEventListener() {} };
+  const { Driving } = await import('../src/drive.js');
+  const sim = new Sim(route, { weather: 'clear', startClock: hms('10:12') });
+  while (sim.clock < hms('10:15')) sim.advance(1);
+  const D = new Driving({ sim, player: { setCab() {} } });
+  D.toggle();
+  const T = sim.train, run = (sec) => { for (let i = 0; i < sec * 10; i++) { D.update(0.1); sim.advance(0.1); } };
+  const v0 = T.speed;
+  D.press('KeyS', true); run(3); D.press('KeyS', false);                   // steam off
+  for (let i = 0; i < 6; i++) D.press('BracketRight', true);               // brake valve to service
+  run(90);
+  assert.ok(v0 > 3 && Math.abs(T.speed) < 0.1, `stopped from ${(v0 * 3.6).toFixed(0)} km/h`);
+  assert.ok(T.brake.v[1].pBC > 1, 'the cars\' brake cylinders are charged');
+  // a hill start on 13 per mille, full gear and sand: hold her on the engine brake, release the train, steam on, then let go
+  D.press('Period', true); run(2); D.press('Period', false);
+  for (let i = 0; i < 9; i++) D.press('BracketLeft', true);                // brake valve to release: the pipe recharges
+  run(25); D.press('BracketRight', true);                                  // back to running
+  D.press('KeyQ', true); run(3); D.press('KeyQ', false); D.press('KeyX', true);
+  D.press('KeyW', true); run(2); D.press('KeyW', false);                   // regulator open
+  D.press('KeyG', true); run(3);                                           // the starting valve: live steam to the LP side
+  D.press('Comma', true); run(2); D.press('Comma', false);                 // engine brake off as she takes the load
+  run(8); D.press('KeyG', false); D.press('KeyX', false);
+  run(30);
+  assert.ok(!T.loco.failed, 'the boiler survives the stop');
+  assert.ok(T.speed > 4, `she moves again (${(T.speed * 3.6).toFixed(0)} km/h)`);
+});

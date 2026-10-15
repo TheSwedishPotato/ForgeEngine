@@ -18,7 +18,7 @@ import { Game } from './game.js';
 import { Structures } from './render/structures.js';
 import { Places } from './render/places.js';
 import { DATE, hms, fmt } from './sim.js';
-import { startScreen, HUD, Phone, DebugPanel, Help, TouchControls } from './ui/ui.js';
+import { startScreen, HUD, Phone, DebugPanel, Help, TouchControls, DrivePanel } from './ui/ui.js';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('view');
@@ -62,7 +62,8 @@ async function ride() {
   if (params.get('phone') === '1') phone.toggle();
   if (params.get('dbg') === '1') debug.toggle();
   const touch = (navigator.maxTouchPoints ?? 0) > 0 && matchMedia('(pointer: coarse)').matches && !manual ? new TouchControls(ui, game, { phone }) : null;
-  game.onFrame = (dt) => { hud.update(dt); phone.update(dt); debug.update(dt); touch?.update(); };
+  const drive = new DrivePanel(ui, game, { touch: !!touch });
+  game.onFrame = (dt) => { hud.update(dt); phone.update(dt); debug.update(dt); touch?.update(); drive.update(dt); };
   if (!manual) {
     game.sound.attach(window);
     let last = performance.now();

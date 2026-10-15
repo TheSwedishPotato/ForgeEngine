@@ -91,3 +91,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1016; col
 .walkpad button { width: 64px; height: 64px; padding: 0; border-radius: 50%; font-size: 20px; }
 .walkpad button:active { background: rgba(201, 163, 90, 0.35); }
 
+/* ---- driving --------------------------------------------------------------------------------- */
+.drive { position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: min(560px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; backdrop-filter: blur(6px); }
+.drive[hidden] { display: none; }
+.drive-read { margin: 0; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); white-space: pre-wrap; }
+.drive-btns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px; }
+.drive-btns button { font: 600 12px/1 Inter, system-ui, sans-serif; color: var(--ink); background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 4px; touch-action: none; -webkit-user-select: none; user-select: none; }
+.drive-btns button:active { background: rgba(201, 163, 90, 0.35); }
+

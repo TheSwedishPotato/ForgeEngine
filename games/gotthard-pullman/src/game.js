@@ -11,6 +11,7 @@ import { TrainGL } from './render/trainGL.js';
 import { Sim, DATE, hms } from './sim.js';
 import { Player } from './player.js';
 import { Structures } from './render/structures.js';
+import { Driving } from './drive.js';
 import { Places } from './render/places.js';
 import { PeopleGL } from './render/peopleGL.js';
 import { Sound } from './audio/sound.js';
@@ -40,9 +41,10 @@ export class Game {
     this.trainGL = new TrainGL(this.stage, route, sim.train);
     this.trainGL.sim = sim;
     this.people = new PeopleGL(this.stage, this.trainGL, sim, seat);
-    this.traffic = new Traffic(route);
+    this.traffic = sim.traffic;
     this.trafficGL = new TrafficGL(this.stage, this.traffic);
     this.player = new Player(this, seat);
+    this.driving = new Driving(this);
     this.sound = new Sound(this);
     // start centred on the player's car, with the sun and the world made around it
     this._recentre(0);
@@ -83,10 +85,11 @@ export class Game {
   frame(dt) {
     dt = Math.min(dt, 0.1);
     const sdt = dt * this.timeScale;
+    this.driving.update(sdt);
     this.sim.advance(sdt);
     this._recentre();
     this.trainGL.update(sdt);
-    this.people.update(sdt, this.stage.camera, { inside: !this.player.exposed() || this.player.mode === 'walking', car: this.player.car() });
+    this.people.update(sdt, this.stage.camera, { inside: !this.player.exposed() || this.player.mode === 'walking', car: this.player.car(), driving: this.driving.on });
     this.trafficGL.update(this.sim.clock, this.stage.camera);
     this._trafficNews();
     this.player.update(dt, this.stage.camera);

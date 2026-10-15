@@ -13,7 +13,7 @@
  *
  * Coordinates: x forward from the engine's middle, y up from the rail head, z right.
  */
-import { Group, Vector3, Matrix4, MeshStandardMaterial, MeshPhysicalMaterial, Color } from 'three';
+import { Group, Vector3, Matrix4, MeshStandardMaterial, MeshPhysicalMaterial, Color, Mesh, CircleGeometry, BoxGeometry, CylinderGeometry, CanvasTexture } from 'three';
 import { Builder } from './geom.js';
 import { letteringTexture } from './carArt.js';
 import { CONTROLS } from '../crew/cab.js';
@@ -174,7 +174,8 @@ export function buildLocomotive() {
   const group = b.build(M);
   group.name = 'C 5/6 2978';
   const parts = { wheels: [], pony: null, rods: [], crossheads: [], mainRods: [], controls };
-  for (const g of Object.values(controls)) group.add(g);
+  for (const g of Object.values(controls)) if (g?.isObject3D) group.add(g);
+  for (const w of controls.glassWater ?? []) group.add(w);
   // coupled wheelsets
   for (const d of LOCO.axles) {
     const ws = new Builder();
@@ -258,6 +259,44 @@ function handwheel(M, r, { spokes = 4, mat = 'steel', knob = false } = {}) {
 }
 
 /**
+ * The gauges of a Swiss steam engine's backhead (positions on 2978 estimated): boiler pressure,
+ * the compound's receiver, the brake's duplex gauge (main reservoir red, brake pipe black), the
+ * brake cylinders, the train heating, and the Hasler speed indicator by the driver's window.
+ * Scales in bar (gauge) and km/h; the needle sweeps 270 degrees clockwise.
+ */
+export const DIALS = [
+  { id: 'gBoiler', pos: [0.0, 2.05, 1.06], r: 0.1, label: 'KESSEL', unit: 'bar', max: 20, major: 5, minor: 1, red: 15, needles: ['#111'] },
+  { id: 'gReceiver', pos: [-0.34, 1.95, 1.08], r: 0.075, label: 'VERBINDER', unit: 'bar', max: 10, major: 2, minor: 0.5, red: 6, needles: ['#111'] },
+  { id: 'gDuplex', pos: [0.62, 1.88, 1.08], r: 0.075, label: 'HL  HB', unit: 'bar', max: 10, major: 2, minor: 0.5, red: null, needles: ['#b01515', '#111'] },
+  { id: 'gCylinder', pos: [0.38, 1.82, 1.08], r: 0.06, label: 'BREMSZYL.', unit: 'bar', max: 6, major: 1, minor: 0.5, red: null, needles: ['#111'] },
+  { id: 'gHeat', pos: [-0.58, 1.84, 1.08], r: 0.06, label: 'HEIZUNG', unit: 'bar', max: 6, major: 1, minor: 0.5, red: 4, needles: ['#111'] },
+  { id: 'gSpeed', pos: [0.92, 1.72, 1.0], r: 0.09, label: 'HASLER', unit: 'km/h', max: 90, major: 10, minor: 5, red: 65, needles: ['#111'] },
+];
+
+function dialTexture(d) {
+  const S = 256, c = document.createElement('canvas');
+  c.width = c.height = S;
+  const g = c.getContext('2d'), cx = S / 2, R = S / 2 - 4;
+  g.fillStyle = '#f1ebdc'; g.beginPath(); g.arc(cx, cx, R, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#3a3226'; g.lineWidth = 4; g.stroke();
+  const ang = (v) => (-135 + 270 * v / d.max) * Math.PI / 180 - Math.PI / 2;
+  if (d.red != null) { g.strokeStyle = '#c0281e'; g.lineWidth = 10; g.beginPath(); g.arc(cx, cx, R - 16, ang(d.red), ang(d.max)); g.stroke(); }
+  g.strokeStyle = '#1b1b1b'; g.fillStyle = '#1b1b1b';
+  for (let v = 0; v <= d.max + 1e-6; v += d.minor) {
+    const a = ang(v), major = Math.abs(v / d.major - Math.round(v / d.major)) < 1e-6;
+    const r0 = R - (major ? 30 : 20), r1 = R - 8;
+    g.lineWidth = major ? 4 : 2;
+    g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cx + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r1, cx + Math.sin(a) * r1); g.stroke();
+    if (major) { g.font = 'bold 26px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(v), cx + Math.cos(a) * (R - 52), cx + Math.sin(a) * (R - 52)); }
+  }
+  g.font = 'bold 20px sans-serif'; g.textAlign = 'center'; g.fillText(d.label, cx, cx + 46);
+  g.font = '18px sans-serif'; g.fillText(d.unit, cx, cx + 72);
+  const t = new CanvasTexture(c);
+  t.colorSpace = 'srgb';
+  return t;
+}
+
+/**
  * The fittings of 2978's backhead and footplate at the positions of cab.js: what turns or swings
  * is a group of its own (returned by name), the rest goes into the engine's builder.
  */
@@ -294,16 +333,38 @@ function cabFittings(b, M) {
     const g = at(h.build(M), [0.0, 2.1, 1.08], 'regulator');
     g.position.x = face - 0.02;
   }
-  // gauges: boiler pressure in the middle, the receiver and the brake (duplex) beside it
-  for (const [p, r] of [[[0.0, 2.05, 1.06], 0.1], [[-0.34, 1.95, 1.08], 0.075], [[0.62, 1.88, 1.08], 0.075]]) {
-    b.cylinder('brass', P([p[0], p[1], 1.15]), P([p[0], p[1], p[2] - 0.02]), r + 0.012, r + 0.012, { segs: 18 });
-    b.cylinder('gauge', P([p[0], p[1], p[2] - 0.02]), P([p[0], p[1], p[2] - 0.024]), r, r, { segs: 18 });
+  // the gauges, each a brass case on the backhead with its dial and needles (turned by animateGauges)
+  out.dials = [];
+  for (const d of DIALS) {
+    const [x, y, z] = d.pos, r = d.r;
+    b.cylinder('brass', P([x, y, 1.15]), P([x, y, z - 0.02]), r + 0.012, r + 0.012, { segs: 22 });
+    const g = new Group();
+    g.position.copy(P([x, y, z - 0.026]));
+    g.rotation.y = -Math.PI / 2;                       // the face looks back into the cab
+    const face = new Mesh(new CircleGeometry(r, 40), new MeshStandardMaterial({ map: dialTexture(d), roughness: 0.3 }));
+    g.add(face);
+    const needles = d.needles.map((col) => {
+      const n = new Mesh(new BoxGeometry(r * 0.05, r * 0.86, 0.004).translate(0, r * 0.33, 0.006), new MeshStandardMaterial({ color: new Color(col), roughness: 0.4 }));
+      g.add(n);
+      return n;
+    });
+    g.add(new Mesh(new CircleGeometry(r * 0.08, 12).translate(0, 0, 0.011), new MeshStandardMaterial({ color: new Color('#222'), roughness: 0.4 })));
+    g.name = d.id;
+    out.dials.push({ d, g, needles });
+    out[d.id] = g;
   }
+  // the water in the gauge glasses: a column whose top is the level in the boiler
+  out.glassWater = [];
   // the gauge glasses either side of the fire door
   for (const x of [-0.22, 0.22]) {
     b.cylinder('brass', P([x, 1.38, 1.1]), P([x, 1.42, 1.1]), 0.022, 0.022, { segs: 8 });
     b.cylinder('glass', P([x, 1.42, 1.1]), P([x, 1.68, 1.1]), 0.012, 0.012, { segs: 8 });
     b.cylinder('brass', P([x, 1.68, 1.1]), P([x, 1.72, 1.1]), 0.022, 0.022, { segs: 8 });
+    // the water column (scaled up from the bottom fitting), with a red-and-white striped back plate
+    const w = new Mesh(new CylinderGeometry(0.0085, 0.0085, 1, 8).translate(0, 0.5, 0), new MeshStandardMaterial({ color: new Color(0.55, 0.62, 0.62), roughness: 0.1, emissive: new Color(0.08, 0.1, 0.1) }));
+    w.position.copy(P([x, 1.42, 1.1]));
+    out.glassWater.push(w);
+    b.box('gauge', [X(CAB.d0 - 1.115) - 0.002, CAB.floor + 1.42, x - 0.018], [X(CAB.d0 - 1.115), CAB.floor + 1.68, x + 0.018]);
   }
   // the reversing screw on its pedestal, its handwheel facing the driver
   {
@@ -344,6 +405,34 @@ function cabFittings(b, M) {
     at(h.build(M), p, 'whistle');
   }
   return out;
+}
+
+/** The gauges' needles and the gauge glasses from the engine and the brake (bar gauge, km/h). */
+export function animateGauges(controls, loco, brake, speed, dt) {
+  const C = controls;
+  if (!C?.dials) return;
+  const P_ATM = 1.013;
+  const front = brake?.v?.[0];
+  const values = {
+    gBoiler: [loco.p - P_ATM],
+    gReceiver: [loco.pRec - P_ATM],
+    gDuplex: [loco.pMR - P_ATM, front?.pBP ?? 0],
+    gCylinder: [Math.max(front?.pBC ?? 0, front?.pBCdirect ?? 0)],
+    gHeat: [(loco.c.steamHeat ?? 0) * Math.min(4, Math.max(0, loco.p - P_ATM))],
+    gSpeed: [Math.abs(speed) * 3.6],
+  };
+  for (const { d, needles } of C.dials) {
+    const vals = values[d.id] ?? [0];
+    needles.forEach((n, i) => {
+      const v = Math.max(0, Math.min(d.max * 1.02, vals[i] ?? 0));
+      const target = -(-135 + 270 * v / d.max) * Math.PI / 180;
+      n.rotation.z += (target - n.rotation.z) * Math.min(1, dt * 6);
+    });
+  }
+  // the glass shows about 0..200 mm above the lowest safe level (the crown sheet + 60 mm)
+  const level = loco.out?.level ?? 120;
+  const f = Math.max(0.02, Math.min(1, (level - 60) / 200));
+  for (const w of C.glassWater ?? []) w.scale.y += (0.26 * f - w.scale.y) * Math.min(1, dt * 4);
 }
 
 /** Sets the footplate's handles and wheels from the controls (loco.c) and the brake. */
