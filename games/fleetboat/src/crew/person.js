@@ -70,7 +70,11 @@ export class Person {
   job(id, to, { hold = 0, pref = null, after = 0 } = {}) {
     const c = CONTROL[id];
     if (!c) throw new Error(`no control ${id}`);
-    const side = pref ?? (this.hands.R.free ? 'R' : this.hands.L.free ? 'L' : 'R');
+    // a free hand; else the one not kept on a wheel, with the shorter list
+    const tending = (h) => h.queue.some((q) => q.hold === Infinity);
+    const R = this.hands.R, L = this.hands.L;
+    const side = pref && !(tending(this.hands[pref]) && hold !== Infinity) ? pref
+      : R.free ? 'R' : L.free ? 'L' : tending(R) && !tending(L) ? 'L' : tending(L) && !tending(R) ? 'R' : L.queue.length < R.queue.length ? 'L' : 'R';
     const h = this.hands[side];
     const j = { id, to, phase: 'wait', t: -after, hold, done: false };
     h.queue.push(j);

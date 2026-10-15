@@ -23,7 +23,7 @@ import { AIR, FT3, PSI } from '../data/boat.js';
 import { ATM, R_GAS } from './units.js';
 import { molesReal, pressureReal, airMolarFlow } from './gas.js';
 
-export const HAMMER_CdA = 6.0e-4;       // each hammer valve wide open (estimate: 1 1/2" valve)
+export const HAMMER_CdA = 2.5e-4;       // each hammer valve wide open (estimate: a 1" valve)
 export const BLEED_CdA = 2.0e-5;        // high-pressure bleed into the boat
 export const LP_BLOWER_M3S = 1350 * FT3 / 60;   // 1350 cfm free air (estimate: tanks dry in ~15 minutes, as the manual has it)
 export const LP_BLOWER_PMAX = 13 * PSI; // the blower's relief (above atmospheric)

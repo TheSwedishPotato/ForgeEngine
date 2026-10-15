@@ -116,6 +116,8 @@ export class ElectricPlant {
     this.trips = { port: 0, stbd: 0 };            // overload timers
     this.breakers = { port: true, stbd: true };   // motor circuit breakers (an overload opens them)
     this.Iseries = { port: 0, stbd: 0 };          // the series field's current, lagging the armature's
+    this.genOK = [true, true, true, true];        // each generator's breaker (the reverse-current relay opens it)
+    this.genRev = [0, 0, 0, 0];
   }
 
   /**
@@ -146,7 +148,8 @@ export class ElectricPlant {
     const el = [];
     for (const b of bats) el.push({ kind: 'bat', b, n: node[0], E: b.emf, R: b.R });
     for (let g = 0; g < 4; g++) {
-      if (c.gen[g] === 'off') continue;
+      if (c.gen[g] === 'off') { this.genOK[g] = true; continue; }       // the lever to OFF resets the relay
+      if (!this.genOK[g]) continue;
       const side = g % 2 === 0 ? 2 : 1;                   // 1 and 3 starboard, 2 and 4 port
       const n = c.gen[g] === 'batBus' ? node[0] : node[side];
       el.push({ kind: 'gen', g, n, E: GEN_K * this._genPhi(g) * this.genOmega[g], R: GEN_R });
@@ -218,8 +221,13 @@ export class ElectricPlant {
     return o;
   }
 
-  /** Overload protection: a side's breaker opens after 4 s above twice the motors' rating. */
+  /** Overload protection: a side's breaker opens after 4 s above twice the motors' rating; a generator's reverse-current relay. */
   protect(dt) {
+    for (let g = 0; g < 4; g++) {
+      // a generator taking current back (motoring) for a second: its breaker opens
+      if (this.out.Igen[g] < -350) this.genRev[g] += dt; else this.genRev[g] = Math.max(0, this.genRev[g] - dt);
+      if (this.genRev[g] > 1.0 && this.genOK[g]) { this.genOK[g] = false; this.genRev[g] = 0; this.out.trip = `No. ${g + 1} generator's reverse-current relay opened its breaker`; }
+    }
     for (const side of ['port', 'stbd']) {
       const I = Math.abs(this.out.Imotor[side]);
       const limit = 2 * MAIN_MOTOR.amps * (this.c.starter[side].startsWith('par') ? 2 : 1);

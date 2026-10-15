@@ -43,7 +43,7 @@ const HEIGHTS = {
  */
 const VENT = { mbt: 0.030, fbt: 0.030, safety: 0.020, negative: 0.012, bowBuoyancy: 0.028, variable: 0.004 };
 const FLOOD = { safety: 0.10, negative: 0.075, fbt: 0.25 };   // the fuel ballast tanks' rectangular flood valves, left open when they serve as main ballast
-const BLOW = { mbt: 7.0e-4, fbt: 6.0e-4, safety: 9.0e-4, negative: 6.0e-4, bowBuoyancy: 7.0e-4, variable: 2.5e-4 };
+const BLOW = { mbt: 3.5e-4, fbt: 3.0e-4, safety: 9.0e-4, negative: 6.0e-4, bowBuoyancy: 3.5e-4, variable: 2.5e-4 };
 
 export class Tank {
   constructor(def) {

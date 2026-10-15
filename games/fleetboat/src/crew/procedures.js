@@ -109,16 +109,22 @@ export function* surface(C) {
   C.orders.depth = 0;
   // the vents shut, then the main ballast blown from the 600-lb manifold
   yield C.done(VENTS.filter((id) => ctl[id] !== 'shut').map((id) => C.do('hydraulic', id, 'shut')));
-  const blow = [C.do('airManifold', 'hp.hammer1', 1), C.do('airManifold', 'hp.hammer2', 1), ...GROUPS.map((n) => C.do('airManifold', `mbt.blow.${n}`, 1)), C.do('airManifold', 'hp.blow.bb', 1)];
-  yield C.done(blow);
-  C.say('airManifold', 'Blowing main ballast.');
-  // on the surface: the shallow depth gauge comes back to her draft
-  yield within(C, 240, () => g.depth < 24);
-  yield 6;
-  const stop = [...GROUPS.map((n) => C.do('airManifold', `mbt.blow.${n}`, 0)), C.do('airManifold', 'hp.hammer1', 0), C.do('airManifold', 'hp.hammer2', 0), C.do('airManifold', 'hp.blow.bb', 0)];
+  // a short blow: enough to start her up; the air left in the tanks expands as she rises (Boyle)
+  // and drives out the rest of the water, so the banks are spared for the next time
+  const blowOpen = () => [...GROUPS.map((n) => C.do('airManifold', `mbt.blow.${n}`, 1)), C.do('airManifold', 'hp.blow.bb', 1)];
+  const blowShut = () => [...GROUPS.map((n) => C.do('airManifold', `mbt.blow.${n}`, 0)), C.do('airManifold', 'hp.blow.bb', 0)];
+  yield C.done(C.do('airManifold', 'hp.hammer1', 1), C.do('airManifold', 'hp.hammer2', 1));
+  for (let tries = 0; tries < 4 && g.depth > 24; tries++) {
+    const d0 = g.depth;
+    yield C.done(blowOpen());
+    C.say('airManifold', tries ? 'Blowing again.' : 'Blowing main ballast.');
+    yield within(C, 25, () => g.depth < d0 - 12 || g.depth < 24);
+    yield C.done(blowShut());
+    yield within(C, 45, () => g.depth < 24);
+  }
+  yield C.done(C.do('airManifold', 'hp.hammer1', 0), C.do('airManifold', 'hp.hammer2', 0));
   C.orders.planes = 'hold';
   C.orders.depth = 15 * FT;
-  yield C.done(stop);
   // the quartermaster cracks the upper hatch (the boat's pressure goes with a whoosh), the bridge is manned
   const h = C.do('quartermaster', 'hatch.ctUpper', 1);
   yield C.done(h);
@@ -131,7 +137,10 @@ export function* surface(C) {
   // the main induction and the hull ventilation open (the blower draws through them)
   C.do('hydraulic', 'hm.induction', 'open');
   C.do('hydraulic', 'hm.hullVent', 'open');
-  yield within(C, 600, () => g.p10 > 9.5);
+  // the lookouts watch for the air bubbling out of the flood ports alongside: the tanks are dry
+  const mbts = P.boat.tanks.filter((t) => t.kind === 'mbt' || t.kind === 'fbt');
+  yield within(C, 720, () => mbts.filter((t) => t.bubbling > 0 || t.fill < 0.02).length >= mbts.length * 0.8);
+  C.say('lookoutS', 'Air bubbling alongside!');
   const lpOff = [C.do('airManifold', 'lp.blower', 0), ...GROUPS.map((n) => C.do('airManifold', `lp.blow.${n}`, 0))];
   yield C.done(lpOff);
   C.say('airManifold', 'Main ballast tanks dry. Secured the low-pressure blower.');
@@ -171,6 +180,7 @@ export function* speed(C, { bell }) {
 export function* startEngine(C, { n, mode = 'propulsion' }) {
   const P = C.plant, ctl = P.ctl, e = P.engines[n - 1];
   const st = `eng${n}`;
+  if (!surfaced(C)) return;
   const m = C.men.find((q) => q.station === st);
   if (!m) return;
   // the engine's man to his engine
@@ -201,12 +211,14 @@ export function* startEngine(C, { n, mode = 'propulsion' }) {
   C.do(side, `man.engSpeed.${n}`, 1);
   if (mode === 'charge') {
     if (ctl['man.busSel'] === 'off') C.do(side, 'man.busSel', 'tieOpen');
+    // the generator's voltage brought up to the battery's before its breaker is closed (else the
+    // battery motors it and runs the engine away): E = V_bus, field = V / (E at full field)
+    const match = Math.min(0.95, (P.g.volts.bus || 250) / (1.12 * 425.6 * (e.rpm / 720)) + 0.004);
+    yield C.done(C.do(side, `man.genField.${n}`, match));
     yield C.done(C.do(side, `man.gen.${n}`, 'batBus'));
-    // the field up until she charges at the finishing rate's start (about 1,600 amperes a generator)
-    for (let k = 0; k < 40 && (P.g.amps.gen[n - 1] ?? 0) < 1500; k++) {
-      yield C.done(C.do(side, `man.genField.${n}`, Math.min(1, (+ctl[`man.genField.${n}`] || 0) + 0.05)));
-      yield 1;
-    }
+    // then the controllerman holds the charging current with the field (crew.js)
+    C.charge[n] = true;
+    yield 20;
     C.say(side, `No. ${n} generator charging the battery, ${Math.round(P.g.amps.gen[n - 1])} amperes.`);
   } else {
     // propulsion: the bus selector to BUS TIE OPEN (each side's generators to its own motors)
@@ -259,8 +271,12 @@ export function* stopEngine3(C) { yield* stopEngine(C, { n: 3 }); }
 export function* stopEngine4(C) { yield* stopEngine(C, { n: 4 }); }
 
 /** Answers bells on the diesels: two engines on propulsion, the other two charging (or all four on propulsion). */
+/** On the surface, with the bridge hatch open? (The diesels breathe the open air: never submerged.) */
+const surfaced = (C) => C.plant.g.depth < 25 && (+C.plant.ctl['hatch.ctUpper'] || 0) > 0.5;
+
 export function* dieselPropulsion(C, { charge = true } = {}) {
   const P = C.plant;
+  if (!surfaced(C)) { C.say('captain', 'The engines can only run on the surface, sir: they breathe through the main induction.'); return; }
   if (P.ctl['hm.induction'] !== 'open') yield C.done(C.do('hydraulic', 'hm.induction', 'open'));
   C.order('startEngine1Prop'); C.order('startEngine2Prop');
   if (charge) { C.order('startEngine3Charge'); C.order('startEngine4Charge'); }

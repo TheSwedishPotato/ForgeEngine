@@ -44,6 +44,8 @@ export class Crew {
     const hd = (this.plant.dyn.attitude.heading * 180) / Math.PI;
     this.orders = { depth: Math.max(60 * FT, this.plant.dyn.out?.keelDepth ?? 0), heading: hd, bell: this.plant.ctl['ct.telegraph.port'] ?? 'stop', rudderLimit: 15, planes: 'hold', diveAngle: 7 };
     this.scripts = [];
+    this.charge = {};                    // generators charging the battery: the controllerman holds the current
+    this.fieldCap = [1, 1, 1, 1, 1];     // each generator's field, held down when its ammeter reaches the rating
     this.log = [];
     this.t = 0;
     this._tick = 0;
@@ -75,8 +77,18 @@ export class Crew {
   setCondition(condition, { now = false, hurry = false } = {}) {
     this.condition = condition;
     this.byStation.clear();
-    let seat = 0;
+    this._seat = 0;
     for (const m of this.men) {
+      // a man with his hands on something finishes it first
+      if (!now && m.busy) { m.reassign = { hurry }; const st = m.goal; if (st) this.byStation.set(st, m); continue; }
+      this._assign(m, condition, { now, hurry });
+    }
+  }
+
+  /** Sends one man to his station for the condition (or to his bunk or the mess). */
+  _assign(m, condition, { now = false, hurry = false } = {}) {
+    m.reassign = null;
+    {
       const id = this.stationFor(m, condition);
       // the engines' men stand by their engines only when they run (or in diving stations)
       const eng = id && /^eng\d|auxEngine/.test(id);
@@ -91,8 +103,8 @@ export class Crew {
         m.rest = null;
       } else {
         // off watch: a third at the mess tables, the rest in their bunks
-        const mess = !m.officer && this.rand() < 0.3 && seat < this.seats.length;
-        const r = mess ? { ...this.seats[seat++], posture: 'sit' } : { ...m.bunk, posture: 'lie' };
+        const mess = !m.officer && this.rand() < 0.3 && this._seat < this.seats.length;
+        const r = mess ? { ...this.seats[this._seat++], posture: 'sit' } : { ...m.bunk, posture: 'lie' };
         m.rest = r;
         if (now) { Object.assign(m, { level: r.level, x: r.x, z: r.z, yaw: r.yaw }); m.path = []; m.at = 'rest'; }
         else if (!m.at || m.at !== 'rest') { m.at = null; m.goTo(r.level, r.x, r.z, r.yaw); }
@@ -103,7 +115,10 @@ export class Crew {
   _engineRunning(id) {
     const n = id === 'auxEngine' ? 0 : Number(id.slice(3));
     const e = n ? this.plant.engines[n - 1] : this.plant.auxEngine;
-    return e.state === 'running' || e.state === 'cranking' || this.plant.ctl[`${n ? `eng${n}` : 'aux'}.lever`] !== 'stop';
+    const pre = n ? `eng${n}` : 'aux', ctl = this.plant.ctl;
+    // running, being started, or still lined up (its sea suction or standby pump on)
+    return e.state === 'running' || e.state === 'cranking' || ctl[`${pre}.lever`] !== 'stop' || (+ctl[`${pre}.seaSuction`] || 0) > 0.5
+      || (+ctl[`${pre}.standbyLube`] || 0) > 0.5 || this.scripts.some((s) => s.name.startsWith(`startEngine${n}`) || s.name === `stopEngine${n}`);
   }
 
   /** Starts a procedure (procedures.js) by name. */
@@ -124,13 +139,6 @@ export class Crew {
   do(station, id, to, opts = {}) {
     const m = this.man(station);
     if (!m) return null;
-    if (CONTROL[id] && !m.canReach(CONTROL[id]) && !m.moving && m.at === station) {
-      // out of reach of his station: he steps over to it, and back
-      const c = CONTROL[id];
-      m.goTo(c.level ?? 'main', c.pos[0] + (c.face === 'fwd' ? -0.5 : c.face === 'aft' ? 0.5 : 0), c.face === 'port' ? c.pos[2] + 0.55 : c.face === 'stbd' ? c.pos[2] - 0.55 : c.pos[2], m.yaw);
-      m.at = null;
-      m.returnTo = station;
-    }
     return m.job(id, to, opts);
   }
   /** A condition to wait for: the jobs done. */
@@ -145,6 +153,15 @@ export class Crew {
     const ctl = this.plant.ctl, P = this.plant;
     // the men: walking, climbing, their hands
     for (const m of this.men) {
+      if (m.reassign && !m.busy) { this._assign(m, this.condition, m.reassign); }
+      // a job on a control out of his reach: he steps over to it (and back to his station after)
+      const j = m.hands.R.queue[0] ?? m.hands.L.queue[0];
+      if (j && !m.moving && !m.canReach(CONTROL[j.id])) {
+        const c = CONTROL[j.id], [sx, sz] = standAt(c);
+        if (m.at && m.at !== 'rest') m.returnTo = m.at;
+        m.at = null;
+        m.goTo(c.level ?? 'main', sx, sz, Math.atan2(c.pos[0] - sx, c.pos[2] - sz));
+      }
       const block = m.stepWalk(dt, ctl);
       if (block?.door != null && !m.pending(`door.${block.door}`)) m.job(`door.${block.door}`, 1);
       if (block?.hatch && !m.pending(`hatch.${block.hatch}`)) m.job(`hatch.${block.hatch}`, 1);
@@ -241,10 +258,26 @@ export class Crew {
   }
 
   _controllermen() {
-    const P = this.plant, ctl = P.ctl;
+    const P = this.plant, ctl = P.ctl, g = P.g;
     for (const side of ['port', 'stbd']) {
-      const m = this.man(side === 'port' ? 'maneuveringP' : 'maneuveringS');
-      if (!m || m.at !== (side === 'port' ? 'maneuveringP' : 'maneuveringS') || m.busy) continue;
+      const station = side === 'port' ? 'maneuveringP' : 'maneuveringS';
+      const m = this.man(station);
+      if (!m || m.at !== station) continue;
+      const gens = side === 'port' ? [2, 4] : [1, 3];
+      if (m.busy) continue;
+      // the generators charging the battery, when the bells leave him a moment (below)
+      const nudgeCharge = () => {
+        for (const n of gens) {
+          if (ctl[`man.gen.${n}`] !== 'batBus' || !this.charge[n]) continue;
+          // the field nudged to hold the charging rate: 1,600 A a generator at the start, tapering
+          // to the finishing rate as the battery's voltage reaches its gassing point (2.35 V a cell)
+          const I = g.amps?.gen?.[n - 1] ?? 0, V = g.volts?.bus ?? 250;
+          const target = V > 2.35 * 126 ? 500 : 1600;
+          const f = +ctl[`man.genField.${n}`] || 0;
+          const df = Math.max(-0.01, Math.min(0.006, (target - I) * 4e-6));
+          if (Math.abs(target - I) > 150) { m.job(`man.genField.${n}`, Math.max(0, Math.min(1, f + df))); return; }
+        }
+      };
       const bell = ctl[`ct.telegraph.${side}`];
       // answer the bell first
       if (ctl[`man.answer.${side}`] !== bell) { m.job(`man.answer.${side}`, bell); continue; }
@@ -254,17 +287,24 @@ export class Crew {
         const rev = bell === 'stop' ? ctl[`man.reverse.${side}`] : astern ? 'astern' : 'ahead';
         if (ctl[`man.reverse.${side}`] !== rev) {
           // the reverse lever only moves with the field down
-          for (const n of side === 'port' ? [2, 4] : [1, 3]) if ((+ctl[`man.genField.${n}`] || 0) > 0.02) m.job(`man.genField.${n}`, 0);
+          for (const n of gens) if ((+ctl[`man.genField.${n}`] || 0) > 0.02 && ctl[`man.gen.${n}`] === 'motorBus') m.job(`man.genField.${n}`, 0);
           m.job(`man.reverse.${side}`, rev);
           continue;
         }
         if (ctl[`man.starter.${side}`] !== 'par2' && bell !== 'stop') { m.job(`man.starter.${side}`, 'par2'); continue; }
-        for (const n of side === 'port' ? [2, 4] : [1, 3]) {
+        for (const n of gens) {
           if (ctl[`man.gen.${n}`] !== 'motorBus') continue;
-          if (Math.abs((+ctl[`man.genField.${n}`] || 0) - f) > 0.02) m.job(`man.genField.${n}`, f);
+          // never past the generator's rating (2,650 amperes): he watches its ammeter and holds the field down
+          const I = g.amps?.gen?.[n - 1] ?? 0, cur = +ctl[`man.genField.${n}`] || 0;
+          if (I > 2700) this.fieldCap[n] = Math.max(0, cur - 0.025);
+          else if (I < 2300) this.fieldCap[n] = Math.min(1, this.fieldCap[n] + 0.004);
+          const want = Math.min(f, this.fieldCap[n]);
+          if (Math.abs(cur - want) > 0.012) m.job(`man.genField.${n}`, want);
         }
+        if (!m.busy) nudgeCharge();
         continue;
       }
+      if (!m.busy) nudgeCharge();
       // on the battery
       const B = BATTERY_BELLS[bell] ?? BATTERY_BELLS.stop;
       const rev = B.starter === 'stop' ? ctl[`man.reverse.${side}`] : B.astern ? 'astern' : 'ahead';
@@ -287,6 +327,17 @@ export class Crew {
       if (B.field != null && Math.abs((+ctl[`man.motorField.${side}`] || 0) - B.field) > 0.02) m.job(`man.motorField.${side}`, B.field);
     }
   }
+}
+
+/** Where a man stands to work a control: in front of it, on the deck (the passage's breadth). */
+function standAt(c) {
+  if (c.kind === 'hatch') return [c.pos[0] + 0.35, c.pos[2]];
+  if (c.normal) {
+    const n = Math.hypot(c.normal[0], c.normal[2]) || 1;
+    return [c.pos[0] + (c.normal[0] / n) * 0.5, Math.max(-1.0, Math.min(1.0, c.pos[2] + (c.normal[2] / n) * 0.55))];
+  }
+  const off = { port: [0, 0.5], stbd: [0, -0.5], fwd: [-0.5, 0], aft: [0.5, 0] }[c.face] ?? [0, 0];
+  return [c.pos[0] + off[0], Math.max(-1.0, Math.min(1.0, c.pos[2] + off[1]))];
 }
 
 export { BELLS, BATTERY_BELLS, DIESEL_BELLS };
