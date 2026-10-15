@@ -1,0 +1,21 @@
+{
+  "name": "fleetboat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A Balao-class fleet submarine on the Med Engine: hydrostatics, air, hydraulics, diesel-electric drive and a full crew working the boat by hand, with an owner's glass observation deck.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node tools/artifact.mjs",
+    "test": "node --test tests/*.test.js",
+    "patrol": "node tools/patrol.mjs"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
