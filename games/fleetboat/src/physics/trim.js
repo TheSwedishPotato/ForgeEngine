@@ -64,9 +64,12 @@ export class TrimSystem {
       for (const n of D) out[n] += Q * (nodes[n].room / Math.max(1e-9, room));
       this.flow = Q / dt;
     } else if (!this.pump) {
-      // no pump: water finds its own way along each line, from the higher pressure to the lower
-      for (const line of [S, D]) {
-        if (line.length < 2) continue;
+      // no pump: water finds its own way, from the higher pressure to the lower, along the lines and
+      // through the idle centrifugal pump between them ("flood auxiliary from sea": the sea's
+      // suction and the auxiliary tank's discharge open, the pump stopped)
+      const line = [...new Set([...S, ...D])];
+      {
+        if (line.length < 2) return (this.moved = out);
         const hi = line.reduce((a, n) => (nodes[n].p > nodes[a].p ? n : a), line[0]);
         for (const n of line) {
           if (n === hi) continue;

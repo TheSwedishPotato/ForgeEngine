@@ -54,13 +54,13 @@ export class Flooding {
   get total() { return this.comps.reduce((a, c) => a + c.water, 0); }
 
   /**
-   * One step. env: { pBoat, seaP(x, y) -> Pa at a body point, keelDepth, rho, doors(i) -> 0..1 open,
+   * One step. env: { pBoat, seaP(x, y) -> Pa at a body point (null above the water), keelDepth, rho, doors(i) -> 0..1 open,
    *                  pitch (rad), drain: { comp, rate m^3 } }
    */
   step(dt, env) {
     const rho = env.rho;
     // ---- the hull under pressure
-    const dpHull = Math.max(0, env.seaP(0, AXIS) - env.pBoat);
+    const dpHull = Math.max(0, (env.seaP(0, AXIS) ?? env.pBoat) - env.pBoat);
     this.stress = dpHull * R / STRENGTH.plate;
     const testStress = STRENGTH.testPressure * R / STRENGTH.plate;
     // weeping past the test depth, growing toward collapse
@@ -80,6 +80,7 @@ export class Flooding {
       const k = o.open();
       if (k <= 0) { this.inflow[o.id] = 0; continue; }
       const pSea = env.seaP(o.x, o.y);
+      if (pSea === null) { this.inflow[o.id] = 0; continue; }      // the opening is out of the water
       const c = this.byId[o.comp];
       const pIn = env.pBoat + rho * G * Math.max(0, c.level - (o.y - 0.6));
       const q = Math.max(0, waterFlowSmooth(o.CdA * k, pSea - pIn, rho)) * dt;
@@ -99,8 +100,9 @@ export class Flooding {
       if (ha <= 0 && hb <= 0) continue;
       const dh = ha - hb;
       const A = 0.5 * 0.97 * Math.max(0.05, Math.max(ha, hb));       // the door's width times the head over the sill
-      const q = Math.sign(dh) * Math.min(Math.abs(dh) * a.len * 0.5, A * Math.sqrt(2 * G * Math.abs(dh)) * dt * open);
-      a.water = Math.max(0, a.water - q); b.water = Math.max(0, b.water + q);
+      let q = Math.sign(dh) * Math.min(Math.abs(dh) * a.len * 0.5, A * Math.sqrt(2 * G * Math.abs(dh)) * dt * open);
+      q = q > 0 ? Math.min(q, a.water) : Math.max(q, -b.water);      // only the water there is
+      a.water -= q; b.water += q;
     }
     for (const c of this.comps) c.level = this.levelOf(c);
   }

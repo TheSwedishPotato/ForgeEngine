@@ -114,6 +114,45 @@ export class Boat {
     return out;
   }
 
+  /**
+   * The diving officer's compensation (the daily trim sheet): the variable ballast that makes her
+   * neutral and level when submerged at `depth` (m, keel) in this sea, with the main ballast and
+   * safety tanks flooded and negative blown to the mark. Weight from the auxiliary tanks (amidships),
+   * moment by moving water between the forward and after trim tanks. Returns the changes (tons).
+   */
+  compensate(sea, depth = 60 * FT) {
+    const rho = sea.column.densityAt(Math.max(1, depth - YA));      // at the hull's axis
+    const keep = this.tanks.map((tk) => [tk, tk.water, tk.n]);
+    for (const tk of this.tanks) {
+      if (tk.kind === 'mbt' || tk.kind === 'fbt' || tk.kind === 'safety' || tk.kind === 'bowBuoyancy') tk.water = tk.volume;
+      if (tk.kind === 'negative') tk.water = 0;
+    }
+    this._rhoSea = rho;
+    let V = 0, xB = 0;
+    for (const s of this.dyn.slices) { V += s.area * s.dx; xB += s.area * s.dx * s.x; }
+    xB /= V;
+    const T = this.tank, rhoT = 1025;
+    const res = { aux: 0, fwdTrim: 0, aftTrim: 0 };
+    for (let it = 0; it < 4; it++) {
+      const m = this.mass.compute(this.massItems());
+      const dW = rho * V - m.m;                       // kg to take on (+) or pump off (-)
+      const dM = rho * V * xB - m.m * m.lcg;          // moment still wanted (kg m); the auxiliary tanks sit amidships
+      const auxRoom = T.aux1.volume + T.aux2.volume;
+      const aux = Math.max(0, Math.min(auxRoom, T.aux1.water + T.aux2.water + dW / rhoT));
+      res.aux += (aux - T.aux1.water - T.aux2.water) * rhoT / 1016;
+      T.aux1.water = T.aux2.water = aux / 2;
+      // move d m^3 from aft to forward trim (or back)
+      const d = dM / (rhoT * (T.fwdTrim.x - T.aftTrim.x));
+      const dd = Math.max(-T.fwdTrim.water, Math.min(T.aftTrim.water, d));
+      T.fwdTrim.water += dd; T.aftTrim.water -= dd;
+      res.fwdTrim += dd * rhoT / 1016; res.aftTrim -= dd * rhoT / 1016;
+    }
+    // put the other tanks back as they were
+    for (const [tk, w, n] of keep) if (tk.kind !== 'variable') { tk.water = w; tk.n = n; }
+    this.massProps = null;
+    return res;
+  }
+
   updateMass() {
     this.massProps = this.mass.compute(this.massItems());
     return this.massProps;
@@ -123,6 +162,8 @@ export class Boat {
   step(dt, sea, { screws = [{ T: 0 }, { T: 0 }], blow = {} } = {}) {
     this.time += dt;
     // the tanks
+    let toBoat = 0, fromSupply = 0;
+    const bySupply = {};
     for (const tk of this.tanks) {
       if (tk.kind === 'variable') continue;
       const env = this.tankEnv(tk, sea);
@@ -130,8 +171,11 @@ export class Boat {
       env.pBoat = this.pBoat ?? ATM;
       const b = blow[tk.id];
       if (b) { env.blow = b.supply; env.blowOpen = b.open; }
-      tk.step(dt, env);
+      const r = tk.step(dt, env);
+      toBoat += r.toBoat; fromSupply += r.fromSupply;
+      if (b && r.fromSupply) bySupply[b.line ?? 'hp'] = (bySupply[b.line ?? 'hp'] ?? 0) + r.fromSupply;
     }
+    this.tankFlows = { toBoat, fromSupply, bySupply };
     if (!this.massProps || (this._massDirty++ % 6) === 0) this.updateMass();
     const out = this.dyn.step(dt, { mass: this.massProps, sea, screws });
     return out;

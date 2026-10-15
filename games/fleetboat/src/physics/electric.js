@@ -115,10 +115,18 @@ export class ElectricPlant {
     this.out = { VB: 0, VP: 0, VS: 0, Imotor: { port: 0, stbd: 0 }, Igen: [0, 0, 0, 0], Ibat: { fwd: 0, aft: 0 }, Iaux: 0, Tshaft: { port: 0, stbd: 0 }, Tgen: [0, 0, 0, 0], Tauxgen: 0, trip: null };
     this.trips = { port: 0, stbd: 0 };            // overload timers
     this.breakers = { port: true, stbd: true };   // motor circuit breakers (an overload opens them)
+    this.Iseries = { port: 0, stbd: 0 };          // the series field's current, lagging the armature's
   }
 
-  /** Motor field factor phi (0.45..1 by the rheostat), with the series winding strengthening it under load. */
-  _phi(side, I) { return Math.max(0.45, Math.min(1, this.c.motorField[side])) * (1 + 0.08 * Math.min(2, Math.abs(I) / MAIN_MOTOR.amps)); }
+  /**
+   * Motor field factor phi (0.45..1 by the rheostat), with the series winding strengthening it under
+   * load. The field's flux follows its current with the winding's time constant (L/R, about 0.4 s),
+   * not instantly: Iseries is that lagged current.
+   */
+  _phi(side) { return Math.max(0.45, Math.min(1, this.c.motorField[side])) * (1 + 0.04 * Math.min(2, this.Iseries[side] / MAIN_MOTOR.amps)); }
+
+  /** A generator's field: the rheostat's full travel gives 12 % over the rated voltage at rated speed. */
+  _genPhi(g) { return 1.12 * Math.max(0, Math.min(1, this.c.genField[g])); }
 
   /**
    * Solve the network for the shaft speeds (rad/s of the propeller shafts), and return the
@@ -141,7 +149,7 @@ export class ElectricPlant {
       if (c.gen[g] === 'off') continue;
       const side = g % 2 === 0 ? 2 : 1;                   // 1 and 3 starboard, 2 and 4 port
       const n = c.gen[g] === 'batBus' ? node[0] : node[side];
-      el.push({ kind: 'gen', g, n, E: GEN_K * Math.max(0, Math.min(1, c.genField[g])) * this.genOmega[g], R: GEN_R });
+      el.push({ kind: 'gen', g, n, E: GEN_K * this._genPhi(g) * this.genOmega[g], R: GEN_R });
     }
     if (c.auxGen) el.push({ kind: 'aux', n: node[0], E: AUXGEN_K * c.auxField * this.auxOmega, R: 0.012 });
     // motors: a pair per side; SLOW puts all four in series across the battery bus
@@ -152,7 +160,7 @@ export class ElectricPlant {
         const st = c.starter[side];
         if (!dir || st === 'stop' || !this.breakers[side]) continue;
         const wm = shaftOmega[side] * RATIO * dir;          // motor speed in the sense of the connection
-        const phi = this._phi(side, this.out.Imotor[side]);
+        const phi = this._phi(side);
         const Em = MOTOR_K * phi * wm;
         const series = st.startsWith('ser');
         const E = series ? 2 * Em : Em;
@@ -164,7 +172,7 @@ export class ElectricPlant {
       const dP = c.reverse.port === 'ahead' ? 1 : c.reverse.port === 'astern' ? -1 : 0;
       const dS = c.reverse.stbd === 'ahead' ? 1 : c.reverse.stbd === 'astern' ? -1 : 0;
       if (dP && dS && c.starter.port !== 'stop' && c.starter.stbd !== 'stop') {
-        const phiP = this._phi('port', this.out.Imotor.port), phiS = this._phi('stbd', this.out.Imotor.stbd);
+        const phiP = this._phi('port'), phiS = this._phi('stbd');
         const E = 2 * MOTOR_K * (phiP * shaftOmega.port * RATIO * dP + phiS * shaftOmega.stbd * RATIO * dS);
         const e = { kind: 'slow', dP, dS, phiP, phiS, n: node[0], E, R: 4 * MOTOR_R + START_R[c.starter.port] };
         el.push(e); motorEl.slow = e;
@@ -190,7 +198,7 @@ export class ElectricPlant {
     for (const e of el) {
       const I = (e.E - V[e.n]) / e.R;                       // out of the element into the node
       if (e.kind === 'bat') { e.b.I = I; e.b.V = V[e.n]; o.Ibat[e.b === this.batteries.fwd ? 'fwd' : 'aft'] = I; }
-      else if (e.kind === 'gen') { o.Igen[e.g] = I; o.Tgen[e.g] = GEN_K * Math.max(0, Math.min(1, c.genField[e.g])) * I; }
+      else if (e.kind === 'gen') { o.Igen[e.g] = I; o.Tgen[e.g] = GEN_K * this._genPhi(e.g) * I; }
       else if (e.kind === 'aux') { o.Iaux = I; o.Tauxgen = AUXGEN_K * c.auxField * I; }
       else if (e.kind === 'motor') {
         const Ia = -I;                                        // into the motors
@@ -221,6 +229,7 @@ export class ElectricPlant {
   }
 
   step(dt) {
+    for (const side of ['port', 'stbd']) this.Iseries[side] += (Math.abs(this.out.Imotor[side]) - this.Iseries[side]) * Math.min(1, dt / 0.4);
     for (const b of Object.values(this.batteries)) b.step(dt);
     this.protect(dt);
   }
