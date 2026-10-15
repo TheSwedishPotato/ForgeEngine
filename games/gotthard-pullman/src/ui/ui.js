@@ -333,3 +333,35 @@ export class Help {
   }
   toggle() { this.box.style.display = this.box.style.display === 'none' ? '' : 'none'; }
 }
+
+// ---- touch screens: no keys, so buttons (shown only where the screen is touched) --------------
+
+export class TouchControls {
+  constructor(root, game, { phone }) {
+    this.game = game;
+    this.box = el('div', 'touchbar');
+    const P = game.player;
+    const btn = (label, fn) => { const b = el('button', null, label); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); this.box.append(b); return b; };
+    this.stand = btn('Stand up', () => (P.mode === 'walking' ? P.toggleStand({ anywhere: true }) : P.mode === 'seated' ? P.toggleStand() : null));
+    this.out = btn('Outside', () => P.setOutside(P.mode !== 'outside', P.orbit ?? {}));
+    btn('Map', () => phone.toggle());
+    // hold to walk on (or back) the way you look; drag the view to turn
+    this.pad = el('div', 'walkpad');
+    for (const [label, code] of [['&#9650;', 'KeyW'], ['&#9660;', 'KeyS']]) {
+      const b = el('button', null, label);
+      const up = () => P.keys.delete(code);
+      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); P.keys.add(code); b.setPointerCapture?.(e.pointerId); });
+      b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+      this.pad.append(b);
+    }
+    root.append(this.box, this.pad);
+  }
+
+  update() {
+    const P = this.game.player;
+    this.stand.textContent = P.mode === 'walking' ? 'Sit down' : 'Stand up';
+    this.out.textContent = P.mode === 'outside' ? 'Inside' : 'Outside';
+    this.pad.hidden = P.mode !== 'walking';
+  }
+}
+

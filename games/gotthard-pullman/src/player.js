@@ -31,7 +31,7 @@ export class Player {
   }
 
   /** Up from the chair into the aisle, or back down when you are by your seat. */
-  toggleStand() {
+  toggleStand({ anywhere = false } = {}) {
     const V = this.game.trainGL.vehicles;
     if (this.mode === 'seated') {
       const m = this.car(), i = V.indexOf(m);
@@ -43,7 +43,7 @@ export class Player {
     } else if (this.mode === 'walking') {
       const m = this._seatCar(), W = this.walk;
       const chair = m.info.chairs[this.chairIndex] ?? m.info.chairs[0];
-      if (V[W.car] === m && Math.hypot(W.x - chair.x, W.z - chair.z) < 1.4) { this.mode = 'seated'; this.walk = null; this.yaw = 0; }
+      if (anywhere || (V[W.car] === m && Math.hypot(W.x - chair.x, W.z - chair.z) < 1.4)) { this.mode = 'seated'; this.walk = null; this.yaw = 0; }
     }
   }
 

@@ -365,8 +365,19 @@ export class Places {
 
   _platforms() {
     const R = this.route;
+    // a platform's edge stands 1.65 m from the track's centre (the mapped outlines are not that
+    // exact, and a train must not run through one): corners nearer a main track are moved out
+    const clear = (x, y) => {
+      for (const line of [R.run, R.right]) {
+        const q = line.locate(x, y, null, 1e9), P = line.pos(q.s), h = line.headingAt(q.s);
+        const rx = Math.cos(h), ry = -Math.sin(h);
+        const off = (x - P.x) * rx + (y - P.y) * ry, along = (x - P.x) * Math.sin(h) + (y - P.y) * Math.cos(h);
+        if (Math.abs(off) < 1.65 && Math.abs(along) < 2) { const t = (off >= 0 ? 1.65 : -1.65) - off; x += rx * t; y += ry * t; }
+      }
+      return [x, y];
+    };
     for (const p of R.platforms) {
-      const pts = p.xy.map(([x, y]) => [x, y]);
+      const pts = p.xy.map(([x, y]) => clear(x, y));
       if (pts.length < 3) continue;
       const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
       const { s } = R.run.locate(cx, cy);

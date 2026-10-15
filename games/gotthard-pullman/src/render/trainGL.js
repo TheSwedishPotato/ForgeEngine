@@ -135,10 +135,16 @@ export class TrainGL {
       m.group.rotation.copy(_e);
       if (m.kind === 'engine') { animateLocomotive(m.parts, this.train.loco.theta, s); animateCab(m.parts.controls, this.train.loco.c, this.train.brake, ddt); }
       if (m.kind === 'tender') animateTender(m.parts, s);
-      // the trucks follow the track under the body
+      // the trucks follow the track under the body: they stay on the rails while the body moves on
+      // its springs (so the body's sway, bounce, roll and pitch are taken out of them again)
       for (const [k, tr] of m.trucks.entries()) {
         const ts = s + (k === 0 ? m.supports : -m.supports);
         const h = line.headingAt(ts);
+        tr.userData.x0 ??= tr.position.x;
+        const x0 = tr.userData.x0;
+        tr.position.set(x0, -(sw?.vertical ?? 0) - x0 * (sw?.pitch ?? 0), -(sw?.lateral ?? 0));
+        tr.rotation.x = -(sw?.roll ?? 0);
+        tr.rotation.z = -(sw?.pitch ?? 0);
         tr.rotation.y = -(h - pose.heading);
         for (const ws of tr.userData.wheelsets) ws.rotation.z = -ts / BODY.wheelR;
       }
