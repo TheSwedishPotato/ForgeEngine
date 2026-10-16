@@ -181,6 +181,17 @@ waits on what the men can see: a gauge, the Christmas tree, a report.
   island's flank going down to the deep.
 - **The waves** are a Pierson–Moskowitz spectrum for the trade wind in a dozen Airy components.
   The boat floats in them and the surface you see is drawn from the same ones.
+- **The waves she makes** are solved, not drawn (`src/world/wake.js`). The free surface is
+  potential flow (Laplace's equation in the water, the inviscid limit of Navier–Stokes),
+  linearised and solved spectrally on a 256 m square that travels with her. Each mode runs at its
+  deep-water frequency, so the Kelvin wedge, the bow and stern waves and their wavelengths come
+  out of the equations. The hull forces it as a moving pressure (Havelock); a submerged hull's
+  effect fades as exp(−kd) with its depth.
+- **Breaking and spray.** Faces that steepen towards the Stokes limit break and leave foam,
+  which fades over seconds; the screws' wash whitens the water astern. The wind sea breaks at its
+  crests as often as Monahan's whitecap coverage gives for the wind. The bow throws spray when she
+  drives into a sea, most when she slams into one. A raised periscope trails its feather. The
+  drops fall under gravity and air drag until they meet the sea.
 - **The light under the sea.** The sun's beam is refracted at the surface (n = 1.333) and dimmed by
   Beer–Lambert, separately for red, green and blue, in clear Jerlov type I water: red is gone
   within 10 m, blue reaches 100 m. The waves' caustics play near the surface. Every view ray is

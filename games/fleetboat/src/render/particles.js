@@ -8,6 +8,10 @@
  * millimetres, faster as it grows) and grows as it rises, its volume going as 1/p (Boyle): a
  * bubble from 60 ft reaches the surface with twice its volume. Marine snow: the slow drift of
  * organic flakes the light picks out near the eye, a sense of the water's movement past her.
+ *
+ * Spray (world/wake.js throws it): drops of a few millimetres flung off the bow and the
+ * periscope, falling under gravity against the air's drag (terminal velocity about 6.5 m/s for a
+ * 2 mm drop), gone when they meet the sea again. One drawn speck stands for a cloud of them.
  */
 import { Program, Target, postProgram, fullscreen, state } from '../../../duel1403/src/engine/gl/GL.js';
 import { COMMON } from '../../../duel1403/src/engine/shaders/common.js';
@@ -22,7 +26,7 @@ const MAX = 6000;
 const VS = /* glsl */`
 layout(location = 0) in vec2 aCorner;
 layout(location = 1) in vec4 aPart;         // world position, radius
-layout(location = 2) in float aKind;         // 0 bubble, 1 snow
+layout(location = 2) in float aKind;         // 0 bubble, 1 snow, 2 spray
 uniform mat4 uViewProj;
 uniform vec3 uCamRight, uCamUp;
 out vec2 vUv; out vec4 vClip; out float vKind; out vec3 vWorld;
@@ -38,7 +42,8 @@ ${COMMON}
 in vec2 vUv; in vec4 vClip; in float vKind; in vec3 vWorld;
 uniform highp sampler2D uDepth;
 uniform mat4 uInvProj;
-uniform vec3 uCameraPos, uKd, uC, uWaterRad, uSkyDown;
+uniform vec3 uCameraPos, uKd, uC, uWaterRad, uSkyDown, uSunIrr;
+uniform float uAbove;
 out vec4 o;
 void main() {
   vec2 ndc = vClip.xy / vClip.w;
@@ -48,6 +53,15 @@ void main() {
   vec2 c = vUv * 2.0 - 1.0;
   float r2 = dot(c, c);
   if (r2 > 1.0) discard;
+  if (vKind > 1.5) {
+    // spray in the air: white drops lit by the sky and the sun
+    if (uAbove < 0.5) discard;
+    float a = (1.0 - r2) * 0.55;
+    vec3 col = (uSkyDown * 0.35 + uSunIrr * 0.12) * a;
+    o = vec4(col, a);
+    return;
+  }
+  if (uAbove > 0.5) discard;
   float depth = max(0.0, -vWorld.y);
   vec3 light = uSkyDown * exp(-uKd * depth);
   float dist = length(vWorld - uCameraPos);
@@ -119,10 +133,27 @@ export class Particles {
     }
   }
 
-  /** Steps the bubbles and the snow; emits from the plant's tanks. */
+  /** Throws spray: [X, Y, Z, vx, vy, vz] in world coordinates. */
+  throwSpray(list) {
+    const D = this.data, O = this.stage.origin;
+    for (const [x, y, z, vx, vy, vz] of list) {
+      if (this.n >= MAX) return;
+      const i = this.n++;
+      D[i * 5] = x - O.x; D[i * 5 + 1] = y; D[i * 5 + 2] = z - O.z; D[i * 5 + 3] = 0.12 + Math.random() * 0.25; D[i * 5 + 4] = 2;
+      this.vel[i * 3] = vx; this.vel[i * 3 + 1] = vy; this.vel[i * 3 + 2] = vz;
+    }
+  }
+
+  /** Steps the bubbles, the snow and the spray; emits from the plant's tanks. */
   step(dt, plant, sea) {
     if (!this.data) return;
-    const D = this.data, c = this.stage.camera.position, col = sea.column;
+    const D = this.data, c = this.stage.camera.position, col = sea.column, O = this.stage.origin;
+    // the floating origin moved: everything moves with it
+    if (this._o && (this._o[0] !== O.x || this._o[1] !== O.z)) {
+      const dx = this._o[0] - O.x, dz = this._o[1] - O.z;
+      for (let i = 0; i < this.n; i++) if (D[i * 5 + 4] !== 1) { D[i * 5] += dx; D[i * 5 + 2] += dz; }
+    }
+    this._o = [O.x, O.z];
     // emission from the tanks venting and spilling, in the boat's frame -> world
     const M = this.stage.boatMat.elements;
     const toW = (x, y, z) => [M[0] * x + M[4] * y + M[8] * z + M[12], M[1] * x + M[5] * y + M[9] * z + M[13], M[2] * x + M[6] * y + M[10] * z + M[14]];
@@ -142,7 +173,13 @@ export class Particles {
     let j = 0;
     for (let i = 0; i < this.n; i++) {
       const kind = D[i * 5 + 4];
-      if (kind > 0.5) {
+      if (kind > 1.5) {
+        // a drop: gravity and quadratic drag (g / vt^2 with vt = 6.5 m/s); back into the sea
+        const v = this.vel, k3 = i * 3, sp = Math.hypot(v[k3], v[k3 + 1], v[k3 + 2]), kd = (9.81 / 42) * sp * dt;
+        v[k3] -= v[k3] * kd; v[k3 + 1] -= 9.81 * dt + v[k3 + 1] * kd; v[k3 + 2] -= v[k3 + 2] * kd;
+        D[i * 5] += v[k3] * dt; D[i * 5 + 1] += v[k3 + 1] * dt; D[i * 5 + 2] += v[k3 + 2] * dt;
+        if (v[k3 + 1] < 0 && D[i * 5 + 1] < sea.eta(D[i * 5] + O.x, D[i * 5 + 2] + O.z)) continue;
+      } else if (kind > 0.5) {
         D[i * 5 + 1] -= 0.004 * dt;
         for (let a = 0; a < 3; a++) {
           const k = i * 5 + a, cc = a === 0 ? c.x : a === 1 ? c.y : c.z;
@@ -166,6 +203,8 @@ export class Particles {
       j++;
     }
     this.n = j;
+    this.hasSpray = false;
+    for (let i = 0; i < this.n; i++) if (D[i * 5 + 4] > 1.5) { this.hasSpray = true; break; }
     // keep the snow's count
     while (this.n < MAX && this.countSnow() < this.snowN) { this._snow(this.n); this.n++; }
   }
@@ -174,8 +213,9 @@ export class Particles {
   afterLighting(r, color) {
     if (!this.n) return color;
     const gl = r.gl, S = this.stage;
-    // only under the sea (or looking into it from the observation deck)
-    if (r.cameraPos.y > 2) return color;
+    // under the sea (or looking into it from the observation deck); above it, only the spray
+    const above = r.cameraPos.y > 2 ? 1 : 0;
+    if (above && !this.hasSpray) return color;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buf);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.data.subarray(0, this.n * 5));
     this.target.bind();
@@ -188,7 +228,8 @@ export class Particles {
     const e = S.camera.matrixWorld.elements;
     this.prog.use().set('uViewProj', r.viewProj).set('uCamRight', [e[0], e[1], e[2]]).set('uCamUp', [e[4], e[5], e[6]])
       .set('uDepth', r.depth).set('uInvProj', r.invProj).set('uCameraPos', r.cameraPos)
-      .set('uKd', WATER.Kd).set('uC', WATER.c).set('uWaterRad', S.U.waterRad).set('uSkyDown', S.U.skyDown);
+      .set('uKd', WATER.Kd).set('uC', WATER.c).set('uWaterRad', S.U.waterRad).set('uSkyDown', S.U.skyDown)
+      .set('uAbove', above).set('uSunIrr', [r.sunColor.x * r.sunIntensity, r.sunColor.y * r.sunIntensity, r.sunColor.z * r.sunIntensity]);
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, this.n);
     gl.bindVertexArray(null);

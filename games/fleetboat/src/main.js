@@ -32,7 +32,10 @@ async function go() {
   if (params.get('pitch')) game.player.pitch = Number(params.get('pitch')) * Math.PI / 180;
   if (params.get('cam') === 'out') { game.player.mode = 'orbit'; Object.assign(game.player.orbit, { yaw: Number(params.get('oyaw') ?? 140) * Math.PI / 180, pitch: Number(params.get('opitch') ?? 12) * Math.PI / 180, dist: Number(params.get('dist') ?? 70) }); }
   if (params.get('order')) game.sim.crew.order(params.get('order'), params.get('depth') ? { depth: Number(params.get('depth')) * 0.3048 } : {});
-  if (params.get('skip')) game.sim.advance(Number(params.get('skip')));
+  if (params.get('skip')) {
+    // (the waves she makes are stepped with her, so they are there when the view opens)
+    for (let t = Number(params.get('skip')); t > 0; t -= 1 / 15) { game.sim.advance(Math.min(t, 1 / 15)); game.wake.step(Math.min(t, 1 / 15), game.sim.plant.dyn, game.sim.plant, game.sim.sea); }
+  }
   if (params.get('dbgsurf')) game.stage.surface.debug = true;
   for (const k of ['surface', 'fog', 'acrylic', 'bloom', 'motionBlur', 'screen']) if (params.get('no' + k)) game.stage[k].enabled = false;
   ui.querySelector('.loading')?.remove();

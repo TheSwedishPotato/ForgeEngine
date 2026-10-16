@@ -8,12 +8,23 @@
  * From below: Snell's window, the whole sky squeezed into a circle 97 degrees across overhead;
  * outside it the surface is a mirror (total internal reflection) of the blue depths.
  * Never inside the boat: the surface stops at her hull.
+ *
+ * On top of the swell, the waves she makes herself (world/wake.js, a free-surface solver) and the
+ * foam where they break; and the wind sea's whitecaps: crests whose downward acceleration is
+ * highest break, as many as Monahan & O'Muircheartaigh's whitecap coverage for the wind
+ * (W = 3.84e-6 U10^3.41).
  */
 import { Program, Target, postProgram, fullscreen, state } from '../../../duel1403/src/engine/gl/GL.js';
 import { COMMON } from '../../../duel1403/src/engine/shaders/common.js';
 import { WATER, RAY_BOAT_GLSL } from './water.js';
 
 const NW = 12;
+
+/** The complementary error function (Abramowitz & Stegun 7.1.26). */
+function erfc(x) {
+  const t = 1 / (1 + 0.3275911 * x);
+  return t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-x * x);
+}
 
 const VS = /* glsl */`
 layout(location = 0) in vec2 aPolar;          // radius (m), angle
@@ -24,17 +35,26 @@ uniform float uTime, uSeaY;
 uniform vec4 uWave[${NW}];                     // kx, kz, omega, amplitude
 uniform vec4 uWaveP[${NW}];                    // phase
 uniform int uWaves;
-out vec3 vWorld; out vec3 vNormal; out vec4 vClip; out float vDist;
+uniform sampler2D uWake;
+uniform vec4 uWakeR;                          // world X, Z of the square's corner, its size, on (1/0)
+out vec3 vWorld; out vec3 vNormal; out vec4 vClip; out float vDist; out float vAcc; out vec2 vWakeUv;
 void main() {
   vec2 xz = uCameraPos.xz + aPolar.x * vec2(cos(aPolar.y), sin(aPolar.y));
   float fade = 1.0 - smoothstep(250.0, 1800.0, aPolar.x);
-  float y = uSeaY; vec2 g = vec2(0.0);
+  float y = uSeaY; vec2 g = vec2(0.0); float acc = 0.0;
   for (int i = 0; i < ${NW}; i++) {
     if (i >= uWaves) break;
     vec4 W = uWave[i];
     float th = W.x * (xz.x + uOrigin.x) + W.y * (xz.y + uOrigin.y) - W.z * uTime + uWaveP[i].x;
     y += W.w * cos(th) * fade;
     g -= W.w * sin(th) * W.xy * fade;
+    acc += W.w * W.z * W.z * cos(th) * fade;   // the surface's downward acceleration (crests)
+  }
+  vAcc = acc;
+  vWakeUv = (xz + uOrigin - uWakeR.xy) / uWakeR.z;
+  if (uWakeR.w > 0.5 && all(greaterThan(vWakeUv, vec2(0.0))) && all(lessThan(vWakeUv, vec2(1.0)))) {
+    vec4 wk = textureLod(uWake, vWakeUv, 0.0);
+    y += wk.r; g += wk.gb;
   }
   vNormal = normalize(vec3(-g.x, 1.0, -g.y));
   vWorld = vec3(xz.x, y, xz.y);
@@ -54,7 +74,20 @@ uniform mat4 uBoatInv;
 uniform vec4 uHull, uCT, uObs;
 uniform vec3 uKd, uC, uWaterRad;
 uniform float uTime, uSeaY, uDebug;
+uniform sampler2D uWake;
+uniform vec4 uWakeR;
+uniform vec2 uWhite;                          // the crest acceleration's spread, the threshold (in spreads) for breaking
+in float vAcc; in vec2 vWakeUv;
 out vec4 o;
+// foam: what breaking leaves on the water (the wake's, and the wind's whitecaps)
+float foamAt() {
+  float f = 0.0;
+  if (uWakeR.w > 0.5 && all(greaterThan(vWakeUv, vec2(0.0))) && all(lessThan(vWakeUv, vec2(1.0)))) f = texture(uWake, vWakeUv).a;
+  if (uWhite.x > 0.0) f = max(f, smoothstep(uWhite.y, uWhite.y + 0.7, vAcc / uWhite.x));
+  // its lacework
+  float n = vnoise(vWorld.xz * 0.9 + vec2(uTime * 0.05, 0.0)) * 0.6 + vnoise(vWorld.xz * 3.1) * 0.4;
+  return clamp(f * (0.55 + 0.9 * n) - 0.15, 0.0, 1.0);
+}
 ${RAY_BOAT_GLSL}
 bool inBoat(vec3 w) {
   vec3 q = (uBoatInv * vec4(w, 1.0)).xyz;
@@ -97,6 +130,13 @@ void main() {
     vec3 glint = uSunIrr * D * F * NoL / max(4.0 * cosI * NoL + 1e-3, 1e-3) * 0.25;
     glint = min(glint, vec3(3e4));
     o = vec4(refl * F + glint, F);
+    // foam: a white diffuser lit by the sky and the sun (albedo about 0.6)
+    float fm = foamAt();
+    if (fm > 0.0) {
+      vec3 Esky = min(textureLod(uEnv, vec3(0.0, 1.0, 0.0), 6.0).rgb, vec3(20.0)) * PI;
+      vec3 foamC = 0.6 / PI * (Esky + uSunIrr * max(uSunDir.y, 0.0));
+      o = vec4(mix(o.rgb, foamC, fm), mix(o.a, 1.0, fm));
+    }
   } else {
     vec3 Nd = -N;                         // the side facing the water
     vec3 up = -V;
@@ -114,6 +154,8 @@ void main() {
     vec3 Rd = reflect(up, Nd);
     vec3 below = uWaterRad * (0.35 + 0.65 * smoothstep(-0.6, 1.0, Rd.y));
     vec3 col = (1.0 - F) * sky + F * below;
+    float fm = foamAt();
+    col = mix(col, (sky * (1.0 - F) + below) * 0.45, fm);
     // the water between the eye and the surface
     vec3 ray = vWorld - uCameraPos;
     float L = length(ray);
@@ -158,6 +200,43 @@ export class Surface {
     this.waveA = new Float32Array(NW * 4); this.waveP = new Float32Array(NW * 4);
   }
 
+  /** The waves she makes (world/wake.js) for the next frames. */
+  setWake(wake) { this.wake = wake; }
+
+  _wakeTex() {
+    const gl = this.gl, w = this.wake;
+    if (!this.wakeTex) {
+      this.wakeTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, this.wakeTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, 1, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array(4));
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      this._wakeV = -1;
+    }
+    this.wakeR = [0, 0, 1, 0];
+    if (w?.o) {
+      if (w.version !== this._wakeV) {
+        gl.bindTexture(gl.TEXTURE_2D, this.wakeTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w.N, w.N, 0, gl.RGBA, gl.FLOAT, w.tex);
+        this._wakeV = w.version;
+      }
+      this.wakeR = [w.o[0], w.o[1], w.L, 1];
+    }
+    return { tex: this.wakeTex };
+  }
+
+  /** Whitecaps: the spread of the crests' acceleration and how far out in it they break, for the wind. */
+  _white(sea) {
+    if (!sea.waves.length) return [0, 0];
+    const sig = Math.sqrt(sea.waves.reduce((a, w) => a + (w.a * w.w * w.w) ** 2 / 2, 0));
+    const U10 = sea.wind / 1.075;                                  // (the wind is given at 19.5 m)
+    const W = Math.min(0.2, 3.84e-6 * U10 ** 3.41);                // the fraction of the sea that is white
+    if (W < 1e-5) return [0, 0];
+    // a Gaussian sea: the threshold k with P(X > k sigma) = W
+    let lo = 0, hi = 6;
+    for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (0.5 * erfc(m / Math.SQRT2) > W) lo = m; else hi = m; }
+    return [sig, lo];
+  }
+
   resize(r) {
     if (!this.target) this.target = new Target(r.gl, { width: r.displayW, height: r.displayH, colors: [{ format: 'rgba16f' }] });
     else this.target.resize(r.displayW, r.displayH);
@@ -165,6 +244,7 @@ export class Surface {
 
   afterLighting(r, color) {
     const gl = r.gl, S = this.stage, sea = S.sea;
+    const wakeTex = this._wakeTex();                 // (before any other texture is bound: its upload binds one)
     const n = Math.min(NW, sea.waves.length);
     for (let i = 0; i < n; i++) { const w = sea.waves[i]; this.waveA.set([w.kx, w.kz, w.w, w.a], i * 4); this.waveP[i * 4] = w.ph; }
     this.target.bind();
@@ -180,7 +260,8 @@ export class Surface {
       .set('uDepth', r.depth).set('uInvProj', r.invProj).set('uEnv', r.env.spec).set('uSunDir', r.sunDir)
       .set('uSunIrr', [r.sunColor.x * sunI, r.sunColor.y * sunI, r.sunColor.z * sunI])
       .set('uBoatInv', S.boatInv).set('uHull', S.U.hull).set('uCT', S.U.ct).set('uObs', S.U.obs)
-      .set('uKd', WATER.Kd).set('uC', WATER.c).set('uWaterRad', S.U.waterRad);
+      .set('uKd', WATER.Kd).set('uC', WATER.c).set('uWaterRad', S.U.waterRad)
+      .set('uWake', wakeTex).set('uWakeR', this.wakeR).set('uWhite', this._white(sea));
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, this.count);
     gl.bindVertexArray(null);
