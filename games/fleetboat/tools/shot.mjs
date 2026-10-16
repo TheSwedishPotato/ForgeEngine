@@ -35,6 +35,6 @@ if (process.env.STATS) console.log(await page.evaluate(() => {
   const sh = Array.from(r.env.sh.slice(0, 9)).map((v) => +v.toFixed(3));
   return JSON.stringify({ stats: r.stats, terrain: st.terrainGL.stats, sun: { dir: r.sunDir.toArray().map((v) => +v.toFixed(3)), color: r.sunColor.toArray().map((v) => +v.toFixed(3)), I: +r.sunIntensity.toFixed(2), el: +st.sunPos.elevation.toFixed(2), az: +st.sunPos.azimuth.toFixed(1) }, shL00_L1: sh, exposure_avgLum: exposure, overcast: st.sky.overcast });
 }));
-await page.screenshot({ path: out, timeout: 300000 });
+await page.screenshot({ path: out, timeout: 300000, ...(out.endsWith('.jpg') ? { type: 'jpeg', quality: 86 } : {}) });
 await browser.close();
 console.log('wrote', out);

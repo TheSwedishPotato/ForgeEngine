@@ -97,11 +97,13 @@ export function* dive(C, { depth = 60 * FT } = {}) {
   C.say('hydraulic', 'Main vents shut.');
   C.setCondition('submerged');
   C.order('trim');
+  if (depth <= 62 * FT) C.order('upScope');
 }
 
 /** Surfacing (18C1): three blasts, blow main ballast, crack the hatch, the low-pressure blower. */
 export function* surface(C) {
   const P = C.plant, ctl = P.ctl, g = P.g;
+  C.order('downScope');
   C.setCondition('diving', { hurry: true });
   C.say('captain', 'Surface! Surface! Surface!');
   yield* press(C, 'quartermaster', 'ct.divingAlarm', 3, 0.5);
@@ -147,9 +149,25 @@ export function* surface(C) {
   C.setCondition('surfaced');
 }
 
+/** "Up periscope": the captain at No. 1, its hoist switch on; a look round. */
+export function* upScope(C) {
+  C.say('captain', 'Up periscope.');
+  yield C.done(C.do('captain', 'ct.scope1', 1));
+  yield () => C.plant.scopes[0] > 0.98;
+  yield 20;
+  C.say('captain', 'Nothing in sight. A sea from the north-east, the sun high.');
+}
+/** "Down periscope." */
+export function* downScope(C) {
+  if (C.plant.scopes.every((x) => x < 0.02) && (+C.plant.ctl['ct.scope1'] || 0) < 0.5 && (+C.plant.ctl['ct.scope2'] || 0) < 0.5) return;
+  C.say('captain', 'Down periscope.');
+  yield C.done(C.do('captain', 'ct.scope1', 0), C.do('captain', 'ct.scope2', 0));
+}
+
 /** Changes depth: the diving officer's order to the planesmen. */
 export function* changeDepth(C, { depth }) {
   const g = C.plant.g;
+  if (depth > 63 * FT) C.order('downScope');
   C.orders.depth = depth;
   C.orders.planes = 'hold';
   C.say('captain', `Make your depth ${ft(depth)} feet.`);

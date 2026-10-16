@@ -49,7 +49,9 @@ export class Player {
       if (e.target?.tagName === 'INPUT') return;
       this.keys.add(e.code);
       if (e.code === 'KeyV') this.mode = this.mode === 'orbit' ? 'walk' : 'orbit';
-      if (e.code === 'KeyE' && this.mode === 'walk' && !this.climb) this.ladder();
+      if (e.code === 'KeyE' && this.mode === 'scope') { this.leaveScope(); return; }
+      if (e.code === 'KeyE' && this.mode === 'walk' && !this.climb) { if (!this.takeScope()) this.ladder(); }
+      if (e.code === 'KeyF' && this.mode === 'scope') this.scope.power = this.scope.power > 2 ? 1.5 : 6;
     });
     canvas.addEventListener('pointerdown', (e) => {
       this.dragging = true; this._px = e.clientX; this._py = e.clientY;
@@ -66,7 +68,22 @@ export class Player {
     document.addEventListener('mousemove', (e) => { if (document.pointerLockElement === canvas) this.look(e.movementX, e.movementY); });
   }
 
+  /** At a periscope in the conning tower: take it (it must be up). */
+  takeScope() {
+    const p = this.p;
+    if (p.level !== 'ct') return false;
+    const i = [10.85, 9.75].findIndex((x) => Math.abs(p.x - x) < 0.7 && Math.abs(p.z - 0.35) < 0.8);
+    if (i < 0) return false;
+    if (this.game.sim.plant.scopes[i] < 0.95) { this.game.sim.say(`No. ${i + 1} periscope is down: its hoist switch is on the overhead.`); return true; }
+    this.mode = 'scope';
+    this.scope = { i, yaw: this.yaw, pitch: 0, power: 1.5 };
+    this.game.ui?.scope?.(true);
+    return true;
+  }
+  leaveScope() { this.mode = 'walk'; this.game.ui?.scope?.(false); this.game.stage.camera.fov = 66; this.game.stage.camera.updateProjectionMatrix(); }
+
   look(dx, dy) {
+    if (this.mode === 'scope') { const k = 0.0016 / this.scope.power; this.scope.yaw += dx * k * 3; this.scope.pitch = Math.max(-0.17, Math.min(0.17, this.scope.pitch - dy * k * 3)); return; }
     if (this.mode === 'orbit') { this.orbit.yaw -= dx * 0.004; this.orbit.pitch = Math.max(-1.2, Math.min(1.4, this.orbit.pitch + dy * 0.004)); return; }
     this.yaw += dx * this.sens;
     this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch - dy * this.sens));
@@ -119,7 +136,7 @@ export class Player {
 
   /** How much of the view is the sea (for the eye's adaptation): outside or in the observation deck, all of it. */
   lookingAtSea() {
-    if (this.mode === 'orbit' || this.p.level === 'obs' || this.p.level === 'bridge') return 1;
+    if (this.mode === 'orbit' || this.mode === 'scope' || this.p.level === 'obs' || this.p.level === 'bridge') return 1;
     return 0;
   }
 
@@ -127,6 +144,7 @@ export class Player {
   where() {
     const p = this.p;
     if (this.mode === 'orbit') return 'Outside';
+    if (this.mode === 'scope') return 'At the periscope';
     if (p.level === 'obs') return 'Observation deck';
     if (p.level === 'ct') return 'Conning tower';
     if (p.level === 'bridge') return 'Bridge';
@@ -188,6 +206,7 @@ export class Player {
   update(dt, camera) {
     const g = this.game, boat = g.boatGL;
     if (this.mode === 'orbit') return this._orbit(dt, camera);
+    if (this.mode === 'scope') return this._scope(dt, camera);
     const p = this.p;
     if (this.climb) {
       const c = this.climb;
@@ -238,6 +257,22 @@ export class Player {
     d.applyQuaternion(_q);
     camera.up.set(0, 1, 0).applyQuaternion(_q);
     camera.lookAt(_v.copy(camera.position).add(d));
+  }
+
+  /** Looking through a periscope: the eye at its head, its power 1.5 (32 degrees) or 6 (8 degrees). */
+  _scope(dt, camera) {
+    const P = this.game.sim.plant, S = this.scope;
+    if (P.scopes[S.i] < 0.9) { this.leaveScope(); return; }
+    const x = [10.85, 9.75][S.i];
+    const y = HULL.periscopeDownTop - 0.06 + P.scopes[S.i] * (HULL.periscopeUpTop - HULL.periscopeDownTop);
+    const fov = S.power > 2 ? 8 : 32;
+    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    const save = { x: this.p.x, z: this.p.z, yaw: this.yaw, pitch: this.pitch };
+    this.p.x = x; this.p.z = 0; this.yaw = S.yaw; this.pitch = S.pitch;
+    this._camera(camera, y, 0);
+    Object.assign(this.p, { x: save.x, z: save.z }); this.yaw = save.yaw; this.pitch = save.pitch;
+    const h = (P.g.heading + (S.yaw * 180) / Math.PI + 720) % 360;
+    this.hint = `No. ${S.i + 1} periscope · bearing ${String(Math.round(h)).padStart(3, '0')} · power ${S.power} (F) · E to step back`;
   }
 
   _orbit(dt, camera) {

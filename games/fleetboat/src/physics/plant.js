@@ -88,6 +88,7 @@ export class Plant {
     this.rig = 0;                         // bow planes rigged out 0..1
     this.planes = { bow: 0, stern: 0, rudder: 0 };   // degrees, as the gear has them
     this.fbtAsBallast = true;             // fuel ballast tanks 3 and 5 rigged as main ballast (their flood valves open)
+    this.scopes = [0, 0];                 // the periscopes raised (0 down .. 1 up): their hoists take about 14 s
     this.o2Flasks = 40 * 1000 / 32 * 30;  // mol of oxygen in the flasks (estimate: 30 days for the crew)
     this.people = [];                     // { kg, x, y, z, work } from the crew model
     this.time = 0;
@@ -317,7 +318,11 @@ export class Plant {
     // ---- lighting and the observation deck
     if (v('obs.floodlights') > 0.5 && power) auxW += LOADS.obsFlood;
     if (v('obs.lamps') > 0.5 && power) auxW += LOADS.obsLamps;
-    if ((v('ct.scope1') > 0.5 || v('ct.scope2') > 0.5) && power) auxW += LOADS.scope;
+    // the periscope hoists (electric, from the conning tower): up while the switch is on, down when off
+    for (let i = 0; i < 2; i++) {
+      const want = v(`ct.scope${i + 1}`) > 0.5 ? 1 : 0, cur = this.scopes[i];
+      if (want !== cur && power) { this.scopes[i] = want > cur ? Math.min(1, cur + dt / 14) : Math.max(0, cur - dt / 14); auxW += LOADS.scope; }
+    }
     this.elec.auxLoad = auxW;
 
     // ---- people and their weight

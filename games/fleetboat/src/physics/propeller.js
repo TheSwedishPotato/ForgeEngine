@@ -59,7 +59,7 @@ export function propForces(n, Va, rho) {
 /**
  * C_T*(beta), C_Q*(beta) relative to their values at beta = 0 (the bollard pull ahead, from the
  * open-water curve): a table after the shape of the Wageningen four-quadrant data (B4-70,
- * Roddy, Hess & Faller 1980). Astern bollard pull about 70 % of ahead; crash-back (turning
+ * Roddy, Hess & Faller 2006). Astern bollard pull about 70 % of ahead; crash-back (turning
  * astern while still going ahead) the strongest; a stopped screw a little drag.
  */
 const BETA = [-180, -135, -110, -90, -45, 0, 30, 90, 135, 180];

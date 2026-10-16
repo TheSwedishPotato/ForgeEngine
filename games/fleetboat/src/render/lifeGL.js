@@ -140,7 +140,9 @@ export class LifeGL {
         const lx = OBS_DECK.x + Math.sin(a * 0.7) * 6, ly = OBS_DECK.axisY - 0.5 + Math.sin(a * 0.5) * 1.5, lz = side * s.radius * (0.85 + 0.15 * Math.sin(a * 1.3));
         const wx = B[0] * lx + B[4] * ly + B[8] * lz + B[12] + S.origin.x, wy = B[1] * lx + B[5] * ly + B[9] * lz + B[13], wz = B[2] * lx + B[6] * ly + B[10] * lz + B[14] + S.origin.z;
         const k = Math.hypot(wx - s.c[0], wz - s.c[2]) > 60 ? 1 : Math.min(1, dt * 0.8);   // (joining her: straight there)
-        s.c[0] += (wx - s.c[0]) * k; s.c[1] += (Math.min(-1.2, wy) - s.c[1]) * k; s.c[2] += (wz - s.c[2]) * k;
+        // (with her on the surface they keep down out of the light, five metres and more)
+        const wy2 = wy > -2 ? -5 - Math.sin(a) * 1.5 : wy;
+        s.c[0] += (wx - s.c[0]) * k; s.c[1] += (wy2 - s.c[1]) * k; s.c[2] += (wz - s.c[2]) * k;
         const hdg = d.attitude.heading;
         s.dir = [Math.sin(hdg), 0, -Math.cos(hdg)];
         this._place(s, Math.atan2(-s.dir[2], s.dir[0]), S);

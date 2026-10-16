@@ -82,6 +82,8 @@ void main() {
   vec3 N = normalize(vNormal + vec3(rg.x, 0.0, rg.y) * rk * 0.35);
   bool above = uCameraPos.y > vWorld.y;
   if (above) {
+    // a facet turned away from the eye is hidden behind its crest at grazing angles: shade the ones you see
+    N = normalize(N + V * max(0.0, 0.1 - dot(N, V)));
     float cosI = max(dot(N, V), 0.0);
     float F = 0.02 + 0.98 * pow5(1.0 - cosI);
     vec3 R = reflect(-V, N);

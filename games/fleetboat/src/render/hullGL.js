@@ -106,9 +106,24 @@ const ND = 8;       // across the deck
  * across the deck, down the port casing, down the port envelope to the keel. Fixed point counts
  * so the sections loft. Feet, [z, y].
  */
+/**
+ * The stem's profile (feet above the keel at x): the forefoot curving up off the keel into a stem
+ * raked about 20 degrees, through the waterline at the forward perpendicular and up to the deck at
+ * the tip. (The hydrostatic envelope, fitted to the displacement curves, stops square; the outside
+ * is drawn to the stem.)
+ */
+const STEM = { x0: 133, x1: 152.25, p: 2.2 };
+function stemY(xf) {
+  if (xf <= STEM.x0) return -Infinity;
+  const E = ENVELOPE, y0 = E.KF * Math.pow((STEM.x0 - E.xk1) / (E.xFP - E.xk1), E.kF);
+  const u = Math.min(1, (xf - STEM.x0) / (STEM.x1 - STEM.x0));
+  return y0 + (deckHeight(STEM.x1) - 0.25 - y0) * Math.pow(u, STEM.p);
+}
+
 function outerSection(xf) {
   const deck = deckHeight(xf);
   const env = sectionAt(xf, 64);
+  const ys = stemY(xf);
   let w = casingHalf(xf);
   let stbd = [];
   if (env) {
@@ -122,12 +137,14 @@ function outerSection(xf) {
     const a = side[i - 1], b = side[i];
     const t = (a[0] - w) / Math.max(1e-6, a[0] - b[0]);
     const junction = [w, a[1] + (b[1] - a[1]) * t];
-    stbd = [...side.slice(0, i), junction];
+    stbd = [...side.slice(0, i), junction].map(([z, y]) => [z, Math.max(y, ys)]);
   } else {
     // the stem and the stern beyond the envelope: a narrow wedge down to the forefoot or the skeg
-    const yk = xf > 0 ? 2 + (xf - ENVELOPE.xFP) * 1.4 : Math.max(5, deck - 9);
+    let yk = xf > 0 ? Math.max(2 + (xf - ENVELOPE.xFP) * 1.4, ys) : Math.max(5, deck - 9);
+    const yt = Math.min(deck - 0.05, Math.max(deck - 1.2, yk + 0.1));
+    yk = Math.min(yk, yt - 0.05);
     w = Math.max(0.15, w);
-    stbd = [[0.05, yk], [w * 0.5, yk + (deck - yk) * 0.4], [w, deck - 1.2]];
+    stbd = [[0.05, yk], [w * 0.5, yk + (yt - yk) * 0.4], [w, yt]];
   }
   // resample the envelope part to NE points by arc length
   const env2 = resample(stbd, NE);
@@ -251,13 +268,12 @@ function fairwater(b) {
   b.cylinder('rail', V(hx, HULL.bridgeDeck + 0.02, 0), V(hx, HULL.bridgeDeck + 0.18, 0), 0.4, 0.4, { segs: 20 });
   // the periscope shears: two columns and the tripod, the periscope tubes; the SJ radar mast
   const s1 = frameX(52.2), s2 = frameX(53.8);
-  const top = HULL.bridgeDeck + 7.6;
+  const top = HULL.periscopeSupports;                 // 47'-3 1/2" above the keel (General Information Book)
   b.cylinder('rail', V(s1 + 0.6, HULL.bridgeDeck, 0), V(s1, top, 0), 0.22, 0.17, { segs: 12 });
   b.cylinder('rail', V(s2 - 0.9, HULL.bridgeDeck, 0), V(s2, top - 0.5, 0), 0.2, 0.16, { segs: 12 });
   b.cylinder('rail', V(s1, top - 0.3, 0), V(s2, top - 0.8, 0), 0.08, 0.08, { segs: 8 });
   b.box('rail', [s2 - 0.5, top - 0.9, -0.5], [s1 + 0.5, top - 0.75, 0.5]);
-  b.cylinder('steel', V(s1 - 0.25, HULL.bridgeDeck + 0.5, 0.0), V(s1 - 0.25, top + 1.6, 0.0), 0.09, 0.09, { segs: 10 });
-  b.cylinder('steel', V(s2 + 0.25, HULL.bridgeDeck + 0.5, 0.0), V(s2 + 0.25, top + 0.9, 0.0), 0.12, 0.12, { segs: 10 });
+  // (the periscopes themselves move: HullGL._moving)
   const sj = frameX(55.2);
   b.cylinder('rail', V(sj, HULL.bridgeDeck, 0.3), V(sj, top - 1.2, 0.3), 0.07, 0.06, { segs: 8 });
   b.box('rail', [sj - 0.05, top - 1.6, -0.25], [sj + 0.05, top - 1.1, 0.85]);
@@ -381,7 +397,7 @@ export class HullGL {
   /** The parts that move: bow planes, stern planes, rudder, screws. */
   _moving() {
     const m = this.m;
-    const mk = (fn, part) => { const b = new Builder(); fn(b); const g = b.build({ [part]: m[part] ?? m.hull }); g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return g; };
+    const mk = (fn, part) => { const b = new Builder(); fn(b); const g = b.build({ [part]: m[part] ?? m.hull, glassDark: m.glassDark }); g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return g; };
     // bow planes: a pivot at each side; rigging folds them up about a fore-and-aft hinge, the tilt turns them about the stock
     this.bowPlanes = [];
     for (const s of [1, -1]) {
@@ -413,6 +429,20 @@ export class HullGL {
     rb.position.x = -0.85;
     this.rudder.add(rb);
     this.group.add(this.rudder);
+    // the periscopes: No. 1 (the attack periscope, its slim head) and No. 2 (the search periscope),
+    // tubes sliding up through the shears on their hoists: 47'-2 1/2" down, 66'-8" up (top of head)
+    this.scopes = [];
+    for (const [x, r, head] of [[10.85, 0.09, 0.045], [9.75, 0.12, 0.07]]) {
+      const g = mk((b) => {
+        const yTop = HULL.periscopeDownTop;
+        b.cylinder('steel', V(x, yTop - 9.0, 0), V(x, yTop - 0.45, 0), r, r, { segs: 12 });
+        b.cylinder('steel', V(x, yTop - 0.45, 0), V(x, yTop - 0.12, 0), r, head, { segs: 12 });
+        b.cylinder('steel', V(x, yTop - 0.12, 0), V(x, yTop, 0), head, head, { segs: 10 });
+        b.box('glassDark', [x + head * 0.6, yTop - 0.1, -head * 0.6], [x + head * 1.05, yTop - 0.03, head * 0.6]);
+      }, 'steel');
+      this.group.add(g);
+      this.scopes.push(g);
+    }
     // the screws
     this.screws = [];
     for (const s of [-1, 1]) {
@@ -434,6 +464,8 @@ export class HullGL {
     }
     for (const p of this.sternPlanes) p.tilt.rotation.z = (P.stern * Math.PI) / 180;
     this.rudder.rotation.y = -(P.rudder * Math.PI) / 180;
+    const travel = HULL.periscopeUpTop - HULL.periscopeDownTop;
+    this.scopes.forEach((g, i) => { g.position.y = plant.scopes[i] * travel; });
     const revs = plant.shaft;
     this.screws[0].g.rotation.x = -revs.port.revs * Math.PI * 2;
     this.screws[1].g.rotation.x = revs.stbd.revs * Math.PI * 2;

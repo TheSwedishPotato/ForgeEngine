@@ -38,6 +38,7 @@ async function go() {
   ui.querySelector('.loading')?.remove();
   const hud = new HUD(ui, game);
   const orders = new Orders(ui, game);
+  if (params.get('scope')) { const P = game.sim.plant; P.set('ct.scope1', 1); P.scopes[0] = 1; Object.assign(game.player.p, { level: 'ct', x: 10.85, z: 0.35 }); game.player.takeScope(); if (params.get('power')) game.player.scope.power = Number(params.get('power')); }
   if (!manual) { const x = document.createElement('div'); x.className = 'crosshair'; ui.append(x); }
   void orders;
   if (manual && params.get('hud') !== '1') hud.toggle();

@@ -16,3 +16,15 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-f
 .orders button:hover { background: #33393f; border-color: #59616a; }
 .orders .small { color: #9a958a; font-size: 12px; margin: 10px 0 0; }
 .crosshair { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); box-shadow: 0 0 2px #000; }
+
+.help { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto; background: rgba(14, 16, 18, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 14px 18px; font-size: 13.5px; pointer-events: auto; }
+.help h3 { margin: 0 0 8px; font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 20px; color: #f1ead6; }
+.help td { padding: 3px 12px 3px 0; vertical-align: top; }
+.help td:first-child { color: #f3dca0; white-space: nowrap; }
+.help p { color: #c9c3b2; margin: 10px 0 0; line-height: 1.45; }
+
+.eyepiece { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0, transparent 38vmin, rgba(0,0,0,0.6) 39vmin, #000 41vmin); pointer-events: none; }
+.eyepiece .wire { position: absolute; background: rgba(10, 10, 10, 0.75); }
+.eyepiece .wire.h { left: calc(50% - 38vmin); width: 76vmin; top: 50%; height: 1px; }
+.eyepiece .wire.v { top: calc(50% - 38vmin); height: 76vmin; left: 50%; width: 1px; }
+.eyepiece .tick { position: absolute; top: calc(50% - 1.2vmin); width: 1px; height: 2.4vmin; background: rgba(10, 10, 10, 0.75); }
