@@ -12,6 +12,7 @@
  * Vehicle coordinates: x forward, y up from the rail head, z right. The car is 25.3 m over
  * the buffers; its truck centres are 9.0 m either side of the middle.
  */
+import { tyre, BACK, WIDTH } from './wheel.js';
 import { Group, Vector3, Matrix4, MeshStandardMaterial, MeshPhysicalMaterial, Color, DoubleSide } from 'three';
 import { Builder } from './geom.js';
 import { rivetNormalMap, letteringTexture, mahoganyTexture, carpetTexture } from './carArt.js';
@@ -397,11 +398,11 @@ let _wheelset = null;
 function wheelset(M) {
   if (!_wheelset) {
     const b = new Builder(), R = BODY.wheelR;
-    for (const z of [-0.7175, 0.7175]) {
-      const s = Math.sign(z);
-      b.cylinder('wheel', V(0, 0, z - s * 0.07), V(0, 0, z + s * 0.065), R, R, { segs: 20 });
-      b.cylinder('tread', V(0, 0, z - s * 0.072), V(0, 0, z - s * 0.04), R + 0.025, R + 0.025, { segs: 20 });    // flange
-      b.cylinder('steel', V(0, 0, z + s * 0.065), V(0, 0, z + s * 0.09), 0.09, 0.09, { segs: 10 });
+    for (const s of [-1, 1]) {
+      // a steel-tyred disc wheel: the tyre (flange inboard, coned tread), the web, the hub
+      tyre(b, 'tread', R, s, { segs: 28 });
+      b.cylinder('wheel', V(0, 0, s * (BACK + 0.04)), V(0, 0, s * (BACK + 0.09)), R - 0.055, R - 0.055, { segs: 24 });
+      b.cylinder('steel', V(0, 0, s * (BACK + WIDTH)), V(0, 0, s * (BACK + WIDTH + 0.03)), 0.09, 0.09, { segs: 10 });
     }
     b.cylinder('under', V(0, 0, -0.65), V(0, 0, 0.65), 0.075, 0.075, { segs: 10 });
     _wheelset = b.build(M);

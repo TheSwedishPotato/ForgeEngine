@@ -160,6 +160,29 @@ Treno Gottardo runs live under the same signals, so it waits behind the special 
 The signals' exact positions are estimates by those rules, as the line's signalling plans were
 not available.
 
+**Wheels and rails** (`src/render/wheel.js`, `src/render/track.js`). The wheels have real
+tyres:
+
+- back-to-back 1360 mm;
+- a 32 mm flange inside the rail head, 28 mm deep;
+- a 135 mm tread coned 1 in 40, whose rolling circle sits on the rail's centre line.
+
+The rails are UIC 60, leaning in 1:40 on concrete sleepers in ballast. The coned treads steer
+each wheelset: on the straight it hunts gently from side to side (Klingel's sinusoid, about 23 m
+long). In the line's tight curves it runs out until the outer flange meets the outer rail. The
+engine's pony truck swings on its pivot to follow the curve while the coupled wheels stay in the
+frame.
+
+Where tracks part, there are turnouts:
+
+- switch blades, planed to a point, lie against the stock rails; the set route's blades are
+  closed and the others stand open by the 110 mm throw;
+- a point machine sits beside the toe;
+- the inner rails cross at the frog, with check rails opposite.
+
+The steel-on-steel contact itself is in the physics: low rolling resistance, and the adhesion
+creep curve at the drivers.
+
 **The ride** (`src/physics/sway.js`). Track irregularities come from a PSD-shaped spectrum
 (alignment, level, cross-level) passed through each car's body modes (lateral and roll ~0.8 Hz,
 bounce ~1.2 Hz, pitch ~1.5 Hz). The player's head lags those accelerations.

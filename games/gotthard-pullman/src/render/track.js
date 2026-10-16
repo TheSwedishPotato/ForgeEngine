@@ -22,6 +22,7 @@ const PIECE = 100;
 const RAIL_PITCH = 1.507;            // rail centre to rail centre (gauge + head width)
 const SLEEPER = { len: 2.6, w: 0.28, h: 0.21, gap: 0.6 };
 const FORMATION = 0.72;
+const BLADE = 16, THROW = 0.11;   // switch blade length and the open blade's throw at its tip (m)
 
 // UIC 60 cross-section (simplified, metres; x across, y up from the rail foot), counter-clockwise
 const RAIL_PROFILE = [
@@ -69,6 +70,25 @@ class Polyline {
   headingAt(s) { const [i] = this._seg(s), P = this.pts, a = i * 3, b = a + 3; return Math.atan2(P[b] - P[a], P[b + 1] - P[a + 1]); }
   gradeAt(s) { const [i] = this._seg(s), P = this.pts, a = i * 3, b = a + 3; return (P[b + 2] - P[a + 2]) / Math.max(1e-3, Math.hypot(P[b] - P[a], P[b + 1] - P[a + 1])); }
   curvatureAt() { return 0; }
+  cantAt() { return 0; }
+  /** Nearest point (plan): { s, d }. */
+  locate(x, y) {
+    const P = this.pts;
+    let best = { s: 0, d: Infinity };
+    for (let i = 0; i + 1 < this.cum.length; i++) {
+      const a = i * 3, b = a + 3, dx = P[b] - P[a], dy = P[b + 1] - P[a + 1], L2 = dx * dx + dy * dy || 1e-9;
+      const u = Math.max(0, Math.min(1, ((x - P[a]) * dx + (y - P[a + 1]) * dy) / L2));
+      const d = Math.hypot(P[a] + dx * u - x, P[a + 1] + dy * u - y);
+      if (d < best.d) best = { s: this.cum[i] + u * (this.cum[i + 1] - this.cum[i]), d };
+    }
+    return best;
+  }
+  /** Within m metres of the plan's bounding box? */
+  near(x, y, m) {
+    if (!this.box) { const P = this.pts; this.box = [Infinity, Infinity, -Infinity, -Infinity]; for (let i = 0; i < P.length; i += 3) { this.box[0] = Math.min(this.box[0], P[i]); this.box[1] = Math.min(this.box[1], P[i + 1]); this.box[2] = Math.max(this.box[2], P[i]); this.box[3] = Math.max(this.box[3], P[i + 1]); } }
+    const b = this.box;
+    return x > b[0] - m && x < b[2] + m && y > b[1] - m && y < b[3] + m;
+  }
 }
 
 export class TrackGL {
@@ -104,8 +124,9 @@ export class TrackGL {
       const pl = new Polyline(y.p);
       for (const sp of spans(pl, [R.run, R.right, R.left], 5)) lines.push({ id: `yard${i}-${sp.s0}`, line: pl, s0: sp.s0, s1: sp.s1, main: false, side: 0 });
     });
-    for (const L of lines) { L.s0 ??= 0; L.s1 ??= L.line.length; }
+    for (const L of lines) { L.s0 ??= 0; L.s1 ??= L.line.length; L.b0 = L.s0; L.b1 = L.s1; }
     this.lines = lines;
+    this._turnouts();
     // the overhead line's supports on the two main lines: spans shorten in curves so the chord
     // between supports stays within the pantograph (sagitta L^2 / 8R under ~0.4 m)
     for (const L of lines) {
@@ -123,6 +144,99 @@ export class TrackGL {
       L.masts = masts;
     }
   }
+
+  /**
+   * The turnouts: wherever a track leaves another (a loop, a siding, a crossover, a yard
+   * track), the two meet at the switch toe. Each track's rail on the side toward the other
+   * becomes a switch blade there, planed down to a point and lying against the other track's
+   * stock rail; the blades of the route that is set lie closed against their stock rails, the
+   * others stand open by the throw. The inner rails of the two tracks cross further on at the
+   * frog, where check rails on the outer rails hold the wheelsets' flanges to their way. A
+   * point machine at the toe works the blades. (Standard 1:9 to 1:12 turnout proportions:
+   * blades 16 m, throw 110 mm, flangeway 45 mm.)
+   */
+  _turnouts() {
+    const R = this.route, mains = [R.run, R.right, R.left];
+    this.blades = new Map();                   // line -> [{ toe, dir, side, closed, other }]
+    this.turnouts = [];
+    const add = (line, b) => { if (!this.blades.has(line)) this.blades.set(line, []); this.blades.get(line).push(b); };
+    const nearest = (line, x, y, z) => {
+      let best = null;
+      const cands = [...mains, ...this.lines.filter((M) => M.line !== line && M.line.near?.(x, y, 4)).map((M) => M.line)];
+      for (const O of new Set(cands)) {
+        if (O === line) continue;
+        const r = O.locate(x, y);
+        if (r.d > 4) continue;
+        const dz = Math.abs(O.pos(r.s).z - z);
+        if (dz > 1.5) continue;                 // (a track crossing above or below, not a junction)
+        if (!this.lines.some((M) => M.line === O && r.s >= M.s0 - 2 && r.s <= M.s1 + 2)) continue;   // (drawn there: the left main is not where the run lies on it)
+        if (!best || r.d < best.d) best = { O, ...r };
+      }
+      return best;
+    };
+    const done = new Set();
+    for (const L of this.lines) {
+      if (L.line === R.run || L.line === R.right) continue;           // (the main lines run through)
+      // (both ends: a span cut short by the other track, or a yard track whose end lies on another)
+      const ends = [{ e: L.s0, out: -1 }, { e: L.s1, out: +1 }];
+      for (const { e, out } of ends) {
+        const p0 = L.line.pos(e), n0 = nearest(L.line, p0.x, p0.y, p0.z);
+        if (!n0) continue;
+        // walk out of the span toward the other track: the toe is where the two centre lines meet
+        let toe = null, dmin = Infinity;
+        for (let x = 0; x <= 90; x += 0.5) {
+          const s = e + out * x;
+          if (s < 0 || s > L.line.length) break;
+          const p = L.line.pos(s), d = n0.O.locate(p.x, p.y, n0.s, 150).d;
+          if (d < dmin) { dmin = d; toe = s; }
+          if (d < 0.02) break;
+        }
+        if (dmin > 0.3) continue;
+        const key = `${Math.round(L.line.pos(toe).x)},${Math.round(L.line.pos(toe).y)}`;
+        if (done.has(key)) continue;
+        done.add(key);
+        const O = n0.O, dirL = -out;
+        const pt = L.line.pos(toe), sO = O.locate(pt.x, pt.y, n0.s, 150).s;
+        const pm = L.line.pos(toe + dirL * 8), sOm = O.locate(pm.x, pm.y, sO, 60).s, qm = O.pos(sOm);
+        // (a way that merely continues another end to end is no turnout: the toe must lie along
+        // the other track, and the two run side by side, close, just beyond it)
+        if (sO < 1 || sO > O.length - 1 || Math.hypot(qm.x - pm.x, qm.y - pm.y) > 1.2) continue;
+        const hL = L.line.headingAt(toe + dirL * 8), hO = O.headingAt(sOm);
+        const sideL = Math.sign((qm.x - pm.x) * Math.cos(hL) - (qm.y - pm.y) * Math.sin(hL)) || 1;
+        const sideO = Math.sign((pm.x - qm.x) * Math.cos(hO) - (pm.y - qm.y) * Math.sin(hO)) || 1;
+        const dirO = Math.sign(sOm - sO) || 1;
+        // the route set: the special's way where it takes one, otherwise the through (main) track
+        const lClosed = L.line === R.run || (O !== R.run && !mains.includes(O) && mains.includes(L.line));
+        if (out < 0) L.s0 = toe; else L.s1 = toe;                    // its rails run on to the toe
+        const t = { toe, line: L.line, other: O, sO, dirL, dirO, sideL, sideO };
+        add(L.line, { toe, dir: dirL, side: sideL, closed: lClosed, other: O, hint: sO, machine: true, stockSide: -sideL });
+        add(O, { toe: sO, dir: dirO, side: sideO, closed: !lClosed, other: L.line, hint: toe, stockSide: -sideO });
+        // the frog: where the centre lines are a rail pitch apart; check rails opposite it
+        for (let x = 4; x < 80; x += 0.5) {
+          const s = toe + dirL * x, p = L.line.pos(s), r = O.locate(p.x, p.y, sO, 120);
+          if (r.d >= RAIL_PITCH) { t.frogL = s; t.frogO = r.s; break; }
+        }
+        if (t.frogL != null) {
+          add(L.line, { check: t.frogL, side: -sideL });
+          add(O, { check: t.frogO, side: -sideO });
+        }
+        this.turnouts.push(t);
+      }
+    }
+  }
+
+  /** The blade, check rail or nothing at chainage s of a line, on one side. */
+  _bladeAt(line, s, side) {
+    for (const b of this.blades.get(line) ?? []) {
+      if (b.side !== side || b.check != null) continue;
+      const u = (s - b.toe) * b.dir;
+      if (u >= -0.01 && u <= BLADE) return { b, t: Math.max(0, u) / BLADE };
+    }
+    return null;
+  }
+
+  /** The other track's centre line from this line's point s (m, plan). */
+  _apart(line, s, b) { const p = line.pos(s); return b.other.locate(p.x, p.y, b.hint, 60).d; }
 
   /** The other main track's tunnels: where its nearest point of the running path is in one (both tracks share the bores). */
   _rightInTunnel(s) {
@@ -145,6 +259,7 @@ export class TrackGL {
       mast: new MeshStandardMaterial({ color: new Color(0.36, 0.37, 0.38), roughness: 0.6, metalness: 0.6 }),
       wire: new MeshStandardMaterial({ color: new Color(0.25, 0.2, 0.15), roughness: 0.5, metalness: 0.8 }),
       insulator: new MeshStandardMaterial({ color: new Color(0.45, 0.25, 0.15), roughness: 0.3 }),
+      machine: new MeshStandardMaterial({ color: new Color(0.33, 0.36, 0.33), roughness: 0.6, metalness: 0.4 }),
     };
     if (p.id === 'fog') this.mats.wire.color.setRGB(0.8, 0.82, 0.85);       // rime on the wires
     for (const pc of this.pieces.values()) this._disposePiece(pc);
@@ -162,15 +277,17 @@ export class TrackGL {
     const group = new Group();
     group.name = `track-${L.id}-${k}`;
     const parts = { group, anchor, ballast: null, rails: null, sleepers: null, mast: null, wires: null };
+    // (ballast and sleepers only where the track runs by itself: at a turnout the other track's carry it)
+    const bs0 = Math.max(s0, L.b0), bs1 = Math.min(s1, L.b1);
     // ---- ballast
-    {
+    if (bs1 - bs0 > 1) {
       const P = [], C = [], idx = [];
       const prof = [[-2.55, -FORMATION - 0.05], [-1.72, -0.215], [-0.75, -0.2], [0.75, -0.2], [1.72, -0.215], [2.55, -FORMATION - 0.05]];
-      const n = Math.max(2, Math.ceil((s1 - s0) / 4) + 1);
+      const n = Math.max(2, Math.ceil((bs1 - bs0) / 4) + 1);
       const f = {}, v = new Vector3();
       const sn = this.snow;
       for (let i = 0; i < n; i++) {
-        const s = s0 + (s1 - s0) * (i / (n - 1));
+        const s = bs0 + (bs1 - bs0) * (i / (n - 1));
         frameAt(line, s, f);
         prof.forEach(([a, u], j) => {
           framePoint(f, a, u, anchor, v);
@@ -197,31 +314,64 @@ export class TrackGL {
       group.add(mesh);
       parts.ballast = mesh;
     }
-    // ---- rails (body and polished head band)
+    // ---- rails (body and polished head band); at a turnout the blades and the check rails
     {
       const body = { P: [], idx: [] }, head = { P: [], idx: [] };
+      const blades = (this.blades.get(line) ?? []).filter((b) => b.check == null), checks = (this.blades.get(line) ?? []).filter((b) => b.check != null);
+      // stations along the piece: every 3 m, every half metre over the blades
+      const ss = [];
       const n = Math.max(2, Math.ceil((s1 - s0) / 3) + 1);
+      for (let i = 0; i < n; i++) ss.push(s0 + (s1 - s0) * (i / (n - 1)));
+      for (const b of blades) {
+        const a = Math.max(s0, Math.min(b.toe, b.toe + b.dir * BLADE)), c = Math.min(s1, Math.max(b.toe, b.toe + b.dir * BLADE));
+        for (let q = a; q <= c; q += 0.5) ss.push(q);
+        if (b.toe > s0 && b.toe < s1) ss.push(b.toe);
+      }
+      ss.sort((x, y) => x - y);
+      const S = ss.filter((q, i) => i === 0 || q - ss[i - 1] > 0.05);
       const f = {}, v = new Vector3();
-      for (const side of [-1, 1]) {
+      const HEAD = [[-0.03, 0.172], [0.03, 0.172], [0.036, 0.165], [-0.036, 0.165]];
+      const sweep = (sList, side, shape, prof, tgt, isHead) => {
         const tilt = side * (1 / 40);                       // rails lean inward 1:40
-        for (const [tgt, prof] of [[body, RAIL_PROFILE], [head, [[-0.03, 0.172], [0.03, 0.172], [0.036, 0.165], [-0.036, 0.165]]]]) {
-          const base = tgt.P.length / 3;
-          for (let i = 0; i < n; i++) {
-            const s = s0 + (s1 - s0) * (i / (n - 1));
-            frameAt(line, s, f);
-            for (const [px, py] of prof) {
-              const a = side * RAIL_PITCH / 2 + px - py * tilt;
-              framePoint(f, a, py - 0.172 + (tgt === head ? 0.0006 : 0), anchor, v);
-              tgt.P.push(v.x, v.y, v.z);
-            }
-          }
-          const m = prof.length;
-          for (let i = 0; i < n - 1; i++) for (let j = 0; j < (tgt === head ? 1 : m); j++) {
-            const j2 = (j + 1) % m;
-            const a = base + i * m + j, b = base + i * m + j2, c = base + (i + 1) * m + j, d = base + (i + 1) * m + j2;
-            tgt.idx.push(a, c, b, b, c, d);
+        const base = tgt.P.length / 3;
+        for (const q of sList) {
+          frameAt(line, q, f);
+          const { a0, kx, lift } = shape(q);
+          for (const [px, py] of prof) {
+            const a = a0 + px * kx - py * tilt;
+            framePoint(f, a, py * lift - 0.172 + (isHead ? 0.0006 : 0), anchor, v);
+            tgt.P.push(v.x, v.y, v.z);
           }
         }
+        const m = prof.length;
+        for (let i = 0; i < sList.length - 1; i++) for (let j = 0; j < (isHead ? 1 : m); j++) {
+          const j2 = (j + 1) % m;
+          const a = base + i * m + j, b = base + i * m + j2, c = base + (i + 1) * m + j, d = base + (i + 1) * m + j2;
+          tgt.idx.push(a, c, b, b, c, d);
+        }
+      };
+      for (const side of [-1, 1]) {
+        const shape = (q) => {
+          const bl = this._bladeAt(line, q, side);
+          if (!bl) return { a0: side * RAIL_PITCH / 2, kx: 1, lift: 1 };
+          // the blade: planed from a point at the toe to the full head, set in from the stock rail
+          // (it lies against it inside), the open one standing off by the throw
+          const { b, t } = bl;
+          const hw = 0.036 * (0.15 + 0.85 * Math.min(1, t * 2.2));
+          const e = this._apart(line, q, b);
+          const shift = Math.max(0, 0.036 + hw + 0.002 - e) + (b.closed ? 0 : THROW * (1 - t));
+          return { a0: side * (RAIL_PITCH / 2 - shift), kx: hw / 0.036, lift: 0.96 + 0.04 * Math.min(1, t * 3) };
+        };
+        sweep(S, side, shape, RAIL_PROFILE, body, false);
+        sweep(S, side, shape, HEAD, head, true);
+      }
+      // check rails opposite the frogs: a guard rail inside the running rail, a flangeway apart
+      for (const c of checks) {
+        const a = Math.max(s0, c.check - 3), z = Math.min(s1, c.check + 3);
+        if (z - a < 0.5) continue;
+        const list = []; for (let q = a; q <= z + 1e-6; q += 0.5) list.push(q);
+        const shape = () => ({ a0: c.side * (RAIL_PITCH / 2 - 0.036 - 0.045 - 0.03), kx: 0.8, lift: 1.0 });
+        sweep(list, c.side, shape, RAIL_PROFILE, body, false);
       }
       const mk = (t, mat) => {
         const g = new BufferGeometry();
@@ -234,16 +384,34 @@ export class TrackGL {
       };
       parts.rails = new Group();
       parts.rails.add(mk(body, this.mats.rail), mk(head, this.mats.head));
+      // the point machines, beside the toes: the drive, its rods across to the blades
+      for (const b of blades) {
+        if (!b.machine || b.toe < s0 || b.toe > s1) continue;
+        const q = b.toe + b.dir * 0.8;
+        frameAt(line, q, f);
+        const yaw = Math.atan2(f.tx, f.ty);
+        const put = (geo, across, up) => {
+          framePoint(f, across, up, anchor, v);
+          const mesh = new Mesh(geo, this.mats.machine);
+          mesh.position.copy(v);
+          mesh.rotation.set(0, -yaw, 0);
+          mesh.castShadow = true;
+          parts.rails.add(mesh);
+        };
+        const out = b.stockSide * 1.55;
+        put((this._machineGeo ??= new BoxGeometry(0.42, 0.32, 1.05)), out, -0.05);
+        put((this._rodGeo ??= new BoxGeometry(3.0, 0.03, 0.06)), b.stockSide * 0.6, -0.12);
+      }
       group.add(parts.rails);
     }
     // ---- sleepers
     {
-      const n = Math.floor((s1 - s0) / SLEEPER.gap);
+      const n = Math.max(0, Math.floor((bs1 - bs0) / SLEEPER.gap));
       const geo = (this._sleeperGeo ??= new BoxGeometry(SLEEPER.len, SLEEPER.h, SLEEPER.w).translate(0, -0.172 - 0.012 - SLEEPER.h / 2, 0));
       const im = new InstancedMesh(geo, this.mats.sleeper, Math.max(1, n));
       const f = {}, m = new Matrix4(), q = new Quaternion(), e = new Euler(), v = new Vector3(), one = new Vector3(1, 1, 1);
       for (let i = 0; i < n; i++) {
-        const s = s0 + (i + 0.5) * SLEEPER.gap;
+        const s = bs0 + (i + 0.5) * SLEEPER.gap;
         frameAt(line, s, f);
         framePoint(f, 0, 0, anchor, v);
         const yaw = Math.atan2(f.tx, f.ty);

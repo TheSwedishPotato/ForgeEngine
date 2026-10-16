@@ -5,7 +5,8 @@
  * driving cab with a raked nose at each end: three white lights leading, red ones trailing.
  * (Proportions from the FLIRT family: 2.88 m wide, about 4.2 m over the roof equipment.)
  */
-import { Group, Euler, MeshStandardMaterial, MeshPhysicalMaterial, Color, Vector3 } from 'three';
+import { Group, Euler, MeshStandardMaterial, MeshPhysicalMaterial, Color, Vector3, Matrix4 } from 'three';
+import { tyre, BACK } from './wheel.js';
 import { Builder } from './geom.js';
 import { poseOnTrack } from './trainGL.js';
 
@@ -90,7 +91,12 @@ function car(k, { nose = false, pantograph = false } = {}) {
   // a Jacobs bogie at the rear (shared with the next car), the gangway bellows
   const bogie = (x) => {
     b.box('bogie', [x - 1.6, 0.25, -1.05], [x + 1.6, 0.75, 1.05]);
-    for (const dx of [-1.35, 1.35]) for (const z of [-0.7175, 0.7175]) b.cylinder('steel', V(x + dx, WR, z - 0.06), V(x + dx, WR, z + 0.06), WR, WR, { segs: 14 });
+    for (const dx of [-1.35, 1.35]) for (const sd of [-1, 1]) {
+      b.transform(new Matrix4().makeTranslation(x + dx, WR, 0));
+      tyre(b, 'steel', WR, sd, { segs: 18 });
+      b.cylinder('bogie', V(0, 0, sd * (BACK + 0.03)), V(0, 0, sd * (BACK + 0.08)), WR - 0.05, WR - 0.05, { segs: 16 });
+      b.transform(null);
+    }
   };
   bogie(-LC / 2);
   if (nose) bogie(LC / 2 - 4.0);

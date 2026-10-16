@@ -13,6 +13,7 @@
  *
  * Coordinates: x forward from the engine's middle, y up from the rail head, z right.
  */
+import { tyre, BACK, WIDTH } from './wheel.js';
 import { Group, Vector3, Matrix4, MeshStandardMaterial, MeshPhysicalMaterial, Color, Mesh, CircleGeometry, BoxGeometry, CylinderGeometry, CanvasTexture } from 'three';
 import { Builder } from './geom.js';
 import { letteringTexture } from './carArt.js';
@@ -56,20 +57,13 @@ export function locoMaterials() {
   return _mats;
 }
 
-/** A spoked driving wheel (red centre, steel tyre, counterweight), axis along z, centred at origin. */
-function wheel(b, R, { spokes = 16, width = 0.13, counterweight = true, centre = 'red' } = {}) {
-  const t = width / 2;
-  b.cylinder('tyre', V(0, 0, -t), V(0, 0, t), R, R, { segs: 32, open: true });
-  b.cylinder('tyre', V(0, 0, -t - 0.035), V(0, 0, -t + 0.005), R + 0.03, R + 0.03, { segs: 32, open: true });   // flange (inside)
-  // the faces of the rim (rings, so the spokes show between)
-  for (const [z, sgn] of [[t, 1], [-t, -1]]) {
-    for (let i = 0; i < 32; i++) {
-      const a0 = (i / 32) * Math.PI * 2, a1 = ((i + 1) / 32) * Math.PI * 2;
-      const P = (r, a) => V(Math.cos(a) * r, Math.sin(a) * r, z);
-      if (sgn > 0) b.quad('tyre', P(R - 0.06, a0), P(R, a0), P(R, a1), P(R - 0.06, a1));
-      else b.quad('tyre', P(R - 0.06, a1), P(R, a1), P(R, a0), P(R - 0.06, a0));
-    }
-  }
+/**
+ * A spoked wheel (red centre, steel tyre with its flange and coned tread, counterweight), axis
+ * along z, the tyre's middle at the origin; side +1 right, -1 left (the flange inboard).
+ */
+function wheel(b, R, { side = 1, spokes = 16, counterweight = true, centre = 'red' } = {}) {
+  const t = WIDTH / 2;
+  tyre(b, 'tyre', R, side, { zBack: -side * t });
   b.cylinder(centre, V(0, 0, -t * 0.9), V(0, 0, t * 0.9), R - 0.06, R - 0.06, { segs: 32, open: true });
   b.cylinder(centre, V(0, 0, -t * 0.6), V(0, 0, t * 0.6), 0.16, 0.16, { segs: 16 });                 // hub
   for (let i = 0; i < spokes; i++) {
@@ -179,10 +173,10 @@ export function buildLocomotive() {
   // coupled wheelsets
   for (const d of LOCO.axles) {
     const ws = new Builder();
-    for (const z of [-0.7175, 0.7175]) { ws.transform(new Matrix4().makeTranslation(0, 0, z + Math.sign(z) * 0.0)); wheel(ws, LOCO.driverR); ws.transform(null); }
+    for (const side of [-1, 1]) { ws.transform(new Matrix4().makeTranslation(0, 0, side * (BACK + WIDTH / 2))); wheel(ws, LOCO.driverR, { side }); ws.transform(null); }
     ws.cylinder('steel', V(0, 0, -0.66), V(0, 0, 0.66), 0.1, 0.1, { segs: 12 });
     // crank pins on the outside faces
-    for (const z of [-0.8, 0.8]) ws.cylinder('steel', V(LOCO.crank, 0, z - Math.sign(z) * 0.05), V(LOCO.crank, 0, z + Math.sign(z) * 0.08), 0.055, 0.055, { segs: 10 });
+    for (const z of [-0.86, 0.86]) ws.cylinder('steel', V(LOCO.crank, 0, z - Math.sign(z) * 0.05), V(LOCO.crank, 0, z + Math.sign(z) * 0.08), 0.055, 0.055, { segs: 10 });
     const g = ws.build(M);
     g.position.set(X(d), LOCO.driverR, 0);
     group.add(g);
@@ -190,7 +184,7 @@ export function buildLocomotive() {
   }
   {
     const ws = new Builder();
-    for (const z of [-0.7175, 0.7175]) { ws.transform(new Matrix4().makeTranslation(0, 0, z)); wheel(ws, LOCO.ponyR, { spokes: 10, counterweight: false }); ws.transform(null); }
+    for (const side of [-1, 1]) { ws.transform(new Matrix4().makeTranslation(0, 0, side * (BACK + WIDTH / 2))); wheel(ws, LOCO.ponyR, { side, spokes: 10, counterweight: false }); ws.transform(null); }
     ws.cylinder('steel', V(0, 0, -0.66), V(0, 0, 0.66), 0.08, 0.08, { segs: 10 });
     const g = ws.build(M);
     g.position.set(X(LOCO.pony), LOCO.ponyR, 0);
@@ -490,7 +484,7 @@ export function buildTender() {
   const parts = { wheels: [] };
   for (const x of [-1.75, 0.05, 1.85]) {
     const ws = new Builder();
-    for (const z of [-0.7175, 0.7175]) { ws.transform(new Matrix4().makeTranslation(0, 0, z)); wheel(ws, R, { spokes: 12, counterweight: false }); ws.transform(null); }
+    for (const side of [-1, 1]) { ws.transform(new Matrix4().makeTranslation(0, 0, side * (BACK + WIDTH / 2))); wheel(ws, R, { side, spokes: 12, counterweight: false }); ws.transform(null); }
     ws.cylinder('steel', V(0, 0, -0.66), V(0, 0, 0.66), 0.08, 0.08, { segs: 10 });
     const g = ws.build(M);
     g.position.set(x, R, 0);

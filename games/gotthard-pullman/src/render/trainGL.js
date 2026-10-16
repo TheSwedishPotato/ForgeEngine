@@ -9,6 +9,9 @@ import { buildLocomotive, animateLocomotive, animateCab, animateGauges, buildTen
 import { RAIL_SPACING } from '../world/route.js';
 import { CarRide } from '../physics/sway.js';
 import { feedSteam } from './steam.js';
+import { wheelsetShift } from './wheel.js';
+
+const _w = new Vector3();
 
 const _e = new Euler(0, 0, 0, 'YZX');
 
@@ -134,7 +137,11 @@ export class TrainGL {
       _e.set((m.roll ?? pose.roll) + (sw?.roll ?? 0), pose.yaw, pose.pitch + (sw?.pitch ?? 0), 'YZX');
       m.group.rotation.copy(_e);
       if (m.kind === 'engine') { animateLocomotive(m.parts, this.train.loco.theta, s); animateCab(m.parts.controls, this.train.loco.c, this.train.brake, ddt); animateGauges(m.parts.controls, this.train.loco, this.train.brake, this.train.speed, ddt); }
-      if (m.kind === 'tender') animateTender(m.parts, s);
+      if (m.kind === 'engine' && m.parts.pony) this._pony(m, s, pose);
+      if (m.kind === 'tender') {
+        animateTender(m.parts, s);
+        for (const [j, w] of m.parts.wheels.entries()) w.position.z = wheelsetShift(LOCO.tenderR, s + w.position.x, m.v.v, line.curvatureAt(s + w.position.x), j * 2.1);
+      }
       // the trucks follow the track under the body: they stay on the rails while the body moves on
       // its springs (so the body's sway, bounce, roll and pitch are taken out of them again)
       for (const [k, tr] of m.trucks.entries()) {
@@ -146,7 +153,11 @@ export class TrainGL {
         tr.rotation.x = -(sw?.roll ?? 0);
         tr.rotation.z = -(sw?.pitch ?? 0);
         tr.rotation.y = -(h - pose.heading);
-        for (const ws of tr.userData.wheelsets) ws.rotation.z = -ts / BODY.wheelR;
+        for (const [j, ws] of tr.userData.wheelsets.entries()) {
+          ws.rotation.z = -ts / BODY.wheelR;
+          // each wheelset steered by its coned treads: hunting on the straight, out to the flange in curves
+          ws.position.z = wheelsetShift(BODY.wheelR, ts + ws.position.x, m.v.v, line.curvatureAt(ts), k * 1.7 + j * 0.9);
+        }
       }
       m.pose = { ...pose };
     }
@@ -163,6 +174,24 @@ export class TrainGL {
       if (here) this.stage.steam.setAir(here.tempC, here.tunnel, vel);
       feedSteam(this.stage.steam, this.train.loco, eng.group, vel, ddt || 1 / 60);
     }
+  }
+
+  /**
+   * The engine's pony truck swings on its pivot to follow the rails: in a curve the track under
+   * it lies off the line of the coupled wheelbase the frame rides on, and the truck goes with
+   * the track (its wheels in the rails), not with the frame.
+   */
+  _pony(m, s, pose) {
+    const P = m.parts.pony, line = this.route.run;
+    P.userData.x0 ??= P.position.x;
+    P.userData.y0 ??= P.position.y;
+    const x0 = P.userData.x0, sp = s + x0;
+    const q = line.pos(sp);
+    this.stage.toWorld(q.x, q.y, q.z, _w);
+    m.group.updateMatrixWorld();
+    m.group.worldToLocal(_w);
+    P.position.set(x0, P.userData.y0 + _w.y, _w.z + wheelsetShift(LOCO.ponyR, sp, m.v.v, line.curvatureAt(sp), 0.4));
+    P.rotation.y = -(line.headingAt(sp) - pose.heading);
   }
 
   /** The cars' frames and window bands, for the interior lighting. */
