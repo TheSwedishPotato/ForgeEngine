@@ -173,6 +173,11 @@ long). In the line's tight curves it runs out until the outer flange meets the o
 engine's pony truck swings on its pivot to follow the curve while the coupled wheels stay in the
 frame.
 
+In the curves the cars and the engine lean in with the track's cant, up to 141 mm on the 252 m
+curves. On top of that, the unbalanced part of the curve's pull rolls each body a little outward
+on its springs. The platforms stand 1.65 m from the track's centre plus a 45/R widening in
+curves, and their top is 55 cm over the rail along their whole length.
+
 Where tracks part, there are turnouts:
 
 - switch blades, planed to a point, lie against the stock rails; the set route's blades are
