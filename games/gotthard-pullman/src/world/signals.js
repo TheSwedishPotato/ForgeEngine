@@ -72,6 +72,14 @@ export class Signals {
   /** The occupied stretches of each track: the special and the other trains. */
   _occupancy() {
     const T = this.sim.train, occ = { L: [[T.rear, T.front]], R: [] };
+    // wreckage fouling the other main line occupies it too (the track circuits see it)
+    for (const v of T.veh) {
+      const W = v.wreck;
+      if (!W) continue;
+      const q = this.sim.route.right.locate(W.x, W.y, W.hintR ?? null, W.hintR == null ? 1e9 : 200);
+      W.hintR = q.s;
+      if (q.d < 2.8) occ.R.push([q.s - v.length / 2, q.s + v.length / 2]);
+    }
     for (const r of this.sim.traffic?.runs ?? []) {
       if (!r.onMap) continue;
       for (const [track, a, b] of r.occupies()) if (track !== 'X') occ[track]?.push([Math.min(a, b), Math.max(a, b)]);

@@ -21,6 +21,7 @@
 import { SteamLocomotive } from './locomotive.js';
 import { AirBrake } from './brakes.js';
 import { muMax, RAIL } from './adhesion.js';
+import { Derailment } from './derail.js';
 
 const G = 9.80665;
 const LB = 4.44822, ST = 907.185;
@@ -58,6 +59,7 @@ export class Train {
     this.coupled = new Array(this.veh.length - 1).fill(true);
     this.helperPower = 0;                                   // banking engine's tractive demand 0..1 (its driver, by radio)
     this.helperTarget = 0;                                  // speed its driver holds when approaching to couple, m/s
+    this.derail = new Derailment(this);                     // what holds each vehicle on the rails, and what it does when nothing does
   }
 
   /** A vehicle arrives behind the train (not coupled yet): the banking engine. */
@@ -106,7 +108,7 @@ export class Train {
     // ---- the engine's machinery and wheels
     const brakeOnDrivers = this._driverBrakeTorque(e, mu);
     const lo = L.step(dt, {
-      v: e.v, grade, accel: e.a, normalDrivers: L.spec.adhesiveMass * G * Math.cos(Math.atan(grade)), mu,
+      v: e.v, grade, accel: e.a, normalDrivers: e.wreck ? 1 : L.spec.adhesiveMass * G * Math.cos(Math.atan(grade)), mu,   // (off the rails the drivers grip nothing)
       ambientC: here.tempC, windSpeed: here.wind, inTunnel: here.tunnel, heatDemand, airDemand: this.brake.airDemand,
       brakeTorque: brakeOnDrivers,
     });
@@ -157,11 +159,12 @@ export class Train {
         const Fmax = Math.min(v.maxTE, v.power / Math.max(1, Math.abs(v.v)), muH * normal);
         v.Ftrac = Fmax * this.helperPower;
       }
-      v.Fg = Fg; v.Froll = Froll; v.Faero = Faero; v.Fbrake = Fbrake; v.Fsnow = Fsnow; v.mNow = m;
+      v.Fg = Fg; v.Froll = Froll; v.Faero = Faero; v.Fbrake = Fbrake; v.Fsnow = Fsnow; v.mNow = m; v.cond = cond;
     }
     // couplings
     for (let i = 0; i < n - 1; i++) {
       const a = this.veh[i], b = this.veh[i + 1];
+      if (a.wreck || b.wreck) continue;                             // (in the plane: derail.js)
       const gap = (a.s - b.s) - (a.length + b.length) / 2;     // + = drawn apart
       const rel = a.v - b.v;
       let F = 0;
@@ -171,9 +174,11 @@ export class Train {
       if (gap < 0) { const c = -gap; F -= 2 * (K_BUF1 * c + K_BUF3 * c * c * c) + C_BUF * -rel * (rel < 0 ? 1 : 0.3); }   // buffers in compression
       this.couplerForce[i] = F;                                     // + tension
     }
+    if (this.derail.any) this.derail.couplings();
     // ---- integrate (semi-implicit Euler). Friction forces (rolling, curving, brakes, snow) cannot reverse motion.
     for (let i = 0; i < n; i++) {
       const v = this.veh[i];
+      if (v.wreck) continue;
       const Fc = (i > 0 ? this.couplerForce[i - 1] : 0) - (i < n - 1 ? this.couplerForce[i] : 0);
       const Fdrive = i === 0 ? lo.Fadh : (v.Ftrac ?? 0);
       const active = v.Fg + v.Faero + Fc + Fdrive;
@@ -191,7 +196,10 @@ export class Train {
       v.a = a;
       v.F = active;
     }
-    for (const v of this.veh) v.s += v.v * dt;
+    for (const v of this.veh) if (!v.wreck) v.s += v.v * dt;
+    // ---- off the rails: the derailed vehicles move as free bodies; the others are checked
+    this.derail.step(dt);
+    this.derail.check(dt);
     this.odometer += Math.abs(e.v) * dt;
     // ---- warmth of the cars (steam heat in, walls and doors out)
     const heatPerCar = lo.heatFlow * 2.1e6 / Math.max(1, n - 2);

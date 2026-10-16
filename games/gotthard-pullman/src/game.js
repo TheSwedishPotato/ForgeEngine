@@ -39,6 +39,7 @@ export class Game {
     this.timeScale = 1;
     onProgress('Building the valley…');
     this.stage = new GotthardStage(canvas, { quality, terrain, weather: this.weather, date: DATE });
+    sim.train.terrain = terrain;            // (where a derailed vehicle comes to rest: the ground itself)
     this.trainGL = new TrainGL(this.stage, route, sim.train);
     this.trainGL.sim = sim;
     this.people = new PeopleGL(this.stage, this.trainGL, sim, seat);

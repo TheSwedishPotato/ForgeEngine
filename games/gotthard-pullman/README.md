@@ -173,7 +173,7 @@ long). In the line's tight curves it runs out until the outer flange meets the o
 engine's pony truck swings on its pivot to follow the curve while the coupled wheels stay in the
 frame.
 
-In the curves the cars and the engine lean in with the track's cant, up to 141 mm on the 252 m
+In the curves the track, the cars and the engine lean in with the cant (the outer rail higher), up to 141 mm on the 252 m
 curves. On top of that, the unbalanced part of the curve's pull rolls each body a little outward
 on its springs. The platforms stand 1.65 m from the track's centre plus a 45/R widening in
 curves, and their top is 55 cm over the rail along their whole length.
@@ -187,6 +187,35 @@ Where tracks part, there are turnouts:
 
 The steel-on-steel contact itself is in the physics: low rolling resistance, and the adhesion
 creep curve at the drivers.
+
+**Derailment** (`src/physics/derail.js`). Nothing holds a vehicle to the track but its wheels'
+flanges and its own weight. Every step, every vehicle is checked for the two ways a wheelset
+leaves the rails:
+
+- **Overturning.** The lateral load the track must supply shifts the weight onto the outer
+  wheels. That load comes from the curve's pull not balanced by the cant, the crosswind, and the
+  couplings, which push the ends outward in a curve when buffing and pull them in when drawing.
+  When the inner wheels carry nothing, the vehicle goes over. On the 252 m curves with 141 mm
+  cant that happens at about 120 km/h.
+- **Flange climb** (Nadal's limit, Y/Q = 1.34 for a 70° flange and μ = 0.3). It comes from big
+  sideways pulls, such as a derailed neighbour dragging on its coupling, or heavy buffing in a
+  curve.
+
+A train also comes off at the end of the line, and in a collision with another train on the
+same rails. The Treno Gottardo is solid, at about 290 t (estimate), and the two share their
+momentum.
+
+Once off the rails, a vehicle is a free body:
+
+- It slides on its wheels over the sleepers and ballast (μ ≈ 0.35), or on its side (μ ≈ 0.55).
+- It is pulled about by its couplings, which tear at about 1.2 MN.
+- It trips over when it slides sideways, because the ground's friction at its feet works
+  against its inertia high up.
+- A tunnel's walls hold it in the bore.
+- It falls off a bridge or down an embankment, onto the terrain.
+
+The brake hoses tear, so every brake goes on, and the crew shut off steam. Wreckage fouling the
+other main line occupies it, so its signals go to Halt.
 
 **The ride** (`src/physics/sway.js`). Track irregularities come from a PSD-shaped spectrum
 (alignment, level, cross-level) passed through each car's body modes (lateral and roll ~0.8 Hz,

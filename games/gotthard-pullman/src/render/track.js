@@ -39,7 +39,7 @@ function frameAt(line, s, out = {}) {
   out.tx = Math.sin(h); out.ty = Math.cos(h); out.tz = g;
   out.rx = Math.cos(h); out.ry = -Math.sin(h);           // right of the direction of travel
   const k = line.curvatureAt(s);
-  out.cant = -Math.atan2(line.cantAt ? line.cantAt(s) : 0, RAIL_PITCH) * Math.sign(k);   // curving right: the left (outer) rail is raised
+  out.cant = -Math.atan2(line.cantAt ? line.cantAt(s) : 0, RAIL_PITCH);   // (the cant carries the curve's sign) curving right: the right (inner) rail is the lower
   return out;
 }
 

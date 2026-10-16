@@ -198,7 +198,17 @@ export class Crew {
   }
 
   tick(dt) {
+    // off the rails: the driver shuts off steam and puts the brake into emergency, and that is all
+    // there is to do; the fireman still minds the fire and the water (a boiler is a boiler)
+    if (this.sim.train.derail?.any && this.phase !== 'derailed') {
+      this.phase = 'derailed';
+      this.loco.c.regulator = 0;
+      this.sim.train.brake.handle = 'emergency';
+      for (const h of Object.values(this.driver.hands)) h.queue.length = 0;
+      this.log('Driver: steam off, emergency brake - we are off the road!');
+    }
     this._updateHands(dt);
+    if (this.phase === 'derailed') { this.fireDecideIn -= dt; if (this.fireDecideIn <= 0) { this.fireDecideIn = 0.5; this._firemanThink(); } return; }
     this.decideIn -= dt; this.fireDecideIn -= dt;
     if (this.decideIn <= 0) { this.decideIn = 0.25; if (this.manual) this._manualThink(); else this._driverThink(); }
     if (this.fireDecideIn <= 0) { this.fireDecideIn = 0.5; this._firemanThink(); }

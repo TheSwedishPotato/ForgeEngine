@@ -221,6 +221,7 @@ class Run {
   step(dt, clock, signals) {
     const tr = this.train;
     if (this.done) return;
+    if (this.crashed) { this.v = 0; return; }             // (struck: it stands where it is)
     if (!this.onMap) { if (clock < tr.t[0]) return; this.onMap = true; this.u = 0; this.v = tr.vFree[0]; }
     if (this.dwellUntil != null) {
       if (clock < this.dwellUntil) { this.v = 0; return; }

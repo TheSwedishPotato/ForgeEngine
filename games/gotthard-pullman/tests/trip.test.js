@@ -64,6 +64,7 @@ test('every weather gets the train to Göschenen', { timeout: 600000 }, async ()
     const r = await trip(w, { until: '13:30' });
     assert.ok(r.sim.arrivals['Göschenen'], `${w}: the train reaches Göschenen`);
     assert.ok(r.minCrown > 0, `${w}: the crown sheet stays covered`);
+    assert.ok(!r.sim.train.derail.any, `${w}: the crew keep her on the rails (${r.sim.train.derail.cause?.why})`);
   }
 });
 

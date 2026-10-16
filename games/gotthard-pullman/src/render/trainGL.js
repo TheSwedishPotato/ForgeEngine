@@ -21,7 +21,7 @@ export function poseOnTrack(line, sa, sb, out = {}) {
   const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2;
   const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z, L = Math.hypot(dx, dy);
   const heading = Math.atan2(dx, dy);
-  const cantAt = (s) => -Math.atan2(line.cantAt(s), RAIL_SPACING) * Math.sign(line.curvatureAt(s));
+  const cantAt = (s) => -Math.atan2(line.cantAt(s), RAIL_SPACING);          // (the cant carries the curve's sign)
   out.x = mx; out.y = my; out.z = mz;
   out.yaw = Math.PI / 2 - heading;            // three.js rotation.y that turns the vehicle's +x onto the heading
   out.heading = heading;
@@ -116,6 +116,7 @@ export class TrainGL {
     const pose = {};
     const ddt = Math.min(dt, 0.05);
     for (const m of this.vehicles) {
+      if (m.v.wreck) { this._wreck(m, pose); continue; }
       const s = m.v.s, sc = s + (m.offset ?? 0);
       poseOnTrack(line, sc + m.supports, sc - m.supports, pose);
       // the model's origin is the vehicle's middle; the supports may sit off it (the engine's coupled wheelbase)
@@ -176,6 +177,26 @@ export class TrainGL {
       if (here) this.stage.steam.setAir(here.tempC, here.tunnel, vel);
       feedSteam(this.stage.steam, this.train.loco, eng.group, vel, ddt || 1 / 60);
     }
+  }
+
+  /**
+   * A vehicle off the rails, where the physics has it (derail.js): its heading, and its roll as it
+   * goes over about its outer wheels (then its body's edge, lying on its side). Its trucks hang
+   * square under it, its wheels stop.
+   */
+  _wreck(m, pose) {
+    const W = m.v.wreck, o = this.stage.origin;
+    const th = Math.abs(W.roll), side = Math.sign(W.roll) || 1, b = 0.75 + 0.7 * Math.min(1, th / (Math.PI / 2));
+    // the rail-level centre, turned about the pivot on the ground: out by b (1 - cos), up by b sin
+    const lat = side * b * (1 - Math.cos(th)), up = b * Math.sin(th);
+    const rx = Math.cos(W.psi), ry = -Math.sin(W.psi);                       // (W is the vehicle's middle, the model's origin)
+    m.group.position.set(W.x + rx * lat - o.x, W.z + up - o.z, -(W.y + ry * lat - o.y));
+    _e.set(W.roll, Math.PI / 2 - W.psi, 0, 'YZX');
+    m.group.rotation.copy(_e);
+    for (const tr of m.trucks) { tr.userData.x0 ??= tr.position.x; tr.position.set(tr.userData.x0, 0, 0); tr.rotation.set(0, 0, 0); }
+    if (m.kind === 'engine') { animateCab(m.parts.controls, this.train.loco.c, this.train.brake, 0); animateGauges(m.parts.controls, this.train.loco, this.train.brake, this.train.speed, 0); }
+    Object.assign(pose, { x: W.x, y: W.y, z: W.z, heading: W.psi, yaw: Math.PI / 2 - W.psi, pitch: 0, roll: W.roll });
+    m.pose = { ...pose };
   }
 
   /**

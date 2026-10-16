@@ -145,6 +145,51 @@ export class Sim {
     }
   }
 
+  /**
+   * The other trains are solid: where one of them and the special come together on the same rails
+   * (a signal passed at danger, a runaway rolling back), they collide. The Treno Gottardo (about
+   * 290 t, estimate) and the vehicle that strikes it share their momentum (an inelastic impact;
+   * the rest of the special arrives through its buffers); hard enough, the vehicle is thrown off
+   * the rails. Afterwards the other train stands where it was struck.
+   */
+  _collisions() {
+    const T = this.train, M = 290e3;
+    for (const r of this.traffic.runs) {
+      if (!r.onMap || r.done) continue;
+      for (const [track, a0, b0] of r.occupies()) {
+        if (track !== 'L') continue;
+        const a = Math.min(a0, b0), b = Math.max(a0, b0);
+        if (b <= T.rear || a >= T.front) continue;
+        const i = r._i(r.u), dir = Math.sign(r.ts[Math.min(i + 1, r.ts.length - 1)] - r.ts[Math.max(0, i - 1)]) || 1;
+        const vr = r.crashed ? 0 : dir * r.v;
+        const ahead = (a + b) / 2 > (T.rear + T.front) / 2;
+        const k = ahead ? 0 : T.veh.length - 1, v = T.veh[k];
+        const closing = ahead ? v.v - vr : vr - v.v;
+        if (closing <= 0.05) continue;
+        const m = v.mNow ?? v.mass, vc = (m * v.v + M * vr) / (m + M), first = !r.crashed;
+        if (first) this.log(`COLLISION with the ${r.train.name.includes('south') ? 'southbound' : 'northbound'} Treno Gottardo at ${(closing * 3.6).toFixed(0)} km/h!`);
+        r.crashed = true; r.v = 0;
+        // the impact shares the momentum; after it the wreck of the other train is a dead weight in the way
+        v.v = first ? vc : ahead ? Math.min(v.v, 0) : Math.max(v.v, 0);
+        if (closing > 6 && !v.wreck) T.derail.derail(k, 'was thrown off the rails in the collision', { lat: (k % 2 ? 1 : -1) * 0.6, roll: 0 });
+        else if (!v.wreck) { v.v = ahead ? Math.min(v.v, 0) : Math.max(v.v, 0); T.brake.handle = 'emergency'; }
+      }
+    }
+  }
+
+  /** The derailments and what follows them, into the trip's log. */
+  _wreckNews() {
+    const E = this.train.events;
+    this._evN ??= 0;
+    for (; this._evN < E.length; this._evN++) {
+      const e = E[this._evN];
+      if (e.type === 'derailed') this.log(`DERAILED: the ${e.name} ${e.why} at ${(Math.abs(e.speed) * 3.6).toFixed(0)} km/h, km ${this.route.kmAt(e.s).toFixed(2)}.`);
+      else if (e.type === 'coupling broke') this.log(`The coupling between the ${e.between[0]} and the ${e.between[1]} has torn apart.`);
+      else if (e.type === 'on its side') this.log(`The ${e.name} has gone over on its side.`);
+      else if (e.type === 'fell') this.log(`The ${e.name} has fallen, striking the ground at ${(e.speed * 3.6).toFixed(0)} km/h.`);
+    }
+  }
+
   /** Advance the world by dt seconds of simulated time. */
   advance(dt) {
     this._acc += dt;
@@ -156,7 +201,7 @@ export class Sim {
       this._assistTick();
       this.train.step(DT);
       this._sigAcc += DT;
-      if (this._sigAcc >= 0.1) { this.traffic.step(this._sigAcc, this.clock, this.signals); this.signals.step(this._sigAcc); this._sigAcc = 0; }
+      if (this._sigAcc >= 0.1) { this.traffic.step(this._sigAcc, this.clock, this.signals); this._collisions(); this.signals.step(this._sigAcc); this._sigAcc = 0; this._wreckNews(); }
     }
   }
 }
