@@ -51,7 +51,7 @@ export class HUD {
     const x = g.timeScale > 1 ? ` <i>×${g.timeScale}</i>` : '';
     this.el.innerHTML = `<b>${P.where()}</b><span>${fmt(s.clock)} HST${x}</span><span>Depth ${G.depth?.toFixed(0)} ft</span><span>${G.speed?.toFixed(1)} kn</span><span>Course ${G.heading?.toFixed(0).padStart(3, '0')}°</span>`;
     this.intro -= 0.2;
-    this.hint.textContent = P.hint || (this.intro > 0 ? 'H: the keys · Tab: orders to the captain · E: the ladder down to the crew\'s mess' : '');
+    this.hint.textContent = P.hint || (this.intro > 0 ? (g.touch ? 'Left stick: walk · drag: look · Use / Back: the control in the middle · Orders: the captain · ?: help' : 'H: the keys · Tab: orders to the captain · E: the ladder down to the crew\'s mess') : '');
     this.log.innerHTML = s.log.slice(-5).map((l) => `<div>${fmt(l.t).slice(0, 5)} ${l.who ? `<b>${l.who}:</b> ` : ''}${l.text}</div>`).join('');
   }
 }

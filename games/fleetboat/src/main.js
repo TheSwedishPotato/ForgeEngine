@@ -9,11 +9,14 @@ import { Game } from './game.js';
 import { hms, fmt } from './sim.js';
 import { HUD } from './ui/hud.js';
 import { Orders } from './ui/orders.js';
+import { Touch, isTouchDevice } from './ui/touch.js';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('view');
 const ui = document.getElementById('ui');
 const manual = !!params.get('manual');
+// a phone or tablet gets the touch controls and a lighter picture; a PC keeps the keys
+const touch = params.get('touch') ? params.get('touch') === '1' : isTouchDevice();
 
 function loading(text) {
   let el = ui.querySelector('.loading');
@@ -27,7 +30,7 @@ async function go() {
   await new Promise((r) => setTimeout(r, 20));
   const at = params.get('at')?.split(',');
   const player = at ? { level: at[0], x: Number(at[1]), z: Number(at[2] ?? 0) } : {};
-  const game = new Game(canvas, { quality: params.get('q') ?? 'high', start: params.get('start') ?? 'dive', clock: params.get('t') ? hms(params.get('t')) : undefined, player });
+  const game = new Game(canvas, { quality: params.get('q') ?? (touch ? 'low' : 'high'), start: params.get('start') ?? 'dive', clock: params.get('t') ? hms(params.get('t')) : undefined, player });
   if (params.get('yaw')) game.player.yaw = Number(params.get('yaw')) * Math.PI / 180;
   if (params.get('pitch')) game.player.pitch = Number(params.get('pitch')) * Math.PI / 180;
   if (params.get('cam') === 'out') { game.player.mode = 'orbit'; Object.assign(game.player.orbit, { yaw: Number(params.get('oyaw') ?? 140) * Math.PI / 180, pitch: Number(params.get('opitch') ?? 12) * Math.PI / 180, dist: Number(params.get('dist') ?? 70) }); }
@@ -44,6 +47,7 @@ async function go() {
   if (params.get('scope')) { const P = game.sim.plant; P.set('ct.scope1', 1); P.scopes[0] = 1; Object.assign(game.player.p, { level: 'ct', x: 10.85, z: 0.35 }); game.player.takeScope(); if (params.get('power')) game.player.scope.power = Number(params.get('power')); }
   if (!manual) { const x = document.createElement('div'); x.className = 'crosshair'; ui.append(x); }
   void orders;
+  if (touch) { game.touch = true; new Touch(ui, game); }
   if (manual && params.get('hud') !== '1') hud.toggle();
   game.onFrame = (dt) => hud.update(dt);
   window.game = { game, stage: game.stage, sim: game.sim, ready: true, advance(dt) { const n = Math.max(1, Math.round(dt * 30)); for (let i = 0; i < n; i++) game.frame(dt / n); } };
