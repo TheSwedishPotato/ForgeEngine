@@ -127,6 +127,45 @@ export class Places {
   /** Map point to tile-local (x, height, -y). */
   _v(t, x, y, z) { return new Vector3(x - t.anchor.x, z - t.anchor.z, -(y - t.anchor.y)); }
 
+  /** Distance (plan) from a point to the nearest track of any kind (the terrain's track segments). */
+  _nearTrack(x, y) {
+    const T = this.T, S = T.samples;
+    let best = 1e9;
+    for (const k of T._segmentsIn(x - 15, y - 15, x + 15, y + 15)) {
+      const a = k * 4, b = a + 4, dx = S[b] - S[a], dy = S[b + 1] - S[a + 1], L2 = dx * dx + dy * dy || 1;
+      let t = ((x - S[a]) * dx + (y - S[a + 1]) * dy) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      best = Math.min(best, Math.hypot(S[a] + dx * t - x, S[a + 1] + dy * t - y));
+    }
+    return best;
+  }
+
+  /**
+   * An outline kept out of the main lines' loading gauge (2.4 m from the centre, more in curves):
+   * the mapped outlines are not that exact. Points nearer are moved back; an outline the line runs
+   * right through (a roof mapped over the tracks) is dropped. Returns { pts, moved, drop }.
+   */
+  _clearOfTracks(pts, z) {
+    if (!pts.some(([x, y]) => this._nearTrack(x, y) < 14)) return { pts, moved: false, drop: false };
+    const R = this.route, out = [], sides = new Set();
+    let moved = false;
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay)));
+      for (let k = 0; k < n; k++) {
+        let x = ax + ((bx - ax) * k) / n, y = ay + ((by - ay) * k) / n;
+        for (const line of [R.run, R.right]) {
+          const q = line.locate(x, y, null, 1e9), P = line.pos(q.s);
+          if (Math.abs(P.z - z) > 6) continue;                       // (a line passing well above or below)
+          const h = line.headingAt(q.s), rx = Math.cos(h), ry = -Math.sin(h);
+          const off = (x - P.x) * rx + (y - P.y) * ry, along = (x - P.x) * Math.sin(h) + (y - P.y) * Math.cos(h);
+          const need = 2.4 + 45 * Math.abs(line.curvatureAt(q.s));
+          if (Math.abs(off) < need && Math.abs(along) < 2) { const t = (off >= 0 ? need : -need) - off; x += rx * t; y += ry * t; moved = true; sides.add(Math.sign(off) || 1); }
+        }
+        out.push([x, y]);
+      }
+    }
+    return { pts: moved ? out : pts, moved, drop: sides.size > 1 };
+  }
+
   // ---- buildings -----------------------------------------------------------------------------
 
   _buildings() {
@@ -142,6 +181,10 @@ export class Places {
       if (!T.inMap(cx, cy)) continue;
       const area = Math.abs(polyArea(pts));
       if (area < 6) continue;
+      // nothing built in the trains' way
+      const cl = this._clearOfTracks(pts, T.heightAt(cx, cy));
+      if (cl.drop) continue;
+      if (cl.moved) { pts.length = 0; pts.push(...cl.pts); }
       const box = obb(pts);
       const hs = heights(b, area);
       let gmin = 1e9, gmax = -1e9;
@@ -156,7 +199,7 @@ export class Places {
       // the Uri house: a log storey or two (Strickbau) on a whitewashed masonry ground floor; barns
       // on a low stone footing
       const socle = wall !== 'timber' ? null : barn ? { mat: 'stone', h: 0.8 } : { mat: hash(id * 5 + 1) < 0.5 ? 'plaster3' : 'plaster', h: STOREY - 0.2 };
-      const rectish = box.area < area * 1.25 && pts.length <= 8;
+      const rectish = !cl.moved && box.area < area * 1.25 && pts.length <= 8;
       const flat = !rectish || /industrial|warehouse|hangar|sports|parking|bunker/.test(c) || area > 900;
       if (rectish) {
         // walls on the fitted rectangle (cleaner than a noisy outline), the gable along the long side
@@ -259,6 +302,9 @@ export class Places {
       P.push(pts.at(-1));
       if (P.length < 2 || !T.inMap(P[0][0], P[0][1])) continue;
       const z0b = T.heightAt(P[0][0], P[0][1]), z1b = T.heightAt(P.at(-1)[0], P.at(-1)[1]);
+      // a road bridge over the railway: its deck clears the overhead line (messenger 6.7 m over the
+      // rail; the DEM at its ends, 30 m across, has lost the approach embankments), ramps at 7 %
+      const deck = bridge ? this._overbridge(P, w, z0b, z1b) : null;
       const t = this._tile(P[Math.floor(P.length / 2)][0], P[Math.floor(P.length / 2)][1]);
       const b = t.b, half = w / 2;
       let prev = null;
@@ -267,7 +313,7 @@ export class Places {
         const [nx, ny] = P[Math.min(P.length - 1, i + 1)], [px, py] = P[Math.max(0, i - 1)];
         let dx = nx - px, dy = ny - py; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
         const rx = dy, ry = -dx;
-        const zc = bridge ? z0b + (z1b - z0b) * (i / (P.length - 1)) : null;
+        const zc = bridge ? deck[i] : null;
         const zl = zc ?? T.heightAt(x - rx * half, y - ry * half), zr = zc ?? T.heightAt(x + rx * half, y + ry * half);
         const cur = {
           l: this._v(t, x - rx * half, y - ry * half, zl + 0.12), r: this._v(t, x + rx * half, y + ry * half, zr + 0.12),
@@ -282,6 +328,31 @@ export class Places {
         prev = cur;
       }
     }
+  }
+
+  /** A road bridge's deck heights along its points: straight between its ends, lifted over any main line it crosses. */
+  _overbridge(P, w, z0, z1) {
+    const R = this.route, n = P.length;
+    const z = P.map((_, i) => z0 + ((z1 - z0) * i) / Math.max(1, n - 1));
+    const need = [];
+    for (const line of [R.run, R.right]) {
+      // where the road passes from one side of the line to the other, near the line's own level
+      let prev = null;
+      for (let i = 0; i < n; i++) {
+        const q = line.locate(P[i][0], P[i][1], prev?.s ?? null, prev ? 200 : 1e9), L = line.pos(q.s), h = line.headingAt(q.s);
+        const off = (P[i][0] - L.x) * Math.cos(h) - (P[i][1] - L.y) * Math.sin(h), cur = { s: q.s, off, d: q.d, rz: L.z };
+        if (prev && Math.sign(prev.off) !== Math.sign(off) && Math.min(prev.d, q.d) < w / 2 + 3.5) {
+          const rz = (prev.rz + L.z) / 2;
+          if (Math.max(z[i], z[i - 1]) < rz + 7.4 && Math.min(z[i], z[i - 1]) > rz - 2) need.push([i - 1, rz + 7.4], [i, rz + 7.4]);
+        }
+        prev = cur;
+      }
+    }
+    if (!need.length) return z;
+    // distance along the road from each point to each crossing
+    const cum = [0];
+    for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+    return z.map((zi, i) => Math.max(zi, ...need.map(([j, h]) => h - 0.07 * Math.abs(cum[i] - cum[j]))));
   }
 
   // ---- water ---------------------------------------------------------------------------------

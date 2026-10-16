@@ -188,6 +188,22 @@ Where tracks part, there are turnouts:
 The steel-on-steel contact itself is in the physics: low rolling resistance, and the adhesion
 creep curve at the drivers.
 
+**Clearances** (`tools/clearance.mjs`). The space a train needs is swept along the whole line
+and checked against everything built around it, with `node tools/clearance.mjs`:
+
+- **The ground.** The terrain is a 5 m grid, so a cutting's side starts a whole grid step beyond
+  the formation, where the grid's triangles cannot rise into the trains. The mountain's cover
+  over a bore begins a step inside the portal.
+- **Buildings.** Mapped outlines are moved back out of the trains' way. A roof mapped right
+  across the tracks is left out.
+- **Road bridges over the line.** They clear the overhead line (its messenger wire is 6.7 m over
+  the rail), ramping at 7 %. The 30 m DEM has lost their approach embankments.
+- **Masts.** A catenary mast never stands on another track.
+
+Steam stays out of the cars and the engine's cab. Every pixel of a puff is tested against their
+bodies, not just its centre: a flat sprite seen past a car's side would otherwise lie over the
+cabin.
+
 **Derailment** (`src/physics/derail.js`). Nothing holds a vehicle to the track but its wheels'
 flanges and its own weight. Every step, every vehicle is checked for the two ways a wheelset
 leaves the rails:

@@ -71,3 +71,18 @@ test('running into a standing train: the collision throws the engine off the rai
   assert.ok(r.crashed, 'they met');
   assert.ok(T.veh[0].wreck, 'the engine is off the rails');
 });
+
+test('the ground stays out of the trains\' way: nothing of the terrain inside the loading gauge', async () => {
+  const { Terrain } = await import('../src/world/terrain.js');
+  const T = await Terrain.load(route), L = route.run, bad = [];
+  const nearPortal = (s) => route.tunnels.some((t) => Math.abs(s - t.s0) < 10 || Math.abs(s - t.s1) < 10);
+  for (let s = 5; s < L.length; s += 3) {
+    if (route.structureAt(s) || nearPortal(s)) continue;
+    const p = L.pos(s), h = L.headingAt(s), w = 1.6 + 45 * Math.abs(L.curvatureAt(s));
+    for (const a of [-w, 0, w]) {
+      const g = T.heightAt(p.x + Math.cos(h) * a, p.y - Math.sin(h) * a);
+      if (g > p.z + 0.6) { bad.push(`${s} (${(g - p.z).toFixed(1)} m at ${a.toFixed(1)})`); break; }
+    }
+  }
+  assert.ok(bad.length === 0, `ground in the gauge at ${bad.slice(0, 8).join(', ')}`);
+});

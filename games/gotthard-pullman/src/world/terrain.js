@@ -96,8 +96,11 @@ export class Terrain {
     const R = this.route;
     const S = [];   // flat array: x, y, zf, kind (0 ground, 1 bridge, 2 tunnel)
     const inRanges = (list, s) => list.some((t) => s >= t.s0 && s <= t.s1);
-    const runKind = (s) => (R.inTunnel(s) ? 2 : inRanges(R.bridges, s) ? 1 : 0);
-    const leftKind = (s) => (inRanges(R.leftTunnels, s) ? 2 : inRanges(R.leftBridges, s) ? 1 : 0);
+    // (the mountain's cover over a bore begins a grid step inside the portal: the cutting runs right
+    // up to the portal's face, so the ground's coarse triangles do not climb through the trains there)
+    const inBore = (list, s) => list.some((t) => s >= t.s0 + 7 && s <= t.s1 - 7);
+    const runKind = (s) => (inBore(R.tunnels, s) ? 2 : inRanges(R.bridges, s) ? 1 : 0);
+    const leftKind = (s) => (inBore(R.leftTunnels, s) ? 2 : inRanges(R.leftBridges, s) ? 1 : 0);
     // a track deep under the natural ground is in a tunnel whatever the map says
     const add = (x, y, z, kind) => { if (kind === 0 && this.demBicubic(x, y) - z > 28) kind = 2; S.push(x, y, z - FORMATION, kind); };
     const every = 4;
@@ -183,6 +186,11 @@ export class Terrain {
     const N = nw * nh;
     const lower = new Float32Array(N).fill(-1e9), upper = new Float32Array(N).fill(1e9);
     const nearD = new Float32Array(N).fill(1e9), nearZ = new Float32Array(N);
+    const openD = new Float32Array(N).fill(1e9), tunD = new Float32Array(N).fill(1e9), openZ = new Float32Array(N);
+    // the ground is a grid of this step, flat between its points: a cutting's side may only begin a
+    // whole step (and a diagonal's worth) beyond the formation's edge, or the triangles that span it
+    // would rise into the space the trains run in (the loading gauge, 2.2 m from the track's centre)
+    const clearEdge = HALF_WIDTH + step * 1.42;
     const touched = new Uint8Array(N);
     for (const k of segs) {
       const a = k * 4, b = a + 4;
@@ -206,21 +214,23 @@ export class Terrain {
           const zf = az + (bz - az) * t;
           const idx = j * nw + i;
           if (inTunnel) {
+            if (d < tunD[idx]) tunD[idx] = d;
             if (tunnelOut && d < 6.0) tunnelOut[idx] = Math.max(tunnelOut[idx], zf + FORMATION);
             const cover = zf + FORMATION + 8.2 - Math.max(0, d - 5) * 1.0;
             if (cover > lower[idx]) { lower[idx] = cover; touched[idx] = 1; if (d < nearD[idx]) { nearD[idx] = d; nearZ[idx] = cover; } }
             continue;
           }
-          const e = Math.max(0, d - HALF_WIDTH);
+          const e = Math.max(0, d - HALF_WIDTH), ec = Math.max(0, d - clearEdge);
           touched[idx] = 1;
           if (d < nearD[idx]) { nearD[idx] = d; nearZ[idx] = zf; }
+          if (d < openD[idx]) { openD[idx] = d; openZ[idx] = zf; }
           if (kind === 1) {
             // a bridge: keep the ground under the deck (no embankment)
-            const u = zf - 2.5 + e * CUT_SOIL;
+            const u = zf - 2.5 + ec * CUT_SOIL;
             if (u < upper[idx]) upper[idx] = u;
             continue;
           }
-          const lo = zf - e * FILL_SLOPE, up = zf + e * CUT_SOIL;
+          const lo = zf - e * FILL_SLOPE, up = zf + ec * CUT_SOIL;
           if (lo > lower[idx]) lower[idx] = lo;
           if (up < upper[idx]) upper[idx] = up;
         }
@@ -233,13 +243,15 @@ export class Terrain {
         const x = gx0 + i * step, y = gy0 + j * step;
         const hn = natural(x, y, idx);
         let lo = lower[idx], up = upper[idx];
-        if (lo > up) { lo = up = nearZ[idx]; }
+        // a tunnel's cover against an open track's cutting: the nearer track has it (an open line
+        // beside a portal must not run into the mountain kept over the other bore)
+        if (lo > up) { if (openD[idx] <= tunD[idx] + 4) lo = up; else up = lo; }
         // rock: steep natural ground takes a steep cutting
         if (hn > up && up < 1e8) {
           const slope = this._naturalSlope(x, y);
-          if (slope > 0.75) {
-            const e = Math.max(0, nearD[idx] - HALF_WIDTH);
-            up = Math.min(hn, nearZ[idx] + e * CUT_ROCK);
+          if (slope > 0.75 && openD[idx] < 1e8) {
+            const e = Math.max(0, openD[idx] - clearEdge);
+            up = Math.min(hn, openZ[idx] + e * CUT_ROCK);            // (a steep rock face, not a soil slope)
           }
         }
         // a long fill down a steep hillside: a wall instead

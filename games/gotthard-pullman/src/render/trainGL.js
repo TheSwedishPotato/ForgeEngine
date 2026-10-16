@@ -217,8 +217,15 @@ export class TrainGL {
     P.rotation.y = -(line.headingAt(sp) - pose.heading);
   }
 
-  /** The cars' frames and window bands, for the interior lighting. */
+  /** The cars' frames and window bands, for the interior lighting; and the engine's cab (kept free of steam). */
   _publishCars() {
+    const eng = this.vehicles[0];
+    if (eng?.kind === 'engine') {
+      eng.group.updateMatrixWorld();
+      this._cabInv ??= new Matrix4();
+      this._cabInv.copy(eng.group.matrixWorld).invert();
+      this.stage.cabInv = this._cabInv.elements;
+    }
     const cars = this.vehicles.filter((m) => m.info);
     const n = Math.min(8, cars.length);
     const C = (this.stage.cars ??= { count: 0, inv: new Float32Array(16 * 8), mat: new Float32Array(16 * 8), band: new Float32Array(32), info: new Float32Array(32), lamp: new Float32Array(32) });

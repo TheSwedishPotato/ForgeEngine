@@ -59,6 +59,35 @@ export class Game {
     this.player.update(0, this.stage.camera);
     while (this.forest.update(this.stage.camera.position, 8));
     while (this.track.update(this.stage.camera.position, 60));
+    onProgress('Preparing the shaders…');
+    this._prewarm();
+  }
+
+  /**
+   * Compiles every material's shaders now, while loading. The renderer makes a material's program
+   * the first time something drawn with it comes into view: the first tunnel's vault, a new kind of
+   * tree up the valley. Compiled then, mid-ride, the frame stalls (on some machines for a large
+   * fraction of a second). So everything in the scene, hidden or not, and every species of tree
+   * is put through the renderer's own program cache here.
+   */
+  _prewarm() {
+    const r = this.stage.r, A = r.adapter, done = new Set();
+    const warm = (o, { instanced = o.isInstancedMesh, instanceColor = !!o.instanceColor } = {}) => {
+      const geo = o.geometry, mat = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (!geo?.attributes?.position || !mat || mat.isShaderMaterial || o.userData?.forgeDraw) return;
+      const m = A.material(mat, o);
+      const defines = {
+        SKINNED: !!o.isSkinnedMesh, INSTANCED: !!instanced, INSTANCE_COLOR: !!(instanced && instanceColor),
+        VERTEX_COLOR: !!(mat.vertexColors && geo.attributes.color), ...m.defines, HAS_UV: !!geo.attributes.uv,
+      };
+      const key = Object.entries(defines).filter(([, v]) => v).map(([k]) => k).join('|');
+      if (done.has(key)) return;
+      done.add(key);
+      for (const kind of ['gbuffer', 'depth']) r.program(kind, defines, key);
+    };
+    this.stage.scene.traverse((o) => { if (o.isMesh) warm(o); });
+    for (const S of this.forest.species ?? []) for (const c of S.chain) warm({ geometry: c.geometry, material: S.mat, userData: {} }, { instanced: true, instanceColor: false });
+    this.prewarmed = done.size;
   }
 
   /** Map position of the player's car (for the floating origin). */

@@ -438,7 +438,8 @@ export class GotthardStage {
     const pos = sunPosition(utcMs(this.date, clock), LAT, LON);
     const v = sunVector(pos);
     this.sunPos = pos;
-    const key = Math.round(pos.azimuth * 20) + ':' + Math.round(pos.elevation * 20);   // every 0.05 degrees
+    // every 0.2 degrees (the sun takes about 50 s over it; the light changes less than one can see)
+    const key = Math.round(pos.azimuth * 5) + ':' + Math.round(pos.elevation * 5);
     if (key === this._sunKey) return;
     this._sunKey = key;
     const r = this.r;
@@ -459,13 +460,41 @@ export class GotthardStage {
     const lz = (ghi * k) / 2.44;
     this.sky.overcast = [lz * 0.94, lz * 0.97, lz * 1.02];
     this.skyLUT.update({ sunDir: v, altitude: alt, mieExt: this.sky.mieExt, groundAlbedo: (this.weather.p.groundSnowValley ?? 0) > 0.05 ? 0.6 : 0.25 });
-    r.invalidateEnvironment();
+    // the sky's light on everything (the environment's cube, its blurred levels, its irradiance):
+    // at once when the scene is set, otherwise rebuilt a piece a frame, so no one frame stalls
+    if (now || !this._envOnce) { r.invalidateEnvironment(); this._envOnce = true; this._envJob = null; }
+    else this._envJob = this._envSteps();
     this.terrainLight.update(v, { now });
+  }
+
+  /** The environment's rebuild (Environment.update), sliced: the six faces, then each mip level, then the irradiance. */
+  *_envSteps() {
+    const r = this.r, E = r.env, gl = r.gl, U = r.skyUniforms();
+    for (let f = 0; f < 6; f++) {
+      state(gl);
+      E.skyProg.use().setAll(U);
+      E.skyTarget.colors[0] = E.sky;
+      E._bindFace(E.skyTarget, f, 0);
+      E.skyProg.set('uFace', f);
+      fullscreen(gl);
+      yield;
+    }
+    E.sky.generateMips();
+    yield;
+    for (let m = 0; m < E.levels; m++) {
+      state(gl);
+      E.prefilter.use().set('uSrc', E.sky).set('uSrcSize', E.size).set('uRoughness', m / (E.levels - 1));
+      for (let f = 0; f < 6; f++) { E._bindFace(E.specTarget, f, m); E.prefilter.set('uFace', f); fullscreen(gl); }
+      yield;
+    }
+    state(gl);
+    E._sh(U);
   }
 
   // ---- frame ---------------------------------------------------------------------------------
 
   render(dt) {
+    if (this._envJob && this._envJob.next().done) this._envJob = null;
     this.terrainLight.step();
     this.r.render(this.scene, this.camera, dt);
   }

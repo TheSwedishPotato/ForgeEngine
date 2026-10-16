@@ -34,6 +34,7 @@ const B0 = 0.55;             // buoyancy of undiluted exhaust in cold air, (ρai
 const DIFFUSE = 0.75 * (1 - 0.85);   // 3/4 (1 - g) for cloud droplets
 const V_STEAM = 1.75;        // m³/kg, exhaust steam at the chimney (about 0.95 bar, 100 °C)
 const MAX = 3200;
+const FAR = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1e9, 1e9, 1e9, 1]);   // (no cab: a frame far away)
 const STRIDE = 16;
 
 /** Saturation vapour density over water (kg/m³) at T (°C): Magnus (Alduchov & Eskridge 1996). */
@@ -59,6 +60,7 @@ uniform vec3 uSkySH[9];
 uniform float uFogExt;
 uniform mat4 uCarInv[8];
 uniform int uCarCount;
+uniform mat4 uCabInv;          // the engine's cab (its model frame), a closed space too
 out vec2 vQ, vAx;
 out float vTau, vFade, vDepth, vSoft, vFwd, vSeed;
 out vec3 vSun, vSkyUp, vSkyDown, vLv;
@@ -99,6 +101,8 @@ void main() {
     vec3 cq = (uCarInv[k] * vec4(aCenter.xyz, 1.0)).xyz;
     if (abs(cq.x) < 12.7 && abs(cq.z) < 1.55 && cq.y > 0.0 && cq.y < 4.15) vFade = 0.0;
   }
+  vec3 cb = (uCabInv * vec4(aCenter.xyz, 1.0)).xyz;
+  if (cb.x > -5.96 && cb.x < -3.76 && abs(cb.z) < 1.45 && cb.y > 1.62 && cb.y < 4.25) vFade = 0.0;
   // light: the sun past the mountains, out of a tunnel, through the valley fog and the plume
   vec3 wpos = aCenter.xyz;
   float day = daylightAt(wpos);
@@ -119,11 +123,29 @@ in vec2 vQ, vAx;
 in float vTau, vFade, vDepth, vSoft, vFwd, vSeed;
 in vec3 vSun, vSkyUp, vSkyDown, vLv;
 uniform sampler2D uDepth;
-uniform mat4 uInvProj, uView;
+uniform mat4 uInvProj, uView, uInvView;
+uniform mat4 uCarInv[8];
+uniform int uCarCount;
+uniform mat4 uCabInv;
 uniform vec2 uResolution;
 uniform float uTime;
 out vec4 o;
 void main() {
+  // a sprite is flat: at a grazing view past a car's side its edge would lie over the cabin. This
+  // pixel's point of the puff (at its depth along the ray) must be outside every car's body.
+  {
+    vec2 uv0 = gl_FragCoord.xy / uResolution;
+    vec4 pv = uInvProj * vec4(uv0 * 2.0 - 1.0, 1.0, 1.0);
+    vec3 dir = pv.xyz / pv.w;
+    vec3 wp = (uInvView * vec4(dir * (vDepth / max(1e-4, -dir.z)), 1.0)).xyz;
+    for (int k = 0; k < 8; k++) {
+      if (k >= uCarCount) break;
+      vec3 cq = (uCarInv[k] * vec4(wp, 1.0)).xyz;
+      if (abs(cq.x) < 12.75 && abs(cq.z) < 1.6 && cq.y > -0.2 && cq.y < 4.2) discard;
+    }
+    vec3 cb = (uCabInv * vec4(wp, 1.0)).xyz;
+    if (cb.x > -5.96 && cb.x < -3.76 && abs(cb.z) < 1.45 && cb.y > 1.62 && cb.y < 4.25) discard;
+  }
   // the turbulent billows of the puff: its density uneven at every scale, boiling slowly
   vec3 np = vec3(vQ * 1.05, vSeed * 37.0 + uTime * 0.12);
   float f = vnoise3(np) * 0.5 + vnoise3(np * 2.1 + 5.3) * 0.28 + vnoise3(np * 4.4 + 9.1) * 0.14 + vnoise3(np * 9.0 + 2.7) * 0.08;
@@ -413,10 +435,10 @@ export class SteamPlume {
     const P = r.proj.elements, W = r.displayW, H = r.displayH;
     const si = r.sunIntensity ?? 1, sc = r.sunColor;
     const prog = this.prog.use();
-    prog.set('uView', r.view).set('uViewProj', r.viewProj).set('uInvProj', r.invProj)
+    prog.set('uView', r.view).set('uViewProj', r.viewProj).set('uInvProj', r.invProj).set('uInvView', this.stage.camera.matrixWorld)
       .set('uFocal', [P[0] * W * 0.5, P[5] * H * 0.5]).set('uResolution', [W, H])
       .set('uSunDir', r.sunDir).set('uSunIrradiance', [sc.x * si, sc.y * si, sc.z * si]).set('uCameraPos', r.cameraPos)
-      .set('uSkySH', r.env.sh).set('uDepth', r.depth).set('uCarInv', this.stage.cars?.inv ?? new Float32Array(128)).set('uCarCount', this.stage.cars?.count ?? 0).set('uFogExt', this.fogExt).set('uTime', (this.time = (this.time ?? 0) + dt));
+      .set('uSkySH', r.env.sh).set('uDepth', r.depth).set('uCarInv', this.stage.cars?.inv ?? new Float32Array(128)).set('uCarCount', this.stage.cars?.count ?? 0).set('uCabInv', this.stage.cabInv ?? FAR).set('uFogExt', this.fogExt).set('uTime', (this.time = (this.time ?? 0) + dt));
     this.stage.bindGround?.(prog);
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, m);

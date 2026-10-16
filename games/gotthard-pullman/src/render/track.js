@@ -135,7 +135,15 @@ export class TrackGL {
       let s = 8;
       while (s < line.length - 5) {
         const inTunnel = (q) => (line === R.run ? !!R.inTunnel(q) : this._rightInTunnel(q));
-        masts.push({ s, tunnel: inTunnel(s) });
+        // (a mast never stands on another main track: where the map has the lines crossing, it is left out)
+        const p = line.pos(s), h = line.headingAt(s), fx = p.x + Math.cos(h) * L.side * 3.1, fy = p.y - Math.sin(h) * L.side * 3.1;
+        const fouls = [R.run, R.right].some((O) => {
+          if (O === line) return false;
+          const q = O.locate(fx, fy, (this._mh ??= new Map()).get(O) ?? null, this._mh.has(O) ? 400 : 1e9);
+          this._mh.set(O, q.s);
+          return q.d < 2.6 && Math.abs(O.pos(q.s).z - p.z) < 6;
+        });
+        if (!fouls) masts.push({ s, tunnel: inTunnel(s) });
         let span = 64;
         for (let q = s; q < s + 64; q += 4) { const k = Math.abs(line.curvatureAt(q)); if (k > 1e-5) span = Math.min(span, Math.sqrt(3.2 / k)); }
         if (inTunnel(s)) span = Math.min(span, 30);
