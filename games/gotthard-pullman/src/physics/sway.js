@@ -77,10 +77,12 @@ export class CarRide {
     const zl = (TRACK.level.at(sf) + TRACK.level.at(sr)) / 2;
     const pz = (TRACK.level.at(sf) - TRACK.level.at(sr)) / (2 * T);
     const cl = ((TRACK.cross.at(sf) + TRACK.cross.at(sr)) / 2) / 1.5;
-    // the curve: the unbalanced lateral acceleration leans the body out on its springs (about 4 cm per m/s^2)
+    // the curve: the unbalanced lateral acceleration (toward the curve's inside, + right) throws the
+    // body out on its springs, about 1.2 cm and 0.26 degrees per m/s^2: out is left in a right-hand
+    // curve, and the body's roll (+ right side down) leans it onto its outer side
     const aUnbal = v * v * k - G * (c / 1.5) * Math.sign(k);
-    const x = this.lat.step(dt, yl + aUnbal * 0.012 * Math.sign(v || 1));
-    const r = this.roll.step(dt, cl + aUnbal * 0.0045);
+    const x = this.lat.step(dt, yl - aUnbal * 0.012);
+    const r = this.roll.step(dt, cl - aUnbal * 0.0045);
     const z = this.bounce.step(dt, zl);
     const p = this.pitch.step(dt, pz);
     // what the passenger feels: the body's own accelerations plus the curve's unbalanced pull and the train's surge

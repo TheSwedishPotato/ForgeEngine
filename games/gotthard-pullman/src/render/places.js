@@ -8,7 +8,7 @@
  *
  * Built once at load into merged meshes, one group per 1 km tile, shown within ~5 km.
  */
-import { Group, Vector3, MeshStandardMaterial, Color, CanvasTexture, RepeatWrapping, LinearMipmapLinearFilter } from 'three';
+import { Group, Vector3, Vector2, ShapeUtils, MeshStandardMaterial, Color, CanvasTexture, RepeatWrapping, LinearMipmapLinearFilter } from 'three';
 import { Builder } from './geom.js';
 import PLACES from '../data/places.js';
 
@@ -365,27 +365,51 @@ export class Places {
 
   _platforms() {
     const R = this.route;
-    // a platform's edge stands 1.65 m from the track's centre (the mapped outlines are not that
-    // exact, and a train must not run through one): corners nearer a main track are moved out
+    // A platform's edge stands 1.65 m from the track's centre on the straight, more in curves,
+    // where a car's middle swings in and its ends out over the curve's chord (the 45/R widening),
+    // and its top 55 cm over the rail all along, rising and falling with the track. The mapped
+    // outlines are not that exact, and a train must not run through one: the outline is cut
+    // into short pieces and every point nearer a track than that is moved back from it.
     const clear = (x, y) => {
       for (const line of [R.run, R.right]) {
         const q = line.locate(x, y, null, 1e9), P = line.pos(q.s), h = line.headingAt(q.s);
         const rx = Math.cos(h), ry = -Math.sin(h);
         const off = (x - P.x) * rx + (y - P.y) * ry, along = (x - P.x) * Math.sin(h) + (y - P.y) * Math.cos(h);
-        if (Math.abs(off) < 1.65 && Math.abs(along) < 2) { const t = (off >= 0 ? 1.65 : -1.65) - off; x += rx * t; y += ry * t; }
+        const need = 1.65 + 45 * Math.abs(line.curvatureAt(q.s));
+        if (Math.abs(off) < need && Math.abs(along) < 2) { const t = (off >= 0 ? need : -need) - off; x += rx * t; y += ry * t; }
       }
       return [x, y];
     };
+    const dense = (xy) => {
+      const out = [];
+      for (let i = 0; i < xy.length; i++) {
+        const [ax, ay] = xy[i], [bx, by] = xy[(i + 1) % xy.length], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 1.5));
+        for (let k = 0; k < n; k++) out.push([ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n]);
+      }
+      return out;
+    };
     for (const p of R.platforms) {
-      const pts = p.xy.map(([x, y]) => clear(x, y));
+      let xy = p.xy.slice();
+      if (xy.length > 2 && xy[0][0] === xy.at(-1)[0] && xy[0][1] === xy.at(-1)[1]) xy.pop();
+      const pts = dense(xy).map(([x, y]) => clear(x, y));
       if (pts.length < 3) continue;
-      const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
-      const { s } = R.run.locate(cx, cy);
-      const top = R.run.pos(s).z + 0.55;
-      const t = this._tile(cx, cy);
-      this._walls(t, pts, top - 1.4, top, 'platform');
       if (polyArea(pts) < 0) pts.reverse();
-      for (let i = 1; i + 1 < pts.length; i++) t.b.tri('platform', this._v(t, pts[0][0], pts[0][1], top), this._v(t, pts[i][0], pts[i][1], top), this._v(t, pts[i + 1][0], pts[i + 1][1], top));
+      const cx = pts.reduce((a, q) => a + q[0], 0) / pts.length, cy = pts.reduce((a, q) => a + q[1], 0) / pts.length;
+      let hint = R.run.locate(cx, cy).s;
+      const top = pts.map(([x, y]) => { const q = R.run.locate(x, y, hint, 400); hint = q.s; return R.run.pos(q.s).z + 0.55; });
+      const t = this._tile(cx, cy), b = t.b;
+      // the walls: the platform's edge and ends, down into the ground
+      for (let i = 0; i < pts.length; i++) {
+        const j = (i + 1) % pts.length, [ax, ay] = pts[i], [bx, by] = pts[j];
+        b.quad('platform', this._v(t, ax, ay, top[i] - 1.4), this._v(t, bx, by, top[j] - 1.4), this._v(t, bx, by, top[j]), this._v(t, ax, ay, top[i]));
+      }
+      // the top, triangulated properly (a platform along a curve is not convex)
+      const tris = ShapeUtils.triangulateShape(pts.map(([x, y]) => new Vector2(x, y)), []);
+      for (let [i, j, k] of tris) {
+        const [ax, ay] = pts[i], [bx, by] = pts[j], [cx2, cy2] = pts[k];
+        if ((bx - ax) * (cy2 - ay) - (by - ay) * (cx2 - ax) < 0) [j, k] = [k, j];      // (counter-clockwise from above: facing up)
+        b.tri('platform', this._v(t, pts[i][0], pts[i][1], top[i]), this._v(t, pts[j][0], pts[j][1], top[j]), this._v(t, pts[k][0], pts[k][1], top[k]));
+      }
     }
   }
 

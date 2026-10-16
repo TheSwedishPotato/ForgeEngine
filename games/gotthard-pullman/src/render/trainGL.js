@@ -26,7 +26,9 @@ export function poseOnTrack(line, sa, sb, out = {}) {
   out.yaw = Math.PI / 2 - heading;            // three.js rotation.y that turns the vehicle's +x onto the heading
   out.heading = heading;
   out.pitch = Math.atan2(dz, L);
-  out.roll = (cantAt(sa) + cantAt(sb)) / 2;
+  // (a three.js roll about the vehicle's x turns its right side down for a positive angle: the
+  // track's cant, which lowers the inner rail, is the opposite sign of the track's own angle)
+  out.roll = -(cantAt(sa) + cantAt(sb)) / 2;
   return out;
 }
 
