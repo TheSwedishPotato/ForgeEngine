@@ -1,0 +1,60 @@
+# DubForge configuration. Every key is optional; omitted keys use these defaults.
+# Typos raise an error on purpose. Override on the command line with: --set tts.cfg_weight=0.3
+device: auto            # auto | cuda | cpu
+work_dir: work          # checkpoints per film (safe to delete when finished)
+output_dir: output
+models_dir: models
+offline: true           # block model-hub network access (run `python main.py models download` once first)
+
+separate:
+  backend: demucs       # demucs | none
+  model: htdemucs
+  shifts: 1             # 2-5 = cleaner stems, proportionally slower
+
+asr:
+  backend: faster_whisper
+  model: large-v3       # medium / small for low VRAM (auto-chosen from your GPU)
+  compute_type: float16 # int8_float16 uses ~40% less VRAM with negligible quality loss
+
+segmentation:
+  merge_gap_s: 0.35     # glue mid-sentence fragments so translation sees whole sentences
+  max_segment_s: 12.0
+
+diarize:
+  backend: ecapa        # ecapa | single (monologue)
+  num_speakers: null    # set if you know it (e.g. 2) - more reliable than automatic
+  threshold: 0.70       # lower = more speakers. Setting num_speakers is more accurate than relying on this
+
+emotion:
+  backend: wav2vec2     # wav2vec2 | none
+
+translate:
+  backend: nllb         # nllb | ollama (local LLM adaptation) | passthrough
+  model: facebook/nllb-200-distilled-1.3B
+  ollama_model: qwen2.5:14b-instruct
+
+tts:
+  backend: chatterbox   # chatterbox (23 langs incl. Swedish) | xtts (17 langs, no Swedish)
+  reference_mode: auto  # auto | segment | speaker
+  base_exaggeration: 0.5
+  cfg_weight: 0.5       # lower = more natural pacing, higher = sticks closer to the text
+  retries: 2
+
+fit:
+  max_speedup: 1.20     # speech is only ever sped up, never slowed
+  hard_speedup: 1.40
+  max_spill_s: 0.6
+  match_loudness: true
+
+mix:
+  residual_vocals_gain: 0.8   # keeps screams/laughs/breaths that have no transcript
+  keep_original_track: true   # original audio as a 2nd selectable track
+
+lipsync:
+  backend: none         # none | wav2lip | musetalk
+  max_clip_s: 6.0
+  min_face_px: 72
+
+video:
+  encoder: libx264      # h264_nvenc is much faster on NVIDIA
+  crf: 16

@@ -1,0 +1,22 @@
+# Full stack. Install torch FIRST from the CUDA index (see README), then:
+#   pip install -r requirements-models.txt
+# This exact set resolves together on Python 3.11 (checked with `uv pip compile`).
+-r requirements.txt
+
+torch==2.6.0                 # pinned by chatterbox-tts
+torchaudio==2.6.0
+faster-whisper>=1.1.0        # Whisper large-v3 via CTranslate2
+sentencepiece                # NLLB tokenizer
+speechbrain>=1.0,<1.1        # 1.1.x needs torch>=2.7 which Chatterbox forbids
+chatterbox-tts==0.1.7        # zero-shot voice cloning, 23 languages incl. Swedish (MIT)
+librosa==0.11.0              # Wav2Lip audio front-end (also a Chatterbox dependency)
+setuptools<81                # Chatterbox's watermarker (resemble-perth) imports pkg_resources; without it Chatterbox
+                             # fails with the cryptic "'NoneType' object is not callable"
+
+# Demucs' PyPI metadata caps torchaudio<2.1, which conflicts with torch 2.6. Install it WITHOUT
+# dependencies (second command in the README) and add its real runtime deps here:
+dora-search
+einops
+julius
+lameenc
+openunmix

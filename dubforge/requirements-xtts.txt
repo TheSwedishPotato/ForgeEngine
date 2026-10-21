@@ -1,0 +1,4 @@
+# OPTIONAL, separate conda env recommended. XTTS-v2 = 17 languages, NO Swedish,
+# Coqui Public Model License (non-commercial). Only needed for languages Chatterbox lacks (Czech, Hungarian).
+-r requirements.txt
+coqui-tts>=0.27

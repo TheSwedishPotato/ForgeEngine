@@ -1,0 +1,11 @@
+# conda env create -f environment.yml && conda activate dubforge
+# Then follow README "Install" for torch (CUDA wheels) and the model packages.
+name: dubforge
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - ffmpeg>=6          # conda-forge build includes the rubberband filter (best time-stretch)
+  - pip
+  - pip:
+      - -r requirements.txt

@@ -1,0 +1,19 @@
+# Slower, best-effort quality. Needs ~12 GB+ VRAM for the 3.3B translator; Ollama must be running.
+#   ollama pull qwen2.5:14b-instruct      (or any larger instruct model you prefer)
+#   python main.py dub movie.mkv --to sv --config configs/high_quality.yaml --review
+separate:
+  shifts: 3
+asr:
+  beam_size: 8
+diarize:
+  num_speakers: null
+translate:
+  backend: ollama        # sees surrounding lines + a mouth-time budget; best for adapting dialogue
+tts:
+  retries: 3
+  cfg_weight: 0.4
+lipsync:
+  backend: musetalk      # needs its own env, see README
+video:
+  crf: 14
+  preset: slow
