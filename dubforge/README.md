@@ -49,7 +49,21 @@ glue code is written against their documented interfaces), the YuNet face-detect
 live mode with real audio devices / VB-CABLE / virtual camera, and — most importantly — the **perceived quality** of a full
 film. Run the 30-second test first, then tell me your GPU and what you hear.
 
-## Quick start
+## Quick start (Windows, two commands)
+
+Install Git and [Miniconda](https://docs.conda.io/en/latest/miniconda.html), open **Anaconda Prompt**, then:
+
+```
+git clone -b claude/dubforge-prototype https://github.com/TheSwedishPotato/ForgeEngine
+cd ForgeEngine\dubforge
+setup_windows.bat                                   :: env + PyTorch + libraries + model download (untested on Windows)
+dubforge.bat test "C:\Videos\movie.mkv"            :: 30-second Swedish test
+dubforge.bat gui                                    :: web interface
+```
+
+The manual steps below do the same thing, one at a time.
+
+## Quick start (manual)
 
 ```bash
 # 1. environment (Windows: Anaconda Prompt; FFmpeg comes from conda-forge)
