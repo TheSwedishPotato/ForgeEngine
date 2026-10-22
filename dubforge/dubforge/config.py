@@ -32,13 +32,17 @@ class ASRCfg:
 class SegmentationCfg:
     merge_gap_s: float = 0.35        # merge mid-sentence fragments closer than this
     max_segment_s: float = 12.0      # split anything longer (TTS + lip-sync work best short)
+    split_sentences: bool = True     # one sentence per unit, so a speaker change between sentences is never voiced as one person
+    min_sentence_s: float = 1.0      # ...but never cut a piece shorter than this
 
 
 @dataclass
 class DiarizeCfg:
     backend: str = "ecapa"           # ecapa | single
     num_speakers: int | None = None  # None = automatic
-    threshold: float = 0.70          # cosine-distance cut (calibrated on 12 LibriSpeech speakers; 0.55 split one actor in two)
+    threshold: float = 0.75          # cosine-distance cut (calibrated on LibriSpeech; film dialogue is noisier, so a bit looser)
+    adjacency_bonus: float = 0.12    # lines separated by < adjacency_gap_s are likelier the same person: shrink their distance
+    adjacency_gap_s: float = 0.35
     min_seg_s: float = 0.8
 
 
@@ -168,9 +172,9 @@ class Config:
         _update(self, _nest(dotted, value))
 
     def apply_cpu_profile(self) -> None:
-        """No NVIDIA GPU: CPU inference. Whisper large-v3 would take hours; 'small' is accurate enough
-        for clean dialogue. (Voice synthesis is the slow part either way.)"""
-        self.asr.model, self.asr.compute_type = "small", "int8"
+        """No NVIDIA GPU: CPU inference. large-v3-turbo (int8) hears quiet film dialogue far better than 'small'
+        and costs ~1x real time; voice synthesis is the slow part either way."""
+        self.asr.model, self.asr.compute_type = "large-v3-turbo", "int8"
 
     def apply_profile(self, vram_gb: float | None) -> None:
         """Pick model sizes that fit the card. Stages run one at a time, so peak VRAM is the

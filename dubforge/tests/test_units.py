@@ -406,3 +406,68 @@ def test_iou_and_confirm_geometry():
     from dubforge.lipsync.faces import iou
     assert iou((0, 0, 10, 10), (0, 0, 10, 10)) == 1.0 and iou((0, 0, 10, 10), (20, 20, 30, 30)) == 0.0
     assert abs(iou((0, 0, 10, 10), (5, 0, 15, 10)) - 1 / 3) < 1e-6
+
+
+def test_segments_never_span_a_sentence_boundary():
+    """Regression (real clip): Whisper returned 'question? answer.' as one segment spoken by two people."""
+    from dubforge.segmentation import split_sentences
+    w = words("Why don't you just admit that you're freaked out by my robot hand? I'm not freaked out but it's fine.", 9.9, 0.45)
+    seg = Segment(0, 9.9, w[-1].end, " ".join(x.text.strip() for x in w), words=w)
+    parts = split_sentences(seg, 1.0)
+    assert len(parts) == 2
+    assert parts[0].text.endswith("robot hand?") and parts[1].text.startswith("I'm not freaked")
+    assert parts[0].end <= parts[1].start and all(p.words for p in parts)
+    # tiny pieces are not cut off ("Yes." stays attached) and one-sentence segments are untouched
+    short = Segment(0, 0, 1.4, "Yes. Sure.", words=words("Yes. Sure.", 0.0, 0.7))
+    assert len(split_sentences(short, 1.0)) == 1
+    one = Segment(0, 0, 3, "Just one sentence here.", words=words("Just one sentence here.", 0.0, 0.7))
+    assert split_sentences(one, 1.0) == [one]
+    out = resegment([seg], SegmentationCfg())
+    assert len(out) == 2 and [o.id for o in out] == [0, 1]
+    assert len(resegment([seg], SegmentationCfg(split_sentences=False))) == 1
+
+
+def test_short_line_reference_follows_the_voice_not_the_label(tmp_path):
+    """A wrong speaker label must not pull another person's voice into a short line."""
+    from dubforge.refs import ReferenceProvider
+    sr = 16000
+
+    def tone(f, secs):
+        return (0.3 * np.sin(2 * np.pi * f * np.arange(int(secs * sr)) / sr)).astype(np.float32)
+
+    # timeline: 150 Hz 'voice A' lines and 300 Hz 'voice B' lines, 3 s each, separated by silence
+    parts, segs, t = [], [], 0.0
+    plan = [(150, "A"), (300, "B"), (150, "A"), (300, "B")]
+    for i, (f, who) in enumerate(plan):
+        parts += [np.zeros(int(0.5 * sr), np.float32), tone(f, 3.0)]
+        t += 0.5
+        # deliberately WRONG labels: every line is filed under speaker "X"
+        segs.append(Segment(i, t, t + 3.0, "x", speaker="X"))
+        t += 3.0
+    short = Segment(9, t + 0.5, t + 1.7, "no", speaker="X")                  # a 1.2 s interjection by voice A (150 Hz)
+    parts += [np.zeros(int(0.5 * sr), np.float32), tone(150, 1.2)]
+    segs.append(short)
+    sf.write(tmp_path / "v.wav", np.concatenate(parts), sr)
+    sf.write(tmp_path / "a.wav", np.zeros(int(sum(len(p) for p in parts)), np.float32), sr)
+    rp = ReferenceProvider(segs, tmp_path / "v.wav", tmp_path / "a.wav", tmp_path / "refs", embed=_fake_embed)
+    ref, rsr = sf.read(rp.for_segment(short), dtype="float32")
+    assert abs(len(ref) / rsr) > 2.0                                          # own audio + matching clips
+    spec = np.abs(np.fft.rfft(ref))
+    freqs = np.fft.rfftfreq(len(ref), 1 / rsr)
+    assert abs(freqs[np.argmax(spec)] - 150) < 10
+    assert spec[(freqs > 280) & (freqs < 320)].max() < 0.05 * spec.max()      # no 300 Hz (other person) in the reference
+    # without an embedding model it falls back to labels (all 'X' here) and is allowed to mix voices
+    rp2 = ReferenceProvider(segs, tmp_path / "v.wav", tmp_path / "a.wav", tmp_path / "refs2")
+    assert rp2.for_segment(short) is not None
+
+
+def test_adjacent_lines_prior_keeps_one_person_together():
+    rng = np.random.default_rng(5)
+    base = rng.standard_normal(32)
+    a, b = base + 0.9 * rng.standard_normal(32), base + 0.9 * rng.standard_normal(32)    # same person, noisy short lines
+    c = rng.standard_normal(32) * 1.0                                                      # a different person
+    E = np.stack([a, b, c])
+    plain = cluster_embeddings(E, None, 0.55)
+    prior = cluster_embeddings(E, None, 0.55, adjacent=[(0, 1)], bonus=0.3)
+    assert len(set(prior)) <= len(set(plain)) and prior[0] == prior[1]
+    assert prior[2] != prior[0]                                                           # a clear voice change still wins

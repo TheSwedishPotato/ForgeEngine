@@ -150,3 +150,53 @@ def test_per_line_lipsync_veto_and_voice_report(film, cfg):
     rep = json.loads((next(Path(cfg.work_dir).glob("film_*")) / "sv" / "report.json").read_text())
     assert rep["voice_flagged"] == 0 and rep["similar_speaker_pairs"] == []
     assert (next(Path(cfg.work_dir).glob("film_*")) / "common" / "speakers.txt").read_text().startswith("SPK0")
+
+
+def test_constant_fps_snaps_variable_frame_rate():
+    from fractions import Fraction
+    from dubforge.media import _constant_fps
+    assert _constant_fps({"avg_frame_rate": "68700/2209", "r_frame_rate": "60/1"}) == 30       # phone screen recording (VFR)
+    assert _constant_fps({"avg_frame_rate": "25/1", "r_frame_rate": "25/1"}) == 25
+    assert _constant_fps({"avg_frame_rate": "24000/1001", "r_frame_rate": "24000/1001"}) == Fraction(24000, 1001)
+    assert _constant_fps({"avg_frame_rate": "0/0", "r_frame_rate": "30/1"}) == 30
+
+
+def test_rotated_phone_video_keeps_its_picture(rotated_film, cfg):
+    """Regression: a rotation-flagged file used to come out as scrambled streaks."""
+    info = probe(rotated_film)
+    assert (info.width, info.height) == (320, 240)                    # display size, not stored size
+    registry.register("lipsync", "redbox", "test_pipeline_e2e:RedBoxLipSync")
+    cfg.lipsync.backend = "redbox"
+    out = DubPipeline(cfg, progress=lambda *a: None).run(rotated_film, "sv")
+    oinfo = probe(out)
+    assert (oinfo.width, oinfo.height) == (320, 240)
+    with FrameReader(rotated_film, info) as a, FrameReader(out, oinfo) as b:
+        for i, (fa, fb) in enumerate(zip(a, b)):
+            if i == 40:                                               # a frame inside the first line (red patch top-left)
+                assert fb[:60, :60].reshape(-1, 3).mean(axis=0)[2] > 150       # patch is where the lip-sync backend drew it
+                diff = np.abs(fa[100:, 100:].astype(int) - fb[100:, 100:].astype(int)).mean()
+                assert diff < 12, f"picture scrambled, mean diff {diff}"       # rest of the frame still the same picture
+                break
+
+
+class NeverSyncs(LipSync):
+    name = "never"
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+    def sync_clip(self, frames, audio_16k, fps):
+        return None                                                   # e.g. no confirmed face anywhere
+
+
+def test_no_lipsynced_window_means_original_video_is_not_reencoded(film, cfg):
+    registry.register("lipsync", "never", "test_pipeline_e2e:NeverSyncs")
+    cfg.lipsync.backend = "never"
+    out = DubPipeline(cfg, progress=lambda *a: None).run(film, "sv")
+    job = next(Path(cfg.work_dir).glob("film_*")) / "sv"
+    assert not (job / "video_lipsync.mp4").exists()
+    with FrameReader(film, probe(film)) as a, FrameReader(out, probe(out)) as b:
+        for i, (fa, fb) in enumerate(zip(a, b)):
+            if i == 30:
+                assert (fa == fb).all()                              # stream copy: bit-identical picture
+                break

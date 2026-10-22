@@ -79,7 +79,9 @@ class ReferenceProvider:
     """Writes reference wavs on demand and caches them."""
 
     def __init__(self, segments: list[Segment], vocals_path: Path, accomp_path: Path, out_dir: Path,
-                 mode: str = "auto", min_own_s: float = 3.0, max_s: float = 12.0):
+                 mode: str = "auto", min_own_s: float = 3.0, max_s: float = 12.0, embed=None, sim_min: float = 0.35):
+        self.embed, self.sim_min = embed, sim_min               # embed: mono 16 kHz audio -> voice embedding (or None)
+        self._emb: dict[int, np.ndarray] = {}
         self.segments = {s.id: s for s in segments}
         self.vocals = vocals_path
         self.out_dir = out_dir
@@ -121,6 +123,40 @@ class ReferenceProvider:
         return self._render(("spk", speaker, emotion), f"{speaker}_{emotion or 'any'}",
                             pick_clips(clips, emotion, self.max_s))
 
+    def _embedding(self, seg_id: int) -> np.ndarray | None:
+        if seg_id not in self._emb:
+            s = self.segments[seg_id]
+            x, _ = read_audio(self.vocals, sr=16000, mono=True, start=s.start, duration=min(s.duration, 8.0))
+            if len(x) < 0.6 * 16000:
+                return None
+            v = np.asarray(self.embed(x), dtype=np.float64).ravel()
+            self._emb[seg_id] = v / (np.linalg.norm(v) + 1e-9)
+        return self._emb[seg_id]
+
+    def similar(self, seg: Segment) -> Path | None:
+        """Reference for a SHORT line: its own audio first (anchors the identity), then the clean clips that
+        ACOUSTICALLY match it - regardless of which speaker label they carry. A wrong speaker label therefore
+        cannot pull in someone else's voice."""
+        if self.embed is None or seg.duration < 0.8:
+            return None
+        key = ("sim", seg.id)
+        if key in self._cache:
+            return self._cache[key]
+        e = self._embedding(seg.id)
+        if e is None:
+            return None
+        scored = []
+        for clips in self.bank.values():
+            for c in clips:
+                if c.seg_id == seg.id:
+                    continue
+                ce = self._embedding(c.seg_id)
+                if ce is not None and float(e @ ce) >= self.sim_min:
+                    scored.append((float(e @ ce), c))
+        scored.sort(key=lambda t: -t[0])
+        own = Clip(seg.id, seg.start, seg.end, seg.emotion, 0.0)
+        return self._render(key, f"sim_{seg.id:05d}", [own] + [c for _, c in scored])
+
     def longest(self, speaker: str) -> Path | None:
         """Last resort for a speaker with no clean clips: their longest line, quality filters ignored."""
         cands = [s for s in self.segments.values() if s.speaker == speaker and not s.skip and s.duration >= 0.8]
@@ -129,11 +165,12 @@ class ReferenceProvider:
     def for_segment(self, seg: Segment) -> Path | None:
         """Reference for one line. Chain: the line's own audio (best prosody match) -> the speaker's
         best emotion-matched clean clips -> their longest line -> the line itself -> None.
-        Short interjections ("No!", "Yes.") are common in films and usually fall to the 2nd/3rd step."""
+        Short interjections ("No!", "Yes.") are common in films. With a voice-embedding model available they get
+        their own audio plus the acoustically closest clips (robust to speaker-label mistakes)."""
         use_own = self.mode == "segment" or (self.mode == "auto" and seg.duration >= self.min_own_s)
         if use_own and seg.duration >= 1.0:
             return self.own(seg)
-        ref = self.speaker(seg.speaker, seg.emotion) or self.longest(seg.speaker)
+        ref = self.similar(seg) or self.speaker(seg.speaker, seg.emotion) or self.longest(seg.speaker)
         if ref is not None:
             return ref
         return self.own(seg) if seg.duration >= 0.6 else None

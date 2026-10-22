@@ -43,6 +43,31 @@ def merge_fragments(segs: list[Segment], cfg: SegmentationCfg) -> list[Segment]:
     return out
 
 
+def split_sentences(seg: Segment, min_piece_s: float) -> list[Segment]:
+    """Cut a segment after each sentence-ending word (using word timings) when both sides are long enough.
+
+    Whisper often returns a whole exchange as ONE segment ("Why don't you admit it? I'm not scared."), which
+    may contain two speakers. Speaker detection works per unit, so units must not span a turn change."""
+    words = seg.words
+    if len(words) < 2:
+        return [seg]
+    pieces: list[list[Word]] = []
+    cur: list[Word] = []
+    for i, w in enumerate(words):
+        cur.append(w)
+        rest = words[i + 1:]
+        if (is_sentence_end(w.text) and rest and cur[-1].end - cur[0].start >= min_piece_s
+                and rest[-1].end - rest[0].start >= min_piece_s):
+            pieces.append(cur)
+            cur = []
+    if cur:
+        pieces.append(cur)
+    if len(pieces) == 1:                      # nothing to cut: keep Whisper's own segment boundaries
+        return [seg]
+    return [Segment(id=seg.id, start=p[0].start, end=p[-1].end, text=_words_text(p), speaker=seg.speaker, words=p)
+            for p in pieces]
+
+
 def split_long(seg: Segment, max_s: float) -> list[Segment]:
     """Recursively split at the best word boundary near the middle (punctuation / long pause win)."""
     if seg.duration <= max_s or len(seg.words) < 2:
@@ -72,7 +97,8 @@ def resegment(segs: list[Segment], cfg: SegmentationCfg) -> list[Segment]:
     merged = merge_fragments(segs, cfg)
     out: list[Segment] = []
     for s in merged:
-        out.extend(split_long(s, cfg.max_segment_s))
+        for piece in (split_sentences(s, cfg.min_sentence_s) if cfg.split_sentences else [s]):
+            out.extend(split_long(piece, cfg.max_segment_s))
     for i, s in enumerate(out):
         s.id = i
         s.skip = is_nonspeech(s.text)

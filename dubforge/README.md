@@ -20,34 +20,41 @@ video ─► extract ─► separate voices from music/FX (Demucs)
 
 ## What is verified and what is not
 
-I built and tested this in a sandbox **without a GPU**, so here is exactly what that does and doesn't prove.
+I built and tested this in a sandbox **without a GPU** (4 CPU cores), so here is exactly what that does and doesn't prove.
 
-**Verified (automated, `pytest`, 34 tests pass on Python 3.11 with the pinned real stack):** stage orchestration and
-checkpoint/resume, timing fit, loudness matching, mixing, muxing, review → re-voice only changed lines, the lip-sync frame
-pass (with a fake lip-sync model), live-mode scheduling (simulated offline), CLI and GUI construction.
+**Automated tests** (`pytest`, 40+ tests on Python 3.11 with the pinned real stack): orchestration, checkpoint/resume,
+timing fit, mixing, muxing, review → re-voice changed lines only, lip-sync frame pass, live-mode scheduling (simulated),
+voice-identity logic, rotated/variable-frame-rate phone video, CLI and GUI construction.
 
-**Verified with the real models, on CPU** (Python 3.11, `requirements-models.txt` exactly as shipped):
+**Real models on CPU, real footage** (Tears of Steel, CC-BY, 75 s clip with several speakers; a 37 s phone screen recording;
+LibriSpeech speech; a real portrait photo):
 
 | Check | Result |
 |---|---|
-| `requirements-models.txt` installs and imports together | Yes — torch 2.6.0, transformers 5.2.0, faster-whisper, speechbrain, chatterbox, demucs |
-| Full `main.py dub` run, real models, 13.5 s English clip (speech over a music bed) → Swedish | Completed in ~3 min on 4 CPU cores; dubbed + original audio tracks tagged `swe`/`eng`, `.srt`, QA report |
-| Music/FX preserved | RMS of the final mix between lines is identical to the Demucs accompaniment stem (0.0222 vs 0.0222) |
-| Chatterbox cross-lingual clone (English reference → Swedish) | Whisper re-transcription: 1 wrong word in 11. Speaker similarity to the reference **0.62** vs **0.015** average for 10 other speakers |
-| Round-trip WER of the dub (2 lines) | 0.25, almost all of it the proper noun "Quilter" being mispronounced — a typical zero-shot-TTS weakness. Tiny sample. |
-| Speaker clustering, 12 real LibriSpeech speakers | Default threshold calibrated: ARI 0.90–0.96 from 1.5 s to 8 s lines (0.55 split one actor into several voices). Setting `diarize.num_speakers` is better still (ARI 1.0 on full lines) |
-| Face detection on a real portrait | Works (OpenCV Haar fallback) |
+| Full pipeline, all real models, English → Swedish | Works end to end; dubbed + original audio tracks, `.srt`, QA report |
+| Music/FX preserved | Final mix between lines is identical to the Demucs accompaniment stem |
+| Chatterbox cross-lingual clone (English reference → Swedish) | Whisper re-transcription 1 wrong word in 11; speaker similarity to reference **0.62** vs **0.015** for other speakers |
+| Wav2Lip on real film faces (CPU) | Works: ~10 s per 4 s of 720p video. Mouth is soft (96 px model), chin area slightly lighter |
+| Speaker clustering | LibriSpeech, 12 speakers: ARI 0.90–0.96. **Film dialogue is harder** (see limitations); set `diarize.num_speakers` |
+| Whisper on quiet, mumbled film dialogue | `small` misses/garbles lines; `large-v3-turbo` (CPU default) recovers noticeably more; still imperfect |
 
-Bugs this testing found and fixed: SpeechBrain 1.0 vs `huggingface_hub` ≥ 1.0 (removed argument + changed 404 type — scoped shim in
-`dubforge/compat.py`), SpeechBrain's emotion model vs transformers 5 (replaced by a plain-`transformers` model),
-Chatterbox failing silently without `setuptools<81`, Demucs' wrong dependency cap, lines too short to clone being muted
-instead of left original, and lip-sync windows not covering the original mouth movement when the dub is shorter.
+**Bugs that real footage found (and are fixed):** phone recordings carry a *rotation flag* and *variable frame rate* — the first
+version read frames at the wrong size and produced a scrambled picture (regression test added); a lip-sync pass re-encoded the
+whole video even when nothing changed; Whisper returns an exchange of two people as one segment, which was voiced as one person
+(now split per sentence before speaker detection); lip-sync trusted a confident face detector that was wrong (a man's face half-hidden
+behind a brain in a jar) — now an independent second detector must agree; plus SpeechBrain/`huggingface_hub`/transformers 5
+clashes, Chatterbox needing `setuptools<81`, lines too short to clone being muted.
 
-**NOT verified — expect to tune:** anything on a GPU (CUDA setup, speed, VRAM use — "8 GB should fit because models load one
-at a time" is reasoning, not a measurement), **Wav2Lip and MuseTalk on real faces** (I couldn't fetch their repos/weights; the
-glue code is written against their documented interfaces), the YuNet face-detector download, `h264_nvenc`, Windows specifics,
-live mode with real audio devices / VB-CABLE / virtual camera, and — most importantly — the **perceived quality** of a full
-film. Run the 30-second test first, then tell me your GPU and what you hear.
+**NOT verified — expect to tune:** anything on an NVIDIA GPU (CUDA, speed, VRAM), MuseTalk, Windows specifics (the `.bat` files were
+never run on Windows), live mode with real audio devices / VB-CABLE / virtual camera, `h264_nvenc`, and the **perceived quality** of a
+full film. Speaker detection and lip-sync in particular need a human to check the first results.
+
+## No NVIDIA GPU (e.g. AMD Ryzen with Radeon graphics)
+
+Everything runs on the CPU. The setup script detects this and installs the CPU build of PyTorch (AMD integrated graphics are not
+supported by PyTorch on Windows). Speed is the cost: measured on a 4-core CPU, **12–35 minutes of waiting per minute of
+dialogue-heavy video** (voice synthesis dominates; a CPU with more cores is faster). That is fine for clips and short scenes and
+**not realistic for a full-length film** — for that you want an NVIDIA GPU. Use `--review` and short test cuts first.
 
 ## Quick start (Windows, two commands)
 
@@ -198,6 +205,12 @@ Language/engine compatibility is checked up front: asking XTTS for Swedish fails
 
 ## Known limitations (be realistic)
 
+* **Speaker detection in film audio is imperfect.** It may split one person into two voices or merge two similar ones. Safeguards:
+  per-sentence units, a continuity prior, short lines take their reference from the acoustically closest clips (not just the label),
+  and after voicing every line is compared with every speaker's real voice (`voice_qa.json`, flagged in `report.json`).
+  Still: read `work/<film>/common/speakers.txt`, and set `diarize.num_speakers` or fix the `speaker` field before voicing.
+* **Quiet or mumbled dialogue** is mis-heard by any Whisper model; mistranslation follows. Always use `--review` on anything you care about.
+
 * Lip-sync re-renders the **largest face**, not necessarily the speaker (see roadmap: active-speaker detection). Wav2Lip's
   mouth is 96 px (soft on 1080p); MuseTalk is sharper but heavier.
 * Cloning across languages keeps some accent of the original speaker.
@@ -219,15 +232,19 @@ Language/engine compatibility is checked up front: asking XTTS for Swedish fails
 | `LocalEntryNotFoundError` | a model isn't downloaded: `python main.py models download` (or `--set offline=false` once) |
 | Wav2Lip errors | `python main.py doctor` shows which of repo / checkpoint / face model is missing |
 
-## Wav2Lip / MuseTalk setup (optional)
+## Lip-sync setup (optional)
 
-```bash
-git clone https://github.com/Rudrabha/Wav2Lip third_party/Wav2Lip
-# download wav2lip_gan.pth (link in that repo's README) -> models/wav2lip/wav2lip_gan.pth
-python main.py dub clip.mp4 --to sv --lipsync wav2lip
+`python main.py models download` already fetches Wav2Lip's network code and GAN checkpoint (from a Hugging Face copy of the
+official repo; non-commercial licence) and the face detector. Then add `--lipsync wav2lip`:
+
 ```
-MuseTalk pins old torch/mmcv, so give it its **own** conda env, clone https://github.com/TMElyralab/MuseTalk to
-`third_party/MuseTalk`, download its weights per its README, then set `lipsync.musetalk_python` to that env's python.
+python main.py dub clip.mp4 --to sv --lipsync wav2lip --review
+```
+It only re-renders a mouth when a face is large enough (`lipsync.min_face_px`) **and a second detector agrees it is a face**
+(`lipsync.confirm_frac`); everything else keeps the original picture, which is the safe failure. To veto a shot yourself set
+`"lipsync": false` on that line in `segments.json` (or untick it in the GUI table).
+MuseTalk pins old torch/mmcv, so it needs its **own** conda env: clone it to `third_party/MuseTalk`, download its weights per its
+README, set `lipsync.musetalk_python` to that env's python. It is untested.
 
 ## Layout
 

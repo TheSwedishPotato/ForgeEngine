@@ -53,6 +53,26 @@ class MediaInfo:
         return f"{self.fps.numerator}/{self.fps.denominator}"
 
 
+_STD_FPS = [Fraction(24000, 1001), Fraction(24), Fraction(25), Fraction(30000, 1001), Fraction(30),
+            Fraction(50), Fraction(60000, 1001), Fraction(60)]
+
+
+def _constant_fps(v: dict) -> Fraction:
+    """Frame rate to process at. Screen recordings are variable-frame-rate (avg != nominal): snap those to the
+    nearest standard rate so reader and writer agree and audio stays in sync."""
+    def frac(x):
+        try:
+            f = Fraction(x)
+            return f if f > 0 else Fraction(0)
+        except (ValueError, ZeroDivisionError):
+            return Fraction(0)
+    avg, nominal = frac(v.get("avg_frame_rate", "0/1")), frac(v.get("r_frame_rate", "0/1"))
+    if avg and nominal and abs(avg - nominal) / nominal <= Fraction(1, 100):
+        return avg
+    base = avg or nominal or Fraction(25)
+    return min(_STD_FPS, key=lambda f: abs(f - base))
+
+
 def probe(path: str | Path) -> MediaInfo:
     require_ffmpeg()
     p = run(["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)])
@@ -64,14 +84,19 @@ def probe(path: str | Path) -> MediaInfo:
     if not a:
         raise MediaError(f"{path} has no audio stream to dub.")
     fps = Fraction(0)
+    w = h = 0
     if v:
-        rate = v.get("avg_frame_rate") or v.get("r_frame_rate") or "0/1"
-        fps = Fraction(rate) if rate not in ("0/0", "") else Fraction(0)
-        if fps == 0:
-            fps = Fraction(v.get("r_frame_rate", "25/1"))
+        w, h = int(v["width"]), int(v["height"])
+        rot = 0
+        for sd in v.get("side_data_list", []) or []:           # phones store landscape video as rotated portrait
+            if "rotation" in sd:
+                rot = int(round(float(sd["rotation"])))
+        rot = rot or int(float(v.get("tags", {}).get("rotate", 0) or 0))
+        if abs(rot) % 180 == 90:                                # ffmpeg autorotates on decode, so frames come out swapped
+            w, h = h, w
+        fps = _constant_fps(v)
     dur = float(j.get("format", {}).get("duration") or (v or a[0]).get("duration") or 0)
-    return MediaInfo(Path(path), dur, v is not None, int(v["width"]) if v else 0,
-                     int(v["height"]) if v else 0, fps, len(a), a[0].get("tags", {}).get("language"))
+    return MediaInfo(Path(path), dur, v is not None, w, h, fps, len(a), a[0].get("tags", {}).get("language"))
 
 
 def extract_audio(src: str | Path, dst: str | Path, sr: int = 44100, channels: int = 2,
@@ -131,7 +156,8 @@ class FrameReader:
 
     def __enter__(self):
         self._proc = subprocess.Popen(
-            ["ffmpeg", "-v", "error", "-i", self.path, "-an", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+            ["ffmpeg", "-v", "error", "-i", self.path, "-an", "-vf", f"fps={self.info.fps_str}",
+             "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=10 ** 8)
         return self
 

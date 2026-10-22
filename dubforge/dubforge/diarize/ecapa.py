@@ -13,20 +13,28 @@ from ..env import resolve_device
 from ..types import Segment
 
 
-def cluster_embeddings(emb: np.ndarray, num_speakers: int | None, threshold: float) -> np.ndarray:
-    """Cosine agglomerative clustering. Returns one label per row, ordered by cluster size."""
+def cluster_embeddings(emb: np.ndarray, num_speakers: int | None, threshold: float,
+                       adjacent: list[tuple[int, int]] | None = None, bonus: float = 0.0) -> np.ndarray:
+    """Cosine agglomerative clustering. Returns one label per row, ordered by cluster size.
+
+    `adjacent` lists (i, j) pairs that follow each other almost without a pause; their distance is reduced by
+    `bonus`, a soft prior that continuous speech is one person (a clear voice change still wins)."""
     from sklearn.cluster import AgglomerativeClustering
     if len(emb) == 0:
         return np.zeros(0, dtype=int)
     if len(emb) == 1:
         return np.zeros(1, dtype=int)
     emb = emb / (np.linalg.norm(emb, axis=1, keepdims=True) + 1e-9)
+    D = np.clip(1.0 - emb @ emb.T, 0.0, 2.0)
+    for i, j in (adjacent or []):
+        D[i, j] = D[j, i] = max(0.0, D[i, j] - bonus)
+    np.fill_diagonal(D, 0.0)
     if num_speakers:
-        model = AgglomerativeClustering(n_clusters=min(num_speakers, len(emb)), metric="cosine", linkage="average")
+        model = AgglomerativeClustering(n_clusters=min(num_speakers, len(emb)), metric="precomputed", linkage="average")
     else:
-        model = AgglomerativeClustering(n_clusters=None, distance_threshold=threshold, metric="cosine",
+        model = AgglomerativeClustering(n_clusters=None, distance_threshold=threshold, metric="precomputed",
                                         linkage="average")
-    labels = model.fit_predict(emb)
+    labels = model.fit_predict(D)
     order = np.argsort(-np.bincount(labels))               # biggest cluster -> SPK0
     remap = {int(old): new for new, old in enumerate(order)}
     return np.array([remap[int(l)] for l in labels])
@@ -83,7 +91,9 @@ class EcapaDiarizer(Diarizer):
                 s.speaker = "SPK0"
             return
         E = np.stack(embs)
-        labels = cluster_embeddings(E, d.num_speakers, d.threshold)
+        adjacent = [(a, b) for a, b in zip(range(len(idxs) - 1), range(1, len(idxs)))
+                    if 0 <= segments[idxs[b]].start - segments[idxs[a]].end < d.adjacency_gap_s]
+        labels = cluster_embeddings(E, d.num_speakers, d.threshold, adjacent, d.adjacency_bonus)
         from ..qa import refine_labels
         labels = refine_labels(E, labels)                    # move lines clustered on thin evidence to the nearest voice
         labelled = assign_short_by_neighbour(segments, {i: int(l) for i, l in zip(idxs, labels)})

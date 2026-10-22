@@ -11,11 +11,8 @@ from .env import setup_env
 YUNET_URL = ("https://raw.githubusercontent.com/opencv/opencv_zoo/main/models/face_detection_yunet/"
              "face_detection_yunet_2023mar.onnx")
 
-WAV2LIP_HELP = """Wav2Lip needs two things you fetch by hand (the authors host the weights on Google Drive):
-  1. git clone https://github.com/Rudrabha/Wav2Lip third_party/Wav2Lip
-  2. download 'Wav2Lip + GAN' (wav2lip_gan.pth) from the link in that repo's README
-     and save it as models/wav2lip/wav2lip_gan.pth
-Licence: personal / research / non-commercial use only."""
+WAV2LIP_HELP = """Wav2Lip (lip-sync) is downloaded too: personal/research/non-commercial use only. Skip it with
+  python main.py models download --only whisper nllb chatterbox demucs speechbrain yunet"""
 
 
 def _whisper(cfg: Config) -> None:
@@ -55,10 +52,29 @@ def _speechbrain(cfg: Config) -> None:
 
 
 def _yunet(cfg: Config) -> None:
+    import shutil
     dst = Path(cfg.lipsync.face_model)
     dst.parent.mkdir(parents=True, exist_ok=True)
-    if not dst.exists():
+    if dst.exists():
+        return
+    try:                                            # Hugging Face first (GitHub raw is blocked on some networks)
+        from huggingface_hub import hf_hub_download
+        shutil.copy(hf_hub_download("opencv/face_detection_yunet", "face_detection_yunet_2023mar.onnx"), dst)
+    except Exception:
         urllib.request.urlretrieve(YUNET_URL, dst)
+
+
+def _wav2lip(cfg: Config) -> None:
+    """Wav2Lip network definition + GAN checkpoint from a Hugging Face copy of the official repo.
+    Non-commercial licence (see docs/BUSINESS_AND_LICENSING.md). The checkpoint is only ever loaded with
+    torch's weights-only unpickler."""
+    import shutil
+    from huggingface_hub import hf_hub_download, snapshot_download
+    repo, ckpt = Path(cfg.lipsync.wav2lip_repo), Path(cfg.lipsync.wav2lip_checkpoint)
+    snapshot_download("camenduru/Wav2Lip", local_dir=str(repo), allow_patterns=["models/*.py"])
+    if not ckpt.exists():
+        ckpt.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(hf_hub_download("camenduru/Wav2Lip", "checkpoints/wav2lip_gan.pth"), ckpt)
 
 
 def _xtts(cfg: Config) -> None:
@@ -68,9 +84,9 @@ def _xtts(cfg: Config) -> None:
 
 JOBS: dict[str, Callable[[Config], None]] = {
     "whisper": _whisper, "nllb": _nllb, "chatterbox": _chatterbox, "demucs": _demucs,
-    "speechbrain": _speechbrain, "yunet": _yunet, "xtts": _xtts,
+    "speechbrain": _speechbrain, "yunet": _yunet, "wav2lip": _wav2lip, "xtts": _xtts,
 }
-DEFAULT = ["whisper", "nllb", "chatterbox", "demucs", "speechbrain", "yunet"]
+DEFAULT = ["whisper", "nllb", "chatterbox", "demucs", "speechbrain", "yunet", "wav2lip"]
 
 
 def download(cfg: Config, which: list[str] | None = None) -> dict[str, str]:

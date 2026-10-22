@@ -27,7 +27,7 @@ if errorlevel 1 goto :fail
 where nvidia-smi >nul 2>nul
 if errorlevel 1 (
   echo [2/5] No NVIDIA GPU found - installing the CPU build of PyTorch.
-  echo       DubForge still works, but is much slower: expect roughly 10-20 minutes of waiting per minute of video.
+  echo       DubForge still works but is slow: I measured 12-35 minutes of waiting per minute of dialogue-heavy video on a 4-core CPU. Fine for clips, not for whole films.
   pip install torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
 ) else (
   echo [2/5] NVIDIA GPU found - installing PyTorch with CUDA ...

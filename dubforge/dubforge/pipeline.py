@@ -181,8 +181,17 @@ class DubPipeline:
             alt = tts_backends_for(tgt.code)
             raise ValueError(f"TTS backend {c.backend!r} cannot speak {tgt.name}. Backends that can: {alt or 'none registered'}.")
         stems = common / "stems"
+        embedder = None
+        if self.cfg.diarize.backend == "ecapa":                  # voice-by-similarity needs the speaker-embedding model
+            try:
+                embedder = self._backend("diarize", "ecapa")
+                embedder.load()
+            except Exception as e:
+                log.warning("similarity references disabled (%s: %s)", type(e).__name__, e)
+                embedder = None
         refs = ReferenceProvider(segs, stems / "vocals.wav", stems / "accompaniment.wav", lang / "refs",
-                                 c.reference_mode, c.min_own_ref_s, c.ref_max_s)
+                                 c.reference_mode, c.min_own_ref_s, c.ref_max_s,
+                                 embed=embedder.embed if embedder else None)
         med: dict[str, float] = {}
         for spk in {s.speaker for s in segs}:
             vals = [s.energy_db for s in segs if s.speaker == spk and s.energy_db is not None]
@@ -196,6 +205,8 @@ class DubPipeline:
                 if i % 10 == 0:
                     save_segments(lang / "segments.json", segs, meta)
                 self.progress("tts", (i + 1) / max(1, len(todo)), f"line {i + 1}/{len(todo)}")
+        if embedder is not None:
+            embedder.unload()
         save_segments(lang / "segments.json", segs, meta)
         self._voice_qa(segs, common, lang)
         save_segments(lang / "segments.json", segs, meta)
@@ -321,9 +332,12 @@ class DubPipeline:
         max_frames = max(30, int(self.cfg.lipsync.max_clip_mb / max(frame_mb, 0.1)))
         windows = lipsync_windows(spans, float(info.fps), self.cfg.lipsync.max_clip_s, max_frames=max_frames)
         with self._backend("lipsync", name) as ls:
-            self._lipsync_pass(video, info, windows, lang / "dub_vocals.wav", ls, out)
+            synced = self._lipsync_pass(video, info, windows, lang / "dub_vocals.wav", ls, out)
+        if synced == 0:                       # nothing changed: keep the original picture untouched (no re-encode loss)
+            out.unlink(missing_ok=True)
+            log.info("lip-sync: no window had a confirmed face; original video kept as-is")
 
-    def _lipsync_pass(self, video: Path, info, windows, dub_wav: Path, backend, out: Path) -> None:
+    def _lipsync_pass(self, video: Path, info, windows, dub_wav: Path, backend, out: Path) -> int:
         fps = float(info.fps)
         wi, buf, synced, tried = 0, [], 0, 0
 
@@ -359,6 +373,7 @@ class DubPipeline:
                 flush(windows[min(wi, len(windows) - 1)])
         tmp.replace(out)
         log.info("lip-sync: %d/%d windows had a usable face", synced, tried)
+        return synced
 
     def _stage_mux(self, video, common, lang, src, tgt):
         out = self._output_path(video, tgt.code)

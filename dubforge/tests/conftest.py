@@ -78,3 +78,20 @@ def cfg(tmp_path) -> Config:
     c.tts.backend = "mock"
     c.device = "cpu"
     return c
+
+
+@pytest.fixture(scope="session")
+def rotated_film(tmp_path_factory) -> Path:
+    """Phone-style file: stored PORTRAIT (240x320) with a 90 degree display-rotation flag, i.e. it plays
+    as 320x240 landscape. This is what iPhone/Android screen recordings look like, and what broke the
+    first version of the frame reader (it read frames at the stored size -> scrambled picture)."""
+    d = tmp_path_factory.mktemp("rot")
+    voice, music = make_stems()
+    wav = d / "mix.wav"
+    sf.write(wav, voice + music, SR, subtype="PCM_16")
+    stored = d / "stored.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"testsrc2=size=240x320:rate=25:duration={DURATION}",
+                    "-i", str(wav), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(stored)], check=True)
+    out = d / "rotated.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-display_rotation", "90", "-i", str(stored), "-c", "copy", str(out)], check=True)
+    return out

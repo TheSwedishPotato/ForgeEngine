@@ -96,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
 
     m = sub.add_parser("models", help="model management")
     m.add_argument("action", choices=["download"])
-    m.add_argument("--only", nargs="+", help="whisper nllb chatterbox demucs speechbrain yunet xtts")
+    m.add_argument("--only", nargs="+", help="whisper nllb chatterbox demucs speechbrain yunet wav2lip xtts")
     m.add_argument("--config")
 
     a = ap.parse_args(argv)
@@ -108,7 +108,13 @@ def main(argv: list[str] | None = None) -> int:
         return doctor.run(Config.load(a.config))
     if a.cmd == "models":
         from dubforge import models_dl
-        res = models_dl.download(Config.load(a.config), a.only)
+        cfg = Config()
+        from dubforge.env import gpu_info
+        g = gpu_info()
+        cfg.apply_profile(g.get("vram_gb")) if g else cfg.apply_cpu_profile()     # fetch the Whisper size this machine will use
+        if a.config:
+            cfg.merge_file(a.config)
+        res = models_dl.download(cfg, a.only)
         for k, v in res.items():
             print(f"{k:<12} {v}")
         return 0 if all(v == "ok" for v in res.values()) else 1
