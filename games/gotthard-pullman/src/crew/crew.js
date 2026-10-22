@@ -628,8 +628,9 @@ export class Crew {
     if (injOn(0) && level > (lifting ? high + 25 : high) && !this.busy(F, 'injectorL')) this.work(F, 'injectorL', { to: 0, pref: 'L' });
     if (injOn(0) && !lifting && level > low + 15 && L.p < L.spec.pSet - 1.2 && hard && !this.busy(F, 'injectorL')) this.work(F, 'injectorL', { to: 0, pref: 'L' });
     // falling behind: the driver puts on the second injector
-    if (!injOn(1) && level < low - 50 && !this.busy(this.driver, 'injectorR') && this.driver.hands.R.free) this.work(this.driver, 'injectorR', { to: 1, pref: 'R' });
-    if (injOn(1) && level > low + 20 && !this.busy(this.driver, 'injectorR')) this.work(this.driver, 'injectorR', { to: 0, pref: 'R' });
+    // (when you drive, the driver's side - its injector, the heating - is yours: nobody undoes what you set)
+    if (!this.manual && !injOn(1) && level < low - 50 && !this.busy(this.driver, 'injectorR') && this.driver.hands.R.free) this.work(this.driver, 'injectorR', { to: 1, pref: 'R' });
+    if (!this.manual && injOn(1) && level > low + 20 && !this.busy(this.driver, 'injectorR')) this.work(this.driver, 'injectorR', { to: 0, pref: 'R' });
     // standing with a hot fire: the injector also stops her blowing off
     if (standing && L.p > L.spec.pSet - 0.25 && !injOn(0) && level < 240 && !this.busy(F, 'injectorL')) this.work(F, 'injectorL', { to: 1, pref: 'L' });
     // ---- blower: on whenever the regulator is shut (no blast to draw the fire, and no blowback)
@@ -640,7 +641,7 @@ export class Crew {
     if (Math.abs(c.dampers - wantDamp) > 0.1 && !this.busy(F, 'dampers')) this.work(F, 'dampers', { to: wantDamp, rate: 1 });
     // ---- train heating: on in the cold
     const wantHeat = this.sim.weather.at(T.front, t).tempC < 12 ? 0.8 : 0;
-    if (Math.abs(c.steamHeat - wantHeat) > 0.1 && !this.busy(this.driver, 'steamHeat') && this.driver.hands.R.free) this.work(this.driver, 'steamHeat', { to: wantHeat, rate: 0.5 });
+    if (!this.manual && Math.abs(c.steamHeat - wantHeat) > 0.1 && !this.busy(this.driver, 'steamHeat') && this.driver.hands.R.free) this.work(this.driver, 'steamHeat', { to: wantHeat, rate: 0.5 });
   }
 
   /** Hand positions for drawing the crew (cab frame). */

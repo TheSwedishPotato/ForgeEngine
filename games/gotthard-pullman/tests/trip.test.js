@@ -164,6 +164,13 @@ test('you can drive: the regulator moves her, the brake valve stops her', async 
   run(8); D.press('KeyG', false); D.press('KeyX', false);
   run(30);
   assert.ok(!T.loco.failed, 'the boiler survives the stop');
+  // nobody on the footplate undoes what you set: heating off, the right injector on, they stay so
+  D.press('KeyJ', true); D.press('KeyJ', false);
+  const heat = T.loco.c.steamHeat, inj = T.loco.c.injector[1];
+  D.press('KeyI', true); D.press('KeyI', false);
+  run(60);
+  assert.equal(T.loco.c.steamHeat, heat, 'the heating stays as you set it');
+  assert.equal(T.loco.c.injector[1], !inj, 'the injector stays as you set it');
   assert.ok(T.speed > 4, `she moves again (${(T.speed * 3.6).toFixed(0)} km/h)`);
 });
 
