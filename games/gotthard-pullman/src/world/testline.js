@@ -9,6 +9,8 @@
  *   12000-18000 rising 35 per mille, level to the end at 18400 (vertical curves between).
  */
 const KNOTS = [[0, 0], [150, 0], [300, -0.10], [1500, -0.10], [1700, -0.035], [11700, -0.035], [12000, 0.035], [18000, 0.035], [18150, 0]];
+/** Where the start screen sets the train down (the engine's front, metres beyond Göschenen): the top of each test track. */
+export const TEST_STARTS = { steep: 120, long: 1760 };
 export const gradeAt = (u) => {
   for (let i = 0; i + 1 < KNOTS.length; i++) {
     const [a, ga] = KNOTS[i], [b, gb] = KNOTS[i + 1];

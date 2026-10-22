@@ -15,6 +15,7 @@ import { TrackGL } from './render/track.js';
 import { TrainGL } from './render/trainGL.js';
 import { Sim } from './sim.js';
 import { Game } from './game.js';
+import { TEST_STARTS } from './world/testline.js';
 import { Structures } from './render/structures.js';
 import { Places } from './render/places.js';
 import { DATE, hms, fmt } from './sim.js';
@@ -37,7 +38,8 @@ async function ride() {
   let opts = { weather: params.get('w') ?? 'clear', quality: params.get('q') ?? 'high', car: params.get('car') ?? 'parlor', chair: Number(params.get('chair') ?? 12), t: params.get('t') ?? '10:12' };
   if (!manual && !params.get('go') && !params.get('w')) opts = await startScreen(ui, opts);
   loading('Laying the line…');
-  const test = opts.t === 'test';                      // the test section: the trip run ahead a little, then the train set down there
+  // a test track: the trip run ahead a little, then the train set down at the top of it
+  const test = opts.t?.startsWith('test') ? (opts.t === 'test-long' ? 'long' : 'steep') : null;
   const join = hms(test ? '10:20' : opts.t);
   const game = await Game.create(canvas, {
     weather: opts.weather, quality: opts.quality, startClock: Math.min(join, hms('10:12')),
@@ -51,15 +53,18 @@ async function ride() {
     while (game.sim.clock < join) { game.sim.advance(Math.min(30, join - game.sim.clock)); if ((game.sim.clock | 0) % 120 < 30) { loading(`Running ahead to ${opts.t}… ${fmt(game.sim.clock)}`); await new Promise((r) => setTimeout(r, 0)); } }
   }
   if (test) {
-    // standing on the level at the top of the test section, engine brake on, you at the controls
-    const sim = game.sim, T = sim.train, d = sim.route.testFrom + 120 - T.front;
+    // standing at the top of the test track, brakes on, you at the controls
+    const sim = game.sim, T = sim.train, d = sim.route.testFrom + TEST_STARTS[test] - T.front;
     for (const v of T.veh) { v.s += d; v.v = 0; v.a = 0; }
     T.brake.handle = 'running';
     sim.crew.next = sim.timetable.stops.length - 1; sim.crew.phase = 'arrived';
     game.driving.toggle();
     sim.crew._setControl('regulator', 0);
     sim.crew._setControl('directBrake', 1);
-    sim.log('Test section: the train stands at the top. 100 per mille down ahead, then 35 down, then 35 up. F hands back.');
+    T.brake.setService(1);
+    T.brake.equalising = T.brake.serviceTarget;
+    for (const v of T.brake.v) { v.pBP = T.brake.serviceTarget; v.pBC = Math.max(v.pBC, 3.8); }     // (already applied, so she stands)
+    sim.log(test === 'steep' ? 'Test track: super steep. 1.2 km down at 100 per mille ahead. Brakes on; F hands back.' : 'Test track: 10 km down at 35 per mille, then 6 km up at 35. Brakes on; F hands back.');
     game.trainGL.update(0);
     game._recentre(0);
   }

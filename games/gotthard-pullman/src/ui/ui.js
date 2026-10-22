@@ -17,7 +17,8 @@ export const JOIN = [
   { t: '10:31', label: 'Climbing past Amsteg', note: 'the Chärstelenbach bridge' },
   { t: '10:52', label: 'The Pfaffensprung spiral', note: 'after the stop at Gurtnellen' },
   { t: '11:19', label: 'Leaving Wassen', note: 'the loops round the church' },
-  { t: 'test', label: 'Test section: you drive', note: 'beyond Göschenen: 100 ‰ down, 35 ‰ down, then 35 ‰ up' },
+  { t: 'test-steep', label: 'Test track: super steep', note: 'you drive: 1.2 km down at 100 ‰' },
+  { t: 'test-long', label: 'Test track: long down, then up', note: 'you drive: 10 km down at 35 ‰, then 6 km up at 35 ‰' },
 ];
 
 const SEATS = [
@@ -59,7 +60,7 @@ export function startScreen(root, defaults = {}) {
     const S = page.querySelector('.seats');
     for (const x of SEATS) { const b = el('button', null, `<b>${x.label}</b><span>${x.note}</span>`); b.dataset.car = x.car; S.append(b); }
     const J = page.querySelector('.joins');
-    for (const x of JOIN) { const b = el('button', null, `<b>${x.t === 'test' ? x.label : `${x.t} &middot; ${x.label}`}</b><span>${x.note}</span>`); b.dataset.t = x.t; J.append(b); }
+    for (const x of JOIN) { const b = el('button', null, `<b>${x.t.startsWith('test') ? x.label : `${x.t} &middot; ${x.label}`}</b><span>${x.note}</span>`); b.dataset.t = x.t; J.append(b); }
     const Q = page.querySelector('.quality');
     for (const q of ['low', 'medium', 'high', 'ultra']) { const b = el('button', null, q[0].toUpperCase() + q.slice(1)); b.dataset.q = q; Q.append(b); }
     const mark = () => {
