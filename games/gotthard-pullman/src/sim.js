@@ -186,6 +186,7 @@ export class Sim {
       if (e.type === 'derailed') this.log(`DERAILED: the ${e.name} ${e.why} at ${(Math.abs(e.speed) * 3.6).toFixed(0)} km/h, km ${this.route.kmAt(e.s).toFixed(2)}.`);
       else if (e.type === 'coupling broke') this.log(`The coupling between the ${e.between[0]} and the ${e.between[1]} has torn apart.`);
       else if (e.type === 'on its side') this.log(`The ${e.name} has gone over on its side.`);
+      else if (e.type === 'wear') this.log(e.text);
       else if (e.type === 'fell') this.log(`The ${e.name} has fallen, striking the ground at ${(e.speed * 3.6).toFixed(0)} km/h.`);
     }
   }

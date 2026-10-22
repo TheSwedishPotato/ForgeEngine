@@ -22,6 +22,7 @@ import { SteamLocomotive } from './locomotive.js';
 import { AirBrake } from './brakes.js';
 import { muMax, RAIL } from './adhesion.js';
 import { Derailment } from './derail.js';
+import { Wear } from './wear.js';
 
 const G = 9.80665;
 const LB = 4.44822, ST = 907.185;
@@ -60,6 +61,7 @@ export class Train {
     this.helperPower = 0;                                   // banking engine's tractive demand 0..1 (its driver, by radio)
     this.helperTarget = 0;                                  // speed its driver holds when approaching to couple, m/s
     this.derail = new Derailment(this);                     // what holds each vehicle on the rails, and what it does when nothing does
+    this.wear = new Wear(this);                             // the motion, the axle boxes and the track under hard running
   }
 
   /** A vehicle arrives behind the train (not coupled yet): the banking engine. */
@@ -159,6 +161,7 @@ export class Train {
         const Fmax = Math.min(v.maxTE, v.power / Math.max(1, Math.abs(v.v)), muH * normal);
         v.Ftrac = Fmax * this.helperPower;
       }
+      Froll += v.drag ?? 0;                                         // (a seized axle dragging, wear.js)
       v.Fg = Fg; v.Froll = Froll; v.Faero = Faero; v.Fbrake = Fbrake; v.Fsnow = Fsnow; v.mNow = m; v.cond = cond;
     }
     // couplings
@@ -180,7 +183,8 @@ export class Train {
       const v = this.veh[i];
       if (v.wreck) continue;
       const Fc = (i > 0 ? this.couplerForce[i - 1] : 0) - (i < n - 1 ? this.couplerForce[i] : 0);
-      const Fdrive = i === 0 ? lo.Fadh : (v.Ftrac ?? 0);
+      // (with a coupling rod broken the engine cannot drive her wheels: they only roll, or brake)
+      const Fdrive = i === 0 ? (this.wear.rodBroken ? Math.min(0, lo.Fadh) : lo.Fadh) : (v.Ftrac ?? 0);
       const active = v.Fg + v.Faero + Fc + Fdrive;
       const friction = v.Froll + v.Fbrake + v.Fsnow;
       const mEff = v.mNow * (v.kind === 'engine' ? 1.0 : 1.04);
@@ -200,6 +204,7 @@ export class Train {
     // ---- off the rails: the derailed vehicles move as free bodies; the others are checked
     this.derail.step(dt);
     this.derail.check(dt);
+    this.wear.step(dt);
     this.odometer += Math.abs(e.v) * dt;
     // ---- warmth of the cars (steam heat in, walls and doors out)
     const heatPerCar = lo.heatFlow * 2.1e6 / Math.max(1, n - 2);

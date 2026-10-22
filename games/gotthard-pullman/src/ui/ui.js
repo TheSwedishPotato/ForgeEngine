@@ -417,6 +417,7 @@ export class DrivePanel {
       `brake valve ${D.brakeText()}   pipe ${f(B.v[0].pBP)} bar   engine brake ${f(B.direct * 100, 0)} %`,
       `${c.drainCocks ? 'cocks OPEN' : 'cocks shut'} · ${c.sander ? 'SAND' : 'sand'} · ${c.startingValve ? 'START VALVE' : 'start valve'} · injector ${c.injector[1] ? 'ON' : 'off'} · heating ${c.steamHeat > 0.5 ? 'on' : 'off'}`,
       sig ? `next signal ${sig.name}: ${sig.aspectText} in ${f(sig.dist, 0)} m` : '',
+      (() => { const W = T.wear, hb = W.hottest(); return `motion ${W.rodBroken ? 'ROD BROKEN' : W.motion > 0.3 ? `KNOCKING ${f(W.motion * 100, 0)} %` : 'sound'}   hottest axle box +${f(hb.k, 0)} K${hb.k > 90 ? ` (${hb.name})` : ''}`; })(),
       sg?.pending ? `SIGNUM WARNING - press K within ${f(Math.max(0, sg.deadline - T.time), 1)} s` : '',
     ].filter(Boolean).join('\n');
   }

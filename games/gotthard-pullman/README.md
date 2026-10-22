@@ -233,6 +233,20 @@ Once off the rails, a vehicle is a free body:
 The brake hoses tear, so every brake goes on, and the crew shut off steam. Wreckage fouling the
 other main line occupies it, so its signals go to Halt.
 
+**Wear and failures** (`src/physics/wear.js`; the rates are estimates):
+
+- **The engine's motion.** Above the C 5/6's 65 km/h, the rods, crankpins and big ends take a
+  beating that grows steeply with speed (about seven minutes at 75 km/h, two at 90). The
+  fireman hears the motion knock, then a coupling rod breaks and the engine can no longer
+  drive her wheels.
+- **Hot axle boxes.** Friction in the plain bearings heats them with load and speed, and far
+  over the design speed the heat runs away. At about 90 K above the air you smell it, at 160 K
+  it smokes, and at 230 K the white metal melts and the bearing seizes. The axle then drags,
+  and its journal soon burns off and drops the axle.
+- **The track.** Too much sideways force from the wheels shifts the whole track in its ballast
+  (Prud'homme's limit as the UIC applies it: 0.85 × (10 + P/3) kN per axle, P the axle load in
+  kN). Held for two seconds, the track moves out of line and the vehicle comes off.
+
 **The ride** (`src/physics/sway.js`). Track irregularities come from a PSD-shaped spectrum
 (alignment, level, cross-level) passed through each car's body modes (lateral and roll ~0.8 Hz,
 bounce ~1.2 Hz, pitch ~1.5 Hz). The player's head lags those accelerations.
