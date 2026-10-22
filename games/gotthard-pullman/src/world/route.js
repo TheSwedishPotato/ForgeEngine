@@ -7,6 +7,7 @@
  * Map coordinates: x east, y north, z height above sea level (m). The
  * renderer's world is three.js-style: X = east, Y = up, Z = -north.
  */
+import { extensionSamples } from './testline.js';
 import ROUTE from '../data/route.js';
 import { gunzipBase64 } from '../data/decode.js';
 
@@ -130,6 +131,13 @@ export class Route {
     this.data = R;
     this.step = R.step;
     this.run = new Track(await gunzipBase64(R.run.xyz), R.step, 'run');
+    // the test section beyond Göschenen (testline.js): the running line carries on
+    {
+      const base = await gunzipBase64(R.run.xyz), ext = extensionSamples(this.run, R.step), all = new Float32Array(base.length + ext.length);
+      all.set(base); all.set(ext, base.length);
+      this.testFrom = this.run.length;
+      this.run = new Track(all, R.step, 'run');
+    }
     this.left = new Track(await gunzipBase64(R.left.xyz), R.step, 'left');
     this.right = new Track(await gunzipBase64(R.right.xyz), R.step, 'right');
     this.length = this.run.length;

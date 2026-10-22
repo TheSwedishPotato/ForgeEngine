@@ -14,6 +14,7 @@
  *
  * Map coordinates: x east, y north, z up (m above sea level).
  */
+import { extensionStructures } from './testline.js';
 import TERRAIN from '../data/terrain.js';
 import TERRAIN_FAR from '../data/terrain_far.js';
 import LANDCOVER from '../data/landcover.js';
@@ -79,6 +80,8 @@ export class Terrain {
     this.x1 = this.x0 + (this.w - 1) * this.step; this.y1 = this.y0 + (this.h - 1) * this.step;
     this.dem = new Float32Array(dem.length);
     for (let i = 0; i < dem.length; i++) this.dem[i] = dem[i] / 10;
+    // the test section's tunnels and viaducts, where it runs deep under the natural ground or high over it
+    if (!route._testStructures) { route._testStructures = true; extensionStructures(route, (x, y) => this.demBicubic(x, y)); }
     this.lc = lc;
     this.lcX0 = LANDCOVER.x0; this.lcY0 = LANDCOVER.y0; this.lcStep = LANDCOVER.step; this.lcW = LANDCOVER.w; this.lcH = LANDCOVER.h;
     this._buildTrackSamples();

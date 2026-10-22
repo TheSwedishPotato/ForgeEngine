@@ -75,7 +75,7 @@ test('running into a standing train: the collision throws the engine off the rai
 test('the ground stays out of the trains\' way: nothing of the terrain inside the loading gauge', async () => {
   const { Terrain } = await import('../src/world/terrain.js');
   const T = await Terrain.load(route), L = route.run, bad = [];
-  const nearPortal = (s) => route.tunnels.some((t) => Math.abs(s - t.s0) < 10 || Math.abs(s - t.s1) < 10);
+  const nearPortal = (s) => route.tunnels.some((t) => Math.abs(s - t.s0) < 15 || Math.abs(s - t.s1) < 15);   // (the portal's face covers its mouth)
   for (let s = 5; s < L.length; s += 3) {
     if (route.structureAt(s) || nearPortal(s)) continue;
     const p = L.pos(s), h = L.headingAt(s), w = 1.6 + 45 * Math.abs(L.curvatureAt(s));
