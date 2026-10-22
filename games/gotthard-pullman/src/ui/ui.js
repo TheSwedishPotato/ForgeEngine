@@ -380,6 +380,14 @@ export class DrivePanel {
     this.box.hidden = true;
     this.read = el('pre', 'drive-read');
     this.box.append(this.read);
+    // quick commands (on every device): go forward, stop, go backward
+    const quick = el('div', 'drive-quick');
+    for (const [label, what, key] of [['▶ Go', 'forward', '1'], ['■ Stop', 'stop', '2'], ['◀ Reverse', 'backward', '3']]) {
+      const b = el('button', null, `${label} <small>${key}</small>`);
+      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); game.driving.quick(what); });
+      quick.append(b);
+    }
+    this.box.append(quick);
     if (touch) {
       const grid = el('div', 'drive-btns');
       for (const [label, code] of [['Reg +', 'KeyW'], ['Reg −', 'KeyS'], ['Fwd', 'KeyQ'], ['Back', 'KeyA'], ['Brake +', 'BracketRight'], ['Brake −', 'BracketLeft'],

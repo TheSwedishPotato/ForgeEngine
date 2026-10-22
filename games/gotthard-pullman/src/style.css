@@ -101,3 +101,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1016; col
   border-radius: 8px; padding: 10px 4px; touch-action: none; -webkit-user-select: none; user-select: none; }
 .drive-btns button:active { background: rgba(201, 163, 90, 0.35); }
 
+
+/* the driving panel's quick commands */
+.drive-quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.drive-quick button { font: 700 13px/1 Inter, system-ui, sans-serif; color: var(--ink); background: rgba(201, 163, 90, 0.18); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 6px; touch-action: manipulation; }
+.drive-quick button small { opacity: 0.55; font-weight: 400; margin-left: 4px; }
+.drive-quick button:active { background: rgba(201, 163, 90, 0.45); }
