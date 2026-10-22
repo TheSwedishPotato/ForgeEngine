@@ -84,10 +84,9 @@ class Wav2LipSync(LipSync):
         finally:
             sys.path.remove(str(repo))
         self.device = resolve_device(self.cfg)
-        try:
-            ck = torch.load(str(ckpt), map_location="cpu", weights_only=True)
-        except Exception:
-            ck = torch.load(str(ckpt), map_location="cpu", weights_only=False)
+        # weights_only=True: the checkpoint is a pickle; never fall back to unrestricted loading, which would
+        # execute whatever code a tampered .pth contains.
+        ck = torch.load(str(ckpt), map_location="cpu", weights_only=True)
         net = Wav2Lip()
         net.load_state_dict({k.replace("module.", ""): v for k, v in ck["state_dict"].items()})
         self.model = net.to(self.device).eval()
@@ -98,6 +97,12 @@ class Wav2LipSync(LipSync):
         raw = [self.detector.detect(f) for f in frames]
         if sum(b is not None for b in raw) < 0.5 * len(frames):
             return None
+        cf = self.cfg.lipsync.confirm_frac
+        if cf > 0 and self.detector.kind == "yunet":            # Haar-only mode has nothing independent to compare
+            sample = [i for i in range(0, len(frames), 3) if raw[i] is not None]
+            agree = sum(self.detector.confirm(frames[i], raw[i]) for i in sample)
+            if not sample or agree / len(sample) < cf:
+                return None
         boxes = fill_missing(raw)
         if boxes is None:
             return None

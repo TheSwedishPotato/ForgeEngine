@@ -23,12 +23,13 @@ from typing import Callable
 import numpy as np
 
 from . import registry
-from .audio_utils import active_rms_db, duration_of, read_audio, write_audio
+from .audio_utils import active_rms_db, duration_of, read_audio, resample, write_audio
 from .config import Config
 from .env import resolve_device, setup_env
 from .languages import resolve, tts_backends_for, tts_supports
 from .media import FrameReader, FrameWriter, extract_audio, mux, probe, to_mono_16k
 from .mix import build_dub_track, final_mix, load_tts_clip, plan_fit
+from .qa import check_dubbed_lines, similar_speaker_pairs, speaker_overview, voice_prints
 from .refs import ReferenceProvider
 from .segmentation import resegment
 from .tts.common import looks_broken, style_for
@@ -152,7 +153,9 @@ class DubPipeline:
         with self._backend("diarize", self.cfg.diarize.backend) as d:
             d.assign(common / "vocals_16k.wav", segs)
         save_segments(common / "segments.json", segs, meta)
-        log.info("speakers: %s", sorted({s.speaker for s in segs}))
+        sheet = speaker_overview(segs)
+        (common / "speakers.txt").write_text(sheet + "\n", encoding="utf-8")
+        log.info("who is who (check this; fix labels in <lang>/segments.json):\n%s", sheet)
 
     def _stage_emotion(self, video, common, lang, src, tgt):
         segs, meta = load_segments(common / "segments.json")
@@ -194,6 +197,37 @@ class DubPipeline:
                     save_segments(lang / "segments.json", segs, meta)
                 self.progress("tts", (i + 1) / max(1, len(todo)), f"line {i + 1}/{len(todo)}")
         save_segments(lang / "segments.json", segs, meta)
+        self._voice_qa(segs, common, lang)
+        save_segments(lang / "segments.json", segs, meta)
+
+    def _voice_qa(self, segs: list[Segment], common: Path, lang: Path) -> None:
+        """Flag lines whose dubbed voice is closer to a DIFFERENT speaker than the one who said them."""
+        if not self.cfg.qa.voice_check or self.cfg.diarize.backend != "ecapa":
+            return
+        for s in segs:
+            s.notes = [n for n in s.notes if not n.startswith(("wrong_voice", "weak_voice"))]
+        vocals = common / "stems" / "vocals.wav"
+        try:
+            with self._backend("diarize", "ecapa") as d:
+                prints = voice_prints(segs, d.embed, lambda s: read_audio(
+                    vocals, sr=16000, mono=True, start=s.start, duration=min(s.duration, 8.0))[0])
+
+                def read_dub(s):
+                    x, sr = load_tts_clip(s.tts_path)
+                    return resample(x, sr, 16000)
+                res = check_dubbed_lines(segs, prints, d.embed, read_dub, self.cfg.qa.min_margin)
+                pairs = similar_speaker_pairs(prints, self.cfg.qa.similar_pair)
+        except Exception as e:                                   # QA must never break a dub
+            log.warning("voice check skipped: %s: %s", type(e).__name__, e)
+            return
+        by_id = {s.id: s for s in segs}
+        for sid, r in res.items():
+            if r["verdict"] != "ok":
+                by_id[sid].notes.append(f"{r['verdict']}: sounds like {r['best_other'] if r['verdict'] == 'wrong_voice' else 'nobody in particular'}"
+                                        f" (sim to {r['speaker']}={r['sim_assigned']}, other={r['sim_other']})")
+        (lang / "voice_qa.json").write_text(json.dumps({"similar_speaker_pairs": pairs, "lines": res}, indent=1))
+        bad = sum(r["verdict"] != "ok" for r in res.values())
+        log.info("voice check: %d/%d lines flagged; similar speaker pairs: %s", bad, len(res), pairs or "none")
 
     def _synth_one(self, tts, s: Segment, refs: ReferenceProvider, med_db, out_dir: Path, lang: str) -> None:
         s.notes = [n for n in s.notes if not n.startswith(("no_reference", "tts_unstable"))]
@@ -260,6 +294,9 @@ class DubPipeline:
             "spilled_into_silence": count("spill"), "compressed": count("compressed"), "overrun": count("overrun"),
             "tts_unstable": sum(any(n.startswith("tts_unstable") for n in s.notes) for s in segs),
             "mix_peak_before_normalise": round(peak, 3),
+            "voice_flagged": sum(any(n.startswith(("wrong_voice", "weak_voice")) for n in s.notes) for s in segs),
+            "similar_speaker_pairs": (json.loads((lang / "voice_qa.json").read_text())["similar_speaker_pairs"]
+                                      if (lang / "voice_qa.json").exists() else []),
             "problem_lines": [{"id": s.id, "t": round(s.start, 1), "text": s.translation[:80], "flags": s.fit.get("flags", []),
                                "notes": s.notes} for s in segs if s.fit.get("flags") and "spill" not in s.fit["flags"]
                               or s.notes],
@@ -279,7 +316,7 @@ class DubPipeline:
         segs, _ = load_segments(lang / "segments.json")
         # Cover the ORIGINAL line too: if the dub is shorter, the actor's lips would otherwise keep
         # speaking the old language after the dub ends. The model renders a closed mouth there.
-        spans = [(min(s.start, placed[s.id][0]), max(s.end, placed[s.id][1])) for s in segs if s.id in placed]
+        spans = [(min(s.start, placed[s.id][0]), max(s.end, placed[s.id][1])) for s in segs if s.id in placed and s.lipsync]
         windows = lipsync_windows(spans, float(info.fps), self.cfg.lipsync.max_clip_s)
         with self._backend("lipsync", name) as ls:
             self._lipsync_pass(video, info, windows, lang / "dub_vocals.wav", ls, out)

@@ -27,6 +27,7 @@ class Segment:
     energy_db: float | None = None              # active RMS of the original vocals (dBFS)
     translation: str = ""
     skip: bool = False                          # e.g. lyrics / music notes: leave original audio
+    lipsync: bool = True                        # set False to veto lip-sync for this line (bad shot)
     tts_path: str | None = None
     tts_duration: float | None = None
     fit: dict[str, Any] = field(default_factory=dict)

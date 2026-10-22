@@ -296,3 +296,113 @@ def test_speechbrain_hub_shim_maps_old_arguments(monkeypatch):
     with pytest.raises(requests.exceptions.HTTPError, match="404 Client Error"):   # what SpeechBrain catches as "file absent"
         hub.hf_hub_download("r", "custom.py", use_auth_token=False)
     assert hub.snapshot_download is huggingface_hub.snapshot_download                # everything else passes through
+
+
+# ------------------------------------------------------------------ voice identity QA
+def _fake_embed(audio):
+    """Embedding = dominant frequency one-hot in 25 Hz bins: a stand-in 'voice' that is easy to reason about."""
+    f = np.fft.rfftfreq(len(audio), 1 / 16000)[np.argmax(np.abs(np.fft.rfft(audio)))]
+    v = np.zeros(40)
+    v[min(39, int(f // 25))] = 1.0
+    return v
+
+
+def _tone(f, secs=2.0):
+    return (0.3 * np.sin(2 * np.pi * f * np.arange(int(secs * 16000)) / 16000)).astype(np.float32)
+
+
+def test_voice_check_flags_a_line_voiced_as_the_wrong_person():
+    from dubforge.qa import check_dubbed_lines, similar_speaker_pairs, voice_prints
+    A, B = 150, 300                                            # two 'voices'
+    segs = [Segment(0, 0, 3, "a1", speaker="A"), Segment(1, 4, 7, "a2", speaker="A"),
+            Segment(2, 8, 11, "b1", speaker="B"), Segment(3, 12, 15, "b2", speaker="B"),
+            Segment(4, 16, 19, "b3", speaker="A")]             # 4: diarization put B's line under A
+    freq_of_original = {0: A, 1: A, 2: B, 3: B, 4: B}
+    prints = voice_prints(segs, _fake_embed, lambda s: _tone(freq_of_original[s.id]))
+    assert set(prints) == {"A", "B"} and not similar_speaker_pairs(prints)
+    for s in segs:
+        s.tts_path = "x.wav"
+    dub = {0: A, 1: A, 2: B, 3: 2000, 4: A}                    # 3: clone came out generic; 4: cloned from A's reference
+    res = check_dubbed_lines(segs, prints, _fake_embed, lambda s: _tone(dub[s.id]))
+    assert res[0]["verdict"] == res[1]["verdict"] == res[2]["verdict"] == "ok"
+    assert res[3]["verdict"] == "weak_voice"                   # sounds like nobody
+    assert res[4]["verdict"] == "ok"                            # dub voice A matches the (wrong) A label -> label error, not a clone error
+    # the label error itself is caught one level up: B's real audio is closer to B than to the label it was given
+    own_label = voice_prints(segs, _fake_embed, lambda s: _tone(freq_of_original[s.id]))
+    e = _fake_embed(_tone(freq_of_original[4]))
+    assert float(e @ own_label["B"]) > float(e @ own_label["A"])
+
+
+def test_wrong_voice_verdict_and_similar_pair_warning():
+    from dubforge.qa import check_dubbed_lines, similar_speaker_pairs, voice_prints
+    segs = [Segment(i, 4 * i, 4 * i + 3, "x", speaker=("A" if i % 2 == 0 else "B"), tts_path="x.wav") for i in range(6)]
+    orig = lambda s: _tone(150 if s.speaker == "A" else 300)
+    prints = voice_prints(segs, _fake_embed, orig)
+    res = check_dubbed_lines(segs, prints, _fake_embed, lambda s: _tone(300))     # every dub came out in B's voice
+    assert [res[i]["verdict"] for i in range(6)] == ["wrong_voice", "ok"] * 3     # A's lines flagged, B's fine
+    assert res[0]["best_other"] == "B" and res[0]["sim_other"] > res[0]["sim_assigned"]
+    same = voice_prints(segs, _fake_embed, lambda s: _tone(150))                    # one person split into two labels
+    assert similar_speaker_pairs(same) == [{"a": "A", "b": "B", "similarity": 1.0}]
+
+
+def test_refine_labels_moves_misfiled_lines_to_the_nearest_voice():
+    from dubforge.qa import refine_labels
+    rng = np.random.default_rng(3)
+    centers = rng.standard_normal((2, 32))
+    E = np.concatenate([c + 0.2 * rng.standard_normal((15, 32)) for c in centers])
+    truth = np.array([0] * 15 + [1] * 15)
+    noisy = truth.copy()
+    noisy[[2, 5]] = 1                                           # two of speaker 0's lines misfiled
+    noisy[[20]] = 0                                             # one of speaker 1's
+    fixed = refine_labels(E, noisy)
+    assert (fixed == truth).all()
+    assert list(refine_labels(E, np.zeros(30, dtype=int))) == [0] * 30      # single cluster untouched
+
+
+def test_speaker_overview_lists_who_is_who():
+    from dubforge.qa import speaker_overview
+    segs = [Segment(0, 65, 70, "Hello there my friend", speaker="SPK0"), Segment(1, 80, 82, "No", speaker="SPK1")]
+    out = speaker_overview(segs)
+    assert "SPK0: 1 lines, 5s" in out and '01:05  "Hello there my friend"' in out and "SPK1" in out
+
+
+# ------------------------------------------------------------------ lip-sync safety gates
+class _StubDetector:
+    kind = "yunet"
+
+    def __init__(self, confirm_pattern):
+        self.pattern, self.i = confirm_pattern, 0
+
+    def detect(self, frame):
+        return (100, 100, 300, 300)
+
+    def confirm(self, frame, box):
+        v = self.pattern[self.i % len(self.pattern)]
+        self.i += 1
+        return v
+
+
+def _w2l(confirm_pattern, confirm_frac=0.25):
+    from dubforge.lipsync.wav2lip import Wav2LipSync
+    cfg = Config()
+    cfg.lipsync.confirm_frac = confirm_frac
+    w = Wav2LipSync(cfg)
+    w.detector = _StubDetector(confirm_pattern)
+    return w
+
+
+def test_face_needs_independent_confirmation_before_lip_sync():
+    frames = [np.zeros((480, 640, 3), np.uint8)] * 30
+    assert _w2l([False]).track_faces(frames) is None                  # confident detector, nobody agrees -> skip (e.g. face behind an object)
+    assert _w2l([True, False, False, False]).track_faces(frames) is not None   # 1 in 4 agree -> accept
+    assert _w2l([False], confirm_frac=0.0).track_faces(frames) is not None      # gate disabled
+    small = [np.zeros((480, 640, 3), np.uint8)] * 30
+    w = _w2l([True])
+    w.detector.detect = lambda f: (10, 10, 40, 40)                    # 30 px face: too small to re-render
+    assert w.track_faces(small) is None
+
+
+def test_iou_and_confirm_geometry():
+    from dubforge.lipsync.faces import iou
+    assert iou((0, 0, 10, 10), (0, 0, 10, 10)) == 1.0 and iou((0, 0, 10, 10), (20, 20, 30, 30)) == 0.0
+    assert abs(iou((0, 0, 10, 10), (5, 0, 15, 10)) - 1 / 3) < 1e-6

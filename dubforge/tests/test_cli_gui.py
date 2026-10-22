@@ -37,6 +37,6 @@ def test_gui_builds_and_warns_about_swedish_on_xtts():
     from dubforge.config import Config
     from dubforge.gui import build, COLS
     demo = build(Config())
-    assert demo is not None and len(COLS) == 8
+    assert demo is not None and len(COLS) == 9
     from dubforge.languages import tts_backends_for
     assert tts_backends_for("sv") == ["chatterbox"]

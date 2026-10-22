@@ -15,7 +15,7 @@ from .types import load_segments
 WEIGHTS = {"extract": .01, "separate": .07, "asr": .10, "diarize": .02, "emotion": .03, "translate": .05,
            "tts": .45, "mix": .03, "lipsync": .22, "mux": .02}
 _ORDER = {s: i for i, s in enumerate(ALL_STAGES)}
-COLS = ["id", "start", "end", "speaker", "emotion", "source", "translation", "skip"]
+COLS = ["id", "start", "end", "speaker", "emotion", "source", "translation", "skip", "lip-sync"]
 
 
 def _progress_fn(progress):
@@ -33,7 +33,7 @@ def _make_config(base: Config, tts: str, translator: str, lipsync: str) -> Confi
 
 def _table(lang_dir: Path):
     segs, _ = load_segments(lang_dir / "segments.json")
-    return [[s.id, round(s.start, 2), round(s.end, 2), s.speaker, s.emotion, s.text, s.translation, s.skip]
+    return [[s.id, round(s.start, 2), round(s.end, 2), s.speaker, s.emotion, s.text, s.translation, s.skip, s.lipsync]
             for s in segs]
 
 
@@ -44,7 +44,10 @@ def _apply_table(lang_dir: Path, rows) -> None:
     for r in (rows.values.tolist() if hasattr(rows, "values") else rows):
         s = by_id.get(int(r[0]))
         if s is not None:
+            s.speaker = str(r[3] or s.speaker)            # fix a wrong speaker label here; that line is re-voiced
             s.translation, s.skip = str(r[6] or ""), bool(r[7])
+            if len(r) > 8:
+                s.lipsync = bool(r[8])
     save_segments(lang_dir / "segments.json", segs, meta)
 
 
@@ -156,7 +159,7 @@ def build(cfg: Config):
                     files = gr.File(label="Files", file_count="multiple")
                     report = gr.JSON(label="Quality report (lines that needed squeezing, failures…)")
             gr.Markdown("### Review the translation (optional but recommended for anything you care about)")
-            table = gr.Dataframe(headers=COLS, datatype=["number", "number", "number", "str", "str", "str", "str", "bool"],
+            table = gr.Dataframe(headers=COLS, datatype=["number", "number", "number", "str", "str", "str", "str", "bool", "bool"],
                                  interactive=True, wrap=True, label="Dialogue")
             hint = gr.Markdown()
             step2 = gr.Button("2 · Voice & render with my edits")

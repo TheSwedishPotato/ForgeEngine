@@ -49,6 +49,13 @@ class EmotionCfg:
 
 
 @dataclass
+class QACfg:
+    voice_check: bool = True         # compare every dubbed line with every speaker's real voice
+    min_margin: float = 0.05         # another speaker must be this much closer to flag a wrong voice
+    similar_pair: float = 0.70       # two 'speakers' this alike are probably one person
+
+
+@dataclass
 class TranslateCfg:
     backend: str = "nllb"            # nllb | ollama | passthrough
     model: str = "facebook/nllb-200-distilled-1.3B"
@@ -99,6 +106,8 @@ class LipSyncCfg:
     backend: str = "none"            # none | wav2lip | musetalk
     max_clip_s: float = 6.0          # frames of one window are held in RAM
     min_face_px: int = 72            # ignore faces smaller than this (wide shots)
+    confirm_frac: float = 0.25       # a 2nd detector must agree on this share of frames; 0 = off. Rejects confident
+                                     # false positives (a face half-hidden behind an object). Conservative on purpose.
     wav2lip_repo: str = "third_party/Wav2Lip"
     wav2lip_checkpoint: str = "models/wav2lip/wav2lip_gan.pth"
     wav2lip_batch: int = 64
@@ -130,6 +139,7 @@ class Config:
     translate: TranslateCfg = field(default_factory=TranslateCfg)
     tts: TTSCfg = field(default_factory=TTSCfg)
     fit: FitCfg = field(default_factory=FitCfg)
+    qa: QACfg = field(default_factory=QACfg)
     mix: MixCfg = field(default_factory=MixCfg)
     lipsync: LipSyncCfg = field(default_factory=LipSyncCfg)
     video: VideoCfg = field(default_factory=VideoCfg)
@@ -155,6 +165,11 @@ class Config:
 
     def set(self, dotted: str, value: Any) -> None:
         _update(self, _nest(dotted, value))
+
+    def apply_cpu_profile(self) -> None:
+        """No NVIDIA GPU: CPU inference. Whisper large-v3 would take hours; 'small' is accurate enough
+        for clean dialogue. (Voice synthesis is the slow part either way.)"""
+        self.asr.model, self.asr.compute_type = "small", "int8"
 
     def apply_profile(self, vram_gb: float | None) -> None:
         """Pick model sizes that fit the card. Stages run one at a time, so peak VRAM is the

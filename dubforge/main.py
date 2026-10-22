@@ -28,7 +28,8 @@ def build_config(a: argparse.Namespace) -> Config:
     mock = getattr(a, "mock", False)
     if getattr(a, "profile", "auto") == "auto" and not mock:
         from dubforge.env import gpu_info
-        cfg.apply_profile(gpu_info().get("vram_gb"))
+        g = gpu_info()
+        cfg.apply_profile(g.get("vram_gb")) if g else cfg.apply_cpu_profile()
     if a.config:
         cfg.merge_file(a.config)
     if mock:

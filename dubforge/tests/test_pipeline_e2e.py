@@ -124,3 +124,27 @@ def test_lipsync_windows_merge_and_split():
     assert all(b - a <= 150 for a, b in w)
     assert sum(b - a for a, b in w if a >= 250) == 250   # 10 s of frames, split into <=6 s pieces
     assert lipsync_windows([], 25, 6) == []
+
+
+def test_per_line_lipsync_veto_and_voice_report(film, cfg):
+    """A line with lipsync=false keeps its original frames; the QA fields exist in the report."""
+    registry.register("lipsync", "redbox", "test_pipeline_e2e:RedBoxLipSync")
+    cfg.lipsync.backend = "redbox"
+    pl = DubPipeline(cfg, progress=lambda *a: None)
+    assert pl.run(film, "sv", until="translate") is None
+    seg_file = next(Path(cfg.work_dir).glob("film_*")) / "sv" / "segments.json"
+    data = json.loads(seg_file.read_text())
+    data["segments"][2]["lipsync"] = False                           # veto the third line's shot
+    seg_file.write_text(json.dumps(data))
+    out = pl.run(film, "sv")
+    t_red = []
+    with FrameReader(out, probe(out)) as r:
+        for f in r:
+            t_red.append(f[10:50, 10:50, 2].mean() > 200 and f[10:50, 10:50, 1].mean() < 80)
+    t_red, t = np.array(t_red), np.arange(len(t_red)) / 25
+    first = (t >= LINES[0][0] + 0.1) & (t < LINES[0][1] - 0.1)
+    vetoed = (t >= LINES[2][0] + 0.1) & (t < LINES[2][1] - 0.1)
+    assert t_red[first].mean() > 0.9 and t_red[vetoed].mean() < 0.05
+    rep = json.loads((next(Path(cfg.work_dir).glob("film_*")) / "sv" / "report.json").read_text())
+    assert rep["voice_flagged"] == 0 and rep["similar_speaker_pairs"] == []
+    assert (next(Path(cfg.work_dir).glob("film_*")) / "common" / "speakers.txt").read_text().startswith("SPK0")

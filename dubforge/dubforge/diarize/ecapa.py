@@ -60,6 +60,12 @@ class EcapaDiarizer(Diarizer):
             savedir=str(Path(self.cfg.models_dir) / "speechbrain" / "spkrec-ecapa-voxceleb"),
             run_opts={"device": resolve_device(self.cfg)})
 
+    def embed(self, audio_16k: np.ndarray) -> np.ndarray:
+        """Embedding for the voice-identity QA (same model that did the diarization)."""
+        import torch
+        with torch.no_grad():
+            return self.classifier.encode_batch(torch.from_numpy(audio_16k.astype(np.float32))[None]).squeeze().cpu().numpy()
+
     def assign(self, wav_path: Path, segments: list[Segment]) -> None:
         import torch
         d = self.cfg.diarize
@@ -76,7 +82,10 @@ class EcapaDiarizer(Diarizer):
             for s in segments:
                 s.speaker = "SPK0"
             return
-        labels = cluster_embeddings(np.stack(embs), d.num_speakers, d.threshold)
+        E = np.stack(embs)
+        labels = cluster_embeddings(E, d.num_speakers, d.threshold)
+        from ..qa import refine_labels
+        labels = refine_labels(E, labels)                    # move lines clustered on thin evidence to the nearest voice
         labelled = assign_short_by_neighbour(segments, {i: int(l) for i, l in zip(idxs, labels)})
         for i, s in enumerate(segments):
             s.speaker = f"SPK{labelled.get(i, 0)}"
