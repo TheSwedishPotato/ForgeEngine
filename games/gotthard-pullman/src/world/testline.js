@@ -89,6 +89,6 @@ export function extensionStructures(route, ground) {
     for (const r of out) { const m = merged.at(-1); if (m && r.s0 - m.s1 < 60) m.s1 = r.s1; else merged.push({ ...r }); }
     return merged.filter((r) => r.s1 - r.s0 >= 30);
   };
-  runs((depth) => depth > 25).forEach((t, i) => route.tunnels.push({ name: `Test tunnel ${i + 1}`, s0: t.s0, s1: t.s1 }));
+  // (no tunnels: the test tracks run in a valley carved for them, terrain.js)
   runs((depth) => depth < -12).forEach((b, i) => route.bridges.push({ name: `Test viaduct ${i + 1}`, s0: b.s0, s1: b.s1 }));
 }

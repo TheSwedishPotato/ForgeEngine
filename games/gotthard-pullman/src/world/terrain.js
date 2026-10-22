@@ -29,6 +29,8 @@ const FORMATION = 0.72;              // rail head to formation top (UIC 60 rail 
 const HALF_WIDTH = 3.6;              // m from a track's centre to the edge of its formation (ballast shoulder and cess)
 const FILL_SLOPE = 2 / 3;            // embankment, rise over run
 const CUT_SOIL = 0.8, CUT_ROCK = 3.0;
+// the test tracks run in a valley carved for them (kind 3): its sides rise at 0.75 (about 37 degrees), reaching up to VALLEY m out
+const VALLEY = 1000, VALLEY_SIDE = 0.75;
 const WALL_SLOPE = 8;                // a dry-stone wall's batter (8:1)
 
 // ---------------------------------------------------------------------------------------------
@@ -107,7 +109,13 @@ export class Terrain {
     // a track deep under the natural ground is in a tunnel whatever the map says
     const add = (x, y, z, kind) => { if (kind === 0 && this.demBicubic(x, y) - z > 28) kind = 2; S.push(x, y, z - FORMATION, kind); };
     const every = 4;
-    for (let s = 0; s <= R.run.length; s += every) { const p = R.run.pos(s); add(p.x, p.y, p.z, runKind(s)); }
+    const runEnd = R.testFrom ?? R.run.length;
+    for (let s = 0; s <= runEnd; s += every) { const p = R.run.pos(s); add(p.x, p.y, p.z, runKind(s)); }
+    // the test tracks: open, in their own valley (samples every 20 m: the valley is wide and smooth)
+    if (R.testFrom != null) {
+      S.push(NaN, NaN, NaN, NaN);
+      for (let s = R.testFrom; s <= R.run.length; s += 20) { const p = R.run.pos(s); S.push(p.x, p.y, p.z - FORMATION, inRanges(R.bridges, s) ? 1 : 3); }
+    }
     S.push(NaN, NaN, NaN, NaN);    // break: segments never join across tracks
     for (let s = 0; s <= R.left.length; s += every) { const p = R.left.pos(s); add(p.x, p.y, p.z, leftKind(s)); }
     S.push(NaN, NaN, NaN, NaN);
@@ -183,13 +191,13 @@ export class Terrain {
    */
   _carveGrid(H, gx0, gy0, step, nw, nh, natural, wallsOut = null, tunnelOut = null) {
     const S = this.samples;
-    const xa = gx0 - CARVE_RADIUS, ya = gy0 - CARVE_RADIUS, xb = gx0 + (nw - 1) * step + CARVE_RADIUS, yb = gy0 + (nh - 1) * step + CARVE_RADIUS;
+    const xa = gx0 - VALLEY, ya = gy0 - VALLEY, xb = gx0 + (nw - 1) * step + VALLEY, yb = gy0 + (nh - 1) * step + VALLEY;
     const segs = this._segmentsIn(xa, ya, xb, yb);
     if (!segs.length) return;
     const N = nw * nh;
     const lower = new Float32Array(N).fill(-1e9), upper = new Float32Array(N).fill(1e9);
     const nearD = new Float32Array(N).fill(1e9), nearZ = new Float32Array(N);
-    const openD = new Float32Array(N).fill(1e9), tunD = new Float32Array(N).fill(1e9), openZ = new Float32Array(N);
+    const openD = new Float32Array(N).fill(1e9), tunD = new Float32Array(N).fill(1e9), openZ = new Float32Array(N), vNear = new Uint8Array(N);
     // the ground is a grid of this step, flat between its points: a cutting's side may only begin a
     // whole step (and a diagonal's worth) beyond the formation's edge, or the triangles that span it
     // would rise into the space the trains run in (the loading gauge, 2.2 m from the track's centre)
@@ -203,8 +211,9 @@ export class Terrain {
       // rock over the bore, it gets at least the vault plus 1.5 m, falling away at 1:1 to the sides
       const ax = S[a], ay = S[a + 1], bx = S[b], by = S[b + 1], az = S[a + 2], bz = S[b + 2];
       const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
-      const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - CARVE_RADIUS - gx0) / step)), i1 = Math.min(nw - 1, Math.ceil((Math.max(ax, bx) + CARVE_RADIUS - gx0) / step));
-      const j0 = Math.max(0, Math.floor((Math.min(ay, by) - CARVE_RADIUS - gy0) / step)), j1 = Math.min(nh - 1, Math.ceil((Math.max(ay, by) + CARVE_RADIUS - gy0) / step));
+      const valley = S[a + 3] === 3 || S[b + 3] === 3, RAD = valley ? VALLEY : CARVE_RADIUS;
+      const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - RAD - gx0) / step)), i1 = Math.min(nw - 1, Math.ceil((Math.max(ax, bx) + RAD - gx0) / step));
+      const j0 = Math.max(0, Math.floor((Math.min(ay, by) - RAD - gy0) / step)), j1 = Math.min(nh - 1, Math.ceil((Math.max(ay, by) + RAD - gy0) / step));
       for (let j = j0; j <= j1; j++) {
         const y = gy0 + j * step;
         for (let i = i0; i <= i1; i++) {
@@ -213,9 +222,18 @@ export class Terrain {
           t = t < 0 ? 0 : t > 1 ? 1 : t;
           const px = ax + dx * t - x, py = ay + dy * t - y;
           const d = Math.sqrt(px * px + py * py);
-          if (d > CARVE_RADIUS) continue;
+          if (d > RAD) continue;
           const zf = az + (bz - az) * t;
           const idx = j * nw + i;
+          if (valley) {
+            // the test tracks' valley: the ground no higher than its sides; banked up close by where the line is high
+            const u = zf + Math.max(0, d - clearEdge) * VALLEY_SIDE;
+            if (u < upper[idx]) upper[idx] = u;
+            if (d < CARVE_RADIUS) { const lo = zf - Math.max(0, d - HALF_WIDTH) * FILL_SLOPE; if (lo > lower[idx]) lower[idx] = lo; }
+            touched[idx] = 1; vNear[idx] = 1;
+            if (d < nearD[idx]) { nearD[idx] = d; nearZ[idx] = zf; }
+            continue;
+          }
           if (inTunnel) {
             if (d < tunD[idx]) tunD[idx] = d;
             if (tunnelOut && d < 6.0) tunnelOut[idx] = Math.max(tunnelOut[idx], zf + FORMATION);
@@ -248,11 +266,11 @@ export class Terrain {
         let lo = lower[idx], up = upper[idx];
         // a tunnel's cover against an open track's cutting: the nearer track has it (an open line
         // beside a portal must not run into the mountain kept over the other bore)
-        if (lo > up) { if (openD[idx] <= tunD[idx] + 4) lo = up; else up = lo; }
+        if (lo > up) { if (vNear[idx] || openD[idx] <= tunD[idx] + 4) lo = up; else up = lo; }   // (the test tracks' valley takes precedence)
         // rock: steep natural ground takes a steep cutting
         if (hn > up && up < 1e8) {
           const slope = this._naturalSlope(x, y);
-          if (slope > 0.75 && openD[idx] < 1e8) {
+          if (slope > 0.75 && openD[idx] < 1e8 && !vNear[idx]) {
             const e = Math.max(0, openD[idx] - clearEdge);
             up = Math.min(hn, openZ[idx] + e * CUT_ROCK);            // (a steep rock face, not a soil slope)
           }
@@ -357,10 +375,11 @@ export class Terrain {
 
   /** Tiles within reach of any track. */
   _fineTileSet() {
-    const set = new Set(), S = this.samples, reach = CARVE_RADIUS + 120;
+    const set = new Set(), S = this.samples;
     for (let k = 0; k < S.length; k += 4) {
       if (Number.isNaN(S[k])) continue;
-      for (const ox of [-reach, 0, reach]) for (const oy of [-reach, 0, reach]) {
+      const reach = (S[k + 3] === 3 ? VALLEY : CARVE_RADIUS) + 120;
+      for (const ox of [-reach, -reach / 2, 0, reach / 2, reach]) for (const oy of [-reach, -reach / 2, 0, reach / 2, reach]) {
         const ti = Math.floor((S[k] + ox - this.x0) / FINE_TILE), tj = Math.floor((S[k + 1] + oy - this.y0) / FINE_TILE);
         if (ti >= 0 && tj >= 0 && ti < Math.floor((this.x1 - this.x0) / FINE_TILE) && tj < Math.floor((this.y1 - this.y0) / FINE_TILE)) set.add(`${ti},${tj}`);
       }
