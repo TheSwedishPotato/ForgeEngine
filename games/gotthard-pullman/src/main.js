@@ -61,10 +61,16 @@ async function ride() {
     game.driving.toggle();
     sim.crew._setControl('regulator', 0);
     sim.crew._setControl('directBrake', 1);
-    T.brake.setService(1);
-    T.brake.equalising = T.brake.serviceTarget;
-    for (const v of T.brake.v) { v.pBP = T.brake.serviceTarget; v.pBC = Math.max(v.pBC, 3.8); }     // (already applied, so she stands)
-    sim.log(test === 'steep' ? 'Test track: super steep. 1.2 km down at 100 per mille ahead. Brakes on; F hands back.' : 'Test track: 10 km down at 35 per mille, then 6 km up at 35. Brakes on; F hands back.');
+    if (test === 'long') {
+      // on the slope the train's brake holds her, the valve at lap (two notches from release)
+      T.brake.setService(1);
+      T.brake.equalising = T.brake.serviceTarget;
+      for (const v of T.brake.v) { v.pBP = T.brake.serviceTarget; v.pBC = Math.max(v.pBC, 3.8); }
+      T.brake.handle = 'lap';
+    }
+    sim.log(test === 'steep'
+      ? 'Test track: super steep, 1.2 km down at 100 per mille ahead. To go: hold , (Eng. brake -), then W (Reg +). F hands back.'
+      : 'Test track: 10 km down at 35, then 6 km up at 35 per mille. To go: [ twice (Brake -, to release), hold , (Eng. brake -), W for steam. F hands back.');
     game.trainGL.update(0);
     game._recentre(0);
   }
