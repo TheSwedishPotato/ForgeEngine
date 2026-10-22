@@ -105,6 +105,7 @@ class MixCfg:
 class LipSyncCfg:
     backend: str = "none"            # none | wav2lip | musetalk
     max_clip_s: float = 6.0          # frames of one window are held in RAM
+    max_clip_mb: int = 900           # ...so also cap a window's RAM (phone/4K video has huge frames)
     min_face_px: int = 72            # ignore faces smaller than this (wide shots)
     confirm_frac: float = 0.25       # a 2nd detector must agree on this share of frames; 0 = off. Rejects confident
                                      # false positives (a face half-hidden behind an object). Conservative on purpose.

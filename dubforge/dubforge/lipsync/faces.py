@@ -10,7 +10,7 @@ Box = tuple[int, int, int, int]   # x1, y1, x2, y2
 
 
 class FaceDetector:
-    def __init__(self, yunet_path: str | Path | None = None, score: float = 0.6, max_side: int = 640):
+    def __init__(self, yunet_path: str | Path | None = None, score: float = 0.6, max_side: int = 1024):
         self.max_side = max_side
         self.yunet = None
         self.score = score

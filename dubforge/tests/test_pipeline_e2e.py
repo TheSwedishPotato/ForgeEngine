@@ -124,6 +124,8 @@ def test_lipsync_windows_merge_and_split():
     assert all(b - a <= 150 for a, b in w)
     assert sum(b - a for a, b in w if a >= 250) == 250   # 10 s of frames, split into <=6 s pieces
     assert lipsync_windows([], 25, 6) == []
+    capped = lipsync_windows([(0.0, 10.0)], fps=60, max_clip_s=6.0, max_frames=100)   # huge frames: RAM cap wins
+    assert all(b - a <= 100 for a, b in capped) and sum(b - a for a, b in capped) == 600
 
 
 def test_per_line_lipsync_veto_and_voice_report(film, cfg):

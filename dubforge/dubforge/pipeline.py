@@ -317,7 +317,9 @@ class DubPipeline:
         # Cover the ORIGINAL line too: if the dub is shorter, the actor's lips would otherwise keep
         # speaking the old language after the dub ends. The model renders a closed mouth there.
         spans = [(min(s.start, placed[s.id][0]), max(s.end, placed[s.id][1])) for s in segs if s.id in placed and s.lipsync]
-        windows = lipsync_windows(spans, float(info.fps), self.cfg.lipsync.max_clip_s)
+        frame_mb = info.width * info.height * 3 / 1e6
+        max_frames = max(30, int(self.cfg.lipsync.max_clip_mb / max(frame_mb, 0.1)))
+        windows = lipsync_windows(spans, float(info.fps), self.cfg.lipsync.max_clip_s, max_frames=max_frames)
         with self._backend("lipsync", name) as ls:
             self._lipsync_pass(video, info, windows, lang / "dub_vocals.wav", ls, out)
 
@@ -375,7 +377,7 @@ class DubPipeline:
 
 
 def lipsync_windows(spans: list[tuple[float, float]], fps: float, max_clip_s: float,
-                    merge_gap_s: float = 0.25) -> list[tuple[int, int]]:
+                    merge_gap_s: float = 0.25, max_frames: int | None = None) -> list[tuple[int, int]]:
     """Dubbed-speech time spans -> frame windows [f0, f1), merged when close, cut to <= max_clip_s."""
     if not spans:
         return []
@@ -387,6 +389,8 @@ def lipsync_windows(spans: list[tuple[float, float]], fps: float, max_clip_s: fl
         else:
             merged.append([a, b])
     max_f = max(1, int(max_clip_s * fps))
+    if max_frames:
+        max_f = min(max_f, max_frames)
     out: list[tuple[int, int]] = []
     for a, b in merged:
         f0, f1 = int(np.floor(a * fps)), int(np.ceil(b * fps))
