@@ -154,6 +154,14 @@ export class Train {
       const fb = this.brake.force(i, v.v, dt, normal, muRail, cond.tempC);
       let Fbrake = fb.F;
       if (i === 0) Fbrake = 0;      // the engine's own brake acts on its wheels (in the loco model)
+      // the magnetic track brake (a test fitting: these cars never had one): electromagnets dropped
+      // onto the rails, each pulled down with about 60 kN and rubbing on the rail head (mu 0.15,
+      // rising toward 0.2 as she slows), independent of the wheels' grip. Four per car (two per
+      // truck), two on the tender. Applied with the switch, and in an emergency application.
+      if (i > 0 && !v.wreck && (this.trackBrake || this.brake.handle === 'emergency')) {
+        const magnets = v.kind === 'tender' ? 2 : v.kind === 'helper' ? 0 : 4;
+        Fbrake += magnets * 60e3 * (0.15 + 0.05 * Math.exp(-Math.abs(v.v) / 8));
+      }
       // the banking engine: an electric's tractive effort, limited by power, adhesion (with its own slip control) and its driver
       v.Ftrac = 0;
       if (v.kind === 'helper') {

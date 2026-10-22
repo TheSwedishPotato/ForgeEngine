@@ -247,6 +247,17 @@ other main line occupies it, so its signals go to Halt.
   (Prud'homme's limit as the UIC applies it: 0.85 × (10 + P/3) kN per axle, P the axle load in
   kN). Held for two seconds, the track moves out of line and the vehicle comes off.
 
+**Magnetic track brake** (a test fitting: these cars never had one; key B, or the Track brake
+button, and on by itself in an emergency application). Electromagnets drop onto the rails,
+each pulled down with about 60 kN and rubbing on the rail head (μ 0.15–0.2). That is roughly
+10 kN of braking per magnet, four per car and two on the tender, whatever the wheels' grip.
+With it a train caught early on the 100 ‰ test drop can be stopped. ([Track brake](https://en.wikipedia.org/wiki/Track_brake);
+EN 16207 sets the performance criteria.)
+
+**Spinning wheels.** Past about two turns a second, the engine's and tender's spokes give way to
+a blurred disc, as the eye sees them (on a screen they would otherwise seem to jump, or even turn
+backwards).
+
 **The ride** (`src/physics/sway.js`). Track irregularities come from a PSD-shaped spectrum
 (alignment, level, cross-level) passed through each car's body modes (lateral and roll ~0.8 Hz,
 bounce ~1.2 Hz, pitch ~1.5 Hz). The player's head lags those accelerations.

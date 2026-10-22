@@ -23,6 +23,7 @@ export const DRIVE_KEYS = [
   ['J', 'train heating on / off'],
   ['K', 'acknowledge a Signum warning'],
   ['1 / 2 / 3', 'quick commands: go forward / stop / go backward'],
+  ['B', 'magnetic track brake on / off (also on with the emergency brake)'],
 ];
 
 const HOLD = new Set(['KeyW', 'KeyS', 'KeyQ', 'KeyA', 'Period', 'Comma', 'Space', 'KeyX', 'KeyG']);
@@ -53,7 +54,7 @@ export class Driving {
     if (code === 'KeyF') { if (down) this.toggle(); return true; }
     if (!this.on) return false;
     if (HOLD.has(code)) { if (down) this.held.add(code); else this.held.delete(code); return true; }
-    if (!down) return ['BracketRight', 'BracketLeft', 'Backspace', 'KeyC', 'KeyI', 'KeyJ', 'KeyK', 'Digit1', 'Digit2', 'Digit3'].includes(code);
+    if (!down) return ['BracketRight', 'BracketLeft', 'Backspace', 'KeyC', 'KeyI', 'KeyJ', 'KeyK', 'KeyB', 'Digit1', 'Digit2', 'Digit3'].includes(code);
     const c = this.loco.c, set = (n, v) => this.crew._setControl(n, v);
     switch (code) {
       case 'BracketRight': this._notch(+1); return true;
@@ -63,6 +64,7 @@ export class Driving {
       case 'KeyI': set('injectorR', c.injector[1] ? 0 : 1); return true;
       case 'KeyJ': set('steamHeat', c.steamHeat > 0.5 ? 0 : 1); return true;
       case 'KeyK': this.game.sim.signals?.acknowledge(); return true;
+      case 'KeyB': this.game.sim.train.trackBrake = !this.game.sim.train.trackBrake; this.game.sim.log?.(this.game.sim.train.trackBrake ? 'Track brake: the magnets are down on the rails.' : 'Track brake: magnets up.'); return true;
       case 'Digit1': this.quick('forward'); return true;
       case 'Digit2': this.quick('stop'); return true;
       case 'Digit3': this.quick('backward'); return true;
@@ -90,7 +92,7 @@ export class Driving {
       return;
     }
     const dir = what === 'backward' ? -1 : 1;
-    set('trainBrake', 'running'); set('directBrake', 0);
+    set('trainBrake', 'running'); set('directBrake', 0); sim.train.trackBrake = false;
     if (c.reverser * dir < 0.5) set('reverser', 0.6 * dir);
     set('drainCocks', 0);
     set('regulator', Math.max(c.regulator, 0.5));

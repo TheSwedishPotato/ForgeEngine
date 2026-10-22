@@ -40,6 +40,8 @@ export function locoMaterials() {
     black: new MeshPhysicalMaterial({ color: new Color(0.018, 0.018, 0.02), roughness: 0.42, clearcoat: 0.6, clearcoatRoughness: 0.3 }),
     smokebox: new MeshStandardMaterial({ color: new Color(0.03, 0.03, 0.032), roughness: 0.8, metalness: 0.2 }),
     red: new MeshPhysicalMaterial({ color: new Color(0.42, 0.03, 0.02), roughness: 0.45, clearcoat: 0.5, clearcoatRoughness: 0.3 }),
+    // a spinning spoked wheel seen as the eye (or a camera's shutter) sees it: the red spokes and the dark gaps between run into one dull disc
+    blur: new MeshStandardMaterial({ color: new Color(0.2, 0.025, 0.02), roughness: 0.6 }),
     steel: new MeshStandardMaterial({ color: new Color(0.42, 0.42, 0.43), roughness: 0.3, metalness: 1.0 }),
     tyre: new MeshStandardMaterial({ color: new Color(0.5, 0.5, 0.51), roughness: 0.35, metalness: 1.0 }),
     brass: new MeshStandardMaterial({ color: new Color(0.8, 0.62, 0.32), roughness: 0.25, metalness: 1.0 }),
@@ -54,6 +56,7 @@ export function locoMaterials() {
     gauge: new MeshStandardMaterial({ color: new Color(0.85, 0.83, 0.78), roughness: 0.35 }),
     plate: new MeshStandardMaterial({ map: letteringTexture('2978', { w: 512, h: 160, paint: '#0b0b0c', gold: '#d9b45a', size: 120, spacing: 0.08 }), roughness: 0.3, metalness: 0.6 }),
   };
+  _mats.spokes = _mats.red;                // (the spokes are the wheel centre's red, in a part of their own so they can give way to the blur)
   return _mats;
 }
 
@@ -69,8 +72,9 @@ function wheel(b, R, { side = 1, spokes = 16, counterweight = true, centre = 're
   for (let i = 0; i < spokes; i++) {
     const a = (i / spokes) * Math.PI * 2;
     const p1 = V(Math.cos(a) * 0.15, Math.sin(a) * 0.15, 0), p2 = V(Math.cos(a) * (R - 0.07), Math.sin(a) * (R - 0.07), 0);
-    b.cylinder(centre, p1, p2, 0.028, 0.02, { segs: 5 });
+    b.cylinder('spokes', p1, p2, 0.028, 0.02, { segs: 5 });
   }
+  b.cylinder('blur', V(0, 0, -t * 0.35), V(0, 0, t * 0.35), R - 0.065, R - 0.065, { segs: 32 });
   if (counterweight) {
     // a crescent filling the spokes opposite the crank
     for (let i = 0; i < 6; i++) {
@@ -481,7 +485,7 @@ export function buildTender() {
   for (const z of [-1.05, 1.05]) b.box('black', [-hl + 0.5, 0.6, z - 0.07], [hl - 0.5, 0.95, z + 0.07]);   // outside frames
   const group = b.build(M);
   group.name = 'tender';
-  const parts = { wheels: [] };
+  const parts = { wheels: [], tenderWheels: true };
   for (const x of [-1.75, 0.05, 1.85]) {
     const ws = new Builder();
     for (const side of [-1, 1]) { ws.transform(new Matrix4().makeTranslation(0, 0, side * (BACK + WIDTH / 2))); wheel(ws, R, { side, spokes: 12, counterweight: false }); ws.transform(null); }
@@ -495,3 +499,18 @@ export function buildTender() {
 }
 
 export function animateTender(parts, s) { for (const w of parts.wheels) w.rotation.z = -s / LOCO.tenderR; }
+
+/**
+ * Spokes or a blur, by how fast each wheel turns (v: the train's speed, m/s): past about two
+ * turns a second the eye no longer follows the spokes (and a screen's frames would show them
+ * jumping, even turning backwards), it sees one disc.
+ */
+export function blurWheels(parts, v) {
+  const set = (g, R) => {
+    if (!g) return;
+    const fast = Math.abs(v) / (2 * Math.PI * R) > 2.0;
+    for (const m of g.children) { if (m.name === 'spokes') m.visible = !fast; else if (m.name === 'blur') m.visible = fast; }
+  };
+  for (const w of parts.wheels ?? []) set(w, parts.tenderWheels ? LOCO.tenderR : LOCO.driverR);
+  set(parts.pony, LOCO.ponyR);
+}

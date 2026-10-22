@@ -5,7 +5,7 @@
  */
 import { Group, Euler, Quaternion, Vector3, Matrix4 } from 'three';
 import { buildCar, BODY, carMaterials } from './pullman.js';
-import { buildLocomotive, animateLocomotive, animateCab, animateGauges, buildTender, animateTender, LOCO } from './locomotive.js';
+import { buildLocomotive, animateLocomotive, animateCab, animateGauges, buildTender, animateTender, blurWheels, LOCO } from './locomotive.js';
 import { RAIL_SPACING } from '../world/route.js';
 import { CarRide } from '../physics/sway.js';
 import { feedSteam } from './steam.js';
@@ -141,6 +141,7 @@ export class TrainGL {
       m.group.rotation.copy(_e);
       if (m.kind === 'engine') { animateLocomotive(m.parts, this.train.loco.theta, s); animateCab(m.parts.controls, this.train.loco.c, this.train.brake, ddt); animateGauges(m.parts.controls, this.train.loco, this.train.brake, this.train.speed, ddt); }
       if (m.kind === 'engine' && m.parts.pony) this._pony(m, s, pose);
+      if (m.kind === 'engine' || m.kind === 'tender') blurWheels(m.parts, m.v.v);
       if (m.kind === 'tender') {
         animateTender(m.parts, s);
         for (const [j, w] of m.parts.wheels.entries()) w.position.z = wheelsetShift(LOCO.tenderR, s + w.position.x, m.v.v, line.curvatureAt(s + w.position.x), j * 2.1);

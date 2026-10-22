@@ -391,7 +391,7 @@ export class DrivePanel {
     if (touch) {
       const grid = el('div', 'drive-btns');
       for (const [label, code] of [['Reg +', 'KeyW'], ['Reg −', 'KeyS'], ['Fwd', 'KeyQ'], ['Back', 'KeyA'], ['Brake +', 'BracketRight'], ['Brake −', 'BracketLeft'],
-        ['Eng. brake +', 'Period'], ['Eng. brake −', 'Comma'], ['Whistle', 'Space'], ['Sand', 'KeyX'], ['Start valve', 'KeyG'], ['Cocks', 'KeyC'], ['Injector', 'KeyI'], ['Heating', 'KeyJ'], ['Signum ack', 'KeyK'], ['EMERG.', 'Backspace']]) {
+        ['Eng. brake +', 'Period'], ['Eng. brake −', 'Comma'], ['Whistle', 'Space'], ['Sand', 'KeyX'], ['Start valve', 'KeyG'], ['Cocks', 'KeyC'], ['Injector', 'KeyI'], ['Heating', 'KeyJ'], ['Signum ack', 'KeyK'], ['Track brake', 'KeyB'], ['EMERG.', 'Backspace']]) {
         const b = el('button', null, label);
         const up = () => game.driving.press(code, false);
         b.addEventListener('pointerdown', (e) => { e.stopPropagation(); game.driving.press(code, true); b.setPointerCapture?.(e.pointerId); });
@@ -414,7 +414,7 @@ export class DrivePanel {
     this.read.textContent = [
       `${f(Math.abs(T.speed) * 3.6, 0).padStart(3)} km/h   boiler ${f(L.p - 1.013)} bar   water ${f(L.out.level ?? 0, 0)} mm`,
       `regulator ${f(c.regulator * 100, 0)} %   cut-off ${f(c.reverser * 100, 0)} %${c.reverser < 0 ? ' (back)' : ''}   chest ${f(L.pChest - 1.013)} bar`,
-      `brake valve ${D.brakeText()}   pipe ${f(B.v[0].pBP)} bar   engine brake ${f(B.direct * 100, 0)} %`,
+      `brake valve ${D.brakeText()}   pipe ${f(B.v[0].pBP)} bar   engine brake ${f(B.direct * 100, 0)} %   track brake ${T.trackBrake || B.handle === 'emergency' ? 'ON' : 'off'}`,
       `${c.drainCocks ? 'cocks OPEN' : 'cocks shut'} · ${c.sander ? 'SAND' : 'sand'} · ${c.startingValve ? 'START VALVE' : 'start valve'} · injector ${c.injector[1] ? 'ON' : 'off'} · heating ${c.steamHeat > 0.5 ? 'on' : 'off'}`,
       sig ? `next signal ${sig.name}: ${sig.aspectText} in ${f(sig.dist, 0)} m` : '',
       (() => { const W = T.wear, hb = W.hottest(); return `motion ${W.rodBroken ? 'ROD BROKEN' : W.motion > 0.3 ? `KNOCKING ${f(W.motion * 100, 0)} %` : 'sound'}   hottest axle box +${f(hb.k, 0)} K${hb.k > 90 ? ` (${hb.name})` : ''}`; })(),
