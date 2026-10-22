@@ -37,7 +37,8 @@ async function ride() {
   let opts = { weather: params.get('w') ?? 'clear', quality: params.get('q') ?? 'high', car: params.get('car') ?? 'parlor', chair: Number(params.get('chair') ?? 12), t: params.get('t') ?? '10:12' };
   if (!manual && !params.get('go') && !params.get('w')) opts = await startScreen(ui, opts);
   loading('Laying the line…');
-  const join = hms(opts.t);
+  const test = opts.t === 'test';                      // the test section: the trip run ahead a little, then the train set down there
+  const join = hms(test ? '10:20' : opts.t);
   const game = await Game.create(canvas, {
     weather: opts.weather, quality: opts.quality, startClock: Math.min(join, hms('10:12')),
     seat: { car: opts.car, chair: opts.chair }, onProgress: (t) => loading(t),
@@ -48,6 +49,19 @@ async function ride() {
     loading(`Running ahead to ${opts.t}…`);
     await new Promise((r) => setTimeout(r, 30));
     while (game.sim.clock < join) { game.sim.advance(Math.min(30, join - game.sim.clock)); if ((game.sim.clock | 0) % 120 < 30) { loading(`Running ahead to ${opts.t}… ${fmt(game.sim.clock)}`); await new Promise((r) => setTimeout(r, 0)); } }
+  }
+  if (test) {
+    // standing on the level at the top of the test section, engine brake on, you at the controls
+    const sim = game.sim, T = sim.train, d = sim.route.testFrom + 120 - T.front;
+    for (const v of T.veh) { v.s += d; v.v = 0; v.a = 0; }
+    T.brake.handle = 'running';
+    sim.crew.next = sim.timetable.stops.length - 1; sim.crew.phase = 'arrived';
+    game.driving.toggle();
+    sim.crew._setControl('regulator', 0);
+    sim.crew._setControl('directBrake', 1);
+    sim.log('Test section: the train stands at the top. 100 per mille down ahead, then 35 down, then 35 up. F hands back.');
+    game.trainGL.update(0);
+    game._recentre(0);
   }
   if (params.get('skip')) game.sim.advance(Number(params.get('skip')));
   if (params.get('cam') === 'out') game.player.setOutside(true, { vehicle: Number(params.get('veh') ?? 0), dist: Number(params.get('dist') ?? 18), yaw: Number(params.get('oyaw') ?? 50) * Math.PI / 180, pitch: Number(params.get('opitch') ?? 10) * Math.PI / 180, along: Number(params.get('oal') ?? 0), height: Number(params.get('oh') ?? 2.2) });
