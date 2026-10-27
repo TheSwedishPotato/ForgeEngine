@@ -107,6 +107,16 @@ export class ElevatorGL {
     }
     btn(-0.12, 0.855, L.symbol('open'), { id: 'car.open', label: 'Door open', kind: 'hold', down: () => (ctl.inputs.open = true), up: () => (ctl.inputs.open = false), lit: () => ctl.inputs.open });
     btn(0.0, 0.855, L.symbol('close'), { id: 'car.close', label: 'Door close', kind: 'hold', down: () => (ctl.inputs.close = true), up: () => (ctl.inputs.close = false), lit: () => ctl.inputs.close });
+    btn(0, 0.785, L.text('ROPE', 'R', { w: 64, h: 64, size: 40, weight: 700 }), {
+      id: 'car.rope', label: 'Part one hoist rope', down: () => {
+        const h = this.sim.hoist;
+        if (h.ropesCut || h.ropesLeft <= 0) return;
+        h.ropesLeft -= 1; this.sim.sfx('snap');
+        if (h.ropesLeft === 0) { h.ropesCut = true; this.sim.say('The last hoist rope has parted.', 'Simulator'); }
+        else this.sim.say(`One hoist rope has parted: ${h.ropesLeft} of 8 still hold the car (safety factor now ${h.ropeSafety.toFixed(1)}).`, 'Simulator');
+      },
+      hint: () => `Part one hoist rope (${this.sim.hoist.ropesLeft} of 8 holding) · click`,
+    });
     btn(0.12, 0.855, L.symbol('bell'), { id: 'car.alarm', label: 'Alarm (hold a second)', kind: 'hold', down: () => (ctl.inputs.alarm = true), up: () => (ctl.inputs.alarm = false), lit: () => ctl.inputs.alarm, litMat: M.amberLit });
     const disp = new Mesh(new PlaneGeometry(0.3, 0.15), this.display.mat); disp.position.set(0, 1.47, 0.0125); cop.add(disp);
     // the firefighters' cabinet: the Phase II key and call cancel; the independent service key
@@ -297,6 +307,11 @@ export class ElevatorGL {
     this.linkLever.rotation.x = Math.min(0.5, h.gov.link * 6);
     // ropes
     const carHitch = h.yc + CAR.crosshead + 0.3, cwHitch = h.yw + ROPE.cwHitch + ROPE.cwHeight - ROPE.cwHitch;
+    if (h.ropesLeft !== this._ropesShown) {
+      // the parted ropes are gone from the bundle
+      this._ropesShown = h.ropesLeft;
+      for (const k of ['hoistCar', 'hoistCw']) { this.stage.scene.remove(this[k]); this[k] = this._bundle(Math.max(1, h.ropesLeft), 0.0065, 0.034, this.M.rope); }
+    }
     if (h.ropesCut) {
       this._span(this.hoistCar, 0, carHitch, carHitch + 1.2, zc);
       this._span(this.hoistCw, RAILS.cwX, cwHitch, cwHitch + 1.2, zc);

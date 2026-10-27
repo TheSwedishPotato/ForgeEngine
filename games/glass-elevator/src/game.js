@@ -43,7 +43,7 @@ export class Game {
   repair() {
     const s = this.sim, h = s.hoist;
     if (Math.abs(h.vc) > 0.05) { s.say('Not while the car is moving.', 'Simulator'); return; }
-    h.ropesCut = false;
+    h.ropesCut = false; h.ropesLeft = SPEC.ropes.n;
     for (const b of h.brakes) b.fail = false;
     s.drive.fault = null; s.doors.curtainFail = false;
     h.gov.tripped = false; h.gov.testTrip = false; h.gov.switchOpen = false; h.gov.link = 0;

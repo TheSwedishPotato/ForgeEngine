@@ -45,6 +45,7 @@ export class Hoist {
     this.lam = SPEC.ropes.kgPerM;
     this.lamC = SPEC.comp.kgPerM;
     this.ropesCut = false;
+    this.ropesLeft = SPEC.ropes.n;    // ropes still holding the car (one can be parted from the car's panel)
     // car, counterweight, ropes, sheave, tension sheave
     this.yc = floorY(floor); this.vc = 0; this.ac = 0;
     this.yw = cwYForCar(this.yc); this.vw = 0;
@@ -87,7 +88,7 @@ export class Hoist {
 
   step(dt) {
     this.t += dt;
-    const S = SPEC, lam = this.lam, lamC = this.lamC, EA = S.ropes.EA, damp = S.ropes.damping;
+    const S = SPEC, lam = this.lam, lamC = this.lamC, EA = (S.ropes.EA * this.ropesLeft) / S.ropes.n, damp = S.ropes.damping;
     // ---- hoist ropes ------------------------------------------------------------------------
     const LcRest = Math.max(0.3, this.Lc), LwRest = Math.max(0.3, this.Lw);
     const ec = ROPE.carTop - (this.yc + CAR.crosshead) - LcRest;
@@ -254,7 +255,7 @@ export class Hoist {
 
   /** Static equilibrium helpers for the tests and the HUD. */
   get stretch() { return this.ec; }
-  get ropeSafety() { return (SPEC.ropes.mbf * SPEC.ropes.n) / Math.max(1, Math.max(this.Tc + this.lam * G * this.Lc, this.Tw + this.lam * G * this.Lw)); }
+  get ropeSafety() { return (SPEC.ropes.mbf * this.ropesLeft) / Math.max(1, Math.max(this.Tc + this.lam * G * this.Lc, this.Tw + this.lam * G * this.Lw)); }
 }
 
 export { R as SHEAVE_R, TS_Y0 };
