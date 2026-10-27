@@ -11,6 +11,7 @@ import { makeMaterials, Labels } from './render/mats.js';
 import { BuildingGL } from './render/buildingGL.js';
 import { ElevatorGL } from './render/elevatorGL.js';
 import { makeProps } from './world/props.js';
+import { Market } from './world/market.js';
 import { Player } from './player.js';
 import { Sound } from './audio/sound.js';
 import { ToolBelt, mend } from './world/tools.js';
@@ -32,6 +33,7 @@ export class Game {
     this.buildingGL = new BuildingGL(ctx);
     this.elevatorGL = new ElevatorGL(ctx);
     this.props = makeProps(this.world, this.M, this.stage.scene);
+    this.market = new Market({ ...ctx, props: this.props }); this.market.game = this;
     this.buildingGL.onRepair = () => this.repair();
     // what blocks your hand from a button behind it: the door panels
     this.occluders = [...this.buildingGL.landing.slice(1).flatMap((l) => l.panels), ...this.elevatorGL.doorPanels.flatMap((g) => g.children)];
@@ -123,6 +125,7 @@ export class Game {
     if (!this.paused) this.sim.advance(dt * this.timeScale);
     const h = this.sim.hoist;
     this.props.update(h.yc);
+    this.market.update(dt);
     this.elevatorGL.update();
     this.buildingGL.update();
     this.controls.update();

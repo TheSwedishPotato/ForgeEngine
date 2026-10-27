@@ -157,6 +157,7 @@ export class ToolBelt {
     if (tg === 'brakes') { for (const k of h.brakes) k.fail = true; return this.say('The brake linings shatter: the brakes no longer hold (E602).'); }
     if (tg === 'governor') { h.gov.tripped = true; h.gov.switchOpen = true; return this.say('The governor\'s jaws are knocked shut and its switch is open (E202).'); }
     if (tg === 'drive' || tg === 'cabinet' || tg === 'driveCover') { s.drive.fault = 'runaway'; return this.say('The drive cabinet is caved in: the encoder cable is crushed (E901). The drive is fed a wrong speed.'); }
+    if (c.person) return this.say('You lower the sledgehammer: not at people.');
     if (c.broken) return this.say(`${c.label} is already smashed.`);
     c.broken = true;
     for (const m of c.meshes) { m.userData.rot0 ??= m.rotation.clone(); m.rotation.x += 0.35; m.rotation.z += 0.2; }
