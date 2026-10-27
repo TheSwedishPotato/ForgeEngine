@@ -12,6 +12,7 @@ import { ElevatorGL } from './render/elevatorGL.js';
 import { makeProps } from './world/props.js';
 import { Player } from './player.js';
 import { Sound } from './audio/sound.js';
+import { ToolBelt } from './world/tools.js';
 import { CAR, FACADE, SPEC, floorY, FLOORS, MR, PIT_Y, cwYForCar } from './data/spec.js';
 
 export class Game {
@@ -32,6 +33,8 @@ export class Game {
     // what blocks your hand from a button behind it: the door panels
     this.occluders = [...this.buildingGL.landing.slice(1).flatMap((l) => l.panels), ...this.elevatorGL.doorPanels.flatMap((g) => g.children)];
     this.player = new Player(this);
+    this.tools = new ToolBelt(this);
+    this.buildingGL.hasKey = () => this.tools.belt.some((b) => b.tool === 'key');
     this.sound = new Sound(this);
     this.timeScale = 1;
     this.paused = false;
@@ -72,8 +75,8 @@ export class Game {
       }
       return x;
     };
-    d.car.block = need(CAR.doorZ - 0.02, CAR.doorZ + 0.02, h.yc);
-    for (let n = 1; n <= FLOORS; n++) d.landing[n].block = Math.abs(h.yc - floorY(n)) < 30 || d.landing[n].x > 0 ? need(FACADE, FACADE + 0.04, floorY(n)) : 0;
+    d.car.block = Math.max(need(CAR.doorZ - 0.02, CAR.doorZ + 0.02, h.yc), d.car.wedge ?? 0);
+    for (let n = 1; n <= FLOORS; n++) d.landing[n].block = Math.abs(h.yc - floorY(n)) < 30 || d.landing[n].x > 0 ? Math.max(need(FACADE, FACADE + 0.04, floorY(n)), d.landing[n].wedge ?? 0) : 0;
   }
 
   _curtain() {

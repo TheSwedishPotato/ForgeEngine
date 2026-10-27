@@ -223,7 +223,7 @@ export class BuildingGL {
     const disp = new Mesh(new PlaneGeometry(0.26, 0.13), this.hallDisplay.mat); disp.position.set(0, 0.17, 0.011); lan.add(disp);
     // the unlocking keyhole in the door head (the triangle)
     const tri = this.labels.quad(this.labels.symbol('triangle'), 0.05, 0.05); tri.position.set(0.42, y0 + 2.2, z0 - 0.056); tri.rotation.y = Math.PI; this.root.add(tri);
-    C.add(tri, { id: `unlock.${n}`, label: `Floor ${n} landing door: emergency unlocking (triangle key)`, kind: 'key', down: () => { this.sim.doors.unlock(n); this.sim.say(`You turn the triangle key in floor ${n}'s landing door: its lock lifts for a few seconds. Pull the door open by hand.`, 'You'); this.sim.sfx('clack', { floor: n }); } });
+    C.add(tri, { id: `unlock.${n}`, label: `Floor ${n} landing door: emergency unlocking (triangle key)`, kind: 'key', down: () => { if (this.hasKey && !this.hasKey()) { this.sim.say('The keyhole needs a hoistway door key: there is one on the technician\'s trolley in the lobby.', 'You'); return; } this.sim.doors.unlock(n); this.sim.say(`You turn the triangle key in floor ${n}'s landing door: its lock lifts for a few seconds. Pull the door open by hand.`, 'You'); this.sim.sfx('clack', { floor: n }); } });
     // fire service Phase I key switch at the lobby
     if (n === 1) {
       const fp = new Object3D(); fp.position.set(1.75, 1.45, z0 - 0.005); fp.rotation.y = Math.PI; this.root.add(fp);
@@ -387,7 +387,7 @@ export class BuildingGL {
     panel('parking', 'Parking at the lobby: ON / OFF', 1.6, 1.1, 'switch', { get: () => ctl.inputs.parking, set: (v) => (ctl.inputs.parking = v), text: 'PRK' });
     // the main switch by the door
     this.wall(b, M.paintGrey, 0.9, y + 1.0, MR.z0, 1.25, y + 1.45, MR.z0 + 0.2);
-    this._panelControl('main', 'MAIN SWITCH (isolates the elevator)', 1.075, y + 1.22, MR.z0 + 0.205, 'switch', { get: () => ctl.inputs.mainSwitch, set: (v) => (ctl.inputs.mainSwitch = v), red: true, big: true });
+    this._panelControl('main', 'MAIN SWITCH (isolates the elevator)', 1.075, y + 1.22, MR.z0 + 0.205, 'switch', { get: () => ctl.inputs.mainSwitch, set: (v) => { if (v && ctl.lockout) { this.sim.say('The main switch is locked off with a padlock and tag: take the padlock off first (R with the padlock).', 'You'); return; } ctl.inputs.mainSwitch = v; }, red: true, big: true });
     // ---- the simulator's own panel: failures to put the safety systems to the test
     const sz = MR.z1 - 0.06;
     this.wall(b, M.paintYellow, -3.0, y + 0.9, sz - 0.2, -1.4, y + 1.9, MR.z1);

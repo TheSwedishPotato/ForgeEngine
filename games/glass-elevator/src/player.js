@@ -108,6 +108,7 @@ export class Player {
   }
 
   _grab(hit) {
+    if (hit.body?.tool) { this.game.tools.take(hit.body); return; }
     if (hit.body) {
       const b = hit.body;
       this.held = { body: b, dist: Math.max(0.6, Math.min(2.5, hit.t)) };
@@ -171,7 +172,8 @@ export class Player {
       return;
     }
     const hit = this.mode === 'walk' || this.mouse ? this._pick(document.pointerLockElement || this.game.touch ? null : this.mouse) : null;
-    if (hit?.body) this.hint = `${hit.body.name} · hold the left button to pick it up`;
+    if (hit?.body?.tool) this.hint = `${hit.body.name} · click to put it on your tool belt`;
+    else if (hit?.body) this.hint = `${hit.body.name} · hold the left button to pick it up`;
     else if (hit?.control) { const c = hit.control; this.hint = c.hint?.() ?? `${c.label} · ${c.kind === 'hold' ? 'hold the left button' : c.kind === 'grab' ? 'hold and drag' : 'click'}`; }
     else this.hint = this._nearSpot()?.label ?? '';
   }

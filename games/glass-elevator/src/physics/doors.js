@@ -90,11 +90,11 @@ export class Doors {
       if (n === cf && (c.x > 0.002 || L.x < 0.002)) {
         // coupled: the landing panels ride with the car's (their hand and obstruction forces went to the car door)
         L.x = c.x; L.v = c.v;
-        L.locked = c.x < 0.002 && L.key <= 0;
+        L.locked = c.x < 0.002 && L.key <= 0 && !L.broken;
         L.Fhand = 0; L.Fext = 0;
         continue;
       }
-      if (L.locked && L.key > 0) L.locked = false;
+      if (L.locked && (L.key > 0 || L.broken)) L.locked = false;
       if (L.locked) { L.v = 0; L.Fhand = 0; L.Fext = 0; continue; }
       // self-closing on its weight, slowed by its damper
       const Fl = -45 + L.Fhand + L.Fext - 60 * L.v;
@@ -103,7 +103,7 @@ export class Doors {
       L.x += (L.v * dt) / T;
       if ((L.block ?? 0) > 0 && L.x < L.block && lx0 >= L.block - 0.02) { L.x = L.block; L.v = Math.max(0, L.v); }
       if (L.x >= 1) { L.x = 1; L.v = Math.min(0, L.v); }
-      if (L.x <= 0) { L.x = 0; L.v = 0; if (L.key <= 0) L.locked = true; }
+      if (L.x <= 0) { L.x = 0; L.v = 0; if (L.key <= 0 && !L.broken) L.locked = true; }
       L.Fhand = 0; L.Fext = 0;
     }
     c.Fhand = 0;

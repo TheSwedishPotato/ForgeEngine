@@ -24,6 +24,7 @@ export class Touch {
         <button data-k="use" class="big">Use</button><button data-k="throw" class="big">Throw</button>
         <button data-k="KeyE">E</button><button data-k="KeyQ">Q</button><button data-k="KeyV">View</button>
         <button data-k="go">Go to</button><button data-k="KeyT">Data</button><button data-k="KeyH">?</button>
+        <button data-k="tool">Tool</button><button data-k="KeyR">Apply</button><button data-k="KeyX">Put down</button>
       </div>`;
     root.append(el);
     // the stick: its offset drives W A S D (and Shift right out)
@@ -55,9 +56,10 @@ export class Touch {
           // carrying: one tap picks it up, the next puts it down
           if (P.held?.body) { P._release(); b.textContent = 'Use'; return; }
           const hit = P._pick(null);
-          if (hit) { P._grab(hit); if (hit.body) b.textContent = 'Drop'; }
+          if (hit) { P._grab(hit); if (hit.body && !hit.body.tool) b.textContent = 'Drop'; }
         }
         else if (k === 'throw') { if (P.held?.body) { P._throw(); el.querySelector('[data-k=use]').textContent = 'Use'; } }
+        else if (k === 'tool') game.tools.cycle();
         else if (k === 'go') hud.goto.style.display = hud.goto.style.display === 'none' ? '' : 'none';
         else { key(k); key(k, 'keyup'); }
       });

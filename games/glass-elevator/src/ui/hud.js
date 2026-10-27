@@ -26,6 +26,7 @@ export class HUD {
       <tr><td>W A S D</td><td>walk (Shift: hurry)</td></tr>
       <tr><td>Left button</td><td>press a button, flip a switch, turn a key · <b>hold</b> on a loose thing to pick it up (wheel: nearer / further, right button: throw) · hold on a door panel or a lever and drag</td></tr>
       <tr><td>E · Q</td><td>at a stairs door: up / down a floor (floor 30: up to the machine room) · the pit door and ladder</td></tr>
+      <tr><td>R · X · 1-9</td><td>use your chosen tool on what you look at · put it down · choose a tool (the tools are on the trolley in the lobby: click one to put it on your belt)</td></tr>
       <tr><td>G</td><td>go somewhere: the lobby, the car, its roof, any floor, the machine room, the pit</td></tr>
       <tr><td>V</td><td>step outside to watch (drag, wheel, W/S up and down, F follow the car)</td></tr>
       <tr><td>T</td><td>the engineer's panel: drive, ropes, traction, brakes, governor, safety chain, doors</td></tr>
@@ -72,7 +73,7 @@ export class HUD {
     const g = this.game, s = g.sim, h = s.hoist, c = s.ctl, d = s.doors, dr = s.drive, P = g.player;
     const x = g.timeScale !== 1 ? ` <i>×${g.timeScale}</i>` : '';
     const arrow = c.display.dir > 0 ? '▲' : c.display.dir < 0 ? '▼' : '';
-    this.top.innerHTML = `<b>${P.where()}</b><span>${fmt(s.clock)}${x}</span><span>Car ${arrow} ${c.floor}${c.display.msg ? ` · ${c.display.msg}` : ''}</span><span>${Math.abs(h.vc).toFixed(2)} m/s</span><span>${Math.max(0, Math.round(c.loadKg))} kg</span>${g.paused ? '<span>PAUSED</span>' : ''}`;
+    this.top.innerHTML = `<b>${P.where()}</b><span>${fmt(s.clock)}${x}</span><span>Car ${arrow} ${c.floor}${c.display.msg ? ` · ${c.display.msg}` : ''}</span><span>${Math.abs(h.vc).toFixed(2)} m/s</span><span>${Math.max(0, Math.round(c.loadKg))} kg</span>${g.tools?.tool ? `<span>Tool: ${g.tools.tool.name} (${g.tools.active + 1}/${g.tools.belt.length})</span>` : ''}${g.paused ? '<span>PAUSED</span>' : ''}`;
     this.intro -= 0.2;
     this.hint.textContent = (g.touch && P.hint ? P.hint.replace(/hold the left button to pick it up/g, 'tap Use to carry it').replace(/let go to drop/g, 'tap Drop to put it down').replace(/hold the left button/g, 'hold Use').replace(/left button/g, 'Use').replace(/click/g, 'tap Use') : P.hint) || (this.intro > 0 && g.touch ? 'Stick: walk · drag: look · Use: press, or hold to carry · Go to: anywhere' : this.intro > 0 ? 'H: the keys · G: go anywhere · T: the engineer\'s panel · the hall buttons are beside the landing door' : '');
     this.log.innerHTML = s.log.slice(-6).map((l) => `<div>${fmt(l.t).slice(0, 8)} ${l.who ? `<b>${l.who}:</b> ` : ''}${l.text}</div>`).join('');
