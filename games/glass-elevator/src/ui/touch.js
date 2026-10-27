@@ -47,24 +47,33 @@ export class Touch {
     stick.addEventListener('pointermove', (e) => { if (e.pointerId === id) { e.stopPropagation(); set(e.clientX - cx, e.clientY - cy); } });
     const end = (e) => { if (e.pointerId !== id) return; id = null; set(0, 0); };
     stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end);
+    // keep the Use label true when something else lets go (a teleport, a throw, the view key)
+    const useB = el.querySelector('[data-k=use]');
+    setInterval(() => { const t = P.held?.body && !P.held.body.tool ? 'Drop' : P.held?.control?.kind === 'hold' ? 'Let go' : 'Use'; if (useB.textContent !== t) useB.textContent = t; }, 200);
     // the buttons
     for (const b of el.querySelectorAll('button')) {
       const k = b.dataset.k;
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
         if (k === 'use') {
-          // carrying: one tap picks it up, the next puts it down
-          if (P.held?.body) { P._release(); b.textContent = 'Use'; return; }
+          // carrying and hold buttons latch: one tap takes it (or holds the button in), the next lets go
+          if (P.held?.body || P.held?.control?.kind === 'hold') { P._release(); b.textContent = 'Use'; return; }
+          P._release();
           const hit = P._pick(null);
-          if (hit) { P._grab(hit); if (hit.body && !hit.body.tool) b.textContent = 'Drop'; }
+          if (hit) {
+            P._grab(hit);
+            if (hit.body && !hit.body.tool) b.textContent = 'Drop';
+            else if (hit.control?.kind === 'hold') b.textContent = 'Let go';
+          }
         }
         else if (k === 'throw') { if (P.held?.body) { P._throw(); el.querySelector('[data-k=use]').textContent = 'Use'; } }
         else if (k === 'tool') game.tools.toggle();
         else if (k === 'go') hud.goto.style.display = hud.goto.style.display === 'none' ? '' : 'none';
         else { key(k); key(k, 'keyup'); }
       });
-      const up = () => { if (k === 'use' && !P.held?.body) P._release(); };
-      b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
+      // a tap on a plain button or switch lets go when the finger lifts; hold buttons and carried things stay
+      b.addEventListener('pointerup', () => { if (k === 'use' && P.held && !P.held.body && P.held.control?.kind !== 'hold') P._release(); });
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
     }
   }
 }
