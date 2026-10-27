@@ -47,7 +47,7 @@ export class Controller {
       open: false, close: false, alarm: false, cancel: false,
       insp: false, inspUp: false, inspDown: false, inspCommon: false,
       eeo: false, eeoUp: false, eeoDown: false, eeoRun: false,
-      fire1: 'off', fire2: 'off', independent: false, parking: true,
+      fire1: 'off', fire2: 'off', independent: false, parking: true, lwBypass: false,
     };
     this.faults = { ucm: false, brake: false };
     this.fire = { latched: false, recalled: false };
@@ -133,7 +133,7 @@ export class Controller {
     this.time += dt;
     // load weighing: the hitch load cells, read while the car stands
     if (Math.abs(h.vc) < 0.02 && this.phase !== 'run') this.loadKg += (h.measuredLoad() - this.loadKg) * Math.min(1, dt / 0.35);
-    const ol = this.loadKg > SPEC.ratedLoad * SPEC.overload;
+    const ol = !I.lwBypass && this.loadKg > SPEC.ratedLoad * SPEC.overload;   // the technician's bypass switch ignores it
     if (ol !== this.overload) { this.overload = ol; if (ol) this.say(`Overload: ${Math.round(this.loadKg)} kg in a ${SPEC.ratedLoad} kg car. The doors stay open.`); }
     this.fullLoad = this.loadKg > SPEC.ratedLoad * SPEC.fullLoad;
     this.chainList = this._chain();

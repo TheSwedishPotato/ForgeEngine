@@ -395,6 +395,7 @@ export class BuildingGL {
     panel('faultReset', 'Fault reset (unintended movement, brake faults)', 0.75, 1.1, 'button', { press: () => ctl.resetFaults(), text: 'FLT' });
     panel('ard', 'Automatic rescue device: ON / OFF', 1.0, 1.1, 'switch', { get: () => ctl.inputs.ard, set: (v) => (ctl.inputs.ard = v), text: 'ARD' });
     panel('mrStop', 'Machine room STOP switch', 1.35, 1.25, 'switch', { get: () => ctl.inputs.mrStop, set: (v) => (ctl.inputs.mrStop = v), red: true });
+    panel('lwBypass', 'Load weighing BYPASS (technicians only: the car runs whatever it carries)', 1.6, 1.4, 'switch', { get: () => ctl.inputs.lwBypass, set: (v) => { ctl.inputs.lwBypass = v; sim.say(v ? `Load weighing bypassed: overload no longer stops the car. It now reads ${Math.round(ctl.loadKg)} kg; past what the traction and the motor can hold, the ropes slip or the car will not lift.` : 'Load weighing back in service.', 'Panel'); }, text: 'LW', red: true });
     panel('parking', 'Parking at the lobby: ON / OFF', 1.6, 1.1, 'switch', { get: () => ctl.inputs.parking, set: (v) => (ctl.inputs.parking = v), text: 'PRK' });
     // the main switch by the door
     this.wall(b, M.paintGrey, 0.9, y + 1.0, MR.z0, 1.25, y + 1.45, MR.z0 + 0.2);

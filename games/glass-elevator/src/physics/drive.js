@@ -120,7 +120,9 @@ export class Drive {
     const kp = M * wc, ki = (kp * wc) / 4;
     let fb = h.vs;
     if (this.fault === 'runaway') fb *= 0.6;                     // the encoder reads 60 %: the loop drives faster and faster
-    const vref = this.dir * this.v + 4 * (this.s - h.enc);
+    // the position loop's correction is clamped: a car held back at the torque limit (overloaded) must
+    // not race to catch up its following error, it just arrives late
+    const vref = this.dir * this.v + Math.max(-0.25, Math.min(0.25, 4 * (this.s - h.enc)));
     const ev = vref - fb;
     let F = this.preF + M * this.dir * this.a + kp * ev + ki * this.integ;
     const lim = this.torqueLimit / R;

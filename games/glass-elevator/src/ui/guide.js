@@ -97,7 +97,7 @@ export class Guide {
     if (I.insp) return { problem: 'Inspection is still switched on (car roof).', step: 'Switch the inspection switch back to NORMAL on the car roof station.', pos: mr('insp') };
     if (I.fire1 !== 'off' || I.fire2 !== 'off' || c.fire.latched) return { problem: 'Firefighters\' service is active.', step: I.fire2 !== 'off' ? 'Turn the Phase II key in the car to OFF.' : 'Turn the Phase I key at the lobby to RESET, then OFF.', pos: this.at(I.fire2 !== 'off' ? 'fire2' : 'fire1') };
     if (I.independent) return { problem: 'Independent service is on: the car ignores hall calls.', step: 'Turn the independent service key in the car to off.', pos: this.at('independent') };
-    if (c.overload) return { problem: `Overload: ${Math.round(c.loadKg)} kg in a 1600 kg car.`, step: 'Take weight out of the car until the buzzer stops.', pos: new Vector3(0, h.yc + 1, CAR.zc) };
+    if (c.overload) return { problem: `Overload: ${Math.round(c.loadKg)} kg in a 1600 kg car.`, step: 'Take weight out of the car until the buzzer stops (or, at your own risk, the LW bypass switch on the controller cabinet).', pos: new Vector3(0, h.yc + 1, CAR.zc) };
     for (let n = 1; n <= FLOORS; n++) if (!d.landing[n].locked && d.coupled !== n) return { problem: `Landing door ${n} is not locked.`, step: `Let floor ${n}'s landing door close (it shuts on its weight), or push it shut.`, pos: this.at(`landingDoor.${n}.`) };
     if (!c.chainOK && c.phase === 'idle' && c.door === 'closed') { const open = c.chainList.find((k) => !k[2]); return { problem: `Safety chain open: ${open?.[1]}.`, step: 'Measure the chain with the multimeter in the controller cabinet to find it.', ...tool('meter', 'Multimeter'), pos: mr('target.cabinet') }; }
     return null;
