@@ -122,8 +122,8 @@ export class ToolBelt {
     spot(g.elevatorGL.car, 0, 3.42, CAR.zc, 0.25, 0.3, 0.4, 'ropes', 'The car\'s rope hitch (eight rope terminations)');
     spot(S, SHEAVE.x, SHEAVE.y, SHEAVE.z, 0.75, 0.75, 0.3, 'ropes', 'The traction sheave and its ropes');
     spot(S, SHEAVE.x, SHEAVE.y, SHEAVE.z + 0.25, 1.0, 0.4, 0.25, 'brakes', 'The machine brakes (two sets)');
-    spot(S, -2.35, y + 1.2, MR.z0 + 0.47, 1.9, 1.6, 0.05, 'cabinet', 'The controller cabinet');
-    spot(S, -0.75, y + 1.2, MR.z0 + 0.47, 1.1, 1.6, 0.05, 'drive', 'The drive (inverter) cabinet');
+    spot(S, -2.35, y + 1.2, MR.z0 + 0.42, 1.9, 1.6, 0.05, 'cabinet', 'The controller cabinet');
+    spot(S, -0.75, y + 1.2, MR.z0 + 0.42, 1.1, 1.6, 0.05, 'drive', 'The drive (inverter) cabinet');
     spot(S, GOVERNOR.x, GOVERNOR.y, GOVERNOR.z, 0.3, 0.4, 0.4, 'governor', 'The overspeed governor');
   }
 
