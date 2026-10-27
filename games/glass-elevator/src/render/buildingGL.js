@@ -386,9 +386,9 @@ export class BuildingGL {
     const disp = new Mesh(new PlaneGeometry(0.42, 0.16), this.mrDisplay.mat); disp.position.set(-2.35, y + 1.72, cz + 0.006); this.root.add(disp);
     const panel = (id, label, x, yy, kind, opts) => this._panelControl(id, label, -3.3 + x, y + yy, cz + 0.005, kind, opts);
     panel('eeo', 'Emergency electrical operation: NORMAL / EEO', 0.25, 1.4, 'switch', { get: () => ctl.inputs.eeo, set: (v) => (ctl.inputs.eeo = v), text: 'EEO' });
-    panel('eeoUp', 'EEO: UP (hold, with RUN)', 0.55, 1.4, 'hold', { set: (v) => (ctl.inputs.eeoUp = v), sym: 'up' });
+    panel('eeoUp', 'EEO: UP (hold: RUN goes in with it)', 0.55, 1.4, 'hold', { set: (v) => { ctl.inputs.eeoUp = v; ctl.inputs.eeoRun = v; }, sym: 'up' });
     panel('eeoRun', 'EEO: RUN (hold)', 0.75, 1.4, 'hold', { set: (v) => (ctl.inputs.eeoRun = v), text: 'RUN' });
-    panel('eeoDown', 'EEO: DOWN (hold, with RUN)', 0.95, 1.4, 'hold', { set: (v) => (ctl.inputs.eeoDown = v), sym: 'down' });
+    panel('eeoDown', 'EEO: DOWN (hold: RUN goes in with it)', 0.95, 1.4, 'hold', { set: (v) => { ctl.inputs.eeoDown = v; ctl.inputs.eeoRun = v; }, sym: 'down' });
     panel('govTrip', 'Governor remote tripping (test: trips it at the next move)', 0.25, 1.1, 'button', { press: () => { h.gov.testTrip = true; sim.say('Governor test magnet armed: it will trip at the next movement.', 'Technician'); }, text: 'GOV' });
     panel('govReset', 'Governor remote reset', 0.5, 1.1, 'button', { press: () => sim.say(h.resetGovernor() ? 'Governor reset. (If the safety gear is set, release it by moving the car up on EEO.)' : 'The governor can only be reset with the car at rest.', 'Technician'), text: 'RST' });
     panel('faultReset', 'Fault reset (unintended movement, brake faults)', 0.75, 1.1, 'button', { press: () => ctl.resetFaults(), text: 'FLT' });

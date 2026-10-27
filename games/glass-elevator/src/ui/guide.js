@@ -85,12 +85,12 @@ export class Guide {
     if (h.gov.tripped) return { problem: 'Overspeed governor tripped (E202): its jaws hold the governor rope.', step: 'Reset the governor: the RST button on the controller cabinet (or the spanner on the governor).', pos: mr('govReset') };
     if (h.sg.set) {
       if (!I.eeo) return { problem: 'The safety gear has set (E203): the wedges hold the car on its rails.', step: 'Free it by moving the car UP: switch on emergency electrical operation (EEO) on the controller cabinet.', pos: mr('eeo') };
-      return { problem: 'Safety gear set: freeing it.', step: 'Hold RUN and UP together on the cabinet for a second or two: the car rises off the wedges.', pos: mr('eeoUp') };
+      return { problem: 'Safety gear set: freeing it.', step: 'Press and hold the UP button on the cabinet (RUN goes in with it) for a second or two: the car rises off the wedges.', pos: mr('eeoUp') };
     }
     const lim = h.yc > floorY(FLOORS) + 0.15 || h.yc < floorY(1) - 0.15 || h.buf.car > 0.02 || h.buf.cw > 0.02;
     if (lim) {
       if (!I.eeo) return { problem: 'The car is beyond a terminal floor (final limit or a buffer).', step: 'Switch on emergency electrical operation on the controller cabinet to drive it back.', pos: mr('eeo') };
-      return { problem: 'Car beyond a terminal floor.', step: `Hold RUN and ${h.yc > 50 ? 'DOWN' : 'UP'} until the car is back at the ${h.yc > 50 ? 'top' : 'bottom'} floor.`, pos: mr(h.yc > 50 ? 'eeoDown' : 'eeoUp') };
+      return { problem: 'Car beyond a terminal floor.', step: `Press and hold ${h.yc > 50 ? 'DOWN' : 'UP'} on the cabinet (RUN goes in with it) until the car is back at the ${h.yc > 50 ? 'top' : 'bottom'} floor.`, pos: mr(h.yc > 50 ? 'eeoDown' : 'eeoUp') };
     }
     if (c.faults.ucm || c.faults.brake) return { problem: `Lockout fault: ${c.faults.ucm ? 'unintended car movement (E301)' : 'brake lift (E601)'}.`, step: 'Clear it: the FLT (fault reset) button on the controller cabinet, or the laptop\'s "Clear log + reset faults".', pos: mr('faultReset') };
     if (I.eeo) return { problem: 'Emergency electrical operation is still switched on.', step: 'Switch EEO off on the controller cabinet to return the car to normal.', pos: mr('eeo') };

@@ -211,9 +211,9 @@ export class ElevatorGL {
       return C.add([ring, face], { id, label, kind: 'switch', down: () => { o.set(!o.get()); this.sim.sfx('clack'); }, hint: () => `${label}: ${o.get() ? o.on : o.off} (click)`, show: () => { face.position.y = o.get() ? 0.07 : 0.08; } });
     };
     panelBtn(-0.14, 'insp', 'Inspection switch (car roof)', 'switch', { get: () => ctl.inputs.insp, set: (v) => (ctl.inputs.insp = v), text: 'INSP', black: true, on: 'INSPECTION', off: 'NORMAL' });
-    panelBtn(-0.07, 'inspUp', 'Inspection UP (hold with COMMON)', 'hold', { set: (v) => (ctl.inputs.inspUp = v), sym: 'up' });
+    panelBtn(-0.07, 'inspUp', 'Inspection UP (hold: COMMON goes in with it)', 'hold', { set: (v) => { ctl.inputs.inspUp = v; ctl.inputs.inspCommon = v; }, sym: 'up' });
     panelBtn(0.0, 'inspCommon', 'Inspection COMMON / RUN (hold)', 'hold', { set: (v) => (ctl.inputs.inspCommon = v), text: 'COM', black: true });
-    panelBtn(0.07, 'inspDown', 'Inspection DOWN (hold with COMMON)', 'hold', { set: (v) => (ctl.inputs.inspDown = v), sym: 'down' });
+    panelBtn(0.07, 'inspDown', 'Inspection DOWN (hold: COMMON goes in with it)', 'hold', { set: (v) => { ctl.inputs.inspDown = v; ctl.inputs.inspCommon = v; }, sym: 'down' });
     panelBtn(0.14, 'carTopStop', 'Car roof STOP switch', 'switch', { get: () => ctl.inputs.carTopStop, set: (v) => (ctl.inputs.carTopStop = v), red: true, text: 'STOP', on: 'STOP', off: 'RUN' });
   }
 
