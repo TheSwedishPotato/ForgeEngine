@@ -67,7 +67,11 @@ export class Doors {
     let v = friction(c.v + (F / m) * dt, 14, m, dt);
     if (locked && v > 0) v = 0;
     c.v = v;
+    const cx0 = c.x;
     c.x += (v * dt) / T;
+    // something standing in the doorway: the panels stop against it (and the door stalls, and reopens)
+    const blockC = Math.max(c.block ?? 0, cf ? this.landing[cf].block ?? 0 : 0);
+    if (blockC > 0 && c.x < blockC && cx0 >= blockC - 0.02) { c.x = blockC; c.v = Math.max(0, c.v); }
     if (c.x <= 0) { c.x = 0; c.v = Math.max(0, c.v); }
     if (c.x >= 1) { c.x = 1; c.v = Math.min(0, c.v); }
     // stalled against something in the doorway while closing
@@ -95,7 +99,9 @@ export class Doors {
       // self-closing on its weight, slowed by its damper
       const Fl = -45 + L.Fhand + L.Fext - 60 * L.v;
       L.v = friction(L.v + (Fl / D.landingPanel) * dt, 10, D.landingPanel, dt);
+      const lx0 = L.x;
       L.x += (L.v * dt) / T;
+      if ((L.block ?? 0) > 0 && L.x < L.block && lx0 >= L.block - 0.02) { L.x = L.block; L.v = Math.max(0, L.v); }
       if (L.x >= 1) { L.x = 1; L.v = Math.min(0, L.v); }
       if (L.x <= 0) { L.x = 0; L.v = 0; if (L.key <= 0) L.locked = true; }
       L.Fhand = 0; L.Fext = 0;

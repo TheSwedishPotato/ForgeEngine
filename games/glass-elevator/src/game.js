@@ -36,6 +36,7 @@ export class Game {
     this.timeScale = 1;
     this.paused = false;
     this.world.carY = this.sim.hoist.yc;
+    this.world.after.push(() => this._doorBlocks());
   }
 
   /** The simulator's repair: new ropes hung where the car is, brakes relined, the drive fixed, everything reset. */
@@ -55,6 +56,26 @@ export class Game {
   }
 
   /** The light curtain's beams across the doorway: anything (or anyone) in them. */
+  /**
+   * How far open each door must stay for the things in its doorway: a panel cannot close through
+   * a box, so it stops against it (the operator then feels the stall and reopens).
+   */
+  _doorBlocks() {
+    const d = this.sim.doors, h = this.sim.hoist, T = SPEC.doors.panelTravel;
+    const need = (z0, z1, y0) => {
+      let x = 0;
+      for (const b of this.world.bodies) {
+        const [lo, hi] = b.aabb();
+        if (hi[2] < z0 || lo[2] > z1 || hi[1] < y0 + 0.01 || lo[1] > y0 + CAR.doorH) continue;
+        if (hi[0] < -0.6 || lo[0] > 0.6) continue;
+        x = Math.max(x, Math.min(1, (Math.max(Math.abs(lo[0]), Math.abs(hi[0])) + 0.005) / T));
+      }
+      return x;
+    };
+    d.car.block = need(CAR.doorZ - 0.02, CAR.doorZ + 0.02, h.yc);
+    for (let n = 1; n <= FLOORS; n++) d.landing[n].block = Math.abs(h.yc - floorY(n)) < 30 || d.landing[n].x > 0 ? need(FACADE, FACADE + 0.04, floorY(n)) : 0;
+  }
+
   _curtain() {
     const d = this.sim.doors, h = this.sim.hoist;
     if (d.car.x < 0.01) { d.curtainBlocked = false; return; }
