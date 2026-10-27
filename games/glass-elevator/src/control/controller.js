@@ -455,6 +455,13 @@ export class Controller {
       : (I.eeoRun ? (I.eeoUp && !I.eeoDown ? 1 : I.eeoDown && !I.eeoUp ? -1 : 0) : 0);
     if (this.phase === 'idle') {
       if (dir && this.chainOK && this.powered) this._start({ kind: 'jog', dir, vmax: mode === 'inspection' ? SPEC.speeds.inspection : SPEC.speeds.eeo });
+      else if (dir && !this._jogNo) {
+        // say once per press why it will not run
+        this._jogNo = true;
+        const open = this.chainList.find((c) => !c[2]);
+        this.say(`${mode === 'eeo' ? 'EEO' : 'Inspection'}: the car will not run: ${!this.powered ? 'no power (mains off)' : `the safety chain is open at the ${open[1].toLowerCase()}`}.`);
+      }
+      if (!dir) this._jogNo = false;
       return;
     }
     if (!dir || dir !== this.pending?.dir) {
