@@ -156,7 +156,8 @@ grid is counted.
 - **The lift engineer's tools** (`src/world/tools.js`), on the technician's trolley in the lobby. Click one to put it on your tool belt; R uses the chosen tool on what you look at, X puts it down, 1-9 choose:
   - hoistway door key (the triangle keyholes need it), door wedge, pry bar (forces a door, and bends its interlock: out of service until mended);
   - spanner set (mends a forced lock, re-hangs parted ropes, resets the governor), brake linings, multimeter (finds the open contact in the safety chain), service laptop (clears the drive's encoder fault and the controller's faults), screwdriver (realigns the light curtain);
-  - lockout padlock and tag for the main switch: rope and brake work is refused until it is locked off, as lockout/tagout requires.
+  - lockout padlock and tag for the main switch: rope and brake work is refused until it is locked off, as lockout/tagout requires;
+  - rescue rope and harness: anchor it in an open (or pried) landing door, lower yourself down the hoistway onto the car roof (back: down, forward: up), and climb back out the same way.
 
   They are rigid bodies (`src/physics/bodies.js`). Whatever stands in the car presses on its
   floor, and the load weighing reads it: your own 80 kg too.

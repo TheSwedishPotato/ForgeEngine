@@ -17,6 +17,7 @@ import { Vector3, Raycaster, Vector2 } from 'three';
 import { FLOORS, floorY, MR, PIT_Y, FACADE } from './data/spec.js';
 import { PIT, LOBBY, LOBBY1 } from './render/buildingGL.js';
 import { overlap } from './physics/bodies.js';
+import { boxMesh } from './render/build.js';
 
 const EYE = 1.62, RAD = 0.28, HEIGHT = 1.8, STEP = 0.42, MASS = 80, REACH = 2.4;
 const _v = new Vector3(), _d = new Vector3(), _r = new Raycaster(), _m = new Vector2();
@@ -223,7 +224,16 @@ export class Player {
     if (k.has('KeyA') || k.has('ArrowLeft')) s -= 1;
     const l = Math.hypot(f, s) || 1, sp = run ? 3.0 : 1.4;
     const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
-    const want = [((f * cy - s * sy) / l) * sp, ((f * sy + s * cy) / l) * sp];
+    let want = [((f * cy - s * sy) / l) * sp, ((f * sy + s * cy) / l) * sp];
+    const R = this.rope;
+    if (R) {
+      // on the rope: forward climbs, back lowers you (Shift: faster); at the top, forward steps out
+      this.peak = p[1];
+      if (R.fresh && !this.grounded) R.fresh = false;
+      if (p[1] >= R.y0 - 0.03 && f > 0) { want = [0, -1.0]; this.v[1] = 0; p[1] = Math.max(p[1], R.y0); }
+      else { want = [(s * -sy) * 0.4, (s * cy) * 0.4]; this.v[1] = f * (run ? 1.2 : 0.5); }
+      if (p[1] > R.y0 && this.v[1] > 0) { p[1] = R.y0; this.v[1] = 0; }
+    }
     const acc = this.grounded ? 12 : 1.5;
     this.v[0] += (want[0] - this.v[0]) * Math.min(1, acc * dt);
     this.v[2] += (want[1] - this.v[2]) * Math.min(1, acc * dt);
@@ -245,7 +255,7 @@ export class Player {
         } else { p[0] = cx + (dx / dd) * RAD; p[2] = cz + (dz / dd) * RAD; }
       }
       // up and down: gravity, the ground under you (which may be the car), your head
-      if (!this.grounded) this.v[1] -= 9.81 * h;
+      if (!this.grounded && !this.rope) this.v[1] -= 9.81 * h;
       const y0 = p[1];
       p[1] += this.v[1] * h;
       let top = -Infinity, under = null;
@@ -257,8 +267,9 @@ export class Player {
         if (t <= p[1] + STEP && t >= p[1] - reach && t > top) { top = t; under = b; }
         if (this.v[1] > 0 && b.min[1] > y0 + HEIGHT - 0.01 && b.min[1] < p[1] + HEIGHT) { p[1] = b.min[1] - HEIGHT; this.v[1] = 0; }
       }
-      if (under && p[1] <= top + 0.001 + (this.grounded ? 0.35 : 0)) {
+      if (under && p[1] <= top + 0.001 + (this.grounded ? 0.35 : 0) && !(this.rope && this.v[1] > 0)) {
         if (!this.grounded) this._landed(top);
+        if (this.rope && !this.rope.fresh && (under.car || p[2] < FACADE - 0.25)) { this.rope = null; this.game.sim.say(under.car ? 'Feet on the car roof: you unclip from the rope. (The rope stays hanging; use it again to climb back up.)' : 'Back in the lobby: you unclip from the rope.', 'You'); }
         p[1] = top; this.v[1] = under.v ? under.v[1] : 0; this.grounded = true; this.ground = under;
       } else { if (this.grounded) this.peak = p[1]; this.grounded = false; this.ground = null; this.peak = Math.max(this.peak, p[1]); }
     }
@@ -282,7 +293,21 @@ export class Player {
 
   // ---------------------------------------------------------------------------------------------
 
+  /** The rope you hang on, drawn from its anchor in the door head to your harness. */
+  _drawRope() {
+    const R = this.rope ?? this.ropeLeft, sc = this.game.stage.scene;
+    if (!this.ropeMesh) { this.ropeMesh = boxMesh(this.game.M.paintYellow, 0.014, 1, 0.014); this.ropeMesh.geometry.translate(0, -0.5, 0); sc.add(this.ropeMesh); }
+    const m = this.ropeMesh;
+    m.visible = !!R;
+    if (!R) return;
+    const a = R.anchor, end = this.rope ? [this.p[0], this.p[1] + 1.1, this.p[2]] : [a[0], a[1] - 30, a[2] + 0.4];
+    const dx = end[0] - a[0], dy = end[1] - a[1], dz = end[2] - a[2], L = Math.hypot(dx, dy, dz);
+    m.position.set(a[0], a[1], a[2]); m.scale.y = Math.max(0.01, L);
+    m.quaternion.setFromUnitVectors(_v.set(0, -1, 0), _d.set(dx, dy, dz).normalize());
+  }
+
   update(dt, camera) {
+    this._drawRope();
     if (this.mode === 'orbit') { this._orbit(dt, camera); this._hands(camera); return; }
     this._walk(dt);
     // the car's starts and stops in your knees

@@ -20,7 +20,7 @@
 import { Group, Mesh, MeshBasicMaterial, BoxGeometry } from 'three';
 import { Body } from '../physics/bodies.js';
 import { boxMesh, cylGeo } from '../render/build.js';
-import { MR, SHEAVE, GOVERNOR, CAR, SPEC, cwYForCar } from '../data/spec.js';
+import { MR, SHEAVE, GOVERNOR, CAR, SPEC, cwYForCar, floorY, FACADE } from '../data/spec.js';
 
 const TOOLS = [
   ['key', 'Hoistway door key', [0.12, 0.02, 0.04], 0.2, 'paintDark'],
@@ -32,6 +32,7 @@ const TOOLS = [
   ['laptop', 'Service laptop', [0.34, 0.03, 0.24], 2.0, 'plastic'],
   ['screwdriver', 'Screwdriver', [0.22, 0.03, 0.03], 0.15, 'paintBlue'],
   ['padlock', 'Lockout padlock and tag', [0.06, 0.08, 0.03], 0.25, 'paintRed'],
+  ['rope', 'Rescue rope and harness', [0.3, 0.15, 0.3], 6, 'paintYellow'],
 ];
 
 export class ToolBelt {
@@ -149,12 +150,12 @@ export class ToolBelt {
       return this.say('A door wedge goes in a door.');
     }
     if (t === 'prybar') {
-      if (landing) { const L = d.landing[floor]; L.broken = true; L.locked = false; L.x = Math.max(L.x, 0.4); s.sfx('snap'); return this.say(`You lever floor ${floor}'s landing door open by force. Its interlock hook bends: the lock contact stays open, the elevator is out of service until it is mended (spanner).`); }
+      if (landing) { const L = d.landing[floor]; L.broken = true; L.locked = false; L.x = Math.max(L.x, 0.62); L.wedge = 0.62; s.sfx('snap'); return this.say(`You lever floor ${floor}'s landing door open by force. The bent door jams half open, its interlock hook bent: the lock contact stays open, the elevator is out of service until it is mended (spanner).`); }
       if (carDoor) { d.car.x = Math.max(d.car.x, 0.4); s.sfx('snap'); return this.say('You force the car door open. Its contact opens the safety chain: if the car was moving, it has just made an emergency stop.'); }
       return this.say('The pry bar is for forcing doors.');
     }
     if (t === 'spanner') {
-      if (landing && d.landing[floor].broken) { d.landing[floor].broken = false; return this.say(`Floor ${floor}'s interlock hook straightened and reset: the door locks again.`); }
+      if (landing && d.landing[floor].broken) { d.landing[floor].broken = false; d.landing[floor].wedge = 0; return this.say(`Floor ${floor}'s interlock hook straightened and reset: the door locks again.`); }
       if (c.target === 'governor') return this.say(h.resetGovernor() ? 'Governor reset by hand. If the safety gear has set, move the car up on emergency electrical operation to free it.' : 'Not while the car moves.');
       if (c.target === 'ropes') {
         if (locked()) return;
@@ -187,6 +188,19 @@ export class ToolBelt {
     if (t === 'screwdriver') {
       if (!carDoor) return this.say('The light curtain\'s edges are on the car door.');
       d.curtainFail = false; return this.say('Light curtain edges re-seated and aligned: all 32 beams seen.');
+    }
+    if (t === 'rope') {
+      if (P.rope) { P.rope = null; return this.say('You unclip from the rope.'); }
+      const n = floor || (P.ropeLeft && Math.hypot(P.p[0] - P.ropeLeft.anchor[0], P.p[2] - P.ropeLeft.anchor[2]) < 2.5 ? P.ropeLeft.floor : 0);
+      if (!n || !(landing || P.ropeLeft)) return this.say('Anchor the rope at an open landing door (look at the door).');
+      const L = d.landing[n];
+      if (L.x < 0.3 && d.coupled !== n) return this.say('Open the landing door first: the pry bar, or the hoistway door key and your hands.');
+      const y0 = floorY(n);
+      P.rope = { floor: n, y0, anchor: [0, y0 + 2.05, FACADE - 0.12] };
+      P.ropeLeft = P.rope;
+      if (P.p[1] < y0 - 0.5) { P.rope.fresh = true; return this.say(`You clip onto the rope hanging from floor ${n}. Forward: climb up · back: lower yourself.`); }
+      P._release?.(); P.p = [0, y0, FACADE + 0.45]; P.v = [0, 0, 0]; P.grounded = false; P.ground = null; P.yaw = -Math.PI / 2;
+      return this.say(`Rope anchored in floor ${n}'s door head, harness on: you swing out into the hoistway. Back (S, or the stick down): lower yourself onto the car roof · forward: climb · R with the rope: unclip.`);
     }
     if (t === 'padlock') {
       if (!(c.target === 'cabinet' || id === 'main')) return this.say('The padlock goes on the main switch in the machine room.');
