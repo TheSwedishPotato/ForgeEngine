@@ -18,7 +18,7 @@ import { TS_Y0 } from '../physics/hoist.js';
 export const COMP = { x: -1.25, z: CAR.zc + 0.25, carX: -0.45 };
 
 export const LOBBY = { x0: -3.3, x1: 3.3, z0: 11.0, z1: 14.7, h: 3.0 };
-export const LOBBY1 = { x0: -8, x1: 8, z0: 7, z1: 14.7, h: 5.7 };
+export const LOBBY1 = { x0: -8, x1: 8, z0: 7, z1: 14.7, h: 5.6 };
 export const PIT = { x0: -2.8, x1: 2.0, z0: FACADE, z1: 17.4 };
 export const PANEL_W = 0.575;
 const F = FACADE;
@@ -87,18 +87,62 @@ export class BuildingGL {
     const M = this.M, top = TOWER.top;
     M.curtain.map.repeat.set(1 / 1.5, 1 / 3.9);
     M.curtain.map.offset.set(0, -6 / 3.9);
-    const C = M.curtain;
-    // north, east and west faces, the roof
-    b.box(C, TOWER.x0, 0, TOWER.z0, TOWER.x1, top, TOWER.z0 + 0.3);
-    b.box(C, TOWER.x0, 0, TOWER.z0, TOWER.x0 + 0.3, top, F);
-    b.box(C, TOWER.x1 - 0.3, 0, TOWER.z0, TOWER.x1, top, F);
-    this.wall(b, M.concrete, TOWER.x0, ROOF_Y - 0.3, TOWER.z0, TOWER.x1, ROOF_Y, F, 2);
-    // the south face, with the landing door openings up the middle and the entrance at the foot
+    const C = M.curtain, T = TOWER, gl = this.glass;
+    this.wall(b, M.concrete, T.x0, ROOF_Y - 0.3, T.z0, T.x1, ROOF_Y, F, 2);
+    // a real curtain wall: glass you see through, both ways, a storey high, between spandrel bands
+    // at each floor and aluminium mullions every 1.5 m; behind it the floors, their ceiling lights,
+    // and the concrete core
     const fz0 = F - 0.3;
-    this.wall(b, C, TOWER.x0, 0, fz0, -0.55, top, F);
-    this.wall(b, C, 0.55, 2.6, fz0, TOWER.x1, top, F);
-    this.wall(b, C, 0.55, 0, fz0, 5, 2.6, F);
-    this.wall(b, C, 7, 0, fz0, TOWER.x1, 2.6, F);
+    const faces = [
+      { a: [T.x0, T.z0], b: [T.x1, T.z0] },                    // north
+      { a: [T.x0, T.z0], b: [T.x0, F] },                        // west
+      { a: [T.x1, T.z0], b: [T.x1, F] },                        // east
+      { a: [T.x0, F], b: [-0.55, F] },                          // south, west of the landing doors
+      { a: [0.55, F], b: [T.x1, F] },                           // south, east of them
+    ];
+    const levels = [0]; for (let n = 2; n <= FLOORS; n++) levels.push(floorY(n)); levels.push(ROOF_Y);
+    for (const f of faces) {
+      const [ax, az] = f.a, [bx, bz] = f.b, alongX = az === bz, nz = az === T.z0 && alongX ? -1 : 1;
+      const box = (u0, u1, y0, y1, mat, solid = true) => {
+        const [x0, z0, x1, z1] = alongX ? [u0, nz > 0 ? fz0 : T.z0, u1, nz > 0 ? F : T.z0 + 0.3] : [ax < 0 ? T.x0 : T.x1 - 0.3, u0, ax < 0 ? T.x0 + 0.3 : T.x1, u1];
+        if (solid) this.wall(b, mat, x0, y0, z0, x1, y1, z1); else b.box(mat, x0, y0, z0, x1, y1, z1);
+      };
+      const u0 = alongX ? ax : az, u1 = alongX ? bx : bz;
+      for (let k = 0; k < levels.length - 1; k++) {
+        const ya = levels[k], yb = levels[k + 1];
+        const g0 = ya + (k === 0 ? 0.03 : 0.15), g1 = k === levels.length - 2 ? yb - 0.35 : yb - 0.35;
+        if (k > 0) box(u0, u1, ya - 0.35, g0, M.paintDark);             // the spandrel at the slab
+        const entrance = k === 0 && alongX && nz > 0 && u0 > 0;
+        // the glass (and a solid box behind it, so nothing walks or falls through)
+        const panes = entrance ? [[u0, 5, g0], [7, u1, g0], [5, 7, 2.6]] : [[u0, u1, g0]];
+        for (const [p0, p1, gb] of panes) {
+          const outer = alongX ? (nz > 0 ? F + 0.002 : T.z0 - 0.002) : ax < 0 ? T.x0 - 0.002 : T.x1 + 0.002;
+          const o = alongX ? [p0, gb, outer] : [outer, gb, p0], uu = alongX ? [p1 - p0, 0, 0] : [0, 0, p1 - p0];
+          gl.add(o, uu, [0, g1 - gb, 0], { tint: 0.04 });
+          if (alongX) this.solid(p0, gb, nz > 0 ? F - 0.08 : T.z0, p1, g1, nz > 0 ? F : T.z0 + 0.08);
+          else this.solid(ax < 0 ? T.x0 : T.x1 - 0.08, gb, p0, ax < 0 ? T.x0 + 0.08 : T.x1, g1, p1);
+        }
+        if (entrance) box(5, 7, 2.6 - 0.12, 2.6, M.aluminium, false);
+      }
+      box(u0, u1, ROOF_Y - 0.35, top, C);                              // the parapet
+      for (let u = Math.ceil(u0 / 1.5) * 1.5; u <= u1; u += 1.5) {      // mullions
+        if (alongX ? u > -0.6 && u < 0.6 : false) continue;
+        if (alongX) b.box(M.aluminium, u - 0.03, 0, nz > 0 ? F - 0.02 : T.z0 - 0.1, u + 0.03, ROOF_Y, nz > 0 ? F + 0.1 : T.z0 + 0.02);
+        else b.box(M.aluminium, ax < 0 ? T.x0 - 0.1 : T.x1 - 0.02, 0, u - 0.03, ax < 0 ? T.x0 + 0.02 : T.x1 + 0.1, ROOF_Y, u + 0.03);
+      }
+    }
+    // the floors behind the glass: slab, carpet, ceiling lights; the core
+    const Lb = LOBBY, cx = [-6, 6], cz = [-6, 4];
+    this.wall(b, M.concrete, cx[0], 0, cz[0], cx[1], ROOF_Y, cz[1], 2);
+    for (let n = 1; n <= FLOORS; n++) {
+      const y = floorY(n), L = n === 1 ? LOBBY1 : Lb;
+      const pieces = [[T.x0 + 0.3, T.z0 + 0.3, T.x1 - 0.3, L.z0], [T.x0 + 0.3, L.z0, L.x0, fz0], [L.x1, L.z0, T.x1 - 0.3, fz0]];
+      for (const [x0, z0, x1, z1] of pieces) {
+        if (n > 1) b.box(M.concrete, x0, y - 0.3, z0, x1, y - 0.02, z1, 2);
+        this.wall(b, M.carpet, x0, n > 1 ? y - 0.02 : -0.05, z0, x1, n > 1 ? y : 0.004, z1, 2);
+      }
+      if (n < FLOORS) for (let i = -2; i <= 2; i++) for (const z of [-11, -1, 8]) if (Math.abs(i * 6.5) > 7 || z > 5 || z < -7) b.box(M.lampPanel, i * 6.5 - 0.6, floorY(n + 1) - 0.301, z - 0.3, i * 6.5 + 0.6, floorY(n + 1) - 0.3, z + 0.3);
+    }
     for (let n = 1; n <= FLOORS; n++) {
       const y0 = floorY(n), y1 = n < FLOORS ? floorY(n + 1) - 0.3 : top;
       this.wall(b, C, -0.55, y0 + CAR.doorH, fz0, 0.55, y1, F);
@@ -118,15 +162,12 @@ export class BuildingGL {
     this.wall(b, M.aluminium, -0.62, y0 - 0.05, L.z1, 0.62, y0, F + 0.035);   // the landing sill
     this.wall(b, M.ceiling, L.x0, y0 + H, L.z0, L.x1, y0 + H + 0.1, L.z1);
     this.wall(b, M.plaster, L.x0 - 0.3, y0, L.z0, L.x0, y0 + H, L.z1);
-    this.wall(b, M.plaster, L.x1, y0, L.z0, L.x1 + 0.3, y0 + H, L.z1);
-    this.wall(b, M.plaster, L.x0, y0, L.z0 - 0.3, L.x1, y0 + H, L.z0);
+    // open on the office side: from the lift lobby you walk out to the windows
     // the wall with the landing door, lined inside; the entrance on the lobby floor
     const z0 = L.z1 - 0.1;
     if (n === 1) {
-      this.wall(b, M.plaster, L.x0, 0, z0, -0.7, H, L.z1);
-      this.wall(b, M.plaster, 0.7, 0, z0, 5, H, L.z1);
-      this.wall(b, M.plaster, 5, 2.6, z0, 7, H, L.z1);
-      this.wall(b, M.plaster, 7, 0, z0, L.x1, H, L.z1);
+      this.wall(b, M.plaster, -2.2, 0, z0, -0.7, H, L.z1);
+      this.wall(b, M.plaster, 0.7, 0, z0, 2.2, H, L.z1);
       this.wall(b, M.plaster, -0.7, 2.3, z0, 0.7, H, L.z1);
       b.box(M.stainless, 4.9, 0, z0 - 0.05, 5, 2.7, F, 1); b.box(M.stainless, 7, 0, z0 - 0.05, 7.1, 2.7, F, 1); b.box(M.stainless, 4.9, 2.6, z0 - 0.05, 7.1, 2.7, F, 1);
       // reception desk and a bench
@@ -134,8 +175,8 @@ export class BuildingGL {
       b.box(M.stainless, -6.6, 1.05, 8.9, -3.4, 1.1, 10.1);
       this.wall(b, M.wood, 3, 0, 8, 6, 0.45, 8.5);
     } else {
-      this.wall(b, M.plaster, L.x0, y0, z0, -0.7, y0 + H, L.z1);
-      this.wall(b, M.plaster, 0.7, y0, z0, L.x1, y0 + H, L.z1);
+      this.wall(b, M.plaster, -2.2, y0, z0, -0.7, y0 + H, L.z1);
+      this.wall(b, M.plaster, 0.7, y0, z0, 2.2, y0 + H, L.z1);
       this.wall(b, M.plaster, -0.7, y0 + 2.3, z0, 0.7, y0 + H, L.z1);
     }
     // the landing door's portal (stainless jambs and head)
@@ -152,7 +193,7 @@ export class BuildingGL {
     b.box(M.stainless, sx, y0 + 1.0, 12.55, sx + 0.08, y0 + 1.05, 12.62);
     const exit = this.labels.text('EXIT', 'EXIT', { w: 128, h: 48, size: 34, weight: 700 });
     const ex = this.labels.quad(exit, 0.4, 0.15, this.labels.glowGreen); ex.position.set(sx + 0.02, y0 + 2.35, 12.2); ex.rotation.y = Math.PI / 2; this.root.add(ex);
-    b.box(M.wood, L.x1 - 0.05, y0, 12.0, L.x1 - 0.01, y0 + 2.1, 13.2);
+
     this.spots.push({ kind: 'stairs', floor: n, pos: [L.x0 + 0.5, y0, 12.2], label: n === FLOORS ? 'stairs: E up to the machine room, Q down' : n === 1 ? 'stairs: E up a floor' : 'stairs: E up a floor, Q down a floor' });
     // the floor's number, big, beside the door
     const fl = this.labels.text('F' + n, String(n), { w: 96, h: 96, size: 64, weight: 300 });

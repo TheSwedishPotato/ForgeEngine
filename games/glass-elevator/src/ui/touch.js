@@ -51,12 +51,17 @@ export class Touch {
       const k = b.dataset.k;
       b.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
-        if (k === 'use') { const hit = P._pick(null); if (hit) P._grab(hit); }
-        else if (k === 'throw') { if (P.held?.body) P._throw(); }
+        if (k === 'use') {
+          // carrying: one tap picks it up, the next puts it down
+          if (P.held?.body) { P._release(); b.textContent = 'Use'; return; }
+          const hit = P._pick(null);
+          if (hit) { P._grab(hit); if (hit.body) b.textContent = 'Drop'; }
+        }
+        else if (k === 'throw') { if (P.held?.body) { P._throw(); el.querySelector('[data-k=use]').textContent = 'Use'; } }
         else if (k === 'go') hud.goto.style.display = hud.goto.style.display === 'none' ? '' : 'none';
         else { key(k); key(k, 'keyup'); }
       });
-      const up = () => { if (k === 'use') P._release(); };
+      const up = () => { if (k === 'use' && !P.held?.body) P._release(); };
       b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('pointerleave', up);
     }
   }

@@ -63,6 +63,7 @@ export function makeMaterials() {
     ceiling: S({ color: 0xf1efe9, metalness: 0, roughness: 0.9 }),
     wood: S({ color: 0x8a5a36, metalness: 0, roughness: 0.6 }),
     lobbyFloor: S({ color: 0xffffff, metalness: 0, roughness: 0.25, map: graniteTex('#3c3a38') }),
+    carpet: S({ color: 0x4a5058, metalness: 0, roughness: 0.95 }),
     carFloor: S({ color: 0xffffff, metalness: 0, roughness: 0.3, map: graniteTex('#262626') }),
     paver: S({ color: 0xffffff, metalness: 0, roughness: 0.8, map: paverTex() }),
     asphalt: S({ color: 0x2f3133, metalness: 0, roughness: 0.92 }),

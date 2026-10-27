@@ -112,10 +112,12 @@ export class World {
       const vP = b.velAt(r);
       const w = 9, m = b.mass;
       let F = sub(mul(sub(H.target, P), m * w * w), mul(vP, 2 * m * w * 0.8));
-      F[1] += -this.g * Math.min(m, this.handForce / 9.81) * 0.98;                // you also bear its weight, as far as you can
+      // strong enough for anything here, the 600 kg carts included
+      const lim = Math.max(this.handForce, m * 9.81 * 1.6 + 300);
+      F[1] += -this.g * m * 0.98;                                              // you bear its weight
       const f = len(F);
-      if (f > this.handForce) F = mul(F, this.handForce / f);
-      H.force = Math.min(f, this.handForce);
+      if (f > lim) F = mul(F, lim / f);
+      H.force = Math.min(f, lim);
       b.impulse(mul(F, dt), r);
     }
     // contacts

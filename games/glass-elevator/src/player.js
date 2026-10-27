@@ -67,7 +67,7 @@ export class Player {
     });
     window.addEventListener('pointerup', (e) => {
       this.dragging = false;
-      if (e.button === 0) this._release();
+      if (e.button === 0 && !this.game.touch) this._release();      // on a touch screen the Use button lets go
       if (this._wantLock && this._moved < 6) { try { canvas.requestPointerLock?.()?.catch?.(() => {}); } catch { /* drag to look instead */ } }
       this._wantLock = false;
     });
@@ -171,7 +171,7 @@ export class Player {
       return;
     }
     const hit = this.mode === 'walk' || this.mouse ? this._pick(document.pointerLockElement || this.game.touch ? null : this.mouse) : null;
-    if (hit?.body) this.hint = `${hit.body.name} · hold the left button to pick it up${hit.body.mass > 45 ? ' (too heavy to lift: you can push or roll it)' : ''}`;
+    if (hit?.body) this.hint = `${hit.body.name} · hold the left button to pick it up`;
     else if (hit?.control) { const c = hit.control; this.hint = c.hint?.() ?? `${c.label} · ${c.kind === 'hold' ? 'hold the left button' : c.kind === 'grab' ? 'hold and drag' : 'click'}`; }
     else this.hint = this._nearSpot()?.label ?? '';
   }
@@ -207,7 +207,7 @@ export class Player {
     const lo = [this.p[0] - 3, this.p[1] - 6, this.p[2] - 3], hi = [this.p[0] + 3, this.p[1] + 4, this.p[2] + 3];
     for (const s of W.solids) if (overlap([s.min, s.max], [lo, hi])) out.push({ min: s.min, max: s.max, v: null });
     for (const m of W.movers) { if (m === this.body) continue; const box = m.bounds(); if (box && overlap(box, [lo, hi])) out.push({ min: box[0], max: box[1], v: m.vel ? m.vel() : null, car: m.car }); }
-    for (const b of W.bodies) if (b.mass >= 40) { const [a, c] = b.aabb(); if (overlap([a, c], [lo, hi])) out.push({ min: a, max: c, v: b.v }); }
+    for (const b of W.bodies) if (b.mass >= 40 && b !== this.held?.body) { const [a, c] = b.aabb(); if (overlap([a, c], [lo, hi])) out.push({ min: a, max: c, v: b.v }); }
     return out;
   }
 

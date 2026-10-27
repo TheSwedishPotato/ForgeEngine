@@ -10,7 +10,9 @@ const VIEWS = {
   carIn: `P.teleport([-0.6, h.yc, 16.5], -Math.PI / 2 + 0.6); P.pitch = -0.2;`,
   cop: `P.teleport([0.75, h.yc, 15.75], -Math.PI / 2); P.pitch = -0.35;`,
   copNear: `P.teleport([0.72, h.yc, 15.52], -Math.PI / 2); P.pitch = -0.85;`,
-  mr: `P.teleport([1.6, 121.6, 17.6], -Math.PI + 0.35); P.pitch = -0.3;`,
+  towerOut: `P.mode = 'orbit'; Object.assign(P.orbit, { yaw: 0.45, pitch: 0.05, dist: 45, follow: false, y: 20 });`,
+  office: `P.teleport([-9, h.yc * 0 + 45.0, 6], Math.PI / 2 + 0.6); P.pitch = 0;`,
+    mr: `P.teleport([1.6, 121.6, 17.6], -Math.PI + 0.35); P.pitch = -0.3;`,
   mrPanel: `P.teleport([-2.2, 121.6, 14.8], -Math.PI / 2); P.pitch = -0.15;`,
 };
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

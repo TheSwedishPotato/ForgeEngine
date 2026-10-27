@@ -58,7 +58,7 @@ export function patchLighting(src) {
   let s = replaceOnce(src, SKY, SKY_GLSL + INDOOR_GLSL);
   s = replaceOnce(s, 'vec3 L = uSunDir;', 'int region = indoor(wpos + N * 0.06);\n  vec3 L = uSunDir;');
   s = replaceOnce(s, 'float vis = uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0;',
-    'float vis = region > 0 ? 0.0 : (uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0);');
+    'float vis = region == 2 ? 0.0 : (uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0);');
   s = replaceOnce(s, 'vec3 E = irradianceAt(wpos, N);', 'vec3 E = region > 0 ? indoorLight(region, N) : irradianceAt(wpos, N);');
   s = replaceOnce(s, 'vec3 envL = textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity;',
     'vec3 envL = region > 0 ? E * INV_PI * (0.6 + 0.6 * max(R.y, 0.0)) : textureLod(uEnvSpec, R, rough * (uEnvLevels - 1.0)).rgb * uEnvIntensity;');
