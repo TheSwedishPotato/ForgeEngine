@@ -55,3 +55,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page);
 .laptop .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .laptop section { min-width: 0; } .laptop h4 { margin: 8px 0 4px; color: #e9fff0; } .laptop p { margin: 2px 0; } .laptop ul { margin: 0; padding-left: 16px; }
 .laptop code { color: #ffd479; margin-right: 6px; } .laptop .dim { color: #6f9c80; }
+.guide { position: absolute; right: 12px; bottom: 12px; width: min(340px, calc(100% - 24px)); background: rgba(40, 28, 6, 0.86); border: 1px solid #c9922a; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+.guide b { color: #ffcf6a; } .guide p { margin: 4px 0 0; } .guide .prob { color: #ffe3b0; } .guide .tool { color: #ffd98a; } .guide .dim { color: #c9b48a; }
+.guide-edge { position: absolute; font-size: 34px; color: #ffbe2e; text-shadow: 0 0 6px #000; pointer-events: none; }
+@media (max-width: 600px) { .guide { top: 112px; bottom: auto; right: 12px; } }

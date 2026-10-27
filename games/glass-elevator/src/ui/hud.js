@@ -26,6 +26,7 @@ export class HUD {
       <tr><td>W A S D</td><td>walk (Shift: hurry)</td></tr>
       <tr><td>Left button</td><td>press a button, flip a switch, turn a key · <b>hold</b> on a loose thing to pick it up (wheel: nearer / further, right button: throw) · hold on a door panel or a lever and drag</td></tr>
       <tr><td>E · Q</td><td>at a stairs door: up / down a floor (floor 30: up to the machine room) · the pit door and ladder</td></tr>
+      <tr><td>K</td><td>the repair guide on or off: when something is wrong it says what, and an arrow shows where to fix it and with which tool</td></tr>
       <tr><td>I · R · X · 1-9</td><td>your tools (inventory) · use the one in your hand on what you look at · put it down · choose one</td></tr>
       <tr><td>G</td><td>go somewhere: the lobby, the car, its roof, any floor, the machine room, the pit</td></tr>
       <tr><td>V</td><td>step outside to watch (drag, wheel, W/S up and down, F follow the car)</td></tr>

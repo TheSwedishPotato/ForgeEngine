@@ -24,7 +24,7 @@ export class Touch {
         <button data-k="use" class="big">Use</button><button data-k="throw" class="big">Throw</button>
         <button data-k="KeyE">E</button><button data-k="KeyQ">Q</button><button data-k="KeyV">View</button>
         <button data-k="go">Go to</button><button data-k="KeyT">Data</button><button data-k="KeyH">?</button>
-        <button data-k="tool">Tool</button><button data-k="KeyR">Apply</button><button data-k="KeyX">Put down</button>
+        <button data-k="tool">Tool</button><button data-k="KeyR">Apply</button><button data-k="KeyX">Put down</button><button data-k="KeyK">Guide</button>
       </div>`;
     root.append(el);
     // the stick: its offset drives W A S D (and Shift right out)

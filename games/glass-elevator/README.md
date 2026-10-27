@@ -159,6 +159,7 @@ grid is counted.
   - lockout padlock and tag for the main switch: rope and brake work is refused until it is locked off, as lockout/tagout requires;
   - service laptop: on the controller cabinet, the drive cabinet or the car's button panel, opens the service tool (fault codes, the fault log, active faults, the safety chain contact by contact, live values; clear faults, re-learn the encoder, reset the governor);
   - screwdriver: takes the car panel's faceplate off (the button board behind it) and the drive cabinet's cover off (heat sink, capacitors, contactors, and two breakers you can throw: the door operator and the car lighting);
+- **The repair guide** (K, or Guide on phones; `src/ui/guide.js`): reads the elevator's state like a service tool and shows the next step of the repair in a real engineer's order (lock out, repair, reset the governor, free the safety gear on EEO, clear faults, take your tools and padlock off, switch on), with the tool to use, a bouncing arrow over the part, and an arrow at the screen's edge when it is out of sight.
 - **The trap door in the car roof** (0.5 x 0.5 m; EN 81-20 asks at least 0.40 x 0.50): open it from the roof by hand, from inside only with a key; its contact opens the safety chain. E beside it climbs through.
   - rescue rope and harness: anchor it in an open (or pried) landing door, lower yourself down the hoistway onto the car roof (back: down, forward: up), and climb back out the same way.
 

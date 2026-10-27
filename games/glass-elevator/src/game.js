@@ -14,6 +14,7 @@ import { Player } from './player.js';
 import { Sound } from './audio/sound.js';
 import { ToolBelt } from './world/tools.js';
 import { Laptop } from './ui/laptop.js';
+import { Guide } from './ui/guide.js';
 import { CAR, FACADE, SPEC, floorY, FLOORS, MR, PIT_Y, cwYForCar } from './data/spec.js';
 
 export class Game {
@@ -36,6 +37,7 @@ export class Game {
     this.player = new Player(this);
     this.tools = new ToolBelt(this);
     this.laptop = new Laptop(this);
+    this.guide = new Guide(this);
     this.elevatorGL.game = this; this.elevatorGL.hasKey = () => this.tools.belt.some((b) => b.tool === 'key');
     this.buildingGL.hasKey = () => this.tools.belt.some((b) => b.tool === 'key');
     this.sound = new Sound(this);
@@ -127,6 +129,7 @@ export class Game {
     this.stage.setTime(this.sim.utcMs);
     this.stage.render(dt);
     this.sound.update(dt);
+    this.guide.update(dt);
     this.onFrame?.(dt);
   }
 }
