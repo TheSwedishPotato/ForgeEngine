@@ -53,7 +53,9 @@ export class ToolBelt {
       const m = boxMesh(M[mat], ...size); m.castShadow = true; m.userData.body = b; g.add(m);
       props.list.push({ b, g });
       b.mesh = g;
+      this.take(b, true);              // you start with the whole kit in your bag
     });
+    this._panel();
     this._targets();
     window.addEventListener('keydown', (e) => {
       if (e.target?.tagName === 'INPUT') return;
@@ -66,12 +68,13 @@ export class ToolBelt {
   get tool() { return this.belt[this.active]; }
 
   /** A tool clicked: onto the belt (out of the world). */
-  take(b) {
+  take(b, quiet = false) {
     const W = this.game.world, i = W.bodies.indexOf(b);
     if (i >= 0) W.bodies.splice(i, 1);
     b.mesh.visible = false;
     this.belt.push(b); this.active = this.belt.length - 1;
-    this.say(`${b.name} on your belt (${this.belt.length}). R: use it on what you look at · X: put it down · 1-9: choose.`);
+    this.render?.();
+    if (!quiet) this.say(`${b.name} on your belt (${this.belt.length}). R: use it on what you look at · X: put it down · 1-9: choose.`);
   }
   drop() {
     const b = this.tool; if (!b) return;
@@ -80,8 +83,31 @@ export class ToolBelt {
     b.p = [P.p[0] + d.x * 0.6, P.p[1] + 1.2, P.p[2] + d.z * 0.6]; b.v = [0, 0, 0]; b.q = [0, 0, 0, 1]; b.wake();
     this.game.world.bodies.push(b); b.mesh.visible = true;
     this.belt.splice(this.active, 1); this.active = Math.max(0, Math.min(this.active, this.belt.length - 1));
+    this.render();
   }
-  cycle() { if (this.belt.length) this.active = (this.active + 1) % this.belt.length; }
+  cycle() { if (this.belt.length) this.active = (this.active + 1) % this.belt.length; this.render(); }
+
+  /** The inventory: every tool you carry; tap one to have it in your hand. */
+  _panel() {
+    const el = (this.el = document.createElement('div'));
+    el.className = 'inv'; el.hidden = true;
+    document.getElementById('ui').append(el);
+    el.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      const k = e.target.closest('[data-i]')?.dataset.i;
+      if (k === 'close') { el.hidden = true; return; }
+      if (k === 'drop') { this.drop(); return; }
+      if (k !== undefined) { this.active = Number(k); this.render(); }
+    });
+    window.addEventListener('keydown', (e) => { if (e.code === 'KeyI' && e.target?.tagName !== 'INPUT') this.toggle(); });
+    this.render();
+  }
+  toggle() { this.el.hidden = !this.el.hidden; if (!this.el.hidden) document.exitPointerLock?.(); this.render(); }
+  render() {
+    if (!this.el) return;
+    const hint = this.game.touch ? 'Apply' : 'R';
+    this.el.innerHTML = `<h3>Tools <span>${hint}: use the one in your hand on what you look at</span></h3><div class="slots">${this.belt.map((b, i) => `<button data-i="${i}" class="${i === this.active ? 'on' : ''}"><b>${i + 1}</b>${b.name}</button>`).join('') || '<p>Your bag is empty: the tools you put down are where you left them (click one to pick it up).</p>'}</div><div class="row"><button data-i="drop">Put down</button><button data-i="close">Close</button></div>`;
+  }
   say(t) { this.game.sim.say(t, 'You'); }
 
   /** Invisible places a tool can be put to: the rope hitch, the brakes, the cabinets, the governor. */

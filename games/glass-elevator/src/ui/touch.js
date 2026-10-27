@@ -59,7 +59,7 @@ export class Touch {
           if (hit) { P._grab(hit); if (hit.body && !hit.body.tool) b.textContent = 'Drop'; }
         }
         else if (k === 'throw') { if (P.held?.body) { P._throw(); el.querySelector('[data-k=use]').textContent = 'Use'; } }
-        else if (k === 'tool') game.tools.cycle();
+        else if (k === 'tool') game.tools.toggle();
         else if (k === 'go') hud.goto.style.display = hud.goto.style.display === 'none' ? '' : 'none';
         else { key(k); key(k, 'keyup'); }
       });
