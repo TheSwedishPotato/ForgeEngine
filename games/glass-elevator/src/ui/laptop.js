@@ -55,6 +55,8 @@ export class Laptop {
     if (dr.fault) active.push(['E901', 'Drive: encoder signal implausible (speed feedback 60 %)']);
     if (h.brakes.some((b) => b.fail)) active.push(['E602', 'Brake: holding torque test failed (linings)']);
     if (d.curtainFail) active.push(['E505', 'Light curtain: no beams received']);
+    const smashed = this.game.controls.list.filter((k) => k.broken).length;
+    if (smashed) active.push(['E810', `Damaged devices: ${smashed} (no response)`]);
     if (c.inputs.lwBypass) active.push(['W110', 'Load weighing bypassed (overload ignored)']);
     if (h.ropesLeft < 8) active.push(['E703', `Hoist ropes: ${h.ropesLeft} of 8 (rope monitor)`]);
     d.landing.forEach((L, n) => { if (L?.broken) active.push(['E504', `Landing door ${n}: lock contact open (forced)`]); });

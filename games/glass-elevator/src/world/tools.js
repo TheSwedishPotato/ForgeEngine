@@ -17,11 +17,14 @@
  *  - screwdriver: re-seats and re-aligns the car door's light curtain;
  *  - padlock and tag: locks the machine room main switch off (lockout/tagout); again, removes it.
  */
-import { Group, Mesh, MeshBasicMaterial, BoxGeometry } from 'three';
+import { Group, Mesh, MeshBasicMaterial, BoxGeometry, Vector3 } from 'three';
 import { Body } from '../physics/bodies.js';
 import { TS_Y0 } from '../physics/hoist.js';
 import { boxMesh, cylGeo } from '../render/build.js';
 import { MR, SHEAVE, GOVERNOR, CAR, SPEC, cwYForCar, floorY, FACADE } from '../data/spec.js';
+
+/** A smashed control made whole again. */
+export const mend = (c) => { c.broken = false; for (const m of c.meshes) if (m.userData.rot0) m.rotation.copy(m.userData.rot0); };
 
 const TOOLS = [
   ['key', 'Hoistway door key', [0.12, 0.02, 0.04], 0.2, 'paintDark'],
@@ -34,6 +37,7 @@ const TOOLS = [
   ['screwdriver', 'Screwdriver', [0.22, 0.03, 0.03], 0.15, 'paintBlue'],
   ['padlock', 'Lockout padlock and tag', [0.06, 0.08, 0.03], 0.25, 'paintRed'],
   ['rope', 'Rescue rope and harness', [0.3, 0.15, 0.3], 6, 'paintYellow'],
+  ['hammer', 'Sledgehammer', [0.7, 0.08, 0.08], 5, 'paintDark'],
 ];
 
 export class ToolBelt {
@@ -128,11 +132,44 @@ export class ToolBelt {
     spot(S, GOVERNOR.x, GOVERNOR.y, GOVERNOR.z, 0.3, 0.4, 0.4, 'governor', 'The overspeed governor');
   }
 
+  /** The sledgehammer: a loose thing is knocked flying, a device is smashed and does what a smashed one would. */
+  _smash(hit) {
+    const g = this.game, s = g.sim, h = s.hoist, d = s.doors;
+    if (!hit) return this.say('Nothing within reach to swing the sledgehammer at.');
+    s.sfx('snap', { at: [hit.point.x, hit.point.y, hit.point.z] });
+    if (hit.body) {
+      const v = g.stage.camera.getWorldDirection(new Vector3()), k = Math.min(12, 600 / hit.body.mass);
+      hit.body.v = [hit.body.v[0] + v.x * k, hit.body.v[1] + v.y * k + 1, hit.body.v[2] + v.z * k];
+      return this.say(`You swing the sledgehammer into the ${hit.body.name.toLowerCase()}.`);
+    }
+    const c = hit.control, id = c.id, tg = c.target;
+    const floor = c.floor ?? Number(/^(?:unlock|landingDoor)\.(\d+)/.exec(id)?.[1] ?? 0);
+    if (floor && (id.startsWith('unlock') || id.startsWith('landingDoor'))) {
+      const L = d.landing[floor]; L.broken = true; L.locked = false; L.x = Math.max(L.x, 0.3); L.wedge = 0.3;
+      return this.say(`Floor ${floor}'s landing door smashed in: the panels are bent and its interlock is broken (spanner to mend).`);
+    }
+    if (id.startsWith('carDoor')) { d.curtainFail = true; d.car.x = Math.max(d.car.x, 0.3); return this.say('The car door is dented and its light curtain smashed: no beams (E505).'); }
+    if (tg === 'ropes') {
+      if (h.ropesLeft <= 0) return this.say('There is no rope left to hit.');
+      h.ropesLeft -= 1; if (h.ropesLeft === 0) h.ropesCut = true;
+      return this.say(h.ropesCut ? 'The last hoist rope parts under the hammer.' : `A hoist rope's strands burst: ${h.ropesLeft} of 8 still hold the car.`);
+    }
+    if (tg === 'brakes') { for (const k of h.brakes) k.fail = true; return this.say('The brake linings shatter: the brakes no longer hold (E602).'); }
+    if (tg === 'governor') { h.gov.tripped = true; h.gov.switchOpen = true; return this.say('The governor\'s jaws are knocked shut and its switch is open (E202).'); }
+    if (tg === 'drive' || tg === 'cabinet' || tg === 'driveCover') { s.drive.fault = 'runaway'; return this.say('The drive cabinet is caved in: the encoder cable is crushed (E901). The drive is fed a wrong speed.'); }
+    if (c.broken) return this.say(`${c.label} is already smashed.`);
+    c.broken = true;
+    for (const m of c.meshes) { m.userData.rot0 ??= m.rotation.clone(); m.rotation.x += 0.35; m.rotation.z += 0.2; }
+    c.up?.();
+    return this.say(`${c.label}: smashed. It does nothing now (spanner to fix).`);
+  }
+
   /** Uses the chosen tool on what the crosshair rests on. */
   apply() {
     const g = this.game, P = g.player, b = this.tool;
     if (!b) { this.say('No tool on your belt: the tools are on the technician\'s trolley in the lobby.'); return; }
     const hit = P._pick(g.touch || document.pointerLockElement ? null : P.mouse);
+    if (b.tool === 'hammer') return this._smash(hit);
     const c = hit?.control;
     if (!c) { this.say(`Nothing within reach to use the ${b.name.toLowerCase()} on.`); return; }
     const s = g.sim, h = s.hoist, d = s.doors, ctl = s.ctl, t = b.tool, id = c.id;
@@ -155,6 +192,7 @@ export class ToolBelt {
       if (carDoor) { d.car.x = Math.max(d.car.x, 0.4); s.sfx('snap'); return this.say('You force the car door open. Its contact opens the safety chain: if the car was moving, it has just made an emergency stop.'); }
       return this.say('The pry bar is for forcing doors.');
     }
+    if (t === 'spanner' && c.broken) { mend(c); return this.say(`${c.label}: the smashed parts replaced and refitted. It works again.`); }
     if (t === 'spanner') {
       if (landing && d.landing[floor].broken) { d.landing[floor].broken = false; d.landing[floor].wedge = 0; return this.say(`Floor ${floor}'s interlock hook straightened and reset: the door locks again.`); }
       if (c.target === 'governor') return this.say(h.resetGovernor() ? 'Governor reset by hand. If the safety gear has set, move the car up on emergency electrical operation to free it.' : 'Not while the car moves.');

@@ -13,7 +13,7 @@ import { ElevatorGL } from './render/elevatorGL.js';
 import { makeProps } from './world/props.js';
 import { Player } from './player.js';
 import { Sound } from './audio/sound.js';
-import { ToolBelt } from './world/tools.js';
+import { ToolBelt, mend } from './world/tools.js';
 import { Laptop } from './ui/laptop.js';
 import { Guide } from './ui/guide.js';
 import { CAR, FACADE, SPEC, floorY, FLOORS, MR, PIT_Y, cwYForCar } from './data/spec.js';
@@ -55,6 +55,7 @@ export class Game {
     h.ropesCut = false; h.ropesLeft = SPEC.ropes.n;
     for (const b of h.brakes) b.fail = false;
     s.drive.fault = null; s.doors.curtainFail = false;
+    for (const c of this.controls.list) if (c.broken) mend(c);
     h.gov.tripped = false; h.gov.testTrip = false; h.gov.switchOpen = false; h.gov.link = 0;
     h.sg.engage = 0; h.sg.set = false;
     h.yw = cwYForCar(h.yc); h.vw = 0; h.ts = TS_Y0; h.vts = 0; h.buf.car = 0; h.buf.cw = 0; h.vc = 0; h.vs = 0; h.vu = 0; h.stick = true;

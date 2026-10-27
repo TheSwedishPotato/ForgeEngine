@@ -119,6 +119,7 @@ export class Player {
     }
     const c = hit.control;
     if (c.kind === 'grab') { this.held = { control: c, mesh: hit.mesh, local: hit.mesh.worldToLocal(hit.point.clone()), dist: hit.t }; return; }
+    if (c.broken) { this.game.sim.say(`${c.label} is smashed: nothing happens.`, 'You'); return; }
     c.down?.();
     this.game.sim.sfx(c.kind === 'switch' || c.kind === 'key' ? 'clack' : 'click', { at: [hit.point.x, hit.point.y, hit.point.z] });
     this.held = { control: c, press: true };
@@ -176,6 +177,7 @@ export class Player {
     const hit = this.mode === 'walk' || this.mouse ? this._pick(document.pointerLockElement || this.game.touch ? null : this.mouse) : null;
     if (hit?.body?.tool) this.hint = `${hit.body.name} · click to put it on your tool belt`;
     else if (hit?.body) this.hint = `${hit.body.name} · hold the left button to pick it up`;
+    else if (hit?.control?.broken) this.hint = `${hit.control.label} · SMASHED (spanner to fix)`;
     else if (hit?.control) { const c = hit.control; this.hint = c.hint?.() ?? `${c.label} · ${c.kind === 'hold' ? 'hold the left button' : c.kind === 'grab' ? 'hold and drag' : 'click'}`; }
     else this.hint = this._nearSpot()?.label ?? '';
   }
