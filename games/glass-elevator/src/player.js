@@ -265,6 +265,7 @@ export class Player {
     const onCar = this.grounded && this.ground?.car;
     this.game.elevatorGL.playerForce = onCar ? -MASS * (9.81 + this.game.sim.hoist.ac) : 0;
     this.onCar = onCar;
+    if (onCar) this.carDy = this.p[1] - this.game.sim.hoist.yc;
     this.bob += Math.hypot(this.v[0], this.v[2]) * dt * 3.2;
   }
 
@@ -303,7 +304,9 @@ export class Player {
     camera.position.set(t.x + Math.sin(o.yaw) * cp * o.dist, t.y + Math.sin(o.pitch) * o.dist, t.z + Math.cos(o.yaw) * cp * o.dist);
     camera.up.set(0, 1, 0);
     camera.lookAt(t);
-    this.game.elevatorGL.playerForce = 0;
+    // you are still standing in the car while you watch it from outside: you ride with it, and it carries your weight
+    if (this.onCar) { this.p[1] = h.yc + (this.carDy ?? 0); this.v[1] = h.vc; this.game.elevatorGL.playerForce = -MASS * (9.81 + h.ac); }
+    else this.game.elevatorGL.playerForce = 0;
   }
 
   /** Where you are, for the HUD. */
