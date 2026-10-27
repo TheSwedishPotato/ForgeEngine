@@ -19,6 +19,7 @@
  */
 import { Group, Mesh, MeshBasicMaterial, BoxGeometry } from 'three';
 import { Body } from '../physics/bodies.js';
+import { TS_Y0 } from '../physics/hoist.js';
 import { boxMesh, cylGeo } from '../render/build.js';
 import { MR, SHEAVE, GOVERNOR, CAR, SPEC, cwYForCar, floorY, FACADE } from '../data/spec.js';
 
@@ -160,7 +161,7 @@ export class ToolBelt {
       if (c.target === 'ropes') {
         if (locked()) return;
         if (h.ropesCut) {
-          h.ropesCut = false; h.ropesLeft = 1; h.yw = cwYForCar(h.yc); h.vw = 0; h.buf.cw = 0; h.vu = 0; h.vs = 0; h.stick = true; h._settle();
+          h.ropesCut = false; h.ropesLeft = 1; h.yw = cwYForCar(h.yc); h.vw = 0; h.ts = TS_Y0; h.vts = 0; h.buf.cw = 0; h.vu = 0; h.vs = 0; h.stick = true; h._settle();
           return this.say('With the counterweight jacked back into place, the first new rope is reeved over the sheave and socketed at both hitches. 1 of 8: keep going.');
         }
         if (h.ropesLeft >= SPEC.ropes.n) return this.say('All eight ropes are in place; their tensions are even.');

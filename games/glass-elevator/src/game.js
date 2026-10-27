@@ -5,6 +5,7 @@
 import { Stage } from './render/stage.js';
 import { Sim } from './sim.js';
 import { World, overlap } from './physics/bodies.js';
+import { TS_Y0 } from './physics/hoist.js';
 import { Controls } from './world/controls.js';
 import { makeMaterials, Labels } from './render/mats.js';
 import { BuildingGL } from './render/buildingGL.js';
@@ -56,7 +57,7 @@ export class Game {
     s.drive.fault = null; s.doors.curtainFail = false;
     h.gov.tripped = false; h.gov.testTrip = false; h.gov.switchOpen = false; h.gov.link = 0;
     h.sg.engage = 0; h.sg.set = false;
-    h.yw = cwYForCar(h.yc); h.vw = 0; h.buf.car = 0; h.buf.cw = 0; h.vc = 0; h.vs = 0; h.vu = 0; h.stick = true;
+    h.yw = cwYForCar(h.yc); h.vw = 0; h.ts = TS_Y0; h.vts = 0; h.buf.car = 0; h.buf.cw = 0; h.vc = 0; h.vs = 0; h.vu = 0; h.stick = true;
     h._settle();
     s.ctl.resetFaults();
     s.ctl.inputs.mains = true;
