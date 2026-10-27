@@ -1,0 +1,20 @@
+{
+  "name": "glass-elevator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A 30-storey panoramic traction elevator on the Med Engine: gearless machine, ropes, counterweight, compensation, governor, safety gear, buffers, doors, controller and every button, physically modelled.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single && node tools/artifact.mjs",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}

@@ -1,0 +1,20 @@
+// Screenshots, headless: node tools/shot.mjs <out.png> "<query>" [seconds to run] [js to run first]
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT ?? 'playwright');
+const [out = 'shots/shot.png', query = '', secs = '2', pre = ''] = process.argv.slice(2);
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const errors = [];
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });
+page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+await page.goto(`http://127.0.0.1:${process.env.PORT ?? 5180}/?manual=1&${query}`);
+await page.waitForFunction(() => window.game?.ready || document.querySelector('.loading span'), null, { timeout: 120000 });
+if (pre) await page.evaluate(pre);
+const t0 = Date.now();
+await page.evaluate((s) => { for (let i = 0; i < Math.round(s * 4); i++) window.game.advance(0.25); }, Number(secs));
+await page.evaluate(() => window.game.advance(0.05));
+console.log('frames took', Date.now() - t0, 'ms');
+await page.screenshot({ path: out });
+console.log(errors.slice(0, 20).join('\n') || 'no errors');
+console.log(await page.evaluate(() => { const g = window.game?.game; if (!g) return document.body.innerText.slice(0, 300); const r = g.stage.r; return JSON.stringify({ draws: r.stats.drawCalls, tris: r.stats.triangles, items: r.stats.items, log: g.sim.log.slice(-5).map((l) => l.text) }); }));
+await browser.close();
