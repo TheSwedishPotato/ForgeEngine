@@ -138,7 +138,25 @@ export class Player {
     const H = this.held;
     cam.getWorldDirection(_d);
     if (H?.body) {
-      const t = _v.copy(cam.position).addScaledVector(_d, H.dist);
+      // your hand stops at the wall: it cannot push what it holds through one
+      let reach = H.dist;
+      const o = cam.position, W = this.game.world, r = Math.min(...H.body.half);
+      const boxes = W.solids.map((s) => [s.min, s.max]);
+      for (const m of W.movers) if (m.active && !m.maxPush && m.box) boxes.push(m.box);
+      for (const [lo, hi] of boxes) {
+        let t0 = 0, t1 = reach;
+        for (let i = 0; i < 3; i++) {
+          const oi = [o.x, o.y, o.z][i], di = [_d.x, _d.y, _d.z][i];
+          if (Math.abs(di) < 1e-9) { if (oi < lo[i] || oi > hi[i]) { t0 = Infinity; break; } continue; }
+          let a = (lo[i] - oi) / di, b = (hi[i] - oi) / di;
+          if (a > b) [a, b] = [b, a];
+          t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+          if (t0 > t1) { t0 = Infinity; break; }
+        }
+        if (t0 > 0.05 && t0 < reach) reach = t0;
+      }
+      reach = Math.max(0.35, reach - r - 0.05);
+      const t = _v.copy(cam.position).addScaledVector(_d, Math.min(H.dist, reach));
       this.game.world.hand.target = [t.x, t.y, t.z];
       this.hint = `Holding: ${H.body.name} · wheel: nearer / further · right button: throw · let go to drop`;
       return;

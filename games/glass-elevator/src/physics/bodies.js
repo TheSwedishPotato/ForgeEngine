@@ -165,10 +165,14 @@ export class World {
         }
       }
     }
-    // integrate
+    // integrate (no faster than 10 m/s: in one step nothing can then cross a wall before it is felt)
     for (const b of B) {
       if (b.asleep) continue;
+      const sp = len(b.v);
+      if (sp > 10) b.v = mul(b.v, 10 / sp);
+      const p0 = b.p;
       b.p = add(b.p, mul(b.v, dt));
+      this._unstick(b, p0);
       const [wx, wy, wz] = b.w, q = b.q;
       const dq = [wx * q[3] + wy * q[2] - wz * q[1], wy * q[3] + wz * q[0] - wx * q[2], wz * q[3] + wx * q[1] - wy * q[0], -wx * q[0] - wy * q[1] - wz * q[2]];
       for (let i = 0; i < 4; i++) q[i] += 0.5 * dq[i] * dt;
@@ -182,6 +186,29 @@ export class World {
     for (const c of C) if (c.m) (c.a.touching ??= []).push(c.m);
     for (const m of this.movers) if (m.onImpulse) m.onImpulse(m.J, dt);
     for (const f of this.after) f(dt);
+  }
+
+  /**
+   * A body whose middle has got inside a wall (pushed there by your hand, or a door closing on it)
+   * goes back out the side it came in from, and stops moving into it.
+   */
+  _unstick(b, p0) {
+    const boxes = this.solids.map((s) => [s.min, s.max]);
+    for (const m of this.movers) if (m.active && !m.maxPush) boxes.push(m.box);
+    for (const [lo, hi] of boxes) {
+      const P = b.p;
+      if (P[0] <= lo[0] || P[0] >= hi[0] || P[1] <= lo[1] || P[1] >= hi[1] || P[2] <= lo[2] || P[2] >= hi[2]) continue;
+      let best = null;
+      for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {
+        const face = s > 0 ? hi[i] : lo[i];
+        const came = s > 0 ? p0[i] >= hi[i] : p0[i] <= lo[i];
+        const d = Math.abs(face - P[i]) - (came ? 1e3 : 0);
+        if (!best || d < best.d) best = { d, i, s, face };
+      }
+      const { i, s, face } = best;
+      b.p[i] = face + s * (Math.min(b.half[0], b.half[1], b.half[2]) + 0.002);
+      if (b.v[i] * s < 0) b.v[i] = 0;
+    }
   }
 
   _rel(c) {
