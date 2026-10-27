@@ -60,7 +60,7 @@ export class Player {
       const ray = locked() || this.game.touch ? null : [e.clientX, e.clientY];
       if (e.button === 2) { if (this.held?.body) this._throw(); return; }
       if (e.button !== 0) return;
-      const hit = this._pick(ray);
+      const hit = this.game.touch ? null : this._pick(ray);      // on a touch screen the Use button is your hand
       if (hit) { this._grab(hit); return; }
       if (!locked() && this.mode === 'walk' && !this.game.touch) { this._wantLock = true; }
     });
@@ -75,7 +75,7 @@ export class Player {
       if (locked() || !this.dragging) return;
       const dx = e.clientX - this._px, dy = e.clientY - this._py;
       this._px = e.clientX; this._py = e.clientY; this._moved += Math.abs(dx) + Math.abs(dy);
-      if (!this.held || this.held.control) this.look(dx * 1.2, dy * 1.2);
+      if (this.game.touch || !this.held || this.held.control) this.look(dx * (this.game.touch ? 2 : 1.2), dy * (this.game.touch ? 2 : 1.2));
     });
     document.addEventListener('mousemove', (e) => { if (locked()) this.look(e.movementX, e.movementY); });
   }
@@ -150,7 +150,7 @@ export class Player {
       this.hint = H.control.hint?.() ?? H.control.label;
       return;
     }
-    const hit = this.mode === 'walk' || this.mouse ? this._pick(document.pointerLockElement ? null : this.mouse) : null;
+    const hit = this.mode === 'walk' || this.mouse ? this._pick(document.pointerLockElement || this.game.touch ? null : this.mouse) : null;
     if (hit?.body) this.hint = `${hit.body.name} · hold the left button to pick it up${hit.body.mass > 45 ? ' (too heavy to lift: you can push or roll it)' : ''}`;
     else if (hit?.control) { const c = hit.control; this.hint = c.hint?.() ?? `${c.label} · ${c.kind === 'hold' ? 'hold the left button' : c.kind === 'grab' ? 'hold and drag' : 'click'}`; }
     else this.hint = this._nearSpot()?.label ?? '';
@@ -206,7 +206,7 @@ export class Player {
     this.v[0] += (want[0] - this.v[0]) * Math.min(1, acc * dt);
     this.v[2] += (want[1] - this.v[2]) * Math.min(1, acc * dt);
     const boxes = this._boxes();
-    const n = Math.max(1, Math.ceil((Math.abs(this.v[1]) * dt) / 0.12));
+    const n = Math.max(1, Math.ceil((Math.abs(this.v[1]) * dt) / 0.12), Math.ceil((Math.hypot(this.v[0], this.v[2]) * dt) / 0.08));
     const h = dt / n;
     for (let i = 0; i < n; i++) {
       p[0] += this.v[0] * h; p[2] += this.v[2] * h;

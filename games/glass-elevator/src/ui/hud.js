@@ -74,7 +74,7 @@ export class HUD {
     const arrow = c.display.dir > 0 ? '▲' : c.display.dir < 0 ? '▼' : '';
     this.top.innerHTML = `<b>${P.where()}</b><span>${fmt(s.clock)}${x}</span><span>Car ${arrow} ${c.floor}${c.display.msg ? ` · ${c.display.msg}` : ''}</span><span>${Math.abs(h.vc).toFixed(2)} m/s</span><span>${Math.max(0, Math.round(c.loadKg))} kg</span>${g.paused ? '<span>PAUSED</span>' : ''}`;
     this.intro -= 0.2;
-    this.hint.textContent = P.hint || (this.intro > 0 ? 'H: the keys · G: go anywhere · T: the engineer\'s panel · the hall buttons are beside the landing door' : '');
+    this.hint.textContent = (g.touch && P.hint ? P.hint.replace(/hold the left button/g, 'hold Use').replace(/left button/g, 'Use').replace(/click/g, 'tap Use') : P.hint) || (this.intro > 0 && g.touch ? 'Stick: walk · drag: look · Use: press, or hold to carry · Go to: anywhere' : this.intro > 0 ? 'H: the keys · G: go anywhere · T: the engineer\'s panel · the hall buttons are beside the landing door' : '');
     this.log.innerHTML = s.log.slice(-6).map((l) => `<div>${fmt(l.t).slice(0, 8)} ${l.who ? `<b>${l.who}:</b> ` : ''}${l.text}</div>`).join('');
     if (this.tele.style.display !== 'none') this._tele(s, h, c, d, dr);
   }

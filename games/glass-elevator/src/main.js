@@ -9,12 +9,13 @@ import './style.css';
 import { Game } from './game.js';
 import { hms } from './sim.js';
 import { HUD } from './ui/hud.js';
+import { Touch, isTouchDevice } from './ui/touch.js';
 
 const params = new URLSearchParams(location.search);
 const canvas = document.getElementById('view');
 const ui = document.getElementById('ui');
 const manual = !!params.get('manual');
-const touch = matchMedia?.('(pointer: coarse)').matches && !params.get('desk');
+const touch = params.get('touch') ? params.get('touch') === '1' : isTouchDevice();
 
 function loading(text) {
   let el = ui.querySelector('.loading');
@@ -37,6 +38,7 @@ async function go() {
   const hud = new HUD(ui, game);
   if (params.get('tele')) hud.tele.style.display = '';
   if (!manual) { const x = document.createElement('div'); x.className = 'crosshair'; ui.append(x); }
+  if (touch) new Touch(ui, game, hud);
   game.onFrame = (dt) => hud.update(dt);
   window.game = { game, stage: game.stage, sim: game.sim, hud, ready: true, advance(dt) { const n = Math.max(1, Math.round(dt * 30)); for (let i = 0; i < n; i++) game.frame(dt / n); } };
   if (!manual) {

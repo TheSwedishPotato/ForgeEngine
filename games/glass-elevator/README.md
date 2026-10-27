@@ -37,6 +37,8 @@ npm run build:single     # one self-contained page: dist-single/glass-elevator.h
 | T | the engineer's panel: drive, ropes, traction, brakes, governor, buffers, load, doors, the safety chain switch by switch |
 | + / − · P · H | time faster or slower · pause · the keys |
 
+On a phone or tablet: the stick walks, dragging looks, **Use** is your hand (tap a button, hold to carry or pull; look round to move what you hold), with Throw, E, Q, View, Go to and Data beside it.
+
 ## What is modelled
 
 All the numbers are in `src/data/spec.js`. Where a rule exists (EN 81-20 and EN 81-50 mostly,
