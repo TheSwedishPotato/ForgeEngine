@@ -13,6 +13,7 @@ import { makeProps } from './world/props.js';
 import { Player } from './player.js';
 import { Sound } from './audio/sound.js';
 import { ToolBelt } from './world/tools.js';
+import { Laptop } from './ui/laptop.js';
 import { CAR, FACADE, SPEC, floorY, FLOORS, MR, PIT_Y, cwYForCar } from './data/spec.js';
 
 export class Game {
@@ -34,6 +35,8 @@ export class Game {
     this.occluders = [...this.buildingGL.landing.slice(1).flatMap((l) => l.panels), ...this.elevatorGL.doorPanels.flatMap((g) => g.children)];
     this.player = new Player(this);
     this.tools = new ToolBelt(this);
+    this.laptop = new Laptop(this);
+    this.elevatorGL.game = this; this.elevatorGL.hasKey = () => this.tools.belt.some((b) => b.tool === 'key');
     this.buildingGL.hasKey = () => this.tools.belt.some((b) => b.tool === 'key');
     this.sound = new Sound(this);
     this.timeScale = 1;

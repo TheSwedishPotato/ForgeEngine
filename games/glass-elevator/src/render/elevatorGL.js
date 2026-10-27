@@ -17,6 +17,8 @@ import { COMP } from './buildingGL.js';
 const T = SPEC.doors.panelTravel, PW = 0.575;
 const z0 = CAR.z0, z1 = CAR.z1, zc = CAR.zc, W = CAR.w / 2;
 export const ROOF = 2.62;
+/** The emergency trap door in the car roof: 0.5 x 0.5 m clear (EN 81-20: at least 0.40 x 0.50). */
+export const HATCH = { x0: -0.85, x1: -0.35, z0: 16.1, z1: 16.6 };
 
 export class ElevatorGL {
   constructor({ stage, M, labels, sim, controls, world, glass }) {
@@ -29,6 +31,7 @@ export class ElevatorGL {
     this._cop();
     this._carDoor();
     this._roof();
+    this._hatch();
     this._counterweight();
     this._ropes();
     this._colliders();
@@ -50,8 +53,10 @@ export class ElevatorGL {
     b.box(M.stainless, 0.55, 0, z0 - 0.04, W + 0.05, CAR.h, z0, 1);
     b.box(M.stainless, -0.55, CAR.doorH, z0 - 0.04, 0.55, CAR.h, z0, 1);
     // ceiling with its downlights
-    b.box(M.ceiling, -W - 0.05, CAR.h, z0 - 0.04, W + 0.05, ROOF, z1 + 0.06);
-    for (const [x, z] of [[-0.5, z0 + 0.45], [0.5, z0 + 0.45], [-0.5, z1 - 0.45], [0.5, z1 - 0.45]]) b.add(cylGeo(0.07, 0.01, 'y', 20), M.downlight, x, CAR.h - 0.003, z);
+    { const H = HATCH;
+      b.box(M.ceiling, -W - 0.05, CAR.h, z0 - 0.04, H.x0, ROOF, z1 + 0.06); b.box(M.ceiling, H.x1, CAR.h, z0 - 0.04, W + 0.05, ROOF, z1 + 0.06);
+      b.box(M.ceiling, H.x0, CAR.h, z0 - 0.04, H.x1, ROOF, H.z0); b.box(M.ceiling, H.x0, CAR.h, H.z1, H.x1, ROOF, z1 + 0.06); }
+    for (const [x, z] of [[-0.5, z0 + 0.45], [0.5, z0 + 0.45], [0.05, z1 - 0.45], [0.5, z1 - 0.45]]) b.add(cylGeo(0.07, 0.01, 'y', 20), M.downlight, x, CAR.h - 0.003, z);
     // the handrail along the glass, 0.9 m up
     const hr = 0.9;
     b.tube(M.mirrorSteel, [-W + 0.06, hr, z0 + 0.15], [-W + 0.06, hr, z1 - 0.06], 0.02);
@@ -92,6 +97,11 @@ export class ElevatorGL {
     const M = this.M, L = this.labels, C = this.controls, ctl = this.sim.ctl;
     const cop = new Object3D(); cop.position.set(0.8, 0, z0 + 0.002); this.car.add(cop);
     const plate = boxMesh(M.mirrorSteel, 0.44, 1.0, 0.012); plate.position.set(0, 1.25, 0.006); cop.add(plate);
+    this.copPlate = plate;
+    // behind the faceplate (the screwdriver takes it off): the button board, its chips and the loom
+    const pcb = boxMesh(M.paintGreen, 0.4, 0.95, 0.004); pcb.position.set(0, 1.25, 0.002); cop.add(pcb);
+    for (let i = 0; i < 6; i++) { const ch = boxMesh(M.plastic, 0.05, 0.03, 0.006); ch.position.set(-0.12 + (i % 3) * 0.12, 1.55 + Math.floor(i / 3) * 0.08, 0.004); cop.add(ch); }
+    for (let i = 0; i < 5; i++) { const w = boxMesh(i % 2 ? M.paintRed : M.paintBlue, 0.006, 0.8, 0.006); w.position.set(-0.17 + i * 0.012, 1.2, 0.005); cop.add(w); }
     const btn = (x, y, cell, spec) => {
       const ring = new Mesh(cylGeo(0.026, 0.01, 'z', 24), M.btnRing); ring.position.set(x, y, 0.015); cop.add(ring);
       const face = new Mesh(cylGeo(0.02, 0.01, 'z', 24), M.btnOff); face.position.set(x, y, 0.018); cop.add(face);
@@ -272,7 +282,10 @@ export class ElevatorGL {
     box(-W - 0.05, 0, z0 - 0.04, -0.55, CAR.h, z0);                                       // front returns
     box(0.55, 0, z0 - 0.04, W + 0.05, CAR.h, z0);
     box(-0.55, CAR.doorH, z0 - 0.04, 0.55, CAR.h, z0);
-    box(-W - 0.05, CAR.h, z0 - 0.06, W + 0.05, ROOF, z1 + 0.06);                         // ceiling and roof
+    { const H = HATCH;                                                                   // ceiling and roof, round the hatch
+      box(-W - 0.05, CAR.h, z0 - 0.06, H.x0, ROOF, z1 + 0.06); box(H.x1, CAR.h, z0 - 0.06, W + 0.05, ROOF, z1 + 0.06);
+      box(H.x0, CAR.h, z0 - 0.06, H.x1, ROOF, H.z0); box(H.x0, CAR.h, H.z1, H.x1, ROOF, z1 + 0.06);
+      w.mover({ bounds: () => ((d.hatch ?? 0) < 0.4 ? [[H.x0, h.yc + CAR.h, H.z0], [H.x1, h.yc + ROOF, H.z1]] : null), vel, onImpulse: acc, car: true }); }
     box(-W - 0.05, ROOF, z0 - 0.06, W + 0.05, ROOF + 0.26, z0 + 0.24);                   // door operator
     box(-W - 0.1, ROOF, z0 + 0.24, -W - 0.02, ROOF + 1.1, z1 + 0.08);                      // balustrade
     box(W + 0.02, ROOF, z0 + 0.24, W + 0.1, ROOF + 1.1, z1 + 0.08);
@@ -292,7 +305,28 @@ export class ElevatorGL {
   }
 
   // -------------------------------------------------------------------------------------------
+  _hatch() {
+    const M = this.M, H = HATCH, d = this.sim.doors, g = new Group();
+    g.position.set((H.x0 + H.x1) / 2, ROOF + 0.015, H.z1); this.car.add(g);
+    const lid = boxMesh(M.stainless, H.x1 - H.x0 + 0.04, 0.03, H.z1 - H.z0 + 0.04, 1); lid.position.z = -(H.z1 - H.z0) / 2; g.add(lid);
+    const handle = boxMesh(M.paintYellow, 0.14, 0.03, 0.03); handle.position.set(0, 0.03, -(H.z1 - H.z0) + 0.06); g.add(handle);
+    this.hatchLid = g; d.hatch = 0; d.hatchCmd = 0;
+    this.controls.add([lid, handle], {
+      id: 'hatch', label: 'Emergency trap door in the car roof', kind: 'switch',
+      down: () => {
+        const P = this.game?.player, inside = P && P.p[1] < this.sim.hoist.yc + 2;
+        if (inside && !d.hatchCmd && !this.hasKey?.()) { this.sim.say('From inside the car the trap door only opens with a key (the hoistway door key fits).', 'You'); return; }
+        d.hatchCmd = d.hatchCmd ? 0 : 1;
+        this.sim.say(d.hatchCmd ? 'Trap door open: its safety contact opens the chain, so the car cannot move. E under or beside it: climb through.' : 'Trap door shut and latched.', 'You');
+      },
+      hint: () => `Car roof trap door: ${d.hatch > 0.5 ? 'open' : 'shut'} · click to ${d.hatch > 0.5 ? 'shut' : 'open'} it · E beside it when open: climb through`,
+    });
+  }
+
   update() {
+    const dd = this.sim.doors;
+    dd.hatch += Math.max(-0.02, Math.min(0.02, (dd.hatchCmd ?? 0) - dd.hatch));
+    if (this.hatchLid) this.hatchLid.rotation.x = dd.hatch * 1.9;
     const sim = this.sim, h = sim.hoist, d = sim.doors, ctl = sim.ctl;
     this.car.position.y = h.yc;
     this.cw.position.y = h.yw;
@@ -328,7 +362,7 @@ export class ElevatorGL {
     this._span(this.cableFix, 0.75, low, yFix, FACADE + 0.08);
     this.cableLoop.position.set(0.75, low, FACADE + 0.2);
     // the car's lamps: the downlights, and their glints in the glass
-    const lit = ctl.powered;
+    const lit = ctl.powered && !ctl.inputs.brkLight;
     this.M.downlight.emissiveIntensity = lit ? 6 : 0.6;
     this.glass.interior = lit ? [0.03, 0.028, 0.025] : [0.004, 0.004, 0.004];
     this.glass.lamp = lit ? [0.6, 0.55, 0.5] : [0, 0, 0];

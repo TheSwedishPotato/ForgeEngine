@@ -373,6 +373,16 @@ export class BuildingGL {
     this.wall(b, M.cabinet, -3.3, y, MR.z0, -1.4, y + 2.0, cz);
     this.wall(b, M.cabinet, -1.3, y, MR.z0, -0.2, y + 2.0, cz);
     b.box(M.paintDark, -1.1, y + 1.5, cz, -0.4, y + 1.8, cz + 0.02);              // the drive's fan grille
+    // inside the drive cabinet (the screwdriver takes its cover off): heat sink, DC-link capacitors,
+    // the main contactors, and two breakers you can throw
+    b.box(M.aluminium, -1.2, y + 0.9, cz, -0.75, y + 1.45, cz + 0.05);
+    for (let i = 0; i < 4; i++) b.cyl(M.paintBlue, -0.65 + i * 0.1, y + 1.2, cz + 0.04, 0.035, 0.2, 'y', 12);
+    for (let i = 0; i < 3; i++) b.box(M.plastic, -1.2 + i * 0.13, y + 0.55, cz, -1.1 + i * 0.13, y + 0.75, cz + 0.08);
+    const cover = boxMesh(M.cabinet, 1.1, 1.95, 0.02); cover.position.set(-0.75, y + 1.0, cz + 0.085); this.root.add(cover);
+    this.controls.add(cover, { id: 'driveCover', label: 'Drive cabinet cover (four screws)', kind: 'target', target: 'driveCover', down: () => this.sim.say('The cover is screwed on: use the screwdriver (R) to take it off.', 'You') });
+    this.driveCover = cover;
+    const brk = (id, label, x) => this._panelControl(id, label, x, y + 0.65, cz + 0.05, 'switch', { get: () => !ctl.inputs[id], set: (v) => (ctl.inputs[id] = !v), text: id === 'brkDoor' ? 'DOOR' : 'LIGHT' });
+    brk('brkDoor', 'Door operator breaker', -0.55); brk('brkLight', 'Car lighting breaker', -0.35);
     const disp = new Mesh(new PlaneGeometry(0.42, 0.16), this.mrDisplay.mat); disp.position.set(-2.35, y + 1.72, cz + 0.006); this.root.add(disp);
     const panel = (id, label, x, yy, kind, opts) => this._panelControl(id, label, -3.3 + x, y + yy, cz + 0.005, kind, opts);
     panel('eeo', 'Emergency electrical operation: NORMAL / EEO', 0.25, 1.4, 'switch', { get: () => ctl.inputs.eeo, set: (v) => (ctl.inputs.eeo = v), text: 'EEO' });

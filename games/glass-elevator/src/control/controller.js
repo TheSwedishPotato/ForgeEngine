@@ -122,6 +122,7 @@ export class Controller {
       ['finalBottom', 'Final limit, bottom', h.yc > LIMITS.bottom || eeo],
       ['sg', 'Safety gear switch', !h.sg.set || eeo],
       ['ucm', 'Unintended movement monitor', !this.faults.ucm],
+      ['hatch', 'Car roof trap door contact', (d.hatch ?? 0) < 0.05],
       ['carDoor', 'Car door contact', d.carClosed || bridge],
       ['locks', 'Landing door locks (30)', d.allLocked || bridge],
     ];
@@ -399,7 +400,7 @@ export class Controller {
   _doors(dt, mode) {
     const d = this.d, dc = d.car, I = this.inputs;
     const here = this._atFloor() && Math.abs(this.h.vc) < 0.31;
-    dc.powered = this.powered || mode === 'ard';
+    dc.powered = (this.powered || mode === 'ard') && !I.brkDoor;
     const bridgeOK = this.bridge || this.phase === 'idle';
     // the door operator follows the door state
     if (this.door === 'opening' || this.door === 'open') dc.cmd = here && bridgeOK ? 'open' : 'close';

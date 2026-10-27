@@ -18,6 +18,7 @@ import { FLOORS, floorY, MR, PIT_Y, FACADE } from './data/spec.js';
 import { PIT, LOBBY, LOBBY1 } from './render/buildingGL.js';
 import { overlap } from './physics/bodies.js';
 import { boxMesh } from './render/build.js';
+import { HATCH, ROOF } from './render/elevatorGL.js';
 
 const EYE = 1.62, RAD = 0.28, HEIGHT = 1.8, STEP = 0.42, MASS = 80, REACH = 2.4;
 const _v = new Vector3(), _d = new Vector3(), _r = new Raycaster(), _m = new Vector2();
@@ -183,12 +184,21 @@ export class Player {
   // Stairs, ladders and doors you go through with E or Q
 
   _nearSpot() {
+    const h = this.game.sim.hoist, d = this.game.sim.doors, cx = (HATCH.x0 + HATCH.x1) / 2, cz = (HATCH.z0 + HATCH.z1) / 2;
+    if ((d.hatch ?? 0) > 0.8 && Math.hypot(this.p[0] - cx, this.p[2] - cz) < 0.9 && this.p[1] > h.yc - 0.3 && this.p[1] < h.yc + ROOF + 0.5)
+      return { kind: 'hatch', label: this.p[1] > h.yc + 2 ? 'E: lower yourself through the trap door into the car' : 'E: climb up through the trap door onto the roof' };
     for (const s of this.game.buildingGL.spots) if (Math.hypot(this.p[0] - s.pos[0], this.p[2] - s.pos[2]) < 1.2 && Math.abs(this.p[1] - s.pos[1]) < 1.2) return s;
     return null;
   }
   _spot(dir) {
     const s = this._nearSpot();
     if (!s) return;
+    if (s.kind === 'hatch') {
+      const h = this.game.sim.hoist;
+      if (this.p[1] > h.yc + 2) { this.teleport([-0.6, h.yc + 0.01, 16.35], -Math.PI / 2); this.game.sim.say('You lower yourself through the trap door into the car.', 'You'); }
+      else { this.teleport([0.25, h.yc + ROOF + 0.01, 16.4], -Math.PI / 2); this.game.sim.say('You climb up through the trap door onto the car roof.', 'You'); }
+      return;
+    }
     const say = (t) => this.game.sim.say(t, 'You');
     const stairs = (n) => { const L = n === 1 ? LOBBY1 : LOBBY; this.teleport([L.x0 + 0.6, floorY(n), 12.2], 0); };
     if (s.kind === 'stairs') {

@@ -180,13 +180,27 @@ export class ToolBelt {
       const open = ctl.chainList.filter((k) => !k[2]).map((k) => k[1]);
       return this.say(open.length ? `Safety chain: voltage lost after ${open.join(', ')}.` : 'Safety chain: full voltage to the end. Everything is made.');
     }
+    if (t === 'laptop' && (c.target === 'cabinet' || c.target === 'drive' || c.target === 'driveCover' || id.startsWith('car.'))) {
+      g.laptop.open(c.target === 'drive' || c.target === 'driveCover' ? 'drive' : id.startsWith('car.') ? 'car' : 'controller');
+      return this.say('Laptop plugged in: the service tool reads the fault log.');
+    }
     if (t === 'laptop') {
       if (c.target === 'drive') { const f = s.drive.fault; s.drive.fault = null; return this.say(f ? 'Drive log: encoder signal fault. Encoder re-seated and its offset re-learnt: fault cleared.' : 'Drive log: no faults.'); }
       if (c.target === 'cabinet') { ctl.resetFaults(); return this.say('Controller: fault log read and cleared.'); }
       return this.say('Plug the laptop into the drive or the controller.');
     }
+    if (t === 'screwdriver' && id.startsWith('car.')) {
+      const pl = g.elevatorGL.copPlate, on = pl.position.y > 0;
+      pl.position.y = on ? -1000 : 1.25;
+      return this.say(on ? 'Six screws out: the faceplate comes off. Behind it the button board, its chips and the loom.' : 'Faceplate back on.');
+    }
+    if (t === 'screwdriver' && c.target === 'driveCover') {
+      const cv = g.buildingGL.driveCover; cv.position.y -= 1000;
+      return this.say('Cover off the drive cabinet: the heat sink, the DC-link capacitors, the contactors and two breakers. (Screwdriver on the cabinet again: cover back on.)');
+    }
+    if (t === 'screwdriver' && c.target === 'drive' && g.buildingGL.driveCover.position.y < -100) { g.buildingGL.driveCover.position.y += 1000; return this.say('Cover back on.'); }
     if (t === 'screwdriver') {
-      if (!carDoor) return this.say('The light curtain\'s edges are on the car door.');
+      if (!carDoor) return this.say('A screwdriver for: the car panel\'s faceplate, the drive cabinet\'s cover, the light curtain on the car door.');
       d.curtainFail = false; return this.say('Light curtain edges re-seated and aligned: all 32 beams seen.');
     }
     if (t === 'rope') {

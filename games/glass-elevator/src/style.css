@@ -48,3 +48,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page);
 .inv .row { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
 .inv p { color: var(--dim); margin: 0; }
 @media (max-width: 600px) { .inv { top: 112px; } .gobtn { display: none; } .hud { font-size: 12px; } .hint { top: 58px; bottom: auto; font-size: 12px; } .log { display: none; } }
+.laptop { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(760px, calc(100% - 24px)); max-height: calc(100% - 40px); overflow: auto; background: #0d1a14; color: #b8f5c8; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; border: 2px solid #2c4a3a; border-radius: 10px; padding: 10px 12px; pointer-events: auto !important; }
+.laptop .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.laptop .bar button { margin-left: auto; } .laptop .bar button + button { margin-left: 0; }
+.laptop button { font: inherit; color: #d8ffe2; background: #1d3b2b; border: 1px solid #3f7356; border-radius: 5px; padding: 6px 9px; cursor: pointer; }
+.laptop .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.laptop section { min-width: 0; } .laptop h4 { margin: 8px 0 4px; color: #e9fff0; } .laptop p { margin: 2px 0; } .laptop ul { margin: 0; padding-left: 16px; }
+.laptop code { color: #ffd479; margin-right: 6px; } .laptop .dim { color: #6f9c80; }
