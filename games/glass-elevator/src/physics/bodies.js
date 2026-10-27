@@ -90,6 +90,7 @@ export class World {
 
   step(dt) {
     this.time += dt;
+    for (const b of this.bodies) b.held = this.hand?.body === b;
     for (const m of this.movers) { m.box = m.bounds(); m.v = m.vel ? m.vel() : [0, 0, 0]; m.J = [0, 0, 0]; m.active = m.box !== null; }
     const B = this.bodies;
     // wake what moving surfaces touch
@@ -123,7 +124,7 @@ export class World {
       if (b.asleep) continue;
       const bb = b.aabb();
       for (const s of this.solids) if (overlap(bb, [s.min, s.max], 0.02)) this._vsBox(C, b, s.min, s.max, null, s.mu);
-      for (const m of this.movers) if (m.active && overlap(bb, m.box, 0.02)) this._vsBox(C, b, m.box[0], m.box[1], m, m.mu);
+      for (const m of this.movers) if (m.active && !m.cyl && overlap(bb, m.box, 0.02)) this._vsBox(C, b, m.box[0], m.box[1], m, m.mu);
     }
     for (let i = 0; i < B.length; i++) {
       const a = B[i], ab = a.aabb();
@@ -173,6 +174,7 @@ export class World {
       const p0 = b.p;
       b.p = add(b.p, mul(b.v, dt));
       this._unstick(b, p0);
+      for (const m of this.movers) if (m.cyl && m.active && !b.held) this._outOf(b, m, dt);
       const [wx, wy, wz] = b.w, q = b.q;
       const dq = [wx * q[3] + wy * q[2] - wz * q[1], wy * q[3] + wz * q[0] - wx * q[2], wz * q[3] + wx * q[1] - wy * q[0], -wx * q[0] - wy * q[1] - wz * q[2]];
       for (let i = 0; i < 4; i++) q[i] += 0.5 * dq[i] * dt;
@@ -211,6 +213,27 @@ export class World {
     }
   }
 
+  /** Out of a person (an upright cylinder): a thing that has got inside you is pushed out, sideways. */
+  _outOf(b, m, dt) {
+    const { p, r, h } = m.cyl, [lo, hi] = b.aabb();
+    if (hi[1] < p[1] + 0.2 || lo[1] > p[1] + h) return;
+    const ex = (hi[0] - lo[0]) / 2, ez = (hi[2] - lo[2]) / 2;
+    let dx = b.p[0] - p[0], dz = b.p[2] - p[2];
+    const reach = r + Math.min(ex, ez) + (b.mass > 40 ? 0.06 : 0);     // you stand against a heavy thing, and lean on it
+    const d = Math.hypot(dx, dz);
+    if (d >= reach) return;
+    if (d < 1e-4) { dx = Math.cos(b.p[1] * 7); dz = Math.sin(b.p[1] * 7); } else { dx /= d; dz /= d; }
+    b.wake();
+    const vin = b.v[0] * dx + b.v[2] * dz - (m.v[0] * dx + m.v[2] * dz);
+    if (b.mass > 40) {
+      // too heavy to shove aside: you lean on it, with what a person can push (450 N)
+      if (vin < 0) { const dv = Math.min(-vin, (450 * dt) / b.mass); b.v[0] += dv * dx; b.v[2] += dv * dz; }
+      return;
+    }
+    b.p[0] = p[0] + dx * (reach + 0.002); b.p[2] = p[2] + dz * (reach + 0.002);
+    if (vin < 0) { b.v[0] -= vin * dx; b.v[2] -= vin * dz; }
+  }
+
   _rel(c) {
     const vA = c.a.velAt(c.rA);
     if (c.b) return sub(vA, c.b.velAt(c.rB));
@@ -225,7 +248,7 @@ export class World {
 
   /** Contacts of body b against the box [lo, hi] (a surface, fixed or moving). */
   _vsBox(C, b, lo, hi, m, mu) {
-    const muC = Math.sqrt(mu * b.mu);
+    const muC = Math.min(mu, b.mu);
     if (b.kind === 'ball') {
       const c = b.p, q = [clamp(c[0], lo[0], hi[0]), clamp(c[1], lo[1], hi[1]), clamp(c[2], lo[2], hi[2])];
       let n = sub(c, q), d = len(n);
@@ -243,7 +266,7 @@ export class World {
   }
 
   _pair(C, a, b) {
-    const mu = Math.sqrt(a.mu * b.mu), e = Math.min(a.e, b.e);
+    const mu = Math.min(a.mu, b.mu), e = Math.min(a.e, b.e);
     if (a.kind === 'ball' && b.kind === 'ball') {
       const d = sub(a.p, b.p), l = len(d);
       if (l >= a.r + b.r || l < 1e-6) return;

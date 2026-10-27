@@ -34,8 +34,9 @@ export class Player {
     this.held = null; this.hint = ''; this.aimLabel = '';
     this.mouse = null;
     this._bind();
+    const self = this;
     // you push loose things about as you walk into them (as hard as a person leans: 450 N)
-    this.body = game.world.mover({ bounds: () => (this.mode === 'walk' ? [[this.p[0] - RAD, this.p[1] + 0.15, this.p[2] - RAD], [this.p[0] + RAD, this.p[1] + HEIGHT, this.p[2] + RAD]] : null), vel: () => this.v, maxPush: 450 * 0.004, mu: 0.3 });
+    this.body = game.world.mover({ bounds: () => (this.mode === 'walk' ? [[this.p[0] - RAD, this.p[1] + 0.15, this.p[2] - RAD], [this.p[0] + RAD, this.p[1] + HEIGHT, this.p[2] + RAD]] : null), vel: () => this.v, maxPush: 450 * 0.004, mu: 0.3, cyl: { get p() { return self.p; }, r: RAD, h: HEIGHT } });
   }
 
   _bind() {
@@ -155,7 +156,8 @@ export class Player {
         }
         if (t0 > 0.05 && t0 < reach) reach = t0;
       }
-      reach = Math.max(0.35, reach - r - 0.05);
+      // and never closer than arm's length allows (it stays in front of you, not inside you)
+      reach = Math.max(RAD + Math.max(...H.body.half) + 0.08, reach - r - 0.05);
       const t = _v.copy(cam.position).addScaledVector(_d, Math.min(H.dist, reach));
       this.game.world.hand.target = [t.x, t.y, t.z];
       this.hint = `Holding: ${H.body.name} · wheel: nearer / further · right button: throw · let go to drop`;
