@@ -25,8 +25,11 @@ export class Touch {
         <button data-k="KeyE">E</button><button data-k="KeyQ">Q</button><button data-k="KeyV">View</button>
         <button data-k="go">Go to</button><button data-k="KeyT">Data</button><button data-k="KeyH">?</button>
         <button data-k="tool">Tool</button><button data-k="KeyR">Apply</button><button data-k="KeyX">Put down</button><button data-k="KeyK">Guide</button>
+        <button data-k="svc" class="svc">Back in service</button>
       </div>`;
     root.append(el);
+    // on a touch screen the pad carries the Back in service button (the corner one would sit over the pad)
+    setTimeout(() => { const sb = document.querySelector('.svcbtn'); if (sb) sb.style.display = 'none'; }, 0);
     // the stick: its offset drives W A S D (and Shift right out)
     const stick = el.querySelector('.stick'), knob = el.querySelector('.knob');
     let id = null, cx = 0, cy = 0;
@@ -68,6 +71,7 @@ export class Touch {
         }
         else if (k === 'throw') { if (P.held?.body) { P._throw(); el.querySelector('[data-k=use]').textContent = 'Use'; } }
         else if (k === 'tool') game.tools.toggle();
+        else if (k === 'svc') game.backInService();
         else if (k === 'go') hud.goto.style.display = hud.goto.style.display === 'none' ? '' : 'none';
         else { key(k); key(k, 'keyup'); }
       });

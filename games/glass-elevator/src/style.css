@@ -30,7 +30,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page);
 .tele .chain b { width: 100%; }
 .ok { color: var(--ok); } .bad { color: var(--bad); }
 .svcbtn { position: absolute; right: 12px; top: 46px; background: rgba(30, 110, 60, 0.85); color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; pointer-events: auto !important; user-select: none; font-weight: 600; }
-@media (max-width: 600px) { .svcbtn { top: auto; bottom: 200px; right: 14px; } }
 .gobtn { position: absolute; right: 12px; top: 12px; background: var(--bg); padding: 5px 10px; border-radius: 6px; cursor: pointer; pointer-events: auto !important; user-select: none; }
 
 /* touch controls (phones and tablets) */
@@ -39,6 +38,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page);
 .touch .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(230, 236, 240, 0.35); border: 1px solid rgba(255, 255, 255, 0.35); }
 .touch .pad { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(3, 58px); gap: 8px; pointer-events: auto; touch-action: none; }
 .touch button { height: 44px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(20, 24, 28, 0.5); color: var(--ink); font: 600 13px Inter, system-ui, sans-serif; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+.touch button.svc { grid-column: span 3; background: rgba(30, 110, 60, 0.8); }
 .touch button.big { height: 58px; background: rgba(40, 70, 95, 0.6); }
 .touch button:active { background: rgba(160, 200, 230, 0.45); }
 .inv { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); background: rgba(12, 16, 20, 0.88); border-radius: 10px; padding: 12px 14px; pointer-events: auto !important; backdrop-filter: blur(8px); }
@@ -61,3 +61,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page);
 .guide b { color: #ffcf6a; } .guide p { margin: 4px 0 0; } .guide .prob { color: #ffe3b0; } .guide .tool { color: #ffd98a; } .guide .dim { color: #c9b48a; }
 .guide-edge { position: absolute; font-size: 34px; color: #ffbe2e; text-shadow: 0 0 6px #000; pointer-events: none; }
 @media (max-width: 600px) { .guide { top: 112px; bottom: auto; right: 12px; } }
+/* touch screens: the guide goes top left, out of the way of the pad, and taps go through it */
+.guide { pointer-events: none; }
+@media (pointer: coarse) { .guide { top: 56px; left: 12px; right: auto; bottom: auto; width: min(300px, 44vw); font-size: 11.5px; } }
