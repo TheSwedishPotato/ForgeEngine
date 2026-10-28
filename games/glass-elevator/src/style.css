@@ -29,6 +29,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page);
 .tele .chain { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .tele .chain b { width: 100%; }
 .ok { color: var(--ok); } .bad { color: var(--bad); }
+.svcbtn { position: absolute; right: 12px; top: 46px; background: rgba(30, 110, 60, 0.85); color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; pointer-events: auto !important; user-select: none; font-weight: 600; }
+@media (max-width: 600px) { .svcbtn { top: auto; bottom: 200px; right: 14px; } }
 .gobtn { position: absolute; right: 12px; top: 12px; background: var(--bg); padding: 5px 10px; border-radius: 6px; cursor: pointer; pointer-events: auto !important; user-select: none; }
 
 /* touch controls (phones and tablets) */

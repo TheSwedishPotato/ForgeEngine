@@ -43,6 +43,10 @@ export class HUD {
     // a button for the same, for screens without keys
     const gb = el('gobtn', 'Go to…');
     gb.addEventListener('click', () => { this.goto.style.display = this.goto.style.display === 'none' ? '' : 'none'; document.exitPointerLock?.(); });
+    // one click: everything that keeps the lift out of service undone
+    const sb = el('svcbtn', 'Back in service');
+    sb.addEventListener('click', () => { this.game.backInService(); document.exitPointerLock?.(); });
+    sb.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.goto.addEventListener('click', (e) => { const g = e.target?.dataset?.go; if (g) { this.go(g); this.goto.style.display = 'none'; } });
     window.addEventListener('keydown', (e) => {
       if (e.target?.tagName === 'INPUT') return;

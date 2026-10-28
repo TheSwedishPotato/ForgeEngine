@@ -70,6 +70,26 @@ export class Game {
     s.say('Repaired: the ropes, the brakes, the drive, the governor, the safety gear, the door locks and anything smashed are as new.', 'Simulator');
   }
 
+  /** Back in service at one click: the repair, and every switch, latch and fault that holds the lift out of service. */
+  backInService() {
+    const s = this.sim, c = s.ctl, I = c.inputs, h = s.hoist, d = s.doors;
+    if (Math.abs(h.vc) > 0.05) { s.say('Not while the car is moving.', 'Simulator'); return; }
+    // a car beyond a terminal floor (on a buffer, past a final limit) is put back level with it
+    const top = floorY(FLOORS);
+    if (h.yc > top + 0.02 || h.yc < -0.02) { h.yc = Math.max(0, Math.min(top, h.yc)); h.vc = 0; }
+    this.repair();
+    Object.assign(I, { mains: true, mainSwitch: true, mrStop: false, pitStop: false, carTopStop: false, insp: false, eeo: false, fire1: 'off', fire2: 'off', independent: false, brkDoor: false, brkLight: false, seismic: false, inspUp: false, inspDown: false, inspCommon: false, eeoUp: false, eeoDown: false, eeoRun: false });
+    c.lockout = false; c.quake = false; c.fire.latched = false; c.fire.recalled = false;
+    c.faults.ucm = false; c.faults.brake = false; c.driveHold = false;
+    if (c.phase === 'idle') { s.drive.off(); h.motor.enabled = false; }
+    d.hatchCmd = 0; d.hatch = 0; d.curtainFail = false;
+    // forced doors shut: the car door, and every landing door the car is not at
+    if (c.door === 'closed') { d.car.x = 0; d.car.v = 0; for (const L of d.landing) if (L) { L.x = 0; L.v = 0; L.key = 0; L.locked = true; } }
+    c.resetFaults(); c.faults.ucm = false;
+    if (this.buildingGL.driveCover.position.y < -100) this.buildingGL.driveCover.position.y += 1000;
+    s.say(c.overload ? 'Back in service, except: the car is overloaded. Take weight out (or use the LW bypass).' : 'Back in service: every fault, switch and latch reset.', 'Simulator');
+  }
+
   /** The light curtain's beams across the doorway: anything (or anyone) in them. */
   /**
    * How far open each door must stay for the things in its doorway: a panel cannot close through
