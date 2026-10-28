@@ -59,6 +59,7 @@ export class Game {
     s.drive.fault = null; s.doors.curtainFail = false;
     for (const c of this.controls.list) if (c.broken) mend(c);
     for (const L of s.doors.landing) if (L) { L.broken = false; L.wedge = 0; }          // bent interlocks straightened, wedges out
+    s.doors.car.wedge = 0;
     if (s.ctl.quake && !s.shake) s.ctl.inputs.seismic = false;
     h.gov.tripped = false; h.gov.testTrip = false; h.gov.switchOpen = false; h.gov.link = 0;
     h.sg.engage = 0; h.sg.set = false;
