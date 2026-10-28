@@ -58,13 +58,15 @@ export class Game {
     for (const b of h.brakes) b.fail = false;
     s.drive.fault = null; s.doors.curtainFail = false;
     for (const c of this.controls.list) if (c.broken) mend(c);
+    for (const L of s.doors.landing) if (L) { L.broken = false; L.wedge = 0; }          // bent interlocks straightened, wedges out
+    if (s.ctl.quake && !s.shake) s.ctl.inputs.seismic = false;
     h.gov.tripped = false; h.gov.testTrip = false; h.gov.switchOpen = false; h.gov.link = 0;
     h.sg.engage = 0; h.sg.set = false;
     h.yw = cwYForCar(h.yc); h.vw = 0; h.ts = TS_Y0; h.vts = 0; h.buf.car = 0; h.buf.cw = 0; h.vc = 0; h.vs = 0; h.vu = 0; h.stick = true;
     h._settle();
     s.ctl.resetFaults();
     s.ctl.inputs.mains = true;
-    s.say('Repaired: the ropes, the brakes, the drive, the governor and the safety gear are as new.', 'Simulator');
+    s.say('Repaired: the ropes, the brakes, the drive, the governor, the safety gear, the door locks and anything smashed are as new.', 'Simulator');
   }
 
   /** The light curtain's beams across the doorway: anything (or anyone) in them. */

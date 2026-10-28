@@ -1,6 +1,6 @@
 /**
  * The lift engineer's tools, and your tool belt. The tools lie on a technician's trolley in the
- * lobby, real things you can pick up: clicking one puts it on your belt (keys 1-9 choose, X puts
+ * lobby, real things you can pick up: clicking one puts it on your belt (keys 1-9, 0 and - choose, X puts
  * the chosen one down in front of you). R uses the chosen tool on what the crosshair rests on, as
  * an engineer would:
  *
@@ -67,7 +67,8 @@ export class ToolBelt {
       if (e.target?.tagName === 'INPUT') return;
       if (e.code === 'KeyR') this.apply();
       if (e.code === 'KeyX') this.drop();
-      if (/^Digit[1-9]$/.test(e.code)) { const k = Number(e.code.slice(5)) - 1; if (this.belt[k]) this.active = k; }
+      // 1 to 9, then 0 and - for the tenth and eleventh tools
+      if (/^Digit[0-9]$/.test(e.code) || e.code === 'Minus') { const k = e.code === 'Minus' ? 10 : e.code === 'Digit0' ? 9 : Number(e.code.slice(5)) - 1; if (this.belt[k]) this.active = k; }
     });
   }
 
@@ -80,7 +81,7 @@ export class ToolBelt {
     b.mesh.visible = false;
     this.belt.push(b); this.active = this.belt.length - 1;
     this.render?.();
-    if (!quiet) this.say(`${b.name} on your belt (${this.belt.length}). R: use it on what you look at · X: put it down · 1-9: choose.`);
+    if (!quiet) this.say(`${b.name} on your belt (${this.belt.length}). R: use it on what you look at · X: put it down · 1-9, 0, -: choose.`);
   }
   drop() {
     const b = this.tool; if (!b) return;

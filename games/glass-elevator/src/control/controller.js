@@ -105,7 +105,7 @@ export class Controller {
     if (I.independent) return 'independent';
     return 'normal';
   }
-  get faulted() { return this.faults.ucm || this.h.sg.set || this.h.gov.tripped; }
+  get faulted() { return this.faults.ucm || this.faults.brake || this.h.sg.set || this.h.gov.tripped; }
 
   _chain() {
     const h = this.h, d = this.d, I = this.inputs, eeo = I.eeo && !I.insp;
@@ -159,6 +159,8 @@ export class Controller {
     const moving = this.phase === 'start' || this.phase === 'run' || this.phase === 'stop';
     const supplied = this.powered || mode === 'ard';
     if (moving && (!this.chainOK || !supplied)) this._estop(!supplied ? 'mains supply lost' : `${open[1]} opened`);
+    // standstill monitoring: the car creeping with the brakes set and the motor off
+    if (this.phase === 'idle' && !h.motor.enabled && this.powered && Math.abs(h.vs) > 0.01 && !this.faults.ucm) this._holdByDrive('the car is creeping at standstill');
     // ---- the motion phases --------------------------------------------------------------------
     this.t += dt;
     if (this.phase === 'start') this._starting();
@@ -305,8 +307,11 @@ export class Controller {
   _stopping() {
     const h = this.h, dr = this.dr, P = this.pending;
     if (this.t >= 0.25 && h.brakes[0].cmd) { for (const b of h.brakes) b.cmd = false; this.sfx('brakeDrop'); }
-    if (this.t >= 0.5) {
-      dr.off(); h.motor.enabled = false; this.phase = 'idle'; this.t = 0; this.sfx('contactorOff');
+    // brake proving: with the brakes set the drive takes its torque off, and the encoder must not move
+    if (this.t >= 0.4 && dr.mode !== 'off') { dr.off(); this._enc0 = h.enc; }
+    if (this.t >= 0.6) {
+      if (Math.abs(h.enc - this._enc0) > 0.003 && P.kind !== 'ard') return this._holdByDrive('the car moved with the brakes set (brake proving at the stop)');
+      h.motor.enabled = false; this.phase = 'idle'; this.t = 0; this.sfx('contactorOff');
       this.bridge = false;
       if (P.kind === 'trip' && !this._arrived) this._arrive(P.floor);
       if (P.kind === 'relevel' || P.kind === 'ard') this.bridge = false;
@@ -314,6 +319,15 @@ export class Controller {
       this._arrived = false;
       this.pending = null;
     }
+  }
+
+  /** The brakes do not hold: the drive catches the car on its motor and holds it there, out of service (E602). */
+  _holdByDrive(why) {
+    const h = this.h;
+    this.faults.brake = true; this._cancelAll();
+    h.motor.enabled = true; this.dr.hold(Drive.unbalance(h, this.loadKg));
+    this.phase = 'idle'; this.t = 0; this.pending = null; this._arrived = false; this.bridge = false; this.driveHold = true;
+    this.say(`Brake fault E602: ${why}. The drive holds the car on its motor; out of service until the brakes are mended.`);
   }
 
   _estop(why) {
@@ -326,6 +340,7 @@ export class Controller {
     this.say(`Emergency stop at ${Math.abs(h.vc).toFixed(2)} m/s: ${why}.`);
     this.sfx('brakeDrop'); this.sfx('estop');
     this.pending = null; this._arrived = false;
+    this.calls.car.fill(false);          // the car calls go with an emergency stop: passengers press again
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -537,6 +552,8 @@ export class Controller {
   resetFaults() {
     if (Math.abs(this.h.vc) > 0.01) return;
     if (this.faults.ucm || this.faults.brake) this.say('Faults reset by the technician.');
+    if (this.faults.brake && this.driveHold && !this.h.brakes.some((b) => b.fail)) { this.dr.off(); this.h.motor.enabled = false; this.driveHold = false; }
+    else if (this.faults.brake && this.h.brakes.some((b) => b.fail)) { this.say('The brakes still do not hold: mend them first.'); return; }
     this.faults.ucm = false; this.faults.brake = false;
     if (this.quake && !this.inputs.seismic) { this.quake = false; this.dwell = Math.min(this.dwell, 2); this.say('Seismic operation reset by the technician: back in service.'); }
   }
