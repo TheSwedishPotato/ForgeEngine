@@ -128,12 +128,15 @@ export class World {
       for (const s of this.solids) if (overlap(bb, [s.min, s.max], 0.02)) this._vsBox(C, b, s.min, s.max, null, s.mu);
       for (const m of this.movers) if (m.active && !m.cyl && overlap(bb, m.box, 0.02)) this._vsBox(C, b, m.box[0], m.box[1], m, m.mu);
     }
+    const boxes = B.map((b) => b.aabb());
     for (let i = 0; i < B.length; i++) {
-      const a = B[i], ab = a.aabb();
+      const a = B[i], ab = boxes[i];
       for (let j = i + 1; j < B.length; j++) {
         const b = B[j];
         if (a.asleep && b.asleep) continue;
-        if (!overlap(ab, b.aabb(), 0.02)) continue;
+        if (!overlap(ab, boxes[j], 0.02)) continue;
+        // a sleeper wakes when what touches it really moves (not for the jitter of something resting on it)
+        if (a.asleep !== b.asleep) { const aw = a.asleep ? b : a; if (aw.held || len(aw.v) > 0.15 || len(aw.w) > 0.6) (a.asleep ? a : b).wake(); }
         this._pair(C, a, b);
       }
     }
@@ -168,8 +171,12 @@ export class World {
         }
       }
     }
+    // torsional friction: a thing standing on a floor (or on another) does not keep spinning about the upright
+    for (const c of C) if (Math.abs(c.n[1]) > 0.7) { c.a._tors = true; if (c.b) c.b._tors = true; }
+    const tors = Math.exp(-15 * dt);
     // integrate (no faster than 10 m/s: in one step nothing can then cross a wall before it is felt)
     for (const b of B) {
+      if (b._tors) { b.w[1] *= tors; b._tors = false; }
       if (b.asleep) continue;
       const sp = len(b.v);
       if (sp > 10) b.v = mul(b.v, 10 / sp);
@@ -183,7 +190,11 @@ export class World {
       const n = Math.hypot(q[0], q[1], q[2], q[3]); for (let i = 0; i < 4; i++) q[i] /= n;
       // rest: still for a while, and not carried by anything that moves
       const carried = b.touching?.some((m) => len(m.v) > 1e-4);
-      if (!b.held && !carried && len(b.v) < 0.04 && len(b.w) < 0.08) { b.still += dt; if (b.still > 0.6) { b.asleep = true; b.v = [0, 0, 0]; b.w = [0, 0, 0]; } } else b.still = 0;
+      // (by where it has got to, not its speed: a thing on its contact points jitters without going anywhere)
+      const R = b.rest;
+      const stays = R && len(sub(b.p, R.p)) < 0.012 && Math.abs(R.q[0] * q[0] + R.q[1] * q[1] + R.q[2] * q[2] + R.q[3] * q[3]) > 0.9995;
+      if (!b.held && !carried && len(b.v) < 0.25 && stays) { b.still += dt; if (b.still > 0.5) { b.asleep = true; b.v = [0, 0, 0]; b.w = [0, 0, 0]; } }
+      else { b.still = 0; b.rest = { p: [...b.p], q: [...q] }; }
       if (b.p[1] < -60) { b.p = [...b.home]; b.v = [0, 0, 0]; b.w = [0, 0, 0]; b.q = [0, 0, 0, 1]; }
       b.touching = null;
     }
@@ -244,7 +255,7 @@ export class World {
   }
   _apply(c, j) {
     c.a.impulse(j, c.rA);
-    if (c.b) { if (c.b.asleep) c.b.wake(); c.b.impulse(mul(j, -1), c.rB); }
+    if (c.b) { if (c.b.asleep) { if (len(j) * c.b.inv < 0.15) return; c.b.wake(); } c.b.impulse(mul(j, -1), c.rB); }
     if (c.m) c.m.J = sub(c.m.J, j);
   }
 
