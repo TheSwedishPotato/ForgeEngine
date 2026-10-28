@@ -11,7 +11,7 @@ import { makeMaterials, Labels } from './render/mats.js';
 import { BuildingGL } from './render/buildingGL.js';
 import { ElevatorGL } from './render/elevatorGL.js';
 import { makeProps } from './world/props.js';
-import { makePlayCorner } from './world/playcorner.js';
+import { makeWeights } from './world/weights.js';
 import { Player } from './player.js';
 import { Sound } from './audio/sound.js';
 import { ToolBelt, mend } from './world/tools.js';
@@ -33,7 +33,7 @@ export class Game {
     this.buildingGL = new BuildingGL(ctx);
     this.elevatorGL = new ElevatorGL(ctx);
     this.props = makeProps(this.world, this.M, this.stage.scene);
-    makePlayCorner(this.world, this.stage.scene, this.props);
+    makeWeights(this.world, this.stage.scene, this.props, this.M);
     this.buildingGL.onRepair = () => this.repair();
     // what blocks your hand from a button behind it: the door panels
     this.occluders = [...this.buildingGL.landing.slice(1).flatMap((l) => l.panels), ...this.elevatorGL.doorPanels.flatMap((g) => g.children)];

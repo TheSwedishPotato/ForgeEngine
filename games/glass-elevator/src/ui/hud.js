@@ -36,7 +36,7 @@ export class HUD {
       <p>Press a hall button, step in, choose a floor. Everything is worked by its real mechanism: the machine room on the roof (stairs from floor 30) has the main switch, emergency electrical operation, the governor test, the brake release lever and a panel of failures to try the safety gear with; the car roof has the inspection station (reach it from a landing with the triangle key, as engineers do).</p>`);
     this.help.style.display = 'none';
     this.goto = el('goto', `<h3>Go to</h3>
-      <button data-go="lobby">Lobby (floor 1)</button><button data-go="play">Play corner</button><button data-go="car">In the car</button><button data-go="roof">Car roof</button>
+      <button data-go="lobby">Lobby (floor 1)</button><button data-go="weights">Test weights</button><button data-go="car">In the car</button><button data-go="roof">Car roof</button>
       <div><input type="number" min="1" max="${FLOORS}" value="15" id="gofloor"/><button data-go="floor">Floor lobby</button></div>
       <button data-go="mr">Machine room</button><button data-go="pit">Pit</button><button data-go="plaza">Plaza</button><button data-go="out">Watch from outside</button>`);
     this.goto.style.display = 'none';
@@ -57,7 +57,7 @@ export class HUD {
     const P = this.game.player, h = this.game.sim.hoist;
     const n = Math.max(1, Math.min(FLOORS, Number(document.getElementById('gofloor')?.value) || 1));
     if (where === 'lobby') P.teleport([0.6, 0, 12.4], Math.PI / 2);
-    if (where === 'play') P.teleport([12.6, 0, 7.4], Math.PI / 2);
+    if (where === 'weights') P.teleport([11.2, 0, 7.2], Math.PI / 2);
     if (where === 'car') P.teleport([0, h.yc + 0.01, CAR.zc + 0.2], -Math.PI / 2);
     if (where === 'roof') P.teleport([-0.3, h.yc + ROOF + 0.01, 16.4], -Math.PI / 2);
     if (where === 'floor') P.teleport([0.6, floorY(n), 12.6], Math.PI / 2);
