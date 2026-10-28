@@ -33,6 +33,9 @@ export class Sim {
   say(text, who = null) { this.log.push({ t: this.clock, text, who }); if (this.log.length > 200) this.log.shift(); }
   sfx(name, opts = {}) { this.sounds.push({ name, ...opts }); if (this.sounds.length > 64) this.sounds.shift(); }
 
+  /** An earthquake: dur seconds of ground motion, amp its peak acceleration (m/s²). */
+  quake(dur = 14, amp = 2.0) { this.shake = { t: 0, dur, amp, a: [0, 0, 0] }; this.say(`Earthquake: the building shakes (peak ground acceleration ${amp.toFixed(1)} m/s²).`, 'Simulator'); }
+
   /** Advances by dt seconds of elevator time. */
   advance(dt) {
     this.acc += dt;
@@ -41,6 +44,14 @@ export class Sim {
     while (this.acc >= this.dt) {
       if (++n > 2000) { this.acc = 0; break; }       // a long hitch: let the rest go
       this.acc -= this.dt;
+      if (this.shake) {
+        // an earthquake: the ground's acceleration (two horizontal components, ramped in and out)
+        const S = this.shake, t = (S.t += this.dt), env = Math.min(1, t / 2, (S.dur - t) / 3);
+        S.a = [S.amp * env * Math.sin(2 * Math.PI * 1.7 * t) + 0.5 * S.amp * env * Math.sin(2 * Math.PI * 4.3 * t + 1), 0, S.amp * env * Math.sin(2 * Math.PI * 2.3 * t + 0.4)];
+        if (t > 0.8) this.ctl.inputs.seismic = true;          // the sensor's threshold is passed
+        if (this.world) this.world.shake = S.a;
+        if (t >= S.dur) { this.shake = null; if (this.world) this.world.shake = null; this.ctl.inputs.seismic = false; }
+      }
       this.ctl.step(this.dt);
       this.doors.step(this.dt, h.yc);
       h.step(this.dt);

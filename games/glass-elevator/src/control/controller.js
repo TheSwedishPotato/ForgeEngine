@@ -47,12 +47,13 @@ export class Controller {
       open: false, close: false, alarm: false, cancel: false,
       insp: false, inspUp: false, inspDown: false, inspCommon: false,
       eeo: false, eeoUp: false, eeoDown: false, eeoRun: false,
-      fire1: 'off', fire2: 'off', independent: false, parking: true, lwBypass: false,
+      fire1: 'off', fire2: 'off', independent: false, parking: true, lwBypass: false, seismic: false,
     };
     this.faults = { ucm: false, brake: false };
     this.fire = { latched: false, recalled: false };
     this.loadKg = 0;
     this.time = 0; this.idleT = 0; this.alarmT = 0; this.stillT = 0;
+    this.quake = false; this.standby = false; this.call = null;
     this.bridge = false;
     this.ard = { t: 0, state: 'off' };
     this.overload = false; this.fullLoad = false;
@@ -60,7 +61,7 @@ export class Controller {
     this.chainList = [];
   }
 
-  say(text) { this.sim.say(text, 'Controller'); }
+  say(text, who = 'Controller') { this.sim.say(text, who); }
   sfx(name, opts) { this.sim.sfx(name, opts); }
   get h() { return this.sim.hoist; }
   get d() { return this.sim.doors; }
@@ -98,6 +99,7 @@ export class Controller {
     if (!I.mains) return this.ard.state === 'run' || this.ard.state === 'open' ? 'ard' : 'power';
     if (I.insp) return 'inspection';
     if (I.eeo) return 'eeo';
+    if (this.quake) return 'seismic';
     if (this.fire.recalled && I.fire2 !== 'off') return 'fire2';
     if (this.fire.latched) return 'fire1';
     if (I.independent) return 'independent';
@@ -136,6 +138,8 @@ export class Controller {
     const ol = !I.lwBypass && this.loadKg > SPEC.ratedLoad * SPEC.overload;   // the technician's bypass switch ignores it
     if (ol !== this.overload) { this.overload = ol; if (ol) this.say(`Overload: ${Math.round(this.loadKg)} kg in a ${SPEC.ratedLoad} kg car. The doors stay open.`); }
     this.fullLoad = this.loadKg > SPEC.ratedLoad * SPEC.fullLoad;
+    // the seismic sensor (EN 81-77): latched until a technician resets it
+    if (I.seismic && !this.quake) { this.quake = true; this._cancelAll(); this.say('Seismic sensor tripped: seismic operation. The car stops at the nearest floor, opens its doors and stays out of service until a technician resets it.'); }
     this.chainList = this._chain();
     const open = this.chainList.find((c) => !c[2]);
     this.chainOK = !open;
@@ -170,6 +174,7 @@ export class Controller {
       if (mode === 'normal' || mode === 'independent' || mode === 'fire1' || mode === 'fire2') this._service(dt, mode);
       else if (mode === 'inspection' || mode === 'eeo') this._jogControl(mode);
       else if (mode === 'power' || mode === 'ard') this._powerFail(dt);
+      else if (mode === 'seismic') this._seismic();
     } else if ((mode === 'inspection' || mode === 'eeo') && this.pending?.kind === 'jog') this._jogControl(mode);
     // ---- doors --------------------------------------------------------------------------------
     this._doors(dt, mode);
@@ -179,12 +184,21 @@ export class Controller {
     if (f !== this.floor) { this.floor = f; }
     this._display(mode);
     // the alarm button, held a second
-    if (I.alarm) { this.alarmT += dt; if (this.alarmT > 1 && !this._alarmed) { this._alarmed = true; this.say('Alarm: connected to the service centre (two-way voice, battery backed). Help is on its way.'); this.sfx('alarm'); } } else { this.alarmT = 0; this._alarmed = false; }
+    // energy saving at rest: after five idle minutes the car light and fan go off; any call wakes them
+    const sb = mode === 'normal' && this.phase === 'idle' && this.door === 'closed' && this.idleT > 300;
+    if (sb !== this.standby) { this.standby = sb; if (sb) this.say('Standby: car lighting and fan off after 5 idle minutes (energy saving).'); }
+    // the two-way call (EN 81-28): the alarm is transmitted, then the service centre speaks
+    if (this.call) {
+      this.call.t += dt;
+      if (this.call.t > 6 && !this.call.voice) { this.call.voice = true; this.say(`Hello, this is the lift service centre. We have your alarm from car 1, ${this._where()}${this.faulted || this.quake ? ', and we can see it is out of service' : ''}. Stay calm: a technician is on the way, about 25 minutes. The car is safe.`, 'Service centre'); }
+      if (this.call.t > 60) this.call = null;
+    }
+    if (I.alarm) { this.alarmT += dt; if (this.alarmT > 1 && !this._alarmed) { this._alarmed = true; this.say('Alarm transmitted to the service centre (yellow bell lit). Waiting for voice connection...'); this.sfx('alarm'); if (!this.call) this.call = { t: 0, voice: false }; } } else { this.alarmT = 0; this._alarmed = false; }
   }
 
   _modeChange(from, to) {
     if (from === undefined) return;
-    const names = { normal: 'automatic operation', inspection: 'INSPECTION from the car roof', eeo: 'EMERGENCY ELECTRICAL OPERATION from the machine room', fire1: 'FIREFIGHTERS\' SERVICE Phase I: recall to the lobby', fire2: 'FIREFIGHTERS\' SERVICE Phase II: in-car operation', independent: 'INDEPENDENT SERVICE', power: 'mains supply lost: brakes set, emergency lighting', ard: 'AUTOMATIC RESCUE on the battery', off: 'main switch OFF' };
+    const names = { normal: 'automatic operation', inspection: 'INSPECTION from the car roof', eeo: 'EMERGENCY ELECTRICAL OPERATION from the machine room', fire1: 'FIREFIGHTERS\' SERVICE Phase I: recall to the lobby', fire2: 'FIREFIGHTERS\' SERVICE Phase II: in-car operation', independent: 'INDEPENDENT SERVICE', power: 'mains supply lost: brakes set, emergency lighting', ard: 'AUTOMATIC RESCUE on the battery', seismic: 'SEISMIC OPERATION (EN 81-77): out of service', off: 'main switch OFF' };
     this.say(`Mode: ${names[to] ?? to}.`);
     if (to !== 'normal' && to !== 'independent') this._cancelAll(to !== 'fire2');
     if (to === 'fire1' && from !== 'fire2') this.fire.recalled = false;
@@ -257,6 +271,11 @@ export class Controller {
           const reach = dr.s + dr.stopping + 0.05;
           for (let n = 1; n <= FLOORS; n++) if (this._encFor(n) >= reach) { if (n < this.target) { this.target = n; P.floor = n; dr.retarget(this._encFor(n)); } break; }
         }
+      } else if (P.kind === 'trip' && this.mode === 'seismic' && !P.quake) {
+        // the nearest floor it can still stop at, ahead
+        P.quake = true;
+        const dir = Math.sign(this._encFor(this.target) - dr.s) || this.dir, reach = dr.s + dir * (dr.stopping + 0.05);
+        for (let n = dir > 0 ? 1 : FLOORS; n >= 1 && n <= FLOORS; n += dir) if (dir * (this._encFor(n) - reach) >= 0) { this.target = n; P.floor = n; dr.retarget(this._encFor(n)); break; }
       } else if (P.kind === 'trip' && (this.mode === 'normal' || this.mode === 'independent' || this.mode === 'fire2')) {
         const dir = Math.sign(this._encFor(this.target) - dr.s) || this.dir;
         const reach = dr.s + dir * (dr.stopping + 0.05);
@@ -357,6 +376,16 @@ export class Controller {
     for (let n = f + dir; n >= 1 && n <= FLOORS; n += dir) if (this._shouldStop(n, dir)) { tgt = n; break; }
     if (!tgt) for (let n = dir > 0 ? FLOORS : 1; n !== f; n -= dir) if (c.car[n] || c.up[n] || c.down[n]) { tgt = n; break; }
     if (tgt) this._trip(tgt, 'trip');
+  }
+
+  /** Seismic operation at rest: level at a floor with the doors open, or creep to the nearest one. */
+  _seismic() {
+    const h = this.h, here = this._atFloor();
+    if (here && Math.abs(h.yc - floorY(here)) < 0.03) { if (this.door === 'closed') this._open(); this.dwell = 1e6; return; }
+    if (this.chainOK && !this.faulted && this.door === 'closed') {
+      const n = nearestFloor(h.yc); this.dir = Math.sign(floorY(n) - h.yc); this.target = n;
+      this._start({ kind: 'trip', floor: n, vmax: 0.5, quake: true });
+    }
   }
 
   _trip(n, why) {
@@ -509,5 +538,6 @@ export class Controller {
     if (Math.abs(this.h.vc) > 0.01) return;
     if (this.faults.ucm || this.faults.brake) this.say('Faults reset by the technician.');
     this.faults.ucm = false; this.faults.brake = false;
+    if (this.quake && !this.inputs.seismic) { this.quake = false; this.dwell = Math.min(this.dwell, 2); this.say('Seismic operation reset by the technician: back in service.'); }
   }
 }

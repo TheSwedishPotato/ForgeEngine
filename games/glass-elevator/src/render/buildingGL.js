@@ -411,6 +411,7 @@ export class BuildingGL {
     f('runaway', 'Failure: the drive\'s encoder misreads (the drive runs away)', -2.25, 1.5, 'switch', { get: () => sim.drive.fault === 'runaway', set: (v) => (sim.drive.fault = v ? 'runaway' : null), text: 'DRV' });
     f('curtainFail', 'Failure: the light curtain is blind', -2.55, 1.5, 'switch', { get: () => sim.doors.curtainFail, set: (v) => (sim.doors.curtainFail = v), text: 'LC' });
     f('cutRopes', 'Failure: all eight hoist ropes part (the safety gear must hold the car)', -2.85, 1.5, 'button', { press: () => { if (!h.ropesCut) { h.ropesCut = true; sim.say('All eight hoist ropes have parted.', 'Simulator'); sim.sfx('snap'); } }, text: 'CUT', red: true });
+    f('quake', 'Simulate an earthquake (the seismic sensor trips: EN 81-77 seismic operation)', -1.75, 1.15, 'button', { press: () => { if (!sim.shake) sim.quake(); }, text: 'EQ' });
     f('repair', 'Repair everything (ropes, brakes, drive, governor, safety gear, faults)', -2.2, 1.15, 'button', { press: () => this.onRepair?.(), text: 'FIX' });
   }
 

@@ -362,7 +362,7 @@ export class ElevatorGL {
     this._span(this.cableFix, 0.75, low, yFix, FACADE + 0.08);
     this.cableLoop.position.set(0.75, low, FACADE + 0.2);
     // the car's lamps: the downlights, and their glints in the glass
-    const lit = ctl.powered && !ctl.inputs.brkLight;
+    const lit = ctl.powered && !ctl.inputs.brkLight && !ctl.standby;
     this.M.downlight.emissiveIntensity = lit ? 6 : 0.6;
     this.glass.interior = lit ? [0.03, 0.028, 0.025] : [0.004, 0.004, 0.004];
     this.glass.lamp = lit ? [0.6, 0.55, 0.5] : [0, 0, 0];

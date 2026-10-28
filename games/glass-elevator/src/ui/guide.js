@@ -92,6 +92,7 @@ export class Guide {
       if (!I.eeo) return { problem: 'The car is beyond a terminal floor (final limit or a buffer).', step: 'Switch on emergency electrical operation on the controller cabinet to drive it back.', pos: mr('eeo') };
       return { problem: 'Car beyond a terminal floor.', step: `Press and hold ${h.yc > 50 ? 'DOWN' : 'UP'} on the cabinet (RUN goes in with it) until the car is back at the ${h.yc > 50 ? 'top' : 'bottom'} floor.`, pos: mr(h.yc > 50 ? 'eeoDown' : 'eeoUp') };
     }
+    if (c.quake) return { problem: 'Seismic operation after an earthquake (E450): the car waits at a floor with its doors open.', step: s.shake ? 'Wait for the shaking to stop.' : 'Check the hoistway, rails and counterweight, then reset: the FLT button on the controller cabinet.', pos: mr('faultReset') };
     if (c.faults.ucm || c.faults.brake) return { problem: `Lockout fault: ${c.faults.ucm ? 'unintended car movement (E301)' : 'brake lift (E601)'}.`, step: 'Clear it: the FLT (fault reset) button on the controller cabinet, or the laptop\'s "Clear log + reset faults".', pos: mr('faultReset') };
     const br = g.controls.list.find((k) => k.broken);
     if (br) return { problem: `Smashed: ${br.label}.`, step: 'Replace the broken parts: the spanner set on it.', ...tool('spanner', 'Spanner set'), pos: br.meshes[0].getWorldPosition(new Vector3()) };

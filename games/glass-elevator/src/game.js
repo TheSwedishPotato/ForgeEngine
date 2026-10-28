@@ -129,6 +129,7 @@ export class Game {
     this.buildingGL.update();
     this.controls.update();
     this.player.update(dt, this.stage.camera);
+    if (this.sim.shake) { const a = this.sim.shake.a, c = this.stage.camera.position; c.x += a[0] * 0.01; c.z += a[2] * 0.01; }   // the building shakes under you
     this._lamps();
     this.stage.setTime(this.sim.utcMs);
     this.stage.render(dt);

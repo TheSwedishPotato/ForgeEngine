@@ -98,10 +98,12 @@ export class World {
       if (!m.active || (Math.abs(m.v[0]) + Math.abs(m.v[1]) + Math.abs(m.v[2]) < 1e-4)) continue;
       for (const b of B) if (b.asleep && overlap(b.aabb(), m.box, 0.06)) b.wake();
     }
-    // forces: gravity, your hand
+    // forces: gravity, your hand, and in an earthquake the ground's acceleration (felt as its opposite)
+    if (this.shake) for (const b of B) if (b.asleep) b.wake();
     for (const b of B) {
       if (b.asleep) continue;
       b.v[1] += this.g * dt;
+      if (this.shake && !b.held) { b.v[0] -= this.shake[0] * dt; b.v[2] -= this.shake[2] * dt; }
       const k = Math.exp(-0.05 * dt), kw = Math.exp(-(b.held ? 6 : 0.3) * dt);
       b.v = mul(b.v, k); b.w = mul(b.w, kw);
     }
