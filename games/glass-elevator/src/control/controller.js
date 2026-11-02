@@ -47,7 +47,7 @@ export class Controller {
       open: false, close: false, alarm: false, cancel: false,
       insp: false, inspUp: false, inspDown: false, inspCommon: false,
       eeo: false, eeoUp: false, eeoDown: false, eeoRun: false,
-      fire1: 'off', fire2: 'off', independent: false, parking: true, lwBypass: false, seismic: false,
+      fire1: 'off', fire2: 'off', independent: false, parking: true, lwBypass: false, windBypass: false, seismic: false,
     };
     this.faults = { ucm: false, brake: false };
     this.fire = { latched: false, recalled: false };
@@ -148,7 +148,9 @@ export class Controller {
     // strong-wind operation: the tower's sway (or the wind at the top) past its limits slows the car, then parks it
     const A = this.sim.atmos;
     if (A) {
-      const vt = A.mean(A.H), lvl = vt > 35 || A.peak > 25 ? 2 : vt > 25 || A.peak > 10 ? 1 : 0;
+      // (the technician's WIND bypass switch overrides it: the car runs at full speed whatever the sway)
+      const vt = A.mean(A.H), lvl = I.windBypass ? 0 : vt > 35 || A.peak > 25 ? 2 : vt > 25 || A.peak > 10 ? 1 : 0;
+      if (I.windBypass && this.windOp) { this.windOp = 0; this.calmT = 0; }
       if (lvl > (this.windOp ?? 0)) { this.windOp = lvl; this.calmT = 0; this.say(lvl === 2 ? `Strong-wind operation: service suspended, the car parks at a floor (wind ${vt.toFixed(0)} m/s at the top, sway ${A.peak.toFixed(0)} mg: the ropes would sway).` : `Strong-wind operation: speed limited to ${SPEC.ratedSpeed / 2} m/s (wind ${vt.toFixed(0)} m/s at the top, sway ${A.peak.toFixed(0)} mg).`); }
       else if (lvl < (this.windOp ?? 0)) { this.calmT = (this.calmT ?? 0) + dt; if (this.calmT > 300) { this.windOp = lvl; this.say(lvl ? 'Wind easing: back to reduced speed.' : 'Wind has dropped: normal service.'); } }
       else this.calmT = 0;
