@@ -14,33 +14,34 @@ const pick = (arr, r) => arr[Math.floor(r() * arr.length) % arr.length];
 const pads = (A, k) => ['padI', 'padO'].map((p) => A.part(p + k)).filter(Boolean);
 const axleCorners = (ax) => (ax === 'F' ? ['FL', 'FR'] : ['RL', 'RR']);
 const ROAD = ['volvo240', 'golf7'];
+let R = Math.random;              // the random numbers of the fault being applied (applyFault sets it)
 
 export const FAULTS = [
   // ---- brakes
   { id: 'pads_worn', title: 'Brake pads worn to the wear limit', sys: 'brake', cars: 'all', where: 'axle', lay: 'a squeal from the brakes when slowing down gently',
-    apply(A, ax) { for (const k of axleCorners(ax)) for (const p of pads(A, k)) p.cond.mm = 2.0 + Math.random() * 0.6; },
+    apply(A, ax) { for (const k of axleCorners(ax)) for (const p of pads(A, k)) p.cond.mm = 2.0 + R() * 0.6; },
     present: (A, ax) => axleCorners(ax).some((k) => pads(A, k).some((p) => p.cond.mm < 3)) },
   { id: 'pads_metal', title: 'Pads worn through to the backing plate, disc scored', sys: 'brake', cars: ROAD, where: 'corner', lay: 'a horrible grinding noise when braking that started last week',
     apply(A, k) { const ax = k[0]; for (const c of axleCorners(ax)) for (const p of pads(A, c)) p.cond.mm = c === k ? 0.4 : 2.5; const d = A.part('disc' + k).cond; d.t = d.min - 0.6; d.runout = 0.05; d.scored = true; },
     present: (A, k) => pads(A, k).some((p) => p.cond.mm < 3) || A.part('disc' + k).cond.t < A.part('disc' + k).cond.min },
   { id: 'disc_warped', title: 'Brake discs with excessive runout (thickness variation)', sys: 'brake', cars: ROAD, where: 'axle', lay: 'the steering wheel shakes when braking on the motorway',
-    apply(A, ax) { for (const k of axleCorners(ax)) A.part('disc' + k).cond.runout = 0.1 + Math.random() * 0.05; },
+    apply(A, ax) { for (const k of axleCorners(ax)) A.part('disc' + k).cond.runout = 0.1 + R() * 0.05; },
     present: (A, ax) => axleCorners(ax).some((k) => A.part('disc' + k).cond.runout > 0.06) },
   { id: 'disc_worn', title: 'Brake discs worn below minimum thickness', sys: 'brake', cars: 'all', where: 'axle', lay: 'nothing much, but the inspection (besiktning) remark says the discs are worn',
-    apply(A, ax) { for (const k of axleCorners(ax)) { const d = A.part('disc' + k).cond; d.t = d.min - 0.3 - Math.random() * 0.5; d.lip = true; } },
+    apply(A, ax) { for (const k of axleCorners(ax)) { const d = A.part('disc' + k).cond; d.t = d.min - 0.3 - R() * 0.5; d.lip = true; } },
     present: (A, ax) => axleCorners(ax).some((k) => A.part('disc' + k).cond.t < A.part('disc' + k).cond.min) },
   { id: 'caliper_seized', title: 'Brake caliper piston (or guide pins) seized', sys: 'brake', cars: ROAD, where: 'corner', lay: 'the car pulls to one side when braking, and one wheel smells hot after driving',
     apply(A, k) { A.part('caliper' + k).cond.seized = true; const [i, o] = pads(A, k); if (i) i.cond.mm = 2.8; if (o) o.cond.mm = 7; },
     present: (A, k) => A.part('caliper' + k).cond.seized },
   { id: 'brake_fluid_old', title: 'Brake fluid with too much water in it (over 3 %)', sys: 'brake', cars: ROAD, where: null, lay: 'it is due a brake fluid change, the service book says',
-    apply(A) { A.part('reservoir').cond.water = 3.5 + Math.random() * 2; }, present: (A) => A.part('reservoir').cond.water > 3 },
+    apply(A) { A.part('reservoir').cond.water = 3.5 + R() * 2; }, present: (A) => A.part('reservoir').cond.water > 3 },
   // ---- tyres and wheels
   { id: 'tyre_nail', title: 'A nail in the tread: slow puncture', sys: 'wheel', cars: ROAD, where: 'corner', lay: 'one tyre keeps going flat; I pump it up every few days',
     apply(A, k) { const c = A.part('wheel' + k).cond; c.nail = true; c.leak = 0.12; c.bar *= 0.72; }, present: (A, k) => A.part('wheel' + k).cond.nail || A.part('wheel' + k).cond.leak > 0 },
   { id: 'tyre_worn', title: 'Tyres below the legal tread depth', sys: 'wheel', cars: ROAD, where: 'axle', lay: 'the car slides about in the wet',
-    apply(A, ax) { for (const k of axleCorners(ax)) A.part('wheel' + k).cond.tread = 1.2 + Math.random() * 0.6; }, present: (A, ax) => axleCorners(ax).some((k) => A.part('wheel' + k).cond.tread < 1.6) },
+    apply(A, ax) { for (const k of axleCorners(ax)) A.part('wheel' + k).cond.tread = 0.9 + R() * 0.6; }, present: (A, ax) => axleCorners(ax).some((k) => A.part('wheel' + k).cond.tread < 1.6) },
   { id: 'wheel_imbalance', title: 'Wheel out of balance (a weight fell off)', sys: 'wheel', cars: ROAD, where: 'corner', lay: 'a vibration around 100 km/h',
-    apply(A, k) { A.part('wheel' + k).cond.imbalance = 35 + Math.random() * 30; }, present: (A, k) => A.part('wheel' + k).cond.imbalance > 15 },
+    apply(A, k) { A.part('wheel' + k).cond.imbalance = 35 + R() * 30; }, present: (A, k) => A.part('wheel' + k).cond.imbalance > 15 },
   { id: 'lug_loose', title: 'Wheel nuts not done up after the last tyre change', sys: 'wheel', cars: ROAD, where: 'corner', lay: 'a clicking from one wheel since the tyres were changed at another place',
     apply(A, k) { const fs = A.part('wheel' + k).fasteners.map((f) => A.fast(f)); for (const f of fs.slice(0, 3)) { f.clamp = f.spec * 0.15; f.seize = 0; } },
     present: (A, k) => A.part('wheel' + k).fasteners.map((f) => A.fast(f)).some((f) => f.clamp < f.spec * 0.85) },
@@ -52,7 +53,7 @@ export const FAULTS = [
   { id: 'distcap_cracked', title: 'Distributor cap cracked (tracking)', sys: 'ignition', cars: ['volvo240'], where: null, lay: 'it misfires, worse on damp mornings',
     apply(A) { A.part('distcap').cond.cracked = true; }, present: (A) => A.part('distcap').cond.cracked },
   { id: 'plugs_worn', title: 'Spark plugs worn out (gaps opened up)', sys: 'ignition', cars: ROAD, where: null, lay: 'it hesitates pulling away and uses more fuel than it did',
-    apply(A) { for (const p of A.byKind('plug')) { p.cond.gap = p.cond.spec + 0.55 + Math.random() * 0.2; p.cond.wear = 1; } }, present: (A) => A.byKind('plug').some((p) => p.cond.gap > p.cond.spec + 0.3) },
+    apply(A) { for (const p of A.byKind('plug')) { p.cond.gap = p.cond.spec + 0.55 + R() * 0.2; p.cond.wear = 1; } }, present: (A) => A.byKind('plug').some((p) => p.cond.gap > p.cond.spec + 0.3) },
   { id: 'plug_fouled', title: 'One spark plug oil-fouled', sys: 'ignition', cars: ROAD, where: 'cyl', lay: 'a misfire that comes and goes',
     apply(A, c) { A.part('plug' + c).cond.fouled = true; }, present: (A, c) => A.part('plug' + c).cond.fouled },
   { id: 'vacuum_leak', title: 'Split vacuum/breather hose (unmetered air)', sys: 'air', cars: ROAD, where: null, lay: 'a hissing under the bonnet and the idle goes up and down',
@@ -89,9 +90,9 @@ export const FAULTS = [
     apply(A) { for (const w of A.byKind('wiper')) w.cond.wear = 0.95; }, present: (A) => A.byKind('wiper').some((w) => w.cond.wear > 0.8) },
   // ---- suspension and steering
   { id: 'sway_link', title: 'Anti-roll bar link ball joint worn', sys: 'susp', cars: ROAD, where: 'corner', front: true, lay: 'a clunk from the front over speed bumps',
-    apply(A, k) { A.part('link' + k).cond.play = 1.2 + Math.random(); }, present: (A, k) => A.part('link' + k).cond.play > 0.5 },
+    apply(A, k) { A.part('link' + k).cond.play = 1.2 + R(); }, present: (A, k) => A.part('link' + k).cond.play > 0.5 },
   { id: 'balljoint', title: 'Lower ball joint worn', sys: 'susp', cars: ['golf7'], where: 'corner', front: true, lay: 'a knocking from the front and the car wanders on the motorway',
-    apply(A, k) { A.part('balljoint' + k).cond.play = 1.5 + Math.random(); }, present: (A, k) => A.part('balljoint' + k).cond.play > 0.5 },
+    apply(A, k) { A.part('balljoint' + k).cond.play = 1.5 + R(); }, present: (A, k) => A.part('balljoint' + k).cond.play > 0.5 },
   { id: 'wheel_bearing', title: 'Wheel bearing worn (rough, rumbling)', sys: 'susp', cars: ['golf7'], where: 'corner', lay: 'a humming noise that gets louder with speed, like driving on a rough road',
     apply(A, k) { const c = A.part('hub' + k).cond; c.rough = 0.8; c.play = 0.15; }, present: (A, k) => A.part('hub' + k).cond.rough > 0.3 },
   { id: 'cv_boot', title: 'Outer CV boot torn', sys: 'drive', cars: ['golf7'], where: 'corner', front: true, lay: 'the inspection found a torn rubber boot at the front, they said',
@@ -107,13 +108,13 @@ export const FAULTS = [
   { id: 'f1_wing', title: 'Front wing damaged (endplate and flaps)', sys: 'aero', cars: ['f1_2026'], where: null, lay: 'the front wing touched a kerb at the demo run',
     apply(A) { A.part('nose').cond.damage = 1; }, present: (A) => A.part('nose').cond.damage > 0.2 },
   { id: 'f1_pads', title: 'Carbon brake pads worn', sys: 'brake', cars: ['f1_2026'], where: 'axle', lay: 'the driver says the brakes feel long',
-    apply(A, ax) { for (const k of axleCorners(ax)) for (const p of pads(A, k)) p.cond.mm = 13 + Math.random() * 3; }, present: (A, ax) => axleCorners(ax).some((k) => pads(A, k).some((p) => p.cond.mm < 20)) },
+    apply(A, ax) { for (const k of axleCorners(ax)) for (const p of pads(A, k)) p.cond.mm = 13 + R() * 3; }, present: (A, ax) => axleCorners(ax).some((k) => pads(A, k).some((p) => p.cond.mm < 20)) },
 ];
 
 /** Work the customer asks for (not a failure). present: still to be done. */
 export const JOBS = [
   { id: 'oil_service', title: 'Oil and oil filter change', cars: ROAD, lay: 'the service light says it is time for an oil change',
-    apply(A) { A.part('engine').cond.oilAge = 14000 + Math.random() * 6000; A.part('oilfilter').cond.age = 15000; }, present: (A) => A.part('engine').cond.oilAge > 2000 || A.part('oilfilter').cond.age > 1000 },
+    apply(A) { A.part('engine').cond.oilAge = 14000 + R() * 6000; A.part('oilfilter').cond.age = 15000; }, present: (A) => A.part('engine').cond.oilAge > 2000 || A.part('oilfilter').cond.age > 1000 },
   { id: 'winter_tyres', title: 'Change to the winter tyres (from the tyre hotel)', cars: ROAD, lay: 'it is November: I need my winter tyres on (they are stored with you)',
     apply() {}, present: (A) => ['FL', 'FR', 'RL', 'RR'].some((k) => A.part('wheel' + k).cond.season !== 'winter') },
   { id: 'wiper_service', title: 'New wiper blades', cars: ROAD, lay: 'new wiper blades before the winter please',
@@ -145,7 +146,9 @@ export function applyFault(A, id, where, r = Math.random) {
   let w = where ?? chooseWhere(f, A, r);
   // a where that does not exist on this car (a fifth cylinder, a rear anti-roll bar link) is chosen again
   if ((f.where === 'cyl' && !(w >= 1 && w <= A.spec.engine.cyl)) || (f.front && String(w)[0] !== 'F')) w = chooseWhere(f, A, r);
+  R = r;
   const extra = f.apply(A, w, r) ?? null;
+  R = Math.random;
   return { id, where: w, extra, title: f.title, job: JOBS.includes(f) };
 }
 

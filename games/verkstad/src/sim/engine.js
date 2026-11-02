@@ -48,6 +48,9 @@ export class Engine {
     this.fuelUsed = 0;
     this.stalls = 0;
     this.lastPower = 0;
+    // its own random numbers (whether a weak spark jumps), seeded, so a run can be repeated
+    let seed = 0x9e3779b9;
+    this.rand = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296; };
   }
 
   get rpm() { return (this.omega * 60) / TAU; }
@@ -130,7 +133,7 @@ export class Engine {
         const comp = io.comp?.[c] ?? 1;
         const cranking = rpm < 300;
         const limiter = rpm > e.redline;                                 // fuel cut at the rev limit
-        const fires = sparkP > 0 && Math.random() < sparkP && mixOK && fuelC > 0.35 && comp > 0.45 && this.omega > 8 && this.sync > 1.5 && !limiter && (!e.mguk || io.f1?.warm);
+        const fires = sparkP > 0 && this.rand() < sparkP && mixOK && fuelC > 0.35 && comp > 0.45 && this.omega > 8 && this.sync > 1.5 && !limiter && (!e.mguk || io.f1?.warm);
         C.fired = fires;
         C.strength = fires ? burn * Math.min(1, fuelC / 0.9) * Math.min(1, comp) * (cranking ? 0.8 : 1) : 0;
         C.w0 = this.omega; C.tPow = this.time;
