@@ -29,7 +29,7 @@ export class Atmos {
     const f1 = 0.1; this.w = 2 * Math.PI * f1; this.zeta = 0.015;
     this.mu = 0.02; this.wd = this.w / (1 + this.mu); this.zd = Math.sqrt((3 * this.mu) / (8 * (1 + this.mu) ** 3));
     this.x = [0, 0]; this.v = [0, 0]; this.u = [0, 0]; this.ud = [0, 0];
-    this.phase = 0; this.a = [0, 0]; this.peak = 0; this.t = 0;
+    this.phase = 0; this.a = [0, 0]; this.top = [0, 0, 0]; this.peak = 0; this.t = 0;
     this.ca = 4.1e-4; this.cc = 0.35 * 4.1e-4;            // tower top displacement per (m/s)² along and across
     this.cab = null;
   }
