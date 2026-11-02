@@ -20,13 +20,13 @@ html, body { margin: 0; height: 100%; background: #0b0a0a; color: #f3eeea; font-
 .st-text { font-size: 22px; line-height: 1.32; }
 .st-input { position: absolute; left: 5%; right: 5%; bottom: 3.5%; background: rgba(30,25,25,.94); border-radius: 18px; padding: 16px 16px 14px; }
 .st-field { display: flex; align-items: flex-start; gap: 10px; }
-.st-field textarea { flex: 1; background: transparent; border: 0; color: #f3eeea; font: 20px/1.35 inherit; resize: none; outline: none; min-height: 54px; }
+.st-field textarea { flex: 1; background: transparent; border: 0; color: #f3eeea; font-family: inherit; font-size: 20px; line-height: 1.35; resize: none; outline: none; min-height: 54px; }
 .st-field textarea::placeholder { color: #9b928c; }
 .st-send { background: transparent; border: 0; color: #9b928c; font-size: 26px; cursor: pointer; padding: 6px; }
 .st-send:not(:disabled):hover { color: #fff; }
 .st-chips { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-top: 6px; }
 .st-chips::-webkit-scrollbar { display: none; }
-.st-chip { flex: none; border: 1px solid rgba(243,238,234,.45); background: rgba(70,58,56,.55); color: #e9e2dc; border-radius: 22px; padding: 11px 18px; font: 16px inherit; cursor: pointer; white-space: nowrap; max-width: 85%; overflow: hidden; text-overflow: ellipsis; }
+.st-chip { flex: none; border: 1px solid rgba(243,238,234,.45); background: rgba(70,58,56,.55); color: #e9e2dc; border-radius: 22px; padding: 11px 18px; font-family: inherit; font-size: 16px; cursor: pointer; white-space: nowrap; max-width: 85%; overflow: hidden; text-overflow: ellipsis; }
 .st-chip:hover { background: rgba(120,100,96,.6); }
 .st-chip.danger { border-color: #ff8a80; }
 .st-chip.qte { position: relative; border-color: #8fd1ff; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; min-width: 60%; }
@@ -47,7 +47,7 @@ html, body { margin: 0; height: 100%; background: #0b0a0a; color: #f3eeea; font-
 #start h1 { font-weight: 300; letter-spacing: .18em; font-size: clamp(30px, 6vw, 56px); margin: 8px 0; }
 #start small { letter-spacing: .5em; color: #8fd1ff; font-size: 12px; }
 #start p { color: #bdb5ae; letter-spacing: .1em; }
-#go { background: #8fd1ff; color: #06121f; border: 0; border-radius: 26px; padding: 14px 44px; font: 600 16px inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+#go { background: #8fd1ff; color: #06121f; border: 0; border-radius: 26px; padding: 14px 44px; font-family: inherit; font-weight: 600; font-size: 16px; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
 #cstat { font-size: 13px; color: #bdb5ae; max-width: 420px; }
 #keyrow { font-size: 12px; color: #9b928c; display: flex; flex-direction: column; gap: 6px; }
 #keyrow input { background: #151212; border: 1px solid #3b3434; color: #eee; padding: 8px 10px; border-radius: 8px; width: 280px; }

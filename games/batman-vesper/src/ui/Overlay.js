@@ -27,18 +27,18 @@ const CSS = `
 .ov-choice .prompt { grid-column: 1 / -1; text-align: center; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
 .ov-opt { background: var(--panel); border: 1px solid rgba(233,241,255,.18); padding: 12px 16px; font-size: clamp(14px, 1.15vw, 18px); cursor: pointer; display: flex; gap: 12px; align-items: center; transition: border-color .15s, background .15s; backdrop-filter: blur(6px); color: var(--ui); text-align: left; font-family: inherit; }
 .ov-opt:hover, .ov-opt:focus { border-color: var(--accent); background: rgba(30,60,100,.55); outline: none; }
-.ov-opt kbd { font: 600 12px/1 inherit; border: 1px solid var(--dim); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; flex: none; }
+.ov-opt kbd { font-family: inherit; font-weight: 600; font-size: 12px; line-height: 1; border: 1px solid var(--dim); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; flex: none; }
 .ov-opt small { display: block; color: var(--dim); font-size: 12px; margin-top: 3px; }
 .ov-opt.danger { border-color: rgba(255,107,107,.5); }
 .ov-free { grid-column: 1 / -1; display: flex; gap: 8px; }
 .ov-free input { flex: 1; background: rgba(8,12,18,.72); border: 1px solid rgba(233,241,255,.25); color: var(--ui); padding: 12px 14px; font: inherit; font-size: 15px; outline: none; }
 .ov-free input:focus { border-color: var(--accent); }
-.ov-free button { background: var(--accent); color: #031020; border: 0; padding: 0 18px; font: 600 14px inherit; cursor: pointer; }
+.ov-free button { background: var(--accent); color: #031020; border: 0; padding: 0 18px; font-family: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
 .ov-timer { grid-column: 1 / -1; height: 2px; background: rgba(233,241,255,.15); }
 .ov-timer div { height: 100%; background: var(--ui); width: 100%; }
 .ov-qte { position: absolute; left: 50%; top: 58%; transform: translate(-50%,-50%); display: flex; gap: 18px; opacity: 0; transition: opacity .15s; }
 .ov-qte.on { opacity: 1; }
-.ov-key { width: 74px; height: 74px; border-radius: 50%; border: 2px solid var(--ui); display: grid; place-items: center; font: 600 22px inherit; position: relative; background: rgba(8,12,18,.4); }
+.ov-key { width: 74px; height: 74px; border-radius: 50%; border: 2px solid var(--ui); display: grid; place-items: center; font-family: inherit; font-weight: 600; font-size: 22px; position: relative; background: rgba(8,12,18,.4); }
 .ov-key svg { position: absolute; inset: -6px; width: 86px; height: 86px; transform: rotate(-90deg); }
 .ov-key.done { border-color: var(--good); color: var(--good); }
 .ov-key.miss { border-color: var(--warn); color: var(--warn); }
@@ -75,7 +75,7 @@ const CSS = `
 .ov-flow .stats { display: flex; gap: 28px; margin: 18px 0; flex-wrap: wrap; }
 .ov-flow .stats div { font-size: 12px; letter-spacing: .15em; color: var(--dim); } .ov-flow .stats b { display: block; color: var(--ui); font-size: 20px; font-weight: 300; letter-spacing: .05em; }
 .ov-flow .btns { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
-.ov-btn { background: transparent; color: var(--ui); border: 1px solid var(--ui); padding: 12px 22px; font: 500 14px inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; pointer-events: auto; }
+.ov-btn { background: transparent; color: var(--ui); border: 1px solid var(--ui); padding: 12px 22px; font-family: inherit; font-weight: 500; font-size: 14px; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; pointer-events: auto; }
 .ov-btn:hover { background: var(--ui); color: #000; }
 .ov-btn.primary { background: var(--accent); border-color: var(--accent); color: #021120; }
 .ov-hint { position: absolute; left: 50%; bottom: 5vh; transform: translateX(-50%); font-size: 12px; letter-spacing: .2em; color: var(--dim); text-transform: uppercase; opacity: 0; transition: opacity .4s; }

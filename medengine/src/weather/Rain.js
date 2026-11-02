@@ -110,6 +110,7 @@ uniform vec2 uResolution;
 out vec2 vQ;
 out float vAge;
 out vec3 vWorld;
+out float vNear;
 void main() {
   int id = gl_InstanceID;
   int corner = gl_VertexID % 6;
@@ -124,7 +125,9 @@ void main() {
   vec3 N = decodeNormal(textureLod(uG1, suv, 0.0).xy);
   vec4 wp = uInvViewProj * vec4(suv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0);
   vec3 p = wp.xyz / wp.w;
-  float ok = (d < 1.0 && N.y > 0.7 && length(p - uCameraPos) < 30.0) ? 1.0 : 0.0;
+  float dist = length(p - uCameraPos);
+  float ok = (d < 1.0 && N.y > 0.7 && dist < 14.0) ? 1.0 : 0.0;
+  vNear = 1.0 - smoothstep(4.0, 14.0, dist);
   vec2 q = vec2(corner == 1 || corner == 2 || corner == 4 ? 1.0 : -1.0, corner == 2 || corner == 4 || corner == 5 ? 1.0 : 0.0);
   vQ = q;
   float size = 0.035 + 0.05 * vAge;
@@ -136,7 +139,7 @@ void main() {
 
 const SPLASH_FS = /* glsl */`
 ${COMMON}
-in vec2 vQ; in float vAge; in vec3 vWorld;
+in vec2 vQ; in float vAge; in vec3 vWorld; in float vNear;
 out vec4 o;
 uniform sampler2D uScene;
 uniform vec2 uResolution;
@@ -149,7 +152,7 @@ void main() {
   float drops = smoothstep(0.08, 0.0, length(vec2(fract(vQ.x * 2.5) - 0.5, vQ.y - 0.7 * (1.0 - vAge) - 0.2)) );
   float a = (crown + drops * 0.6) * (1.0 - vAge);
   vec3 behind = texture(uScene, gl_FragCoord.xy / uResolution + vec2(0.0, 0.004)).rgb;
-  o = vec4((behind * 0.6 + uAmbient * 0.8) * a * uIntensity, 0.0);
+  o = vec4((behind * 0.6 + uAmbient * 0.8) * a * uIntensity * vNear * 0.6, 0.0);
 }`;
 
 export class Rain {

@@ -1,4 +1,4 @@
-import { Vector3, MathUtils } from 'three';
+import { Vector3, MathUtils, Group, Mesh, BoxGeometry, MeshPhysicalMaterial, Matrix4, Quaternion } from 'three';
 import { Human } from './Human.js';
 import { Rig, completePose, blendPose, addPose, clonePose } from './Rig.js';
 import { Face } from './Face.js';
@@ -57,8 +57,43 @@ export class Actor {
     return this;
   }
 
+  /**
+   * Puts a prop in a hand ('phone', 'pistol', null to empty it). Props ride the hand bone, so
+   * they follow every pose; they are oriented from the hand's rest frame (fingers, palm).
+   */
+  prop(name, side = 'r') {
+    const hand = this.h.bones['hand_' + side];
+    if (this._prop) { this._prop.removeFromParent(); this._prop = null; }
+    if (!name) return this;
+    const L = this.rig.limbs[side === 'r' ? 'armR' : 'armL'];
+    const f = L.restHandDir.clone().normalize(), n = L.restPalm.clone().normalize();
+    const g = new Group();
+    const dark = new MeshPhysicalMaterial({ color: 0x0c0c0e, roughness: 0.35, metalness: 0.5, clearcoat: 0.6 });
+    if (name === 'phone') {
+      const m = new Mesh(new BoxGeometry(0.072, 0.008, 0.148), dark); g.add(m);
+      const scr = new Mesh(new BoxGeometry(0.066, 0.002, 0.14), new MeshPhysicalMaterial({ color: 0x050608, roughness: 0.05, clearcoat: 1, emissive: 0x0a1420 }));
+      scr.position.y = -0.005; g.add(scr);
+    } else if (name === 'pistol') {
+      const slide = new Mesh(new BoxGeometry(0.03, 0.035, 0.19), dark); slide.position.set(0, 0.03, 0.05); g.add(slide);
+      const grip = new Mesh(new BoxGeometry(0.028, 0.11, 0.045), dark); grip.position.set(0, -0.025, -0.015); grip.rotation.x = -0.25; g.add(grip);
+    }
+    // the prop's frame: +z along the fingers, +y away from the palm
+    const z = f, y = n.clone().negate().addScaledVector(f, n.dot(f)).normalize(), x = new Vector3().crossVectors(y, z);
+    g.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(x, y, z));
+    // a phone sits low in the palm so its lower end shows past the heel of the hand; a pistol's grip fills the fist
+    g.position.copy(f).multiplyScalar(name === 'phone' ? 0.03 : 0.07).addScaledVector(n, name === 'phone' ? 0.02 : 0.03);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.userData.static = false; } });
+    hand.add(g);
+    this._prop = g;
+    return this;
+  }
+
   /** Holds a pose (by name or object), blending from the current one. */
   posture(p, fade = 0.45) {
+    if (typeof p === 'string') {
+      const want = p === 'phone' ? 'phone' : /^(gun_low|gun_aim|hostage_hold)$/.test(p) ? 'pistol' : null;
+      if (want !== this._propName) { this._propName = want; this.prop(want); }
+    }
     const pose = typeof p === 'string' ? POSES[p] : p;
     if (typeof p === 'string') this.postName = p;
     this.postFrom = this._currentBase();
