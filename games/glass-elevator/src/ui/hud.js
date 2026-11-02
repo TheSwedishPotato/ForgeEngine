@@ -47,6 +47,13 @@ export class HUD {
     const sb = el('svcbtn', 'Back in service');
     sb.addEventListener('click', () => { this.game.backInService(); document.exitPointerLock?.(); });
     sb.addEventListener('pointerdown', (e) => e.stopPropagation());
+    // in the car: type the floor you want (the car panel's keypad, on the screen)
+    this.keypad = el('keypad', `<label>Floor</label><input type="number" inputmode="numeric" min="1" max="${FLOORS}" placeholder="1-${FLOORS}"/><button>GO</button>`);
+    const kin = this.keypad.querySelector('input');
+    const send = () => { const n = Number(kin.value); kin.value = ''; kin.blur(); if (n >= 1 && n <= FLOORS) { this.game.sim.ctl.pressCar(n); this.game.sim.sfx('beep'); this.game.sim.say(`Car call registered: floor ${n}.`, 'Car'); } else if (n) this.game.sim.say(`There is no floor ${n} (1 to ${FLOORS}).`, 'Car'); };
+    this.keypad.querySelector('button').addEventListener('click', send);
+    kin.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); e.stopPropagation(); });
+    for (const ev of ['pointerdown', 'mousedown', 'touchstart']) this.keypad.addEventListener(ev, (e) => e.stopPropagation());
     this.goto.addEventListener('click', (e) => { const g = e.target?.dataset?.go; if (g) { this.go(g); this.goto.style.display = 'none'; } });
     window.addEventListener('keydown', (e) => {
       if (e.target?.tagName === 'INPUT') return;
@@ -82,6 +89,7 @@ export class HUD {
   }
 
   update(dt) {
+    this.keypad.style.display = this.game.player.inCar() ? '' : 'none';
     this.t += dt;
     if (this.t < 0.2) return;
     this.t = 0;
