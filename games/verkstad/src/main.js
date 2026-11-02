@@ -59,7 +59,7 @@ async function go() {
     let last = performance.now();
     const loop = (now) => { const dt = (now - last) / 1000; last = now; game.frame(dt); requestAnimationFrame(loop); };
     requestAnimationFrame(loop);
-    if (!localStorage.getItem('verkstad.seenHelp')) { try { localStorage.setItem('verkstad.seenHelp', '1'); } catch { /* */ } hud.openHelp(); }
+    let seen = false; try { seen = !!localStorage.getItem('verkstad.seenHelp'); localStorage.setItem('verkstad.seenHelp', '1'); } catch { /* private mode */ } if (!seen) hud.openHelp();
   }
   addEventListener('keydown', (e) => { if (e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return; if (e.code === 'KeyP') game.timeScale = game.timeScale ? 0 : 1; });
 }

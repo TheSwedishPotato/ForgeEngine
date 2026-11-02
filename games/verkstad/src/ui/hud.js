@@ -66,7 +66,7 @@ export class HUD {
       <div class="chat"></div>
       <div class="row"><input class="say" placeholder="Say something (Enter)…" maxlength="400"><button class="send">Say</button></div>
       <div class="row btns"><button class="est">Write an estimate…</button><button class="phone">Ask to approve extra work…</button><button class="show">Show what you found</button><button class="hand">Hand the car back…</button></div>
-      <div class="note">${g.brain.online ? `Played by ${esc(g.brain.model)}` : 'Offline customer (connect Claude in Settings for real conversations)'}</div>`, 'chatpanel');
+      <div class="note">${g.brain.status === 'artifact' ? 'Played by Claude (your claude.ai account)' : g.brain.online ? `Played by ${esc(g.brain.model)}` : 'Offline customer (connect Claude in Settings for real conversations)'}</div>`, 'chatpanel');
     const box = this.panel.querySelector('.chat');
     for (const h of c.history) box.append(this._lineEl(h.who, h.text));
     box.scrollTop = 1e9;
@@ -181,7 +181,7 @@ export class HUD {
       <label>Anthropic API key <small>(kept only in this browser; sent only to api.anthropic.com)</small></label><input class="key" type="password" placeholder="sk-ant-…" value="${esc(B.key)}">
       <label>Model</label><select class="model">${MODELS.map((m) => `<option value="${m.id}"${B.model === m.id ? ' selected' : ''}>${esc(m.label)}</option>`).join('')}</select>
       <label>Picture quality</label><select class="q">${['low', 'medium', 'high', 'ultra'].map((q) => `<option${g.stage.quality === q ? ' selected' : ''}>${q}</option>`).join('')}</select>
-      <p class="note">Now: ${B.status === 'proxy' ? 'Claude through the dev server' : B.status === 'key' ? 'Claude with your key' : 'offline'} · ${B.usage.calls} calls, ${B.usage.input + B.usage.output} tokens (${B.usage.cached} read from cache)${B.lastError ? ` · last error: ${esc(B.lastError)}` : ''}</p>
+      <p class="note">Now: ${B.status === 'artifact' ? 'Claude on your claude.ai account' : B.status === 'proxy' ? 'Claude through the dev server' : B.status === 'key' ? 'Claude with your key' : 'offline'} · ${B.usage.calls} calls, ${B.usage.input + B.usage.output} tokens (${B.usage.cached} read from cache)${B.lastError ? ` · last error: ${esc(B.lastError)}` : ''}</p>
       <div class="row btns"><button class="go primary">Save</button></div>`, 'setpanel');
     this.panel.querySelector('.mode').value = B.mode;
     this.panel.querySelector('.go').onclick = async () => {

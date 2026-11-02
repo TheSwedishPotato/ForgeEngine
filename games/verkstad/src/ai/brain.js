@@ -84,6 +84,11 @@ export class Brain {
   /** Finds out which way to Claude works here: the dev proxy, a saved key, or none. */
   async probe() {
     if (this.mode === 'offline') return (this.status = 'offline');
+    // published as a claude.ai artifact: ask Claude on the viewer's own account (no key needed)
+    if (window.claude?.use && this.mode !== 'key') {
+      try { this.sample = await window.claude.use('sample'); } catch { this.sample = null; }
+      if (this.sample) return (this.status = 'artifact');
+    }
     if (this.mode === 'key' || (this.mode === 'auto' && this.key)) return (this.status = this.key ? 'key' : 'offline');
     try {
       const r = await fetch('./claude/__status');
@@ -93,7 +98,7 @@ export class Brain {
     return (this.status = this.key ? 'key' : 'offline');
   }
 
-  get online() { return this.status === 'proxy' || this.status === 'key'; }
+  get online() { return this.status === 'proxy' || this.status === 'key' || this.status === 'artifact'; }
 
   _client() {
     if (this.status === 'proxy') return new Anthropic({ apiKey: 'held-by-the-dev-proxy', baseURL: new URL('./claude', location.href).href.replace(/\/$/, ''), dangerouslyAllowBrowser: true, maxRetries: 2 });
@@ -102,6 +107,7 @@ export class Brain {
 
   /** One Messages API call. format: a JSON schema for structured output. Returns text (or the parsed object). */
   async _call({ system, messages, format = null, effort = 'low', maxTokens = 4000 }) {
+    if (this.status === 'artifact') return this._sample({ system, messages, format, effort });
     const client = this._client();
     const fallback = this.model !== 'claude-haiku-5-5';        // server-side fallback on a refusal (Opus 5.5 / Sonnet 5.5)
     const params = {
@@ -125,6 +131,23 @@ export class Brain {
     const text = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
     if (!format) return text;
     try { return JSON.parse(text); } catch { throw new Error('Claude returned something that was not the expected JSON.'); }
+  }
+
+  /** The same call through the artifact runtime's `sample` (memoryless: the rules go in a leading turn). */
+  async _sample({ system, messages, format, effort }) {
+    const rules = `${RULES}\n\n${catalogueText()}${system ? '\n\n' + system : ''}`;
+    const turns = [{ role: 'user', content: rules }, ...messages.map((m) => ({ role: m.role, content: String(m.content) }))];
+    if (format) turns[turns.length - 1] = { role: 'user', content: `${turns[turns.length - 1].content}\n\nReply with only one JSON object matching this JSON schema:\n${JSON.stringify(format)}` };
+    const opts = { modelTier: effort === 'low' ? 'quick' : 'default', cache: false };
+    this.usage.calls++;
+    try {
+      if (format) return await this.sample.json(turns, opts);
+      return (await this.sample(turns, opts)).text.trim();
+    } catch (e) {
+      this.lastError = e?.code === 'not_granted' ? 'Claude was not allowed for this page.' : e?.code === 'rate_limited' ? 'Rate limited: wait a moment.' : `Claude: ${e?.code ?? ''} ${e?.message ?? e}`;
+      if (e?.code === 'not_granted' || e?.code === 'sampling_disabled') this.status = 'offline';
+      throw new Error(this.lastError);
+    }
   }
 
   /** A new customer. ctx: { when, weather, recent: [names], wantCar (optional), allowF1 } */

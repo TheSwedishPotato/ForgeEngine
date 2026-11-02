@@ -19,5 +19,7 @@ html = html
 const script = html.match(/<script type="module"[\s\S]*?<\/script>/)[0];
 html = html.replace(script, '');
 html = `${title}\n${html.trim()}\n${script}\n`;
+// a literal U+FFFD inside a JS string (the SDK's surrogate scrubber) as an escape, so the page is clean text
+html = html.replace(/\uFFFD/g, '\\uFFFD');
 writeFileSync('dist-single/verkstad.html', html);
 console.log('artifact page:', (html.length / 1024 / 1024).toFixed(1), 'MB');
