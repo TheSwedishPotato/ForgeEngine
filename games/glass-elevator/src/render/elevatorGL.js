@@ -11,8 +11,9 @@
 import { Group, Mesh, PlaneGeometry, Object3D } from 'three';
 import { Batch, boxMesh, cylGeo, merge, boxGeo } from './build.js';
 import { Display } from './mats.js';
-import { FLOORS, CAR, RAILS, SHEAVE, DEFLECTOR, GOVERNOR, ROPE, SPEC, TOP_Y, FACADE, MR } from '../data/spec.js';
-import { COMP } from './buildingGL.js';
+import { FLOORS, CAR, RAILS, SHEAVE, DEFLECTOR, GOVERNOR, ROPE, SPEC, TOP_Y, FACADE, MR, PIT_Y } from '../data/spec.js';
+import { COMP, PIT } from './buildingGL.js';
+import { Ropes } from './ropes.js';
 
 const T = SPEC.doors.panelTravel, PW = 0.575;
 const z0 = CAR.z0, z1 = CAR.z1, zc = CAR.zc, W = CAR.w / 2;
@@ -246,12 +247,50 @@ export class ElevatorGL {
   }
   _span(m, x, y0, y1, z) { m.position.set(x, Math.min(y0, y1), z); m.scale.y = Math.max(0.001, Math.abs(y1 - y0)); }
 
+  /** The ropes move: their sway, and a parted rope's fall (each strand that has gone becomes two falling chains). */
+  _ropeUpdate() {
+    const h = this.sim.hoist, now = performance.now(), dt = this._ropeT ? Math.min(0.05, (now - this._ropeT) / 1000) * (this.sim.timeScale ?? 1) : 0;
+    this._ropeT = now;
+    for (let i = 0; i < SPEC.ropes.n; i++) {
+      const live = !h.ropesCut && i < h.ropesLeft;
+      if (live && this._parted.has(i)) { for (const c of this._parted.get(i)) this.ropes.chains.splice(this.ropes.chains.indexOf(c), 1); this._parted.delete(i); }
+      if (!live && !this._parted.has(i)) {
+        const z = zc + (i - (SPEC.ropes.n - 1) / 2) * 0.034, x = SHEAVE.x + SHEAVE.r, LINKS = 40;
+        const line = (x0, y0, y1, zz) => Array.from({ length: LINKS }, (_, k) => [x0, y0 + (y1 - y0) * (k / (LINKS - 1)), zz]);
+        const roof = () => [[-W - 0.1, W + 0.1, z0 - 0.1, z1 + 0.1, h.yc + ROOF + 0.3], [RAILS.cwX - 0.35, RAILS.cwX + 0.35, zc - 0.5, zc + 0.5, h.yw + ROPE.cwHeight]];
+        this._parted.set(i, [
+          this.ropes.chain(() => [x, this._carHitch(), z], line(x, this._carHitch(), ROPE.carTop, z), 0.0065, roof),
+          this.ropes.chain(() => [RAILS.cwX, this._cwHitch(), z], line(RAILS.cwX, this._cwHitch(), ROPE.cwTop, z), 0.0065, roof),
+        ]);
+      }
+    }
+    this.ropes.update(dt, this.sim.shake?.a, [[PIT.x0 + 0.1, PIT_Y + 0.05, FACADE + 0.15], [PIT.x1 - 0.1, 1e4, PIT.z1 - 0.1]]);
+  }
+
   _ropes() {
     const M = this.M;
-    this.hoistCar = this._bundle(8, 0.0065, 0.034, M.rope);
-    this.hoistCw = this._bundle(8, 0.0065, 0.034, M.rope);
-    this.compCar = this._bundle(4, 0.009, 0.05, M.rope);
-    this.compCw = this._bundle(4, 0.009, 0.05, M.rope);
+    // the hoist and compensating ropes, strand by strand (render/ropes.js)
+    const h = this.sim.hoist, N = SPEC.ropes.n, R = (this.ropes = new Ropes(this.stage.scene, M.rope));
+    const mu = SPEC.ropes.kgPerM / N, muC = SPEC.comp.kgPerM / SPEC.comp.n;
+    const off = (i, n, d) => (i - (n - 1) / 2) * d;
+    this._ropeErr = Array.from({ length: N }, (_, i) => ((i * 7919) % 13) / 13 * 0.006 - 0.003);   // each rope a few mm longer or shorter
+    const live = (i) => !h.ropesCut && i < h.ropesLeft;
+    this._carHitch = () => h.yc + CAR.crosshead + 0.3;
+    this._cwHitch = () => h.yw + ROPE.cwHeight;
+    // one rope's share of the car side: the hitch springs (120 kN/m) in series with the rope even out the length errors
+    const share = (i, Ttot, L) => {
+      let nl = 0, mean = 0; for (let j = 0; j < N; j++) if (live(j)) { nl++; mean += this._ropeErr[j]; }
+      if (!nl) return 0; mean /= nl;
+      const kr = SPEC.ropes.EA / N / Math.max(1, L), k = 1 / (1 / 120e3 + 1 / kr);
+      return Math.max(0, Ttot / nl + k * (this._ropeErr[i] - mean));
+    };
+    R.run({ n: N, r: 0.0065, mu, live, ends: (i) => { const x = SHEAVE.x + SHEAVE.r, z = zc + off(i, N, 0.034); return [[x, this._carHitch(), z], [x, ROPE.carTop, z]]; },
+      T: (i) => share(i, h.Tc, ROPE.carTop - this._carHitch()), spring: (i) => ({ len: Math.max(0.04, 0.14 - share(i, h.Tc, ROPE.carTop - this._carHitch()) / 120e3), r: 0.014 }) });
+    R.run({ n: N, r: 0.0065, mu, live, ends: (i) => { const z = zc + off(i, N, 0.034); return [[RAILS.cwX, this._cwHitch(), z], [RAILS.cwX, ROPE.cwTop, z]]; },
+      T: (i) => share(i, h.Tw, ROPE.cwTop - this._cwHitch()) });
+    R.run({ n: SPEC.comp.n, r: 0.009, mu: muC, ends: (i) => { const z = COMP.z + off(i, SPEC.comp.n, 0.05); return [[COMP.carX, h.ts, z], [COMP.carX, h.yc + CAR.compHitch, z]]; }, T: () => (h.Tb ?? 5000) / SPEC.comp.n });
+    R.run({ n: SPEC.comp.n, r: 0.009, mu: muC, ends: (i) => { const z = COMP.z + off(i, SPEC.comp.n, 0.05); return [[RAILS.cwX, h.ts, z], [RAILS.cwX, h.yw, z]]; }, T: () => (h.Tb ?? 5000) / SPEC.comp.n });
+    this._parted = new Map();
     // the ropes from the traction sheave down to the deflector, in the machine room floor (they run, but look the same)
     const b = new Batch();
     for (let i = 0; i < 8; i++) {
@@ -340,21 +379,7 @@ export class ElevatorGL {
     for (const w of this.wedges) w.position.y = CAR.plank - 0.36 + 0.05 * h.sg.engage;
     this.linkLever.rotation.x = Math.min(0.5, h.gov.link * 6);
     // ropes
-    const carHitch = h.yc + CAR.crosshead + 0.3, cwHitch = h.yw + ROPE.cwHitch + ROPE.cwHeight - ROPE.cwHitch;
-    if (h.ropesLeft !== this._ropesShown) {
-      // the parted ropes are gone from the bundle
-      this._ropesShown = h.ropesLeft;
-      for (const k of ['hoistCar', 'hoistCw']) { this.stage.scene.remove(this[k]); this[k] = this._bundle(Math.max(1, h.ropesLeft), 0.0065, 0.034, this.M.rope); }
-    }
-    if (h.ropesCut) {
-      this._span(this.hoistCar, 0, carHitch, carHitch + 1.2, zc);
-      this._span(this.hoistCw, RAILS.cwX, cwHitch, cwHitch + 1.2, zc);
-    } else {
-      this._span(this.hoistCar, SHEAVE.x + SHEAVE.r, carHitch, ROPE.carTop, zc);
-      this._span(this.hoistCw, RAILS.cwX, cwHitch, ROPE.cwTop, zc);
-    }
-    this._span(this.compCar, COMP.carX, h.ts, h.yc + CAR.compHitch, COMP.z);
-    this._span(this.compCw, RAILS.cwX, h.ts, h.yw, COMP.z);
+    this._ropeUpdate();
     // the travelling cable's loop hangs half way between its ends (it is 10 m longer than half the rise)
     const yCar = h.yc - 0.45, yFix = TOP_Y / 2;
     const S = TOP_Y / 2 + 10, low = (yCar + yFix - S + Math.PI * 0.16) / 2;

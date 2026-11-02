@@ -9,7 +9,7 @@
 import { Group, Mesh, SphereGeometry } from 'three';
 import { Body, MATERIALS } from '../physics/bodies.js';
 import { boxMesh, cylGeo, Batch } from '../render/build.js';
-import { floorY, MR, PIT_Y, FLOORS } from '../data/spec.js';
+import { floorY, MR, PIT_Y, FLOORS, CAR } from '../data/spec.js';
 
 export function makeProps(world, M, scene) {
   const list = [];
@@ -65,7 +65,9 @@ export function makeProps(world, M, scene) {
     /** Draws each thing where it is (what rides the car is drawn where the car is now, between physics steps). */
     update(carY) {
       for (const { b, g } of list) {
-        const dy = b.touching?.some((m) => m.car) ? carY - world.carY : 0;
+        // anything riding in the car (on its floor, or stacked on something that is) is drawn where the car is now
+        const inCar = b.touching?.some((m) => m.car) || (b.p[0] > -CAR.w / 2 - 0.05 && b.p[0] < CAR.w / 2 + 0.05 && b.p[2] > CAR.z0 - 0.05 && b.p[2] < CAR.z0 + CAR.d + 0.05 && b.p[1] > world.carY - 0.05 && b.p[1] < world.carY + CAR.h);
+        const dy = inCar ? carY - world.carY : 0;
         g.position.set(b.p[0], b.p[1] + dy, b.p[2]); g.quaternion.set(b.q[0], b.q[1], b.q[2], b.q[3]);
       }
     },
