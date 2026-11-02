@@ -286,6 +286,7 @@ function engineBay(A, lay, volvo) {
   const ax = (a, b) => (lon ? [0, a, b] : [b, a, 0]);     // place along the crank axis
   const dim = (w, h, l) => (lon ? [w, h, l] : [l, h, w]);
   const BB = (w, h, l, p, m) => ({ t: 'box', s: dim(w, h, l), p, m });
+  const EP = (across, up, along) => (lon ? [across, up, along] : [along, up, across]);   // engine-local: across the crank, up, along it
   A.add({ id: 'engine', name: `${e.code} engine (${(Math.PI / 4 * e.bore ** 2 * e.stroke * e.cyl * 1000).toFixed(1)} l)`, kind: 'engine', sys: 'engine', fixed: true, mass: volvo ? 150 : 104,
     pos: [0, EY, EZ], rot: volvo ? [0, 0, -0.2] : [0, 0, 0],
     cond: { oil: e.oil.capacity, oilAge: 12000, oilGrade: e.oil.grade, sludge: 0, comp: [1, 1, 1, 1], blowby: 0, coolant: 1, headGasket: true, timing: true },
@@ -296,7 +297,31 @@ function engineBay(A, lay, volvo) {
       BB(0.28, 0.12, len - 0.06, [0, -0.22, 0], 'alu'),               // sump
       BB(0.24, 0.3, 0.04, ax(0.02, len / 2 + 0.02), 'blackPlastic'),    // timing belt cover
       { t: 'cyl', rad: 0.075, len: 0.03, p: ax(-0.1, len / 2 + 0.05), ax: lon ? 'z' : 'x', m: 'castIron', seg: 28 },   // crank pulley
+      // the cam cover's ribs, the intake manifold's four cast runners to the plenum and throttle body,
+      // the exhaust runners on the other side (after a photo of a 240's engine bay, docs/references.md)
+      ...[-2, -1, 0, 1, 2].map((k) => BB(0.012, 0.018, len - 0.14, [...EP(k * 0.035, 0.355, 0)], volvo ? 'camCoverVolvo' : 'blackPlastic')),
+      ...[0, 1, 2, 3].flatMap((i) => { const q = (i - 1.5) * cylPitch; return [
+        { t: 'tube', pts: [EP(0.11, 0.22, q), EP(0.24, 0.24, q), EP(0.31, 0.12, q * 0.85)], rad: 0.022, m: 'alu' },
+        { t: 'tube', pts: [EP(-0.12, 0.17, q), EP(-0.2, 0.08, q * 0.8), EP(-0.2, -0.08, q * 0.3), EP(-0.18, -0.2, 0)], rad: 0.019, m: 'exhaustHot' },
+      ]; }),
+      BB(0.09, 0.1, len - 0.04, EP(0.33, 0.08, 0), 'alu'),
+      { t: 'cyl', rad: 0.04, len: 0.07, p: EP(0.33, 0.1, len / 2 + 0.01), ax: lon ? 'z' : 'x', m: 'alu', seg: 20 },
+      { t: 'tube', pts: [EP(0.33, 0.1, len / 2 + 0.05), EP(0.36, 0.16, len / 2 + 0.2), EP(0.42, 0.2, len / 2 + 0.36)], rad: 0.042, m: 'rubber' },
+      { t: 'tube', pts: [EP(-0.05, 0.25, -len / 2 - 0.02), EP(0.1, 0.3, -len / 2 - 0.12), EP(0.2, 0.25, -len / 2 - 0.25)], rad: 0.009, m: 'hose' },
+      { t: 'tube', pts: [EP(0.15, 0.33, -len / 2 + 0.05), EP(0.2, 0.36, 0), EP(0.17, 0.33, len / 2 - 0.05)], rad: 0.011, m: 'wire' },
     ] });
+  // the engine bay's own panels, in the body's colour: the inner wings, the strut towers, the bulkhead
+  const hwB = s.dims.width / 2 - 0.13, zb0 = lay.fire + 0.05, zb1 = lay.radZ - 0.08, yTop = lay.hoodY - 0.08;
+  A.add({ id: 'apron', name: 'Inner wings and strut towers', kind: 'apron', sys: 'body', fixed: true, pos: [0, 0, 0], g: [
+    ...[1, -1].flatMap((sx) => [
+      B(0.02, yTop - 0.35, zb1 - zb0, [sx * hwB, (yTop + 0.35) / 2, (zb0 + zb1) / 2], 'paint'),
+      C(0.1, 0.18, [sx * (s.dims.trackF / 2 - 0.2), yTop - 0.1, s.dims.wheelbase / 2 - 0.02], 'y', 'paint', { r2: 0.085, seg: 24 }),
+      ...[0, 1, 2].map((i) => C(0.008, 0.012, [sx * (s.dims.trackF / 2 - 0.2) + Math.cos(i * 2.1) * 0.06, yTop + 0.0, s.dims.wheelbase / 2 - 0.02 + Math.sin(i * 2.1) * 0.06], 'y', 'steel', { seg: 6 })),
+      C(0.025, 0.03, [sx * (s.dims.trackF / 2 - 0.2), yTop + 0.005, s.dims.wheelbase / 2 - 0.02], 'y', 'rubber'),
+    ]),
+    B(s.dims.width - 0.3, yTop - 0.35, 0.02, [0, (yTop + 0.35) / 2, zb0 - 0.03], 'paint'),
+    B(s.dims.width - 0.3, 0.06, 0.12, [0, yTop - 0.02, zb0 - 0.02], 'blackPlastic'),          // the scuttle panel under the wipers
+  ] });
   // the oil: filler cap, dipstick, drain plug, filter
   A.add({ id: 'oilcap', name: 'Oil filler cap', kind: 'oilcap', sys: 'oil', mass: 0.05, price: 120, clip: true, need: ['hood'], pos: [0.03, EY + 0.36, EZ + (lon ? 0.12 : 0)], g: [C(0.03, 0.025, [0, 0, 0], 'y', volvo ? 'blackPlastic' : 'yellowCap', { seg: 20 })] });
   A.add({ id: 'dipstick', name: 'Oil dipstick', kind: 'dipstick', sys: 'oil', mass: 0.05, price: 140, clip: true, need: ['hood'], pos: lon ? [0.17, EY + 0.25, EZ - 0.05] : [-0.05, EY + 0.25, EZ + 0.17], info: 'Wipe, push it fully home, pull it out and read where the oil reaches between MIN and MAX', g: [T([[0, 0, 0], [0, -0.45, 0]], 0.003, 'steel'), TOR(0.018, 0.004, [0, 0.02, 0], 'z', 'yellowCap')] });
@@ -314,8 +339,8 @@ function engineBay(A, lay, volvo) {
       blockers: [volvo ? 'lead' + i : 'coil' + i],
       fasteners: [{ id: 'thread', name: 'spark plug', size: e.plug.socket, torque: e.plug.torque, len: 6, stiffness: 1.2, pos: [0, 0, 0], axis: [0, 1, 0] }],
       cond: { gap: e.plug.gap, wear: 0.2, fouled: false, cracked: false, spec: e.plug.gap }, g: [C(0.008, 0.06, [0, 0.02, 0], 'y', 'ceramic'), C(0.01, 0.015, [0, -0.012, 0], 'y', 'steel', { seg: 6 })] });
-    if (volvo) A.add({ id: 'lead' + i, name: `HT lead, cylinder ${i}`, kind: 'lead', sys: 'ignition', cyl: i, mass: 0.05, price: 95, clip: true, need: ['hood'], pos: [plugPos[0], plugPos[1] + 0.03, plugPos[2]],
-      cond: { ok: true, resistance: 5.5 }, g: [T([[0, 0, 0], [0.08, 0.05, 0], [0.18, 0.06, (0.2 - p) * 0.6], [0.24, 0.08, 0.22 - p]], 0.0045, 'leadRed')] });
+    if (volvo) A.add({ id: 'lead' + i, name: `HT lead, cylinder ${i}`, kind: 'lead', sys: 'ignition', cyl: i, mass: 0.05, price: 95, clip: true, need: ['hood'], pos: [plugPos[0], plugPos[1] + 0.01, plugPos[2]],
+      cond: { ok: true, resistance: 5.5 }, g: [T([[0, 0, 0], [0.08, 0.02, 0], [0.18, 0.015, (0.2 - p) * 0.6], [0.24, 0.0, 0.22 - p]], 0.0045, 'leadRed')] });
     else A.add({ id: 'coil' + i, name: `Ignition coil, cylinder ${i}`, kind: 'coil', sys: 'ignition', cyl: i, mass: 0.25, price: 590, partNo: '04E 905 110', clip: true, need: ['hood'], pos: [plugPos[0], plugPos[1] + 0.04, plugPos[2]],
       cond: { ok: true }, g: [C(0.012, 0.1, [0, -0.02, 0], 'y', 'blackPlastic'), B(0.04, 0.04, 0.05, [0, 0.04, 0], 'blackPlastic')] });
   }

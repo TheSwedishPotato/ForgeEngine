@@ -58,6 +58,14 @@ these cars.
 
 ## Reference pictures
 
-No photographs or drawings are bundled with the game. The bodies are lofted from the published
-dimensions and from the shapes as they are commonly known: the Volvo's boxy saloon, the Golf's
-hatch with its C-pillar, the 2026 F1 car's halo, narrower wings and smaller wheels.
+The bodies are lofted from the published dimensions; their details (lamps, grilles, bumpers, trim,
+wheels, the engine bay, the cabin) were traced from these photographs on Wikimedia Commons. The
+photos are not bundled with the game.
+
+| What was taken from it | Photograph |
+| --- | --- |
+| Volvo 240: headlamps with the amber indicators, grille and diagonal bar, bumpers, rubbing strip, window frames, alloys | [1986 Volvo 244 GL in Bucharest](https://commons.wikimedia.org/wiki/File:1986_Volvo_244_GL_in_Bucharest.jpg) |
+| Volvo 240: the dashboard (binnacle, wood strip, vents, console, four-spoke wheel), pleated leather seats | [1993 Volvo 240 Classic dashboard (US)](https://commons.wikimedia.org/wiki/File:1993_Volvo_240_Classic_dashboard_(US).jpg) |
+| Volvo 240: the engine bay (body-coloured inner wings and strut towers, cam cover, intake runners, intake hose) | [B234F engine bay](https://commons.wikimedia.org/wiki/File:B234F.jpg) (a 16-valve redblock in a 240's bay) |
+| Golf VII: headlamps, grille band, lower intake, fog lamps, mirrors, double five-spoke wheels | [2013–2015 Volkswagen Golf (5G) 110TDI Highline, front](https://commons.wikimedia.org/wiki/File:2013-2015_Volkswagen_Golf_(5G)_110TDI_Highline_(R-Line)_5-door_hatchback_(2018-10-29)_01.jpg) and [rear](https://commons.wikimedia.org/wiki/File:2013-2015_Volkswagen_Golf_(5G)_110TDI_Highline_(R-Line)_5-door_hatchback_(2018-10-29)_02.jpg) |
+| The 2026 F1 car's proportions: nose, halo, sidepods, engine cover, rear wing, the medium tyres' yellow sidewall band | [FIA F1 Austria 2026, Nr. 12 Antonelli](https://commons.wikimedia.org/wiki/File:FIA_F1_Austria_2026_Nr._12_Antonelli_(1).jpg) |

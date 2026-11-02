@@ -40,7 +40,7 @@ export function bodyDetails(spec, B) {
   } else {
     for (const sx of [1, -1]) {
       // wedge headlamps on the nose's slope, swept back and tilted up
-      out.push(box(0.4, 0.1, 0.03, [sx * 0.52, 0.715, F - 0.04], 'lensGolf', [-0.3, sx * 0.38, sx > 0 ? 0 : Math.PI]));
+      out.push(box(0.46, 0.125, 0.03, [sx * 0.55, 0.72, F - 0.06], 'lensGolf', [-0.3, sx * 0.5, sx > 0 ? 0 : Math.PI]));
       out.push(box(0.12, 0.05, 0.02, [sx * 0.56, 0.43, F + 0.03], 'lensGolf'));                      // fog lamp
       out.push(box(0.36, 0.11, 0.03, [sx * 0.6, 0.98, R + 0.03], 'tailGolf', [0.35, sx * -0.25, 0]));      // rear lamp
       out.push(box(0.02, 0.02, P.cowl - P.roofR - 0.2, [sx * (st(-0.6)[3] - 0.03), st(-0.6)[2] + 0.005, (P.cowl + P.roofR) / 2], 'trimBlack'));
