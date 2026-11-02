@@ -139,7 +139,17 @@ export class Theatre3D {
     if (spec.setVisible !== undefined) a.setVisible(spec.setVisible);
     if (spec.posture) a.posture(spec.posture);
     if (spec.emote) a.emote(spec.emote);
-    if (spec.lookAt !== undefined) a.lookAt(spec.lookAt === null ? null : this._point(spec.lookAt), 1);
+    if (spec.lookAt !== undefined) {
+      const tp = spec.lookAt === null ? null : this._point(spec.lookAt);
+      a.lookAt(tp, 1);
+      // a target well behind the shoulder: turn the body, not just the head
+      const P = tp?.isVector3 ? tp : tp?.position;
+      if (P && !spec.walkTo && spec.turnTo === undefined) {
+        const want = Math.atan2(P.x - a.position.x, P.z - a.position.z);
+        const d = Math.atan2(Math.sin(want - a.yaw), Math.cos(want - a.yaw));
+        if (Math.abs(d) > 1.0) jobs.push(a.turnTo(P, 0.7));
+      }
+    }
     if (spec.play) jobs.push(a.play(spec.play));
     if (spec.walkTo) { const m = this._mark(spec.walkTo); if (m) jobs.push(a.walkTo(new Vector3(...m.pos), { run: spec.run })); }
     if (spec.turnTo !== undefined) jobs.push(a.turnTo(typeof spec.turnTo === 'number' ? spec.turnTo : this._point(spec.turnTo)));

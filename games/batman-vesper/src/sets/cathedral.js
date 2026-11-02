@@ -117,7 +117,7 @@ export async function build({ time = 'night' } = {}) {
     weather: dawn ? { rain: 0, wind: 0.3, night: 0.12, overcast: 0.35, lightning: 0, wetness: 0.8 } : { rain: 0.75, wind: 0.6, night: 1, overcast: 0.95, lightning: 0.25 },
     cityGlow: [0.07, 0.045, 0.025],
     fog: dawn ? { density: 0.0035, height: -30, falloff: 0.02, mist: 0, maxDist: 400, anisotropy: 0.7, glow: [0, 0, 0] } : { density: 0.0018, height: -20, falloff: 0.006, mist: 0, maxDist: 500, anisotropy: 0.6, glow: [0.014, 0.009, 0.0055] },
-    exposure: dawn ? { key: 0.18, minEV: -4, maxEV: 3 } : { key: 0.12, minEV: -2, maxEV: 6 },
+    exposure: dawn ? { key: 0.18, minEV: -4, maxEV: 3 } : { key: 0.1, minEV: -3, maxEV: 5 },
     grade: dawn ? { lift: [0.01, 0.01, 0.02], gain: [1.04, 1.0, 0.95], shadowTint: [0.92, 0.98, 1.06], highTint: [1.06, 1.0, 0.92], saturation: 1.0, contrast: 1.06, temperature: 0.4, halation: 0.2 }
       : { lift: [0.008, 0.013, 0.022], gain: [0.98, 1, 1.02], shadowTint: [0.86, 0.98, 1.1], highTint: [1.04, 1.0, 0.94], saturation: 0.85, contrast: 1.12, temperature: -0.45, halation: 0.18 },
     envIntensity: dawn ? 1 : 0.6,

@@ -9,9 +9,9 @@ import { extrude, mat, box } from '../../../../medengine/src/world/Kit.js';
 function wheel(r = 0.33, w = 0.22) {
   const g = new Group();
   const tyre = new Mesh(new CylinderGeometry(r, r, w, 24), mat(0x0c0c0c, { roughness: 0.85 }));
-  tyre.rotation.z = Math.PI / 2;
+  tyre.rotation.x = Math.PI / 2;
   const rim = new Mesh(new CylinderGeometry(r * 0.62, r * 0.62, w + 0.02, 12), mat(0x9a9ea4, { roughness: 0.25, metalness: 0.9 }));
-  rim.rotation.z = Math.PI / 2;
+  rim.rotation.x = Math.PI / 2;
   g.add(tyre, rim);
   tyre.castShadow = rim.castShadow = true;
   return g;

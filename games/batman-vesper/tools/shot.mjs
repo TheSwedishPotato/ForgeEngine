@@ -16,7 +16,7 @@ try { ({ chromium } = await import('playwright')); } catch {
 const [, , path = 'lab.html', out = 'shots/lab.jpg', framesArg = '40', w = '1280', h = '720'] = process.argv;
 let base = process.env.BASE, server;
 if (!base) {
-  server = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), server: { port: 0, host: '127.0.0.1' }, logLevel: 'error' });
+  server = await createServer({ root: fileURLToPath(new URL('..', import.meta.url)), server: { port: 0, host: '127.0.0.1', hmr: false, watch: null }, logLevel: 'error' });
   await server.listen();
   base = server.resolvedUrls.local[0];
 }

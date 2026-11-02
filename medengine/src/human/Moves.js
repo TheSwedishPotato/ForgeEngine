@@ -21,7 +21,7 @@ export const POSES = {
   hands_up: { armL: { hand: [0.12, 0.12, 0.12], elbow: [0.6, -1, 0], fingers: [0, 1, 0.1], palm: [0, 0, 1], curl: 0.05, spread: 0.8 }, armR: { hand: [0.12, 0.12, 0.12], elbow: [0.6, -1, 0], fingers: [0, 1, 0.1], palm: [0, 0, 1], curl: 0.05, spread: 0.8 }, spine: [-6, 0, 0], head: [-6, 0, 0] },
   hands_bound: { armL: { hand: [-0.16, -0.42, 0.2], elbow: [0.3, -1, -0.4], fingers: [-0.2, -0.6, 1], palm: [-1, 0, 0], curl: 0.5 }, armR: { hand: [-0.16, -0.42, 0.2], elbow: [0.3, -1, -0.4], fingers: [-0.2, -0.6, 1], palm: [-1, 0, 0], curl: 0.5 }, spine: [8, 0, 0], head: [6, 0, 0] },
   point: { armR: { hand: [0.02, 0.0, 0.52], elbow: [0.5, -1, 0], fingers: [0, 0.05, 1], palm: [-1, -0.3, 0], curl: 0.7, thumb: 0.4 }, spine: [0, -8, 0] },
-  phone: { armR: { hand: [-0.1, 0.17, 0.1], elbow: [0.6, -0.6, -0.2], fingers: [-0.3, 0.6, 0.4], palm: [-1, 0, 0], curl: 0.5, thumb: 0.6 }, head: [3, -8, 4], spine: [3, 0, 0] },
+  phone: { armR: { hand: [-0.07, 0.16, -0.01], elbow: [0.5, -0.7, 0.3], fingers: [-0.2, 0.9, 0.15], palm: [-1, 0, 0], curl: 0.55, thumb: 0.6 }, head: [3, -10, 6], spine: [3, 0, 0] },
   gun_low: { armR: { hand: [0.02, -0.45, 0.2], elbow: [0.3, -1, -0.3], fingers: [0, -0.5, 1], palm: [-1, 0, 0], curl: 0.8, thumb: 0.5 } },
   gun_aim: { spine: [2, -12, 0], head: [2, 10, 0], armR: { hand: [-0.12, 0.0, 0.56], elbow: [0.35, -1, 0], fingers: [0, 0.15, 1], palm: [-1, 0, 0], curl: 0.8, thumb: 0.5 }, armL: { hand: [-0.27, -0.04, 0.48], elbow: [0.2, -1, -0.2], fingers: [0.2, 0.2, 1], palm: [-0.2, 1, 0], curl: 0.6 }, legL: { foot: [0.03, 0, 0.14] }, legR: { foot: [0.04, 0, -0.12] } },
   // holding a hostage in front, gun at their head (the hostage stands just in front)

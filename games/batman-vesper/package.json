@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "BATMAN: VESPER — an interactive film on the Med Engine 2. Episode 1: First Night.",
+  "description": "BATMAN: VESPER \u2014 an interactive film on the Med Engine 2. Episode 1: First Night.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:single": "vite build --mode single && node tools/artifact.mjs",
     "humans": "node ../../medengine/tools/human/build.mjs characters.mjs public/assets/humans",
-    "test": "node --test tests/*.test.js ../../medengine/tests/*.test.js"
+    "test": "node --test tests/*.test.js ../../medengine/tests/*.test.js",
+    "build:artifact": "vite build && node tools/artifact.mjs",
+    "stills": "node tools/stills.mjs",
+    "playthrough": "node tools/playthrough.mjs"
   },
   "devDependencies": {
     "vite": "^7.0.0",

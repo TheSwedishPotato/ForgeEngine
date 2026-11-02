@@ -32,11 +32,26 @@ const cache = new Map();
 async function fetchPair(url) {
   if (cache.has(url)) return cache.get(url);
   const p = (async () => {
-    const [h, b] = await Promise.all([fetch(url + '.json').then((r) => { if (!r.ok) throw new Error(`${url}.json: ${r.status}`); return r.json(); }), fetch(url + '.bin').then((r) => r.arrayBuffer())]);
+    const [h, b] = await Promise.all([fetch(url + '.json').then((r) => { if (!r.ok) throw new Error(`${url}.json: ${r.status}`); return r.json(); }), fetchBinary(url)]);
     return { h, buf: b };
   })();
   cache.set(url, p);
   return p;
+}
+
+/** The character's binary: .binz (gzip, inflated in the browser) or plain .bin. */
+async function fetchBinary(url) {
+  let r = await fetch(url + '.binz');
+  if (!r.ok) r = await fetch(url + '.bin');
+  if (!r.ok) throw new Error(`${url}: ${r.status}`);
+  const buf = await r.arrayBuffer();
+  const u = new Uint8Array(buf, 0, 2);
+  if (u[0] === 0x1f && u[1] === 0x8b) {
+    // gzip: a server that did not decode it for us
+    const ds = new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip')));
+    return ds.arrayBuffer();
+  }
+  return buf;
 }
 
 const TYPES = { Float32: Float32Array, Uint32: Uint32Array, Uint8: Uint8Array, Uint16: Uint16Array, Int32: Int32Array };

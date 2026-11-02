@@ -313,7 +313,7 @@ export async function build({ staging = 'harbour' } = {}) {
     weather: { rain: 1, wind: 0.95, night: 1, overcast: 1, lightning: 0.6 },
     cityGlow: [0.06, 0.04, 0.025],
     fog: { density: 0.006, height: 0, falloff: 0.02, mist: 0.01, mistHeight: 3, maxDist: 300, anisotropy: 0.6, glow: [0.03, 0.025, 0.022] },
-    exposure: { key: 0.12, minEV: -2, maxEV: 6 },
+    exposure: { key: 0.1, minEV: -3, maxEV: 4.5 },
     grade: { lift: [0.008, 0.012, 0.02], gain: [0.98, 1, 1.03], shadowTint: [0.85, 0.98, 1.12], highTint: [1.02, 1.0, 0.95], saturation: 0.8, contrast: 1.12, temperature: -0.55, halation: 0.2 },
     envIntensity: 0.5,
     space: staging === 'acheron' ? 'deck' : 'open',

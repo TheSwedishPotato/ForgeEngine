@@ -31,7 +31,7 @@ export const PLATES = {
 };
 
 const filter = process.argv[2];
-const server = await createServer({ root: ROOT, server: { port: 0, host: '127.0.0.1' }, logLevel: 'error' });
+const server = await createServer({ root: ROOT, server: { port: 0, host: '127.0.0.1', hmr: false, watch: null }, logLevel: 'error' });
 await server.listen();
 const base = server.resolvedUrls.local[0];
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });

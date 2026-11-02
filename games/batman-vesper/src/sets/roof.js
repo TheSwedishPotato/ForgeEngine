@@ -53,7 +53,7 @@ export async function build() {
     weather: { rain: 0.6, wind: 0.5, night: 1, overcast: 0.95, lightning: 0.2 },
     cityGlow: [0.08, 0.05, 0.028],
     fog: { density: 0.008, height: -15, falloff: 0.02, mist: 0, maxDist: 300, anisotropy: 0.6, glow: [0.045, 0.03, 0.018] },
-    exposure: { key: 0.12, minEV: -2, maxEV: 6 },
+    exposure: { key: 0.1, minEV: -3, maxEV: 4.5 },
     grade: { lift: [0.01, 0.012, 0.02], gain: [1.0, 0.99, 0.98], shadowTint: [0.88, 0.98, 1.08], highTint: [1.06, 1.0, 0.9], saturation: 0.85, contrast: 1.1, temperature: -0.15, halation: 0.22 },
     envIntensity: 0.6,
     bounds: { min: new Vector3(-30, -4, -30), max: new Vector3(30, 20, 30) },

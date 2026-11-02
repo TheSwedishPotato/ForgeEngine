@@ -26,7 +26,7 @@ export const RECIPES = [
     id: 'rook', name: 'Victor "Rook" Salas',
     macro: { gender: 1, age: 0.55, muscle: 0.72, weight: 0.55, heightM: 1.8, proportions: 0.7, race: { caucasian: 0.9, african: 0.1 } },
     details: { 'nose/nose-scale-horiz-incr': 0.3, 'chin/chin-width-incr': 0.35, 'head/head-square': 0.4, 'ears/r-ear-scale-decr': 0.2, 'ears/l-ear-scale-decr': 0.2 },
-    skin: 'skins02_cc0/skins/mindfront_aksel_skin/mindfront_aksel_skin.mhmat', brows: 'eyebrow003', lashes: 'eyelashes01', eyes: { material: 'lightblue' },
+    skin: 'middleage_caucasian_male', brows: 'eyebrow003', lashes: 'eyelashes01', eyes: { material: 'lightblue' },
     clothes: ['male_casualsuit06', { name: 'elvs_emt_uniform_jacket_male', material: leather([0.03, 0.028, 0.026]) }, 'mindfront_shoes_biker_boots_male'],
     meta: { garments: ['buzzcut'], voice: { pitch: 0.9, rate: 1.0 } },
   },
@@ -35,7 +35,7 @@ export const RECIPES = [
     macro: { gender: 0, age: 0.53, muscle: 0.45, weight: 0.42, heightM: 1.67, proportions: 0.85, race: { african: 0.9, caucasian: 0.1 } },
     skin: 'young_african_female', brows: 'eyebrow011', lashes: 'eyelashes04', eyes: { material: 'brown' }, hair: 'toigo_curled_under_bob',
     clothes: ['female_elegantsuit01', 'mindfront_shoes_oxford_female'],
-    meta: { voice: { pitch: 1.08, rate: 1.04 } },
+    meta: { hairColor: [0.05, 0.035, 0.025], voice: { pitch: 1.08, rate: 1.04 } },
   },
   {
     id: 'cruz', name: 'Det. Renata Cruz',

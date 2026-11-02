@@ -114,7 +114,7 @@ export async function build() {
   const marks = {
     stairDoor: { pos: [-X + 0.9, 0, -6], yaw: 90 }, pillarB: { pos: [-8.6, 0, -3.6], yaw: 90 }, breaker: { pos: [-12, 0, -Z + 0.8], yaw: 180 },
     lightPool: { pos: [-2.5, 0, -0.8], yaw: 90 }, ramp: { pos: [X + 2, 0, 0], yaw: 90 }, van: { pos: [-0.6, 0, 0.6], yaw: 90 }, vanFront: { pos: [6.3, 0, -0.7], yaw: 270 },
-    nadiaStart: { pos: [0.4, 0, 1.8], yaw: 270 }, kowStart: { pos: [-0.2, 0, 2.6], yaw: 120 }, dezStart: { pos: [14.5, 0, -1.2], yaw: 90 }, rookPhone: { pos: [8.5, 0, 3.5], yaw: 200 },
+    nadiaStart: { pos: [-1.8, 0, 2.1], yaw: 60 }, kowStart: { pos: [-2.6, 0, 2.9], yaw: 110 }, dezStart: { pos: [14.5, 0, -1.2], yaw: 90 }, rookPhone: { pos: [8.5, 0, 3.5], yaw: 200 },
     standoffRook: { pos: [0.2, 0, -0.6], yaw: 270 }, standoffNadia: { pos: [-0.25, 0, -0.55], yaw: 270 }, standoffBat: { pos: [-3.6, 0, -0.9], yaw: 90 },
   };
   const points = { van: [1.0, 1.3, 0.6], breakerPanel: [-12, 1.5, -Z + 0.3], cam_stairs: [-X + 0.6, 1.7, -5.6], vanFrontP: [6.0, 1.1, 0.3] };
@@ -124,13 +124,13 @@ export async function build() {
     sun: { dir: [0.2, 1, 0.3], color: [0.5, 0.6, 0.8], intensity: 0.0 },
     weather: { rain: 0, wind: 0, night: 1, overcast: 1, lightning: 0, wetness: 0.35 },
     fog: { density: 0.012, height: 0, falloff: 0.15, mist: 0, maxDist: 40, anisotropy: 0.5 },
-    exposure: { key: 0.13, minEV: -3, maxEV: 6 },
-    grade: { lift: [0.012, 0.016, 0.02], gamma: [1, 1, 1], gain: [1, 1.0, 0.98], shadowTint: [0.88, 1.0, 1.06], highTint: [1.0, 1.02, 0.96], saturation: 0.82, contrast: 1.1, temperature: -0.3, halation: 0.12 },
+    exposure: { key: 0.1, minEV: -3, maxEV: 4 },
+    grade: { lift: [0.012, 0.016, 0.02], gamma: [1, 1, 1], gain: [1, 1.0, 0.98], shadowTint: [0.88, 1.0, 1.06], highTint: [1.0, 1.02, 0.96], saturation: 0.92, contrast: 1.08, temperature: -0.12, halation: 0.12 },
     envIntensity: 0.25,
     lights(m) {
       mode = m;
       for (const t of tubes) { t.light.userData.light.intensity = m === 'on' ? t.base : 0; t.fixture.material = m === 'on' ? fixtureM : mat(0x777777, { roughness: 0.3 }); }
-      for (const e of emergency) e.intensity = m === 'emergency' ? 4 : 0;
+      for (const e of emergency) e.intensity = m === 'emergency' ? 14 : 0;
       key.intensity = m === 'on' ? 18 : 0;
     },
     update(dt, t) {

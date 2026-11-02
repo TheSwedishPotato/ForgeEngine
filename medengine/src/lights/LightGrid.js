@@ -225,7 +225,8 @@ vec3 localLights(vec3 wpos, vec3 N, vec3 V, vec3 diffuseColor, vec3 F0, float ro
     float dist = sqrt(dist2);
     L /= dist;
     float fall = win / (dist2 + d.z * d.z + 0.01);
-    if (type == 2) fall *= 1.0 + c.w * 0.8;   // a long tube gives more light
+    // a tube sits in a fixture that throws its light down: little reaches the ceiling above it
+    if (type == 2) fall *= (1.0 + c.w * 0.8) * (0.06 + 0.94 * saturate(L.y * 1.3));
     if (type == 1) {
       float cd = dot(-L, c.xyz);
       fall *= smoothstep(c.w, d.x, cd);

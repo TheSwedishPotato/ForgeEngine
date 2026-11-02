@@ -17,6 +17,7 @@
 import { writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join, basename, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { gzipSync } from 'node:zlib';
 import { pathToFileURL } from 'node:url';
 import { MH_DATA, MH_ASSETS, readText, parseObj, parseTarget, parseMhclo, parseMhmat, fitProxy, loadJSON, vertexGroups, groupMean, expandRanges } from './mhdata.mjs';
 import { shape } from './macro.mjs';
@@ -168,7 +169,7 @@ export function writeBase(outDir) {
     license: 'Derived from the MakeHuman/MPFB CC0 base mesh, rig, weights and faceunits01 targets.',
   };
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, 'human-base.bin'), pk.bytes());
+  writeFileSync(join(outDir, 'human-base.binz'), gzipSync(pk.bytes(), { level: 9 }));
   writeFileSync(join(outDir, 'human-base.json'), JSON.stringify(header));
 }
 
@@ -278,7 +279,7 @@ export function buildCharacter(r, outDir) {
   header.credits = [...credits.entries()].map(([asset, pack]) => ({ asset, pack, license: /cc-?by/i.test(pack) ? 'CC-BY 4.0' : 'CC0' }));
   credits.clear();
   header.height = Math.max(...Array.from({ length: BODY_VERTS }, (_, v) => pos[v * 3 + 1])) * SCALE - minY * SCALE;
-  writeFileSync(join(outDir, `${r.id}.bin`), pk.bytes());
+  writeFileSync(join(outDir, `${r.id}.binz`), gzipSync(pk.bytes(), { level: 9 }));
   writeFileSync(join(outDir, `${r.id}.json`), JSON.stringify(header));
   return header;
 }
