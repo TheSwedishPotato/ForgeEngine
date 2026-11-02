@@ -139,7 +139,8 @@ export class Controller {
     // (filtered over a second: on long ropes the car bounces for a while after people step in)
     if (!this.pending || this.pending.kind === 'relevel') this.loadKg += (h.measuredLoad() - this.loadKg) * Math.min(1, dt / 1.0);
     this.levelErr = (this.levelErr ?? 0) + ((h.yc - floorY(nearestFloor(h.yc))) - (this.levelErr ?? 0)) * Math.min(1, dt / 0.8);
-    const ol = !I.lwBypass && this.loadKg > SPEC.ratedLoad * SPEC.overload;   // the technician's bypass switch ignores it
+    // with hysteresis: set at 110 %, cleared only under 105 % (the reading wavers while the car re-levels and bounces)
+    const ol = !I.lwBypass && this.loadKg > SPEC.ratedLoad * (this.overload ? SPEC.overload - 0.05 : SPEC.overload);   // the technician's bypass switch ignores it
     if (ol !== this.overload) { this.overload = ol; if (ol) this.say(`Overload: ${Math.round(this.loadKg)} kg in a ${SPEC.ratedLoad} kg car. The doors stay open.`); }
     this.fullLoad = this.loadKg > SPEC.ratedLoad * SPEC.fullLoad;
     // the seismic sensor (EN 81-77): latched until a technician resets it
