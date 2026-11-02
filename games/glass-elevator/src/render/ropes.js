@@ -41,7 +41,7 @@ export class Ropes {
     if (dt <= 0) return;
     dt = Math.min(dt, 0.05);
     // wind: the building sways by a few hundredths of a m/s², slowly (a filtered random walk)
-    for (let i = 0; i < 2; i++) this.wind[i] += (-this.wind[i] / 4 + 0.03 * (Math.random() - 0.5) / Math.sqrt(dt) * 0.5) * dt;
+    if (this.selfWind !== false) for (let i = 0; i < 2; i++) this.wind[i] += (-this.wind[i] / 4 + 0.03 * (Math.random() - 0.5) / Math.sqrt(dt) * 0.5) * dt;
     const A = [this.wind[0] + (shake?.[0] ?? 0), this.wind[1] + (shake?.[2] ?? 0)];
     let n = 0;
     const M = this.mesh;

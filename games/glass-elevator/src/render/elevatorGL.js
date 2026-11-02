@@ -280,7 +280,10 @@ export class ElevatorGL {
         ]);
       }
     }
-    this.ropes.update(dt, this.sim.shake?.a, [[PIT.x0 + 0.1, PIT_Y + 0.05, FACADE + 0.15], [PIT.x1 - 0.1, 1e4, PIT.z1 - 0.1]]);
+    // the ropes hang in a swaying tower: its acceleration two thirds of the way up drives them (earthquake included)
+    this.ropes.selfWind = false;
+    const A = this.sim.atmos.accelAt(TOP_Y * 0.67), q = this.sim.shake?.a;
+    this.ropes.update(dt, [A[0] + (q?.[0] ?? 0), 0, A[2] + (q?.[2] ?? 0)], [[PIT.x0 + 0.1, PIT_Y + 0.05, FACADE + 0.15], [PIT.x1 - 0.1, 1e4, PIT.z1 - 0.1]]);
   }
 
   _ropes() {

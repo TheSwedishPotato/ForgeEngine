@@ -70,7 +70,7 @@ export const GOVERNOR = { x: 1.02, y: MR.floor + 0.55, z: CAR.zc + 0.55, r: 0.15
 // ---------------------------------------------------------------------------------------------
 // The elevator
 
-const ropeN = 10, ropeD = 0.016;   // a 672 m rise: ten 16 mm ropes keep the safety factor over 12 with 6 t of rope hanging
+const ropeN = 10, ropeD = 0.005;   // a 672 m rise: ten carbon-fibre hoisting belts (KONE UltraRope type, 25 x 5 mm)
 export const SPEC = {
   ratedLoad: 1600,          // Q (kg): 21 persons
   persons: 21,
@@ -79,18 +79,21 @@ export const SPEC = {
   jerk: 1.2,                // m/s³
   carMass: 2100,            // P (kg): car, sling, laminated glass walls, doors, operator, travelling cable share
   balance: 0.45,            // counterweight = P + 0.45 Q
-  // hoist ropes: 10 x 16 mm, 8x19 Seale with fibre core, dual tensile 1370/1770 (EN 12385-5)
-  ropes: { n: ropeN, d: ropeD, kgPerM: 0.90 * ropeN, mbf: 132e3, EA: 90e9 * 0.384 * ropeD * ropeD * ropeN, damping: 0.02 },
+  // hoisting belts: carbon fibre in epoxy with a high-friction coat, about a fifth of the weight of steel rope
+  // of the same strength (KONE UltraRope: rises to ~1 km); per belt ~0.2 kg/m, breaking load and stiffness
+  // close to a 16 mm steel rope's (estimates: the published figures are relative)
+  // (was: 8 x 13 mm steel, 8x19 Seale with fibre core), dual tensile 1370/1770 (EN 12385-5)
+  ropes: { n: ropeN, d: ropeD, kgPerM: 0.20 * ropeN, mbf: 140e3, EA: 9.0e6 * ropeN, carbon: true, damping: 0.02 },
   // compensating ropes: 4 x 18 mm, the same weight a metre as the hoist ropes (full compensation)
-  comp: { n: 6, d: 0.024, kgPerM: 0.90 * ropeN, EA: 90e9 * 0.384 * 0.024 * 0.024 * 6, sheaveMass: 1000, sheaveR: 0.8, tieDown: true },
+  comp: { n: 4, d: 0.012, kgPerM: 0.20 * ropeN, EA: 90e9 * 0.384 * 0.012 * 0.012 * 4, sheaveMass: 1000, sheaveR: 0.8, tieDown: true },
   machine: {
     // gearless permanent-magnet synchronous machine, 20 poles, sheave on the rotor
     J: 32,                  // kg·m², rotor, sheave and brake drums
-    ratedTorque: 9000, maxTorque: 18000, ratedRpm: 298.4, poles: 20, ratedPower: 280e3,   // ~30 t moving with 12 t of hoist rope and 12 t of compensation
+    ratedTorque: 6000, maxTorque: 12000, ratedRpm: 298.4, poles: 20, ratedPower: 190e3,   // ~11 t moving: light carbon belts
     torqueLag: 0.004,       // the current loop (s)
     efficiency: 0.93,
   },
-  brakes: { n: 2, torque: 12000, lift: 0.25, drop: 0.15 },   // each set (N·m)
+  brakes: { n: 2, torque: 7500, lift: 0.25, drop: 0.15 },   // each set (N·m)
   traction: { wrapDeg: 160, grooveDeg: 30, undercutDeg: 95 },
   governor: { trip: 11.8, overspeedSwitch: 11.2, ropeD: 0.008, tension: 60 * G, linkTravel: 0.03 },
   safetyGear: { force: 3700 * G * 1.5, engageTime: 0.05 },     // progressive: ~0.5 gn on P + Q in free fall

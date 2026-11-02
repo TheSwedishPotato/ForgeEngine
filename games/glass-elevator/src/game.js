@@ -12,6 +12,8 @@ import { BuildingGL } from './render/buildingGL.js';
 import { ElevatorGL } from './render/elevatorGL.js';
 import { makeProps } from './world/props.js';
 import { makeWeights } from './world/weights.js';
+import { Clouds } from './render/clouds.js';
+import { makePlates } from './render/plates.js';
 import { Player } from './player.js';
 import { Sound } from './audio/sound.js';
 import { ToolBelt, mend } from './world/tools.js';
@@ -34,6 +36,8 @@ export class Game {
     this.elevatorGL = new ElevatorGL(ctx);
     this.props = makeProps(this.world, this.M, this.stage.scene);
     makeWeights(this.world, this.stage.scene, this.props, this.M);
+    this.plates = makePlates(this);
+    this.clouds = new Clouds(this.stage.scene, this.sim.atmos, [-18.4, 18.4, -15.4, 17.6]);   // the hole: the tower and its hoistway
     this.buildingGL.onRepair = () => this.repair();
     // what blocks your hand from a button behind it: the door panels
     this.occluders = [...this.buildingGL.landing.slice(1).flatMap((l) => l.panels), ...this.elevatorGL.doorPanels.flatMap((g) => g.children)];
@@ -152,7 +156,13 @@ export class Game {
     this.buildingGL.update();
     this.controls.update();
     this.player.update(dt, this.stage.camera);
+    // your ears: the middle ear holds its pressure until the difference forces the tube open (a pop)
+    { const A = this.sim.atmos, P = this.player, amb = P.inCar() && A.cab ? A.cab : A.p(P.p[1]);
+      if (this._ear === undefined || Math.abs(amb - this._ear) > 40) this._ear = amb;          // (a jump: Go to)
+      else if (Math.abs(amb - this._ear) > 12) { this.sim.say(`Your ears pop (${(amb - this._ear).toFixed(0)} hPa ${amb > this._ear ? 'more' : 'less'} pressure).`, 'You'); this._ear = amb; } }
     this.buildingGL.cull(this.stage.camera);
+    this.clouds.update(dt, this.stage.camera);
+    this.plates.update();
     if (this.sim.shake) { const a = this.sim.shake.a, c = this.stage.camera.position; c.x += a[0] * 0.01; c.z += a[2] * 0.01; }   // the building shakes under you
     this._lamps();
     this.stage.setTime(this.sim.utcMs);

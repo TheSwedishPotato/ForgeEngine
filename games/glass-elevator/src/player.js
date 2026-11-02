@@ -14,7 +14,7 @@
  * go up and down, F to follow the car); clicking works from there too.
  */
 import { Vector3, Raycaster, Vector2 } from 'three';
-import { FLOORS, floorY, MR, PIT_Y, FACADE } from './data/spec.js';
+import { FLOORS, floorY, MR, PIT_Y, FACADE, CAR } from './data/spec.js';
 import { PIT, LOBBY, LOBBY1 } from './render/buildingGL.js';
 import { overlap } from './physics/bodies.js';
 import { boxMesh } from './render/build.js';
@@ -211,6 +211,9 @@ export class Player {
     else if (s.kind === 'pitDoor' && dir > 0) { this.teleport([PIT.x1 - 0.3, PIT_Y, PIT.z1 - 0.55], -Math.PI / 2); say('Through the pit door and down the ladder into the pit. (The pit STOP switch is on the wall by the ladder.)'); }
     else if (s.kind === 'pitLadder') { this.teleport([PIT.x1 + 0.6, 0, FACADE + 1.8], 0); say('Up the pit ladder, out onto the plaza.'); }
   }
+
+  /** Inside the car (for its sealed, pressure-controlled air). */
+  inCar() { const h = this.game.sim.hoist, p = this.p; return Math.abs(p[0]) < CAR.w / 2 + 0.05 && p[2] > CAR.z0 - 0.05 && p[2] < CAR.z0 + CAR.d + 0.05 && p[1] > h.yc - 0.3 && p[1] < h.yc + CAR.h; }
 
   teleport(pos, yaw) { this._release(); this.p = [...pos]; this.v = [0, 0, 0]; this.peak = pos[1]; this.grounded = true; if (yaw !== undefined) this.yaw = yaw; this.mode = 'walk'; }
 

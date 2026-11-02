@@ -8,7 +8,8 @@ import { Hoist } from './physics/hoist.js';
 import { Drive } from './physics/drive.js';
 import { Doors } from './physics/doors.js';
 import { Controller } from './control/controller.js';
-import { DATE } from './data/spec.js';
+import { DATE, ROOF_Y } from './data/spec.js';
+import { Atmos } from './physics/atmos.js';
 
 export const hms = (s) => { const [h, m = 0, sec = 0] = String(s).split(':').map(Number); return h * 3600 + m * 60 + sec; };
 export const fmt = (t) => { t = ((t % 86400) + 86400) % 86400; const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = Math.floor(t % 60); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`; };
@@ -26,6 +27,7 @@ export class Sim {
     this.log = [];
     this.sounds = [];
     this.world = null;          // the loose things, when there is a world round the elevator
+    this.atmos = new Atmos(ROOF_Y);
   }
 
   get utcMs() { return Date.UTC(DATE.year, DATE.month - 1, DATE.day) + (this.clock - DATE.utcOffset * 3600) * 1000; }
@@ -56,6 +58,7 @@ export class Sim {
       this.doors.step(this.dt, h.yc);
       h.step(this.dt);
       if (++this.tick % 4 === 0) this.world?.step(this.dt * 4);
+      if (this.tick % 20 === 0) this.atmos.step(this.dt * 20, this.shake?.a, h.yc, Math.abs(h.vc) > 0.05);
       if (h.events.length) { for (const e of h.events) this.say(e, 'Elevator'); h.events.length = 0; }
       this.clock += this.dt;
     }
