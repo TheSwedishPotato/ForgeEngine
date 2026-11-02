@@ -99,9 +99,9 @@ export function makeMaterials() {
 
 export class Labels {
   constructor() {
-    this.c = document.createElement('canvas'); this.c.width = 2048; this.c.height = 1024;
+    this.c = document.createElement('canvas'); this.c.width = 2048; this.c.height = 2048;
     this.g = this.c.getContext('2d');
-    this.g.fillStyle = '#000'; this.g.fillRect(0, 0, 2048, 1024);
+    this.g.fillStyle = '#000'; this.g.fillRect(0, 0, 2048, 2048);
     this.at = new Map(); this.x = 0; this.y = 0; this.rowH = 0;
     this.tex = new CanvasTexture(this.c); this.tex.colorSpace = SRGBColorSpace; this.tex.anisotropy = 8;
     this.engraved = new MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.5, map: this.tex });
@@ -119,7 +119,7 @@ export class Labels {
     g.fillStyle = '#fff'; g.strokeStyle = '#fff';
     draw(g, w, h);
     g.restore();
-    const r = { u0: x / 2048, v0: 1 - (y + h) / 1024, u1: (x + w) / 2048, v1: 1 - y / 1024, w, h };
+    const H = this.c.height, r = { u0: x / 2048, v0: 1 - (y + h) / H, u1: (x + w) / 2048, v1: 1 - y / H, w, h };
     this.at.set(key, r);
     this.x += w + 2; this.rowH = Math.max(this.rowH, h);
     this.tex.needsUpdate = true;
