@@ -71,6 +71,10 @@ def portrait(black, white, out):
 
 def plate(src, out):
     rgb = np.asarray(Image.open(src).convert('RGB')).astype(np.float32) / 255
+    # illustrations keep their shadows readable: lift the darks (gamma), keep the highlights
+    lum = rgb.mean(axis=2, keepdims=True)
+    gamma = 1.0 + 0.9 * np.clip(0.35 - lum.mean(), 0, 0.35) / 0.35
+    rgb = np.power(rgb, 1 / gamma) * 0.97 + 0.012
     painted = kuwahara(rgb, 6)
     im = finish(Image.fromarray((painted * 255).astype(np.uint8)), sat=1.12, contrast=1.08, sharp=80)
     im.save(out, 'WEBP', quality=84, method=6)

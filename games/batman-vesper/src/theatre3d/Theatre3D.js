@@ -224,7 +224,7 @@ export class Theatre3D {
     this.timeScale = 0.6;
     this.audio?.sfx('choice');
     const r = await this.ui.choose(spec);
-    this.timeScale = 1;
+    this.timeScale = this.paused ? 0.0001 : 1;
     this.audio?.sfx('click');
     return r;
   }
@@ -234,7 +234,7 @@ export class Theatre3D {
     this.timeScale = 0.3;
     this.audio?.sfx('heartbeat');
     const ok = await this.ui.qte(spec, (i, good) => this.audio?.sfx(good ? 'success' : 'fail'));
-    this.timeScale = 1;
+    this.timeScale = this.paused ? 0.0001 : 1;
     return ok;
   }
 

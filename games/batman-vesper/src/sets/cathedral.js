@@ -19,9 +19,13 @@ export function streetGlow({ size = 1400, y = -60, spacing = 70 } = {}) {
     x.fillRect(0, i + Math.random() * 2, 1024, avenue ? 1.4 : 0.8);
     x.fillRect(i + Math.random() * 2, 0, avenue ? 1.4 : 0.8, 1024);
   }
+  // soften: streets are pools of light seen through rain, not lines
+  const soft = document.createElement('canvas'); soft.width = soft.height = 1024;
+  const sx = soft.getContext('2d'); sx.filter = 'blur(3px)'; sx.drawImage(c, 0, 0); sx.filter = 'none'; sx.globalAlpha = 0.6; sx.drawImage(c, 0, 0);
+  x.clearRect(0, 0, 1024, 1024); x.drawImage(soft, 0, 0);
   for (let k = 0; k < 900; k++) { x.fillStyle = Math.random() < 0.5 ? 'rgba(255,240,220,0.9)' : 'rgba(255,40,30,0.9)'; x.fillRect(Math.random() * 1024, Math.random() * 1024, 1.5, 1.5); }
   const t = new CanvasTexture(c); t.colorSpace = SRGBColorSpace;
-  const m = new MeshStandardMaterial({ color: 0x050506, roughness: 0.3, emissive: new Color(1, 1, 1), emissiveMap: t, emissiveIntensity: 0.9 });
+  const m = new MeshStandardMaterial({ color: 0x050506, roughness: 0.3, emissive: new Color(1, 1, 1), emissiveMap: t, emissiveIntensity: 0.45 });
   m.userData.puddles = false;
   const mesh = new Mesh(new PlaneGeometry(size, size), m);
   mesh.rotation.x = -Math.PI / 2; mesh.position.y = y;

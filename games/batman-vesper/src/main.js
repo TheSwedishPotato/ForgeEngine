@@ -78,6 +78,7 @@ async function play(fromChapter = null, resume = null) {
 }
 
 async function afterEpisode() {
+  if (auto) return;   // the test tools read the result; no menus
   for (;;) {
     const pick = auto ? 'title' : await T.ui.flowchart(runner, CHAPTERS, [
       { id: 'night2', label: 'Continue: Night Two', primary: true },
@@ -140,11 +141,12 @@ addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && runner && !$('#settings-panel').classList.contains('on')) {
     const p = $('#pause');
     p.classList.toggle('on');
-    T.timeScale = p.classList.contains('on') ? 0.0001 : 1;
+    T.paused = T.ui.paused = p.classList.contains('on');
+    T.timeScale = T.paused ? 0.0001 : 1;
   }
   if (e.key === 'F3') { e.preventDefault(); $('#stats').classList.toggle('on'); }
 });
-$('#resume').onclick = () => { $('#pause').classList.remove('on'); T.timeScale = 1; };
+$('#resume').onclick = () => { $('#pause').classList.remove('on'); T.paused = T.ui.paused = false; T.timeScale = 1; };
 $('#pause-settings').onclick = () => openSettings();
 $('#pause-quit').onclick = () => location.reload();
 setInterval(() => {

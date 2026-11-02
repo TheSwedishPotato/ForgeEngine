@@ -178,10 +178,12 @@ export class Overlay {
       let timer = null;
       if (spec.timer) {
         const tb = el('ov-timer', C), bar = el('', tb);
-        const t0 = performance.now();
+        let elapsed = 0, lastT = performance.now();
         timer = setInterval(() => {
-          if (input && document.activeElement === input && input.value) return;   // typing pauses the clock
-          const k = 1 - (performance.now() - t0) / (spec.timer * 1000);
+          const now = performance.now(), step = now - lastT; lastT = now;
+          if (this.paused || (input && document.activeElement === input && input.value)) return;   // pause and typing stop the clock
+          elapsed += step;
+          const k = 1 - elapsed / (spec.timer * 1000);
           bar.style.width = Math.max(0, k * 100) + '%';
           if (k <= 0) finish({ id: spec.default ?? spec.options[0].id, timedOut: true });
         }, 50);
@@ -221,8 +223,12 @@ export class Overlay {
       // touch/click: tapping the prompt counts
       items.forEach((d, k) => { d.style.pointerEvents = 'auto'; d.onclick = () => { if (k === i) onKey({ key: keys[i] === 'SPACE' ? ' ' : keys[i], code: keys[i] === 'SPACE' ? 'Space' : '', preventDefault() {} }); }; });
       let raf;
+      let lastT = performance.now();
       const tick = () => {
-        const k = (performance.now() - t0) / (window * 1000);
+        const now = performance.now();
+        if (this.paused) t0 += now - lastT;
+        lastT = now;
+        const k = (now - t0) / (window * 1000);
         const ring = items[i]?.querySelector('.ring');
         if (ring) ring.style.strokeDashoffset = String(251.3 * Math.min(1, k));
         if (k >= 1) { items[i]?.classList.add('miss'); finish(false); return; }

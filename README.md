@@ -1,3 +1,12 @@
+# ForgeEngine
+
+> **New:** [`medengine/`](medengine/README.md) — **Med Engine 2**, the WebGL2 engine of the ForgeEngine
+> games as a standalone package (digital humans, tiled lights, skin scattering, rain, a film camera,
+> Claude). First game on it: [`games/batman-vesper/`](games/batman-vesper/README.md) — **BATMAN: VESPER**,
+> an interactive film (and its illustrated-story twin) where Claude plays the people you talk to.
+
+---
+
 # Forge Engine - Medieval Life Simulation
 
 ## Overview

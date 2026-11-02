@@ -30,6 +30,7 @@ async function begin() {
   T.onMenu = () => T._note(`The code ${R.state.code} · Nadia ${R.state.nadia} · Rook ${R.state.rook}`);
   await R.play(P.get('chapter'));
   window.__ended = true;
+  if (P.get('auto') === '1') return;
   const more = await T.choose({ prompt: 'The night is over. Vesper is not.', options: [{ id: 'n2', label: 'Night Two (written live by Claude)' }, { id: 'again', label: 'Start again' }] });
   if (more.id === 'n2') await R.continueStory();
   location.reload();
