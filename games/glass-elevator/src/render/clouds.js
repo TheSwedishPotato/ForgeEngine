@@ -57,7 +57,7 @@ function wall(a, b, y0, y1, scale) {
 export class Clouds {
   constructor(scene, atmos, hole) {
     this.A = atmos;
-    const base = atmos.cloudBase, top = atmos.cloudTop, R = 5000, [hx0, hx1, hz0, hz1] = hole;
+    const base = 0, top = atmos.cloudTop - atmos.cloudBase, R = 5000, [hx0, hx1, hz0, hz1] = hole;   // built at 0: moved to the base
     this.deckTex = noiseTex(512, 0.8, 11);
     const deck = new MeshStandardMaterial({ color: 0xffffff, map: this.deckTex, alphaTest: 0.35, roughness: 1, metalness: 0 });
     // the underside: lit by the sky through the cloud, not by the sun: an even grey
@@ -68,7 +68,7 @@ export class Clouds {
     for (const [x0, x1, z0, z1] of frame) {
       g.add(new Mesh(sheet(x0, x1, z0, z1, base, false, 900), under));
       g.add(new Mesh(sheet(x0, x1, z0, z1, top, true, 900), deck));
-      g.add(new Mesh(sheet(x0, x1, z0, z1, (base + top) / 2, true, 700), deck));
+      g.add(new Mesh(sheet(x0, x1, z0, z1, top / 2, true, 700), deck));
     }
     // inside the cloud: veils round the tower at 25, 45 and 70 m, the farthest solid white
     this.veilTex = noiseTex(256, 0.95, 5);
@@ -80,6 +80,7 @@ export class Clouds {
       this.veils.add(new Mesh(sheet(x0, x1, z0, z1, base + 0.5, true, 60), m), new Mesh(sheet(x0, x1, z0, z1, top - 0.5, false, 60), m));
     });
     for (const m of [...g.children, ...this.veils.children]) { m.frustumCulled = false; m.castShadow = false; }
+    g.position.y = this.veils.position.y = atmos.cloudBase;
   }
 
   /** The deck drifts with the wind at its height; the veils are there only while you are in the cloud. */
@@ -87,6 +88,7 @@ export class Clouds {
     const A = this.A, v = A.mean((A.cloudBase + A.cloudTop) / 2), d = A.dir + A.nd;
     // the wind blows from dir: the cloud moves the other way
     this.deckTex.offset.x -= (Math.sin(d) * v * dt) / 900; this.deckTex.offset.y -= (Math.cos(d) * v * dt) / 900;
+    this.group.position.y = this.veils.position.y = A.cloudBase;
     const y = cam.position.y;
     this.veils.visible = y > A.cloudBase - 2 && y < A.cloudTop + 2;
   }

@@ -64,7 +64,8 @@ export class Doors {
     c.vt = vt;
     F += c.Fext + c.Fhand;
     const locked = !inZone && c.x < 0.004;            // the car door lock, away from the unlocking zone
-    let v = friction(c.v + (F / m) * dt, 14, m, dt);
+    // (coupled to a landing door, the stack effect's pressure presses the panels into their guides)
+    let v = friction(c.v + (F / m) * dt, 14 + (this.coupled ? this.extraFric ?? 0 : 0), m, dt);
     if (locked && v > 0) v = 0;
     c.v = v;
     const cx0 = c.x;

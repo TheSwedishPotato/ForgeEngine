@@ -54,11 +54,18 @@ export class Sim {
         if (this.world) this.world.shake = S.a;
         if (t >= S.dur) { this.shake = null; if (this.world) this.world.shake = null; this.ctl.inputs.seismic = false; }
       }
+      // the air drags on the car as it runs (0.5 rho Cd A v|v|, a 3.4 m² roof), the stack effect on the doors
+      h.aeroF = -0.5 * this.atmos.rho(h.yc) * 1.05 * 3.4 * h.vc * Math.abs(h.vc);
+      this.doors.extraFric = 0.35 * Math.abs(this.atmos.stack(h.yc + 1)) * 2.3;
       this.ctl.step(this.dt);
       this.doors.step(this.dt, h.yc);
       h.step(this.dt);
       if (++this.tick % 4 === 0) this.world?.step(this.dt * 4);
-      if (this.tick % 20 === 0) this.atmos.step(this.dt * 20, this.shake?.a, h.yc, Math.abs(h.vc) > 0.05);
+      if (this.tick % 20 === 0) {
+        const ice0 = this.atmos.ice;
+        this.atmos.step(this.dt * 20, this.shake?.a, h.yc, Math.abs(h.vc) > 0.05, { vc: h.vc, mass: h.P + h.load, power: this.drive.power });
+        h.load += this.atmos.ice - ice0;            // rime weighs on the car (and its load weighing cannot tell it from people)
+      }
       if (h.events.length) { for (const e of h.events) this.say(e, 'Elevator'); h.events.length = 0; }
       this.clock += this.dt;
     }

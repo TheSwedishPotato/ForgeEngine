@@ -14,6 +14,16 @@
  *    Comfort codes put the limit at about 10 to 25 milli-g peak at the top floor.
  *  - The car's air pressure: a sealed glass car with blowers that hold the change to 1.26 hPa/s at most
  *    (as Taipei 101's cars); your middle ear catches up in pops.
+ *  - The wind on the car: it runs outside the curtain wall, so the wind at its height pushes it sideways
+ *    (0.5 rho v² Cd A) into its roller guides, which with the rail joints at speed set its ride vibration.
+ *  - The stack effect: warm air inside, cold air outside: the pressure across the landing doors grows with
+ *    the distance from the neutral plane at mid-height (dp = g drho dz), presses the panels into their guides
+ *    and, in a hard winter, makes them bind (tall buildings' doors are re-adjusted twice a year for it).
+ *  - The machine room's air: the machine's losses warm it, the roof's cold draws heat out; a thermostat runs
+ *    a heater below 7 °C and a fan above 30 °C (the equipment is rated for 5 to 40 °C, and lifts do stop in
+ *    the cold when it leaves that band).
+ *  - Rime: in cloud below 0 °C the droplets freeze on what they hit: ice grows on the car (collection
+ *    efficiency 0.5, liquid water 0.3 g/m³) and on its rails, and melts again above freezing.
  */
 const G = 9.80665;
 
@@ -32,7 +42,22 @@ export class Atmos {
     this.phase = 0; this.a = [0, 0]; this.top = [0, 0, 0]; this.peak = 0; this.t = 0;
     this.ca = 4.1e-4; this.cc = 0.35 * 4.1e-4;            // tower top displacement per (m/s)² along and across
     this.cab = null;
+    this.Tin = 21;                                        // the building's air (°C)
+    this.spread = 5.2;                                    // dew-point spread (K)
+    this.car = { x: [0, 0], v: [0, 0], a: [0, 0], peak: 0, F: [0, 0], rail: [0, 0], railV: [0, 0] };
+    this.ice = 0;                                         // rime on the car (kg)
+    this.mr = { T: 15, heater: false, fan: false };
+    this.season = 'autumn'; this.windName = 'normal';
   }
+
+  /** The weather: wind at 10 m and the season (temperature and dew-point spread, so the cloud base). */
+  setWeather({ v10, season }) {
+    if (v10 !== undefined) { this.v10 = v10; this.windName = { 2: 'calm', 5.5: 'normal', 10: 'strong', 15: 'storm' }[v10] ?? `${v10} m/s`; }
+    if (season) { const S = { autumn: [8, 5.2], winter: [-6, 3.0], summer: [24, 10] }[season]; this.season = season; this.T0 = S[0]; this.spread = S[1]; }
+    this.Td = this.T0 - this.spread; this.cloudBase = 125 * this.spread; this.cloudTop = this.cloudBase + 320;
+  }
+  /** Stack effect: pressure across a landing door at height y (Pa, + pushes from the building into the hoistway). */
+  stack(y) { const ri = (this.p(y) * 100) / (287.05 * (this.Tin + 273.15)); return 0.4 * (this.rho(y) - ri) * G * (y - this.H / 2); }
 
   T(y) { return this.T0 - 0.0065 * y; }
   p(y) { return this.p0 * Math.pow(1 - 2.25577e-5 * y, 5.25588); }
@@ -45,7 +70,7 @@ export class Atmos {
   inCloud(y) { return y > this.cloudBase && y < this.cloudTop; }
 
   /** dt (s); quake the ground's acceleration [x, , z] (an earthquake) or null; carY and carMoving for the car's air. */
-  step(dt, quake, carY, carMoving) {
+  step(dt, quake, carY, carMoving, ex = {}) {
     this.t += dt;
     // gusts: an Ornstein-Uhlenbeck process, time scale ~ 12 s; the direction wanders slowly
     const g = () => { let s = 0; for (let i = 0; i < 6; i++) s += Math.random(); return (s - 3) / Math.sqrt(0.5); };
@@ -75,6 +100,30 @@ export class Atmos {
     if (this.cab === null) this.cab = out;
     const lim = 1.26 * dt;
     this.cab = carMoving ? this.cab + Math.max(-lim, Math.min(lim, out - this.cab)) : this.cab + (out - this.cab) * Math.min(1, dt / 2);
+    // ---- the wind on the car, its roller guides and the rail joints --------------------------------------
+    const y = carY + 1.25, vw = this.wind(y), rho = this.rho(y), vc = ex.vc ?? 0, m = (ex.mass ?? 2500) + this.ice;
+    // the tower shelters the car (on its south face) from a north wind: then it sits in the wake
+    const shelter = Math.cos(dir) > 0.3 ? 0.35 : 1, q = 0.5 * rho * vw * vw * 1.2 * shelter;
+    const C = this.car, Ff = [q * 4.9 * -sn, q * 6.2 * cs];                    // along the facade (x) and through it (z), N
+    const k = 2.5e5, cz = 2 * 0.15 * Math.sqrt(k * m);                      // guide stiffness (N/m), damping
+    const tau = 5 / Math.max(0.3, Math.abs(vc)), rough = 0.00015 * (1 + 2 * Math.min(1, this.ice / 20)) * Math.min(1, Math.abs(vc) / 2);
+    for (let i = 0; i < 2; i++) {
+      // the rails' alignment as the car runs over them: a random profile, 5 m sections
+      C.railV[i] += (-C.railV[i] / tau) * dt + rough * Math.sqrt((2 * dt) / tau) * g() / Math.max(dt, 1e-3) * dt * 3;
+      C.rail[i] += (C.railV[i] - C.rail[i] / tau) * dt;
+      const acc = (Ff[i] - k * (C.x[i] - C.rail[i]) - cz * C.v[i]) / m;
+      C.v[i] += acc * dt; C.x[i] += C.v[i] * dt; C.a[i] = acc; C.F[i] = k * (C.x[i] - C.rail[i]);
+    }
+    C.peak = Math.max((Math.hypot(C.a[0], C.a[1]) / G) * 1000, C.peak - dt * 2);
+    // ---- rime on the car in freezing cloud; melting above 0 °C ------------------------------------------
+    const Tc = this.T(y);
+    if (this.inCloud(y) && Tc < 0) this.ice += 0.5 * 0.3e-3 * Math.max(vw, Math.abs(vc)) * 6.2 * shelter * dt;
+    else if (Tc > 0.5) this.ice = Math.max(0, this.ice - 0.004 * Tc * dt);
+    // ---- the machine room's air --------------------------------------------------------------------------
+    const R = this.mr, Tout = this.T(this.H + 8), loss = 300 + 0.07 * Math.abs(ex.power ?? 0);
+    if (R.T < 7) R.heater = true; else if (R.T > 10) R.heater = false;
+    if (R.T > 30) R.fan = true; else if (R.T < 26) R.fan = false;
+    R.T += ((loss + (R.heater ? 6000 : 0) - (R.fan ? 1500 : 300) * (R.T - Tout)) / 2e5) * dt;
   }
 
   /** The tower's sway acceleration at height y (world [x, 0, z], m/s²): the first mode's shape (y / H)^1.5. */

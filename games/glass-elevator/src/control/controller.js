@@ -100,6 +100,8 @@ export class Controller {
     if (I.insp) return 'inspection';
     if (I.eeo) return 'eeo';
     if (this.quake) return 'seismic';
+    if (this.windOp === 2) return 'wind';
+    if (this.mrTemp) return 'temp';
     if (this.fire.recalled && I.fire2 !== 'off') return 'fire2';
     if (this.fire.latched) return 'fire1';
     if (I.independent) return 'independent';
@@ -142,6 +144,16 @@ export class Controller {
     this.fullLoad = this.loadKg > SPEC.ratedLoad * SPEC.fullLoad;
     // the seismic sensor (EN 81-77): latched until a technician resets it
     if (I.seismic && !this.quake) { this.quake = true; this._cancelAll(); this.say('Seismic sensor tripped: seismic operation. The car stops at the nearest floor, opens its doors and stays out of service until a technician resets it.'); }
+    // strong-wind operation: the tower's sway (or the wind at the top) past its limits slows the car, then parks it
+    const A = this.sim.atmos;
+    if (A) {
+      const vt = A.mean(A.H), lvl = vt > 35 || A.peak > 25 ? 2 : vt > 25 || A.peak > 10 ? 1 : 0;
+      if (lvl > (this.windOp ?? 0)) { this.windOp = lvl; this.calmT = 0; this.say(lvl === 2 ? `Strong-wind operation: service suspended, the car parks at a floor (wind ${vt.toFixed(0)} m/s at the top, sway ${A.peak.toFixed(0)} mg: the ropes would sway).` : `Strong-wind operation: speed limited to ${SPEC.ratedSpeed / 2} m/s (wind ${vt.toFixed(0)} m/s at the top, sway ${A.peak.toFixed(0)} mg).`); }
+      else if (lvl < (this.windOp ?? 0)) { this.calmT = (this.calmT ?? 0) + dt; if (this.calmT > 300) { this.windOp = lvl; this.say(lvl ? 'Wind easing: back to reduced speed.' : 'Wind has dropped: normal service.'); } }
+      else this.calmT = 0;
+      const out = A.mr.T < 5 || A.mr.T > 40;
+      if (out !== !!this.mrTemp) { this.mrTemp = out; this.say(out ? `Machine room at ${A.mr.T.toFixed(1)} °C: outside the 5 to 40 °C the equipment is rated for. The car parks and waits.` : `Machine room back to ${A.mr.T.toFixed(1)} °C: normal service.`); }
+    }
     this.chainList = this._chain();
     const open = this.chainList.find((c) => !c[2]);
     this.chainOK = !open;
@@ -183,7 +195,7 @@ export class Controller {
       if (mode === 'normal' || mode === 'independent' || mode === 'fire1' || mode === 'fire2') this._service(dt, mode);
       else if (mode === 'inspection' || mode === 'eeo') this._jogControl(mode);
       else if (mode === 'power' || mode === 'ard') this._powerFail(dt);
-      else if (mode === 'seismic') this._seismic();
+      else if (mode === 'seismic' || mode === 'wind' || mode === 'temp') this._seismic();
     } else if ((mode === 'inspection' || mode === 'eeo') && this.pending?.kind === 'jog') this._jogControl(mode);
     // ---- doors --------------------------------------------------------------------------------
     this._doors(dt, mode);
@@ -207,8 +219,9 @@ export class Controller {
 
   _modeChange(from, to) {
     if (from === undefined) return;
-    const names = { normal: 'automatic operation', inspection: 'INSPECTION from the car roof', eeo: 'EMERGENCY ELECTRICAL OPERATION from the machine room', fire1: 'FIREFIGHTERS\' SERVICE Phase I: recall to the lobby', fire2: 'FIREFIGHTERS\' SERVICE Phase II: in-car operation', independent: 'INDEPENDENT SERVICE', power: 'mains supply lost: brakes set, emergency lighting', ard: 'AUTOMATIC RESCUE on the battery', seismic: 'SEISMIC OPERATION (EN 81-77): out of service', off: 'main switch OFF' };
+    const names = { normal: 'automatic operation', inspection: 'INSPECTION from the car roof', eeo: 'EMERGENCY ELECTRICAL OPERATION from the machine room', fire1: 'FIREFIGHTERS\' SERVICE Phase I: recall to the lobby', fire2: 'FIREFIGHTERS\' SERVICE Phase II: in-car operation', independent: 'INDEPENDENT SERVICE', power: 'mains supply lost: brakes set, emergency lighting', ard: 'AUTOMATIC RESCUE on the battery', seismic: 'SEISMIC OPERATION (EN 81-77): out of service', wind: 'STRONG-WIND OPERATION: parked', temp: 'MACHINE ROOM TEMPERATURE out of range: parked', off: 'main switch OFF' };
     this.say(`Mode: ${names[to] ?? to}.`);
+    if (['seismic', 'wind', 'temp'].includes(from)) this.dwell = Math.min(this.dwell, 2);      // the parked car's doors may close again
     if (to !== 'normal' && to !== 'independent') this._cancelAll(to !== 'fire2');
     if (to === 'fire1' && from !== 'fire2') this.fire.recalled = false;
     if (to === 'normal' && (from === 'power' || from === 'ard' || from === 'off')) this.ard.state = 'off';
@@ -280,7 +293,7 @@ export class Controller {
           const reach = dr.s + dr.stopping + 0.05;
           for (let n = 1; n <= FLOORS; n++) if (this._encFor(n) >= reach) { if (n < this.target) { this.target = n; P.floor = n; dr.retarget(this._encFor(n)); } break; }
         }
-      } else if (P.kind === 'trip' && this.mode === 'seismic' && !P.quake) {
+      } else if (P.kind === 'trip' && (this.mode === 'seismic' || this.mode === 'wind' || this.mode === 'temp') && !P.quake) {
         // the nearest floor it can still stop at, ahead
         P.quake = true;
         const dir = Math.sign(this._encFor(this.target) - dr.s) || this.dir, reach = dr.s + dir * (dr.stopping + 0.05);
@@ -416,7 +429,7 @@ export class Controller {
     if (!this.d.carClosed || !this.d.allLocked) return;
     this.dir = Math.sign(floorY(n) - this.h.yc);
     this.target = n;
-    this._start({ kind: why === 'fire' || why === 'park' ? 'trip' : 'trip', floor: n, vmax: SPEC.ratedSpeed });
+    this._start({ kind: 'trip', floor: n, vmax: SPEC.ratedSpeed * (this.windOp ? 0.5 : 1) });
   }
 
   /** The car has arrived (or is about to, with the doors pre-opening) at floor n. */
@@ -491,7 +504,7 @@ export class Controller {
     } else if (this.door === 'closing') {
       const reopen = (!this.nudging && blocked) || I.open || dc.stall > 0.25 || this.overload;
       if (reopen) {
-        this.say(dc.stall > 0.25 ? 'Doors reopening: something in the doorway stopped them.' : blocked ? 'Doors reopening: the light curtain is interrupted.' : this.overload ? 'Doors reopening: overload.' : 'Doors reopening.');
+        this.say(dc.stall > 0.25 ? ((d.extraFric ?? 0) > 60 ? `Doors reopening: the stack effect presses them into their guides (${this.sim.atmos.stack(this.h.yc + 1).toFixed(0)} Pa across the door, ${Math.round(d.extraFric)} N of extra friction against a 150 N operator).` : 'Doors reopening: something in the doorway stopped them.') : blocked ? 'Doors reopening: the light curtain is interrupted.' : this.overload ? 'Doors reopening: overload.' : 'Doors reopening.');
         dc.stall = 0;
         this.held += 1.5;
         this._open(); this.dwell = 2.0;

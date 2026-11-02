@@ -412,6 +412,9 @@ export class BuildingGL {
     f('curtainFail', 'Failure: the light curtain is blind', -2.55, 1.5, 'switch', { get: () => sim.doors.curtainFail, set: (v) => (sim.doors.curtainFail = v), text: 'LC' });
     f('cutRopes', 'Failure: all eight hoist ropes part (the safety gear must hold the car)', -2.85, 1.5, 'button', { press: () => { if (!h.ropesCut) { h.ropesCut = true; sim.say('All eight hoist ropes have parted.', 'Simulator'); sim.sfx('snap'); } }, text: 'CUT', red: true });
     f('quake', 'Simulate an earthquake (the seismic sensor trips: EN 81-77 seismic operation)', -1.75, 1.15, 'button', { press: () => { if (!sim.shake) sim.quake(); }, text: 'EQ' });
+    const A = sim.atmos, winds = [2, 5.5, 10, 15], seasons = ['autumn', 'winter', 'summer'];
+    f('wind', 'Weather: wind (calm 2 / normal 5.5 / strong 10 / storm 15 m/s at street level)', -2.55, 1.15, 'button', { press: () => { const v = winds[(winds.indexOf(A.v10) + 1) % winds.length]; A.setWeather({ v10: v }); sim.say(`Weather: ${A.windName} wind, ${v} m/s in the street, ${A.mean(A.H).toFixed(0)} m/s at the top.`, 'Simulator'); }, text: 'WND' });
+    f('season', 'Weather: season (autumn 8 °C / winter -6 °C / summer 24 °C)', -2.85, 1.15, 'button', { press: () => { const s = seasons[(seasons.indexOf(A.season) + 1) % seasons.length]; A.setWeather({ season: s }); sim.say(`Weather: ${s}, ${A.T0} °C in the street, ${A.T(A.H).toFixed(1)} °C at the top; cloud base ${Math.round(A.cloudBase)} m.`, 'Simulator'); }, text: 'TMP' });
     f('repair', 'Repair everything (ropes, brakes, drive, governor, safety gear, faults)', -2.2, 1.15, 'button', { press: () => this.onRepair?.(), text: 'FIX' });
   }
 

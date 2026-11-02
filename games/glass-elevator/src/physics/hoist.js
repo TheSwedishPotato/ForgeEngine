@@ -115,7 +115,7 @@ export class Hoist {
     // ---- the car ----------------------------------------------------------------------------
     // the hanging ropes' inertia: most of each side's moves with what hangs on it, the rest with the sheave
     const mc = this.P + this.load + lamC * Lcc + 0.75 * lam * LcRest;
-    const Fc = Tc - (this.P + this.load) * G - Fcc + this.propForce + Fbc;
+    const Fc = Tc - (this.P + this.load) * G - Fcc + this.propForce + Fbc + (this.aeroF ?? 0);
     let vc = this.vc + (Fc / mc) * dt;
     vc = friction(vc, 180 + 25 * Math.abs(vc), mc, dt);                      // roller guides
     // the safety gear holds against descent only

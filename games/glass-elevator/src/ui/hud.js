@@ -85,7 +85,7 @@ export class HUD {
     if (!A) return '';
     const inCar = this.game.player.inCar?.() ?? false;
     const p = inCar && A.cab ? A.cab : A.p(y);
-    return `<span>${Math.round(y)} m · ${A.T(y).toFixed(1)} °C · ${p.toFixed(1)} hPa${inCar ? ' (car)' : ''}</span><span>Wind ${A.mean(y).toFixed(0)} m/s, now ${A.wind(y).toFixed(0)} from ${A.dirName}</span><span>Sway ${(A.sway * 100).toFixed(0)} cm · ${A.peak.toFixed(1)} mg</span>${A.inCloud(y) ? '<span>IN CLOUD</span>' : ''}`;
+    return `<span>${Math.round(y)} m · ${A.T(y).toFixed(1)} °C · ${p.toFixed(1)} hPa${inCar ? ' (car)' : ''}</span><span>Wind ${A.mean(y).toFixed(0)} m/s, now ${A.wind(y).toFixed(0)} from ${A.dirName}</span><span>Sway ${(A.sway * 100).toFixed(0)} cm · ${A.peak.toFixed(1)} mg</span>${A.inCloud(y) ? '<span>IN CLOUD</span>' : ''}${inCar ? `<span>Ride ${A.car.peak.toFixed(1)} mg sideways${A.ice > 0.5 ? ` · ice ${A.ice.toFixed(0)} kg` : ''}</span>` : ''}${s.ctl.windOp ? `<span>STRONG-WIND OP ${s.ctl.windOp === 2 ? '(parked)' : '(½ speed)'}</span>` : ''}${s.ctl.mrTemp ? '<span>MACHINE ROOM TEMP!</span>' : ''}`;
   }
 
   update(dt) {
@@ -117,6 +117,11 @@ export class HUD {
       ${row('Energy', `${(dr.energy / 3.6e6).toFixed(3)} kWh drawn (− = returned to the grid)`)}
       ${row('Brakes', `${h.brakes.map((b, i) => `B${i + 1} ${b.lift >= 1 ? 'lifted' : b.lift > 0 ? Math.round(b.lift * 100) + ' %' : 'set'}${b.fail ? ' (FAILED)' : ''}`).join(' · ')} · ${(h.brakeTorque / 1000).toFixed(1)} kN·m${h.manualRelease > 0.01 ? ` · hand release ${Math.round(h.manualRelease * 100)} %` : ''}`)}
       ${row('Hoist ropes', h.ropesCut ? '<b class="bad">PARTED</b>' : `car side ${kN(h.Tc)} kN, cw side ${kN(h.Tw)} kN · stretch ${(h.ec * 1000).toFixed(0)} mm · safety factor ${h.ropeSafety.toFixed(1)}`)}
+      ${s.atmos ? row('Weather', `${s.atmos.season}, ${s.atmos.windName} wind · street ${s.atmos.T0} °C, ${s.atmos.v10} m/s · top ${s.atmos.T(s.atmos.H).toFixed(1)} °C, ${s.atmos.mean(s.atmos.H).toFixed(0)} m/s · cloud ${Math.round(s.atmos.cloudBase)}–${Math.round(s.atmos.cloudTop)} m`) : ''}
+      ${s.atmos ? row('Tower sway', `${(s.atmos.sway * 100).toFixed(0)} cm at the top · ${s.atmos.peak.toFixed(1)} mg peak · damper swing ${(Math.hypot(...s.atmos.u) * 100).toFixed(0)} cm${c.windOp ? ` · STRONG-WIND OPERATION ${c.windOp === 2 ? '(parked)' : '(half speed)'}` : ''}`) : ''}
+      ${s.atmos ? row('Car in the wind', `${s.atmos.wind(h.yc + 1.25).toFixed(0)} m/s at the car · guide load ${Math.round(Math.hypot(...s.atmos.car.F))} N · sideways ride ${s.atmos.car.peak.toFixed(1)} mg · air drag ${Math.round(Math.abs(h.aeroF ?? 0))} N${s.atmos.ice > 0.1 ? ` · RIME ICE ${s.atmos.ice.toFixed(0)} kg` : ''}`) : ''}
+      ${s.atmos ? row('Stack effect', `${s.atmos.stack(h.yc + 1).toFixed(0)} Pa across the landing door here (${s.atmos.stack(floorY(FLOORS) + 1).toFixed(0)} at the top, ${s.atmos.stack(1).toFixed(0)} at the lobby) · extra door friction ${Math.round(d.extraFric ?? 0)} N`) : ''}
+      ${s.atmos ? row('Machine room', `${s.atmos.mr.T.toFixed(1)} °C (rated 5–40 °C) · heater ${s.atmos.mr.heater ? 'ON' : 'off'} · fan ${s.atmos.mr.fan ? 'ON' : 'off'}`) : ''}
       ${row('Traction', `T1/T2 ${isFinite(h.tractionRatio) ? h.tractionRatio.toFixed(3) : '∞'} of e^(fα) ${Tlim.toFixed(3)} · grooves using ${isFinite(h.tractionUse) ? Math.round(h.tractionUse * 100) + ' %' : 'all (slipping)'} · slip ${(h.slip * 1000).toFixed(1)} mm`)}
       ${row('Counterweight', `${h.yw.toFixed(2)} m · ${h.vw.toFixed(2)} m/s`)}
       ${row('Compensation', `tension sheave ${(h.ts).toFixed(3)} m · loop ${kN(h.Tb)} kN${h.tieDown.engaged ? ' · tie-down holding' : ''}`)}
