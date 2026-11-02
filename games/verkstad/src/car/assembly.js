@@ -142,7 +142,7 @@ function buildRoadCar(A) {
   const zF = d.wheelbase / 2, zR = -d.wheelbase / 2;
   const volvo = s.id === 'volvo240';
   const lay = volvo
-    ? { engZ: zF - 0.12, engY: 0.56, hoodY: 0.92, fire: zF - 0.62, radZ: zF + 0.62, batt: [0.5, 0.62, zF - 0.45], air: [-0.48, 0.66, zF + 0.32], resv: [-0.42, 0.8, zF - 0.5], fuse: [0.3, 0.55, zF - 0.95], exp: [0.55, 0.78, zF - 0.1], diag: [0.62, 0.72, zF + 0.15] }
+    ? { engZ: zF - 0.12, engY: 0.48, hoodY: 0.92, fire: zF - 0.62, radZ: zF + 0.62, batt: [0.5, 0.62, zF - 0.45], air: [-0.48, 0.66, zF + 0.32], resv: [-0.42, 0.8, zF - 0.5], fuse: [0.3, 0.55, zF - 0.95], exp: [0.55, 0.72, zF - 0.1], diag: [0.62, 0.72, zF + 0.15] }
     : { engZ: zF + 0.12, engY: 0.42, hoodY: 0.88, fire: zF - 0.42, radZ: zF + 0.7, batt: [0.5, 0.6, zF + 0.05], air: [0.25, 0.72, zF + 0.5], resv: [0.48, 0.8, zF - 0.32], fuse: [0.62, 0.62, zF - 0.95], exp: [-0.5, 0.74, zF + 0.05], obd: [0.38, 0.5, zF - 1.0] };
   A.layout = lay;
   const rimR = (W.rim * 0.0254) / 2;
@@ -185,10 +185,15 @@ function corner(A, k, z, track, rimR, volvo) {
     pos: [x + sx * 0.06, y, z], need: ['raised'], fasteners: fasten, partNo: W.tyre,
     cond: { bar: s.wheels.pressure[axle], tread: 7.5, nail: false, leak: 0, imbalance: 0, season: 'summer', age: 4 },
     g: [
-      { t: 'lathe', prof: tyreProf, p: [sx * 0.0, 0, 0], ax: 'x', m: 'tyre', seg: 40 },
+      { t: 'lathe', prof: tyreProf, p: [sx * 0.0, 0, 0], ax: 'x', m: volvo ? 'tyreVolvo' : 'tyreGolf', seg: 56 },
       L([[rimR, -wid / 2 + 0.01], [rimR - 0.012, -wid / 2 + 0.005], [rimR - 0.012, wid / 2 - 0.005], [rimR, wid / 2 - 0.01]], [0, 0, 0], 'x', volvo ? 'rimSilver' : 'rimAlu', { seg: 40, open: true }),
       C(rimR - 0.012, 0.012, [sx * 0.02, 0, 0], 'x', volvo ? 'rimSilver' : 'rimAlu', { seg: 32 }),
-      ...(volvo ? [C(0.075, 0.03, [sx * 0.045, 0, 0], 'x', 'chrome', { seg: 24 })] : [0, 1, 2, 3, 4].map((i) => B(0.035, rimR - 0.07, 0.012, [sx * 0.03, Math.sin((i / 5) * Math.PI * 2) * (rimR / 2 + 0.02), Math.cos((i / 5) * Math.PI * 2) * (rimR / 2 + 0.02)], 'rimAlu', [(i / 5) * Math.PI * 2, 0, 0]))),
+      // the face of the wheel: the 240's many-spoked alloy, the Golf's five double spokes (from the reference photos)
+      ...(volvo
+        ? [...[...Array(10).keys()].map((i) => { const a = (i / 10) * Math.PI * 2; return B(0.022, rimR - 0.085, 0.016, [sx * 0.034, Math.sin(a) * (rimR / 2 + 0.03), Math.cos(a) * (rimR / 2 + 0.03)], 'rimSilver', [a, 0, 0]); }),
+          TOR(rimR - 0.03, 0.012, [sx * 0.03, 0, 0], 'x', 'rimSilver', { seg: 40 }), C(0.07, 0.03, [sx * 0.04, 0, 0], 'x', 'rimSilver', { seg: 24 }), C(0.032, 0.012, [sx * 0.058, 0, 0], 'x', 'blackPlastic', { seg: 20 })]
+        : [...[...Array(10).keys()].map((i) => { const a = (Math.floor(i / 2) / 5) * Math.PI * 2 + (i % 2 ? 0.16 : -0.16); return B(0.02, rimR - 0.065, 0.016, [sx * 0.036, Math.sin(a) * (rimR / 2 + 0.025), Math.cos(a) * (rimR / 2 + 0.025)], 'rimAlu', [a, 0, 0]); }),
+          C(0.068, 0.03, [sx * 0.042, 0, 0], 'x', 'rimAlu', { seg: 24 }), C(0.03, 0.01, [sx * 0.06, 0, 0], 'x', 'chrome', { seg: 20 })]),
       C(0.004, 0.035, [sx * 0.03, rimR - 0.03, 0.03], 'x', 'rubber'),      // the valve
     ],
   });
@@ -315,9 +320,9 @@ function engineBay(A, lay, volvo) {
       cond: { ok: true }, g: [C(0.012, 0.1, [0, -0.02, 0], 'y', 'blackPlastic'), B(0.04, 0.04, 0.05, [0, 0.04, 0], 'blackPlastic')] });
   }
   if (volvo) {
-    A.add({ id: 'distcap', name: 'Distributor cap', kind: 'distcap', sys: 'ignition', mass: 0.15, price: 230, clip: true, need: ['hood'], pos: [0.24, EY + 0.42, EZ + 0.22], blockers: [], cond: { cracked: false, tracking: false },
+    A.add({ id: 'distcap', name: 'Distributor cap', kind: 'distcap', sys: 'ignition', mass: 0.15, price: 230, clip: true, need: ['hood'], pos: [0.24, EY + 0.37, EZ + 0.22], blockers: [], cond: { cracked: false, tracking: false },
       g: [C(0.045, 0.05, [0, 0, 0], 'y', 'distCap'), ...[0, 1, 2, 3, 4].map((i) => C(0.007, 0.02, [Math.sin(i * 1.26) * 0.03, 0.03, Math.cos(i * 1.26) * 0.03], 'y', 'distCap'))] });
-    A.add({ id: 'rotor', name: 'Distributor rotor arm', kind: 'rotor', sys: 'ignition', mass: 0.02, price: 90, clip: true, need: ['hood'], blockers: ['distcap'], pos: [0.24, EY + 0.4, EZ + 0.22], cond: { worn: false }, g: [B(0.012, 0.01, 0.04, [0, 0, 0.01], 'blackPlastic')] });
+    A.add({ id: 'rotor', name: 'Distributor rotor arm', kind: 'rotor', sys: 'ignition', mass: 0.02, price: 90, clip: true, need: ['hood'], blockers: ['distcap'], pos: [0.24, EY + 0.35, EZ + 0.22], cond: { worn: false }, g: [B(0.012, 0.01, 0.04, [0, 0, 0.01], 'blackPlastic')] });
     A.add({ id: 'distributor', name: 'Distributor (Bosch, Hall sender)', kind: 'distributor', sys: 'ignition', fixed: true, pos: [0.24, EY + 0.3, EZ + 0.22], g: [C(0.04, 0.12, [0, 0, 0], 'y', 'alu')] });
     A.add({ id: 'diagunit', name: 'Diagnostic unit (LH-Jetronic 2.4 / EZ-116K)', kind: 'diag', sys: 'elec', fixed: true, pos: lay.diag, need: ['hood'], info: 'Fit the lead in socket 2 (fuel) or 6 (ignition), press the button for about 2 s and count the LED: three flashes, a pause, two...',
       g: [B(0.09, 0.04, 0.12, [0, 0, 0], 'blackPlastic'), C(0.006, 0.01, [0, 0.025, 0.03], 'y', 'redLens')] });
@@ -345,7 +350,7 @@ function engineBay(A, lay, volvo) {
     fasteners: [{ id: 's1', name: 'starter bolt (upper)', size: 17, torque: 40, len: 6, pos: [0, 0.05, 0.08], axis: [0, 0, 1] }, { id: 's2', name: 'starter bolt (lower)', size: 17, torque: 40, len: 6, pos: [0, -0.05, 0.08], axis: [0, 0, 1] }],
     cond: { ok: true, solenoid: true }, g: [C(0.045, 0.16, [0, 0, 0], 'z', 'paintBlack'), C(0.02, 0.07, [0, 0.05, 0], 'z', 'alu')] });
   // cooling
-  A.add({ id: 'radiator', name: 'Radiator', kind: 'radiator', sys: 'cool', fixed: true, pos: [0, 0.52, lay.radZ], g: [B(0.62, 0.42, 0.04, [0, 0, 0], 'radiator'), B(0.08, 0.46, 0.06, [0.35, 0, 0], 'blackPlastic'), B(0.08, 0.46, 0.06, [-0.35, 0, 0], 'blackPlastic')] });
+  A.add({ id: 'radiator', name: 'Radiator', kind: 'radiator', sys: 'cool', fixed: true, pos: [0, volvo ? 0.52 : 0.44, lay.radZ], g: [B(0.62, 0.42, 0.04, [0, 0, 0], 'radiator'), B(0.08, 0.46, 0.06, [0.35, 0, 0], 'blackPlastic'), B(0.08, 0.46, 0.06, [-0.35, 0, 0], 'blackPlastic')] });
   A.add({ id: 'fan', name: volvo ? 'Viscous fan' : 'Electric cooling fan', kind: 'fan', sys: 'cool', fixed: true, pos: [0, 0.5, lay.radZ - 0.08], cond: { ok: true }, g: [C(0.19, 0.04, [0, 0, 0], 'z', 'blackPlastic', { seg: 9 })] });
   A.add({ id: 'thermohousing', name: 'Thermostat housing', kind: 'thermohousing', sys: 'cool', mass: 0.3, price: 340, need: ['hood'], pos: lon ? [0.12, EY + 0.25, EZ + 0.28] : [-0.27, EY + 0.18, EZ + 0.02],
     fasteners: [{ id: 't1', name: 'housing bolt', size: 10, torque: 10, len: 4, pos: [0.03, 0, 0], axis: [0, 1, 0] }, { id: 't2', name: 'housing bolt', size: 10, torque: 10, len: 4, pos: [-0.03, 0, 0], axis: [0, 1, 0] }],
@@ -375,16 +380,36 @@ function engineBay(A, lay, volvo) {
 
 function cabin(A, lay, volvo, zF) {
   const d = A.spec.dims;
-  A.add({ id: 'dash', name: 'Dashboard', kind: 'dash', sys: 'interior', fixed: true, pos: [0, 0.88, zF - 1.05], g: [B(d.width - 0.2, 0.22, 0.38, [0, 0, 0], 'dash'), B(0.5, 0.1, 0.1, [0.37, 0.1, -0.12], 'dash')] });
-  A.add({ id: 'cluster', name: 'Instrument cluster', kind: 'cluster', sys: 'interior', fixed: true, pos: [0.37, 1.0, zF - 1.2], g: [{ t: 'box', s: [0.32, 0.12, 0.01], p: [0, 0, 0], m: 'clusterScreen', r: [-0.35, Math.PI, 0] }] });
-  A.add({ id: 'wheelSteer', name: 'Steering wheel', kind: 'steering', sys: 'interior', fixed: true, pos: [0.37, 0.92, zF - 1.42], rot: [-0.45, 0, 0], g: [TOR(0.19, 0.015, [0, 0, 0], 'z', 'rubber', { seg: 36 }), B(0.36, 0.03, 0.02, [0, 0, 0], 'blackPlastic'), C(0.06, 0.06, [0, 0, 0.02], 'z', 'blackPlastic')] });
+  const W = d.width - 0.2, seat = volvo ? 'leather' : 'seatFabric';
+  A.add({ id: 'dash', name: 'Dashboard', kind: 'dash', sys: 'interior', fixed: true, pos: [0, 0.88, zF - 1.05], g: [
+    B(W, 0.2, 0.4, [0, 0, 0], 'dash'), B(W - 0.04, 0.06, 0.25, [0, 0.12, 0.06], 'dash', [0.25, 0, 0]),
+    B(W - 0.1, 0.035, 0.012, [0, -0.04, -0.205], volvo ? 'woodTrim' : 'chrome'),                         // the wood strip (Volvo) or the chrome line (Golf)
+    B(0.12, 0.08, 0.012, [W / 2 - 0.1, 0.03, -0.205], 'vent'), B(0.12, 0.08, 0.012, [-W / 2 + 0.1, 0.03, -0.205], 'vent'),
+    B(0.2, 0.07, 0.012, [0.0, 0.03, -0.205], 'vent'),
+    B(0.42, 0.13, 0.16, [0.37, 0.1, -0.12], 'dash'),                                                       // the instrument binnacle
+    B(0.38, 0.09, 0.012, [-0.33, -0.01, -0.205], 'dash'),                                                  // the glovebox lid
+    B(0.26, 0.36, 0.2, [0, -0.3, -0.12], 'dash'), B(0.18, 0.045, 0.012, [0, -0.2, -0.225], volvo ? 'clusterScreen' : 'screen'),   // centre console, radio / infotainment
+    ...[0, 1, 2, 3, 4].map((i) => B(0.025, 0.02, 0.01, [-0.06 + i * 0.03, -0.29, -0.225], i === 4 ? 'redPlastic' : 'blackPlastic')),
+  ] });
+  A.add({ id: 'cluster', name: 'Instrument cluster', kind: 'cluster', sys: 'interior', fixed: true, pos: [0.37, 0.99, zF - 1.255], g: [{ t: 'box', s: [0.34, 0.1, 0.01], p: [0, 0, 0], m: 'clusterScreen', r: [-0.2, Math.PI, 0] }] });
+  A.add({ id: 'wheelSteer', name: 'Steering wheel', kind: 'steering', sys: 'interior', fixed: true, pos: [0.37, 0.93, zF - 1.42], rot: [-0.42, 0, 0], g: [
+    TOR(0.19, 0.016, [0, 0, 0], 'z', 'rubber', { seg: 40 }),
+    ...(volvo ? [B(0.2, 0.15, 0.06, [0, -0.01, 0.03], 'blackPlastic'), ...[[0.14, 0.03], [-0.14, 0.03], [0.1, -0.12], [-0.1, -0.12]].map(([x, y]) => B(Math.abs(x) > 0.12 ? 0.1 : 0.03, Math.abs(x) > 0.12 ? 0.03 : 0.1, 0.02, [x * 0.75, y * 0.75, 0.02], 'blackPlastic'))]
+      : [C(0.06, 0.05, [0, 0, 0.03], 'z', 'blackPlastic'), B(0.3, 0.035, 0.02, [0, 0, 0.02], 'blackPlastic'), B(0.035, 0.15, 0.02, [0, -0.09, 0.02], 'blackPlastic'), B(0.05, 0.02, 0.005, [0, 0, 0.058], 'chrome')]),
+    C(0.025, 0.25, [0, 0, 0.16], 'z', 'blackPlastic'),
+  ] });
   A.add({ id: 'ignition', name: 'Ignition lock and key', kind: 'ignition', sys: 'interior', fixed: true, pos: [volvo ? 0.2 : 0.2, 0.82, zF - 1.38], info: 'Click to turn the key: 0 off, I accessories, II ignition, III start (hold)', g: [C(0.018, 0.03, [0, 0, 0], 'z', 'chrome'), B(0.012, 0.03, 0.004, [0, 0, -0.025], 'steel')] });
   A.add({ id: 'hoodrelease', name: 'Bonnet release lever', kind: 'hoodrelease', sys: 'interior', fixed: true, pos: [0.72, 0.55, zF - 1.15], g: [B(0.06, 0.03, 0.08, [0, 0, 0], 'blackPlastic')] });
-  A.add({ id: 'handbrake', name: volvo ? 'Handbrake lever' : 'Electric parking brake switch', kind: 'handbrake', sys: 'interior', fixed: true, pos: [0, 0.5, zF - 1.75], g: volvo ? [B(0.05, 0.05, 0.28, [0, 0, 0], 'blackPlastic')] : [B(0.03, 0.02, 0.04, [0, 0.05, 0.1], 'blackPlastic')] });
-  A.add({ id: 'gearlever', name: `Gear lever (${A.spec.gearbox})`, kind: 'gearlever', sys: 'interior', fixed: true, pos: [0, 0.55, zF - 1.45], g: [C(0.008, 0.25, [0, 0.12, 0], 'y', 'blackPlastic'), S(0.025, [0, 0.26, 0], 'blackPlastic')] });
-  for (const sx of [1, -1]) A.add({ id: 'seat' + (sx > 0 ? 'L' : 'R'), name: `${sx > 0 ? 'Driver' : 'Passenger'} seat`, kind: 'seat', sys: 'interior', fixed: true, pos: [sx * 0.37, 0.35, zF - 1.85],
-    g: [B(0.5, 0.12, 0.5, [0, 0.08, 0], 'seatFabric'), B(0.5, 0.62, 0.12, [0, 0.42, -0.24], 'seatFabric', [-0.18, 0, 0]), B(0.26, 0.18, 0.1, [0, 0.82, -0.3], 'seatFabric')] });
-  A.add({ id: 'seatRear', name: 'Rear seat', kind: 'seat', sys: 'interior', fixed: true, pos: [0, 0.35, zF - 2.65], g: [B(d.width - 0.3, 0.12, 0.5, [0, 0.08, 0], 'seatFabric'), B(d.width - 0.3, 0.55, 0.12, [0, 0.4, -0.25], 'seatFabric', [-0.2, 0, 0])] });
+  A.add({ id: 'handbrake', name: volvo ? 'Handbrake lever' : 'Electric parking brake switch', kind: 'handbrake', sys: 'interior', fixed: true, pos: [0, 0.5, zF - 1.75], g: volvo ? [B(0.05, 0.05, 0.28, [0, 0, 0], 'blackPlastic', [0.25, 0, 0])] : [B(0.03, 0.02, 0.04, [0, 0.05, 0.1], 'blackPlastic')] });
+  A.add({ id: 'gearlever', name: `Gear lever (${A.spec.gearbox})`, kind: 'gearlever', sys: 'interior', fixed: true, pos: [0, 0.55, zF - 1.45], g: [C(0.008, 0.25, [0, 0.12, 0], 'y', 'chrome'), S(0.028, [0, 0.26, 0], 'blackPlastic'), C(0.05, 0.06, [0, 0.0, 0], 'y', 'rubber', { r2: 0.03 })] });
+  // seats: cushion, backrest with side bolsters, a headrest on its two posts
+  const seatG = (wd) => [B(wd, 0.12, 0.5, [0, 0.08, 0], seat), B(wd - 0.12, 0.6, 0.11, [0, 0.42, -0.24], seat, [-0.18, 0, 0]),
+    B(0.07, 0.62, 0.15, [wd / 2 - 0.035, 0.42, -0.23], seat, [-0.18, 0, 0]), B(0.07, 0.62, 0.15, [-wd / 2 + 0.035, 0.42, -0.23], seat, [-0.18, 0, 0]),
+    B(0.07, 0.1, 0.42, [wd / 2 - 0.035, 0.16, 0.02], seat), B(0.07, 0.1, 0.42, [-wd / 2 + 0.035, 0.16, 0.02], seat),
+    B(0.26, 0.17, 0.09, [0, 0.86, -0.35], seat), C(0.006, 0.08, [0.07, 0.75, -0.33], 'y', 'chrome'), C(0.006, 0.08, [-0.07, 0.75, -0.33], 'y', 'chrome')];
+  for (const sx of [1, -1]) A.add({ id: 'seat' + (sx > 0 ? 'L' : 'R'), name: `${sx > 0 ? 'Driver' : 'Passenger'} seat`, kind: 'seat', sys: 'interior', fixed: true, pos: [sx * 0.37, 0.35, zF - 1.85], g: seatG(0.52) });
+  A.add({ id: 'seatRear', name: 'Rear seat', kind: 'seat', sys: 'interior', fixed: true, pos: [0, 0.35, zF - 2.65], g: [B(d.width - 0.3, 0.13, 0.5, [0, 0.08, 0], seat), B(d.width - 0.3, 0.55, 0.12, [0, 0.4, -0.25], seat, [-0.2, 0, 0]), ...[-0.45, 0, 0.45].map((x) => B(0.24, 0.13, 0.08, [x, 0.74, -0.33], seat))] });
+  for (const sx of [1, -1]) A.add({ id: 'doorcard' + (sx > 0 ? 'L' : 'R'), name: 'Door trim panel', kind: 'trim', sys: 'interior', fixed: true, pos: [sx * (d.width / 2 - 0.07), 0.7, zF - 1.75], g: [B(0.02, 0.4, 1.6, [0, 0, 0], volvo ? 'leather' : 'dash'), B(0.06, 0.03, 0.4, [-sx * 0.03, 0.08, 0.2], 'blackPlastic')] });
   A.add({ id: 'carpet', name: 'Carpet', kind: 'carpet', sys: 'interior', fixed: true, pos: [0, 0.26, zF - 1.9], g: [B(d.width - 0.2, 0.02, 1.9, [0, 0, 0], 'carpet')] });
   for (const sx of [1, -1]) A.add({ id: 'wiper' + (sx > 0 ? 'L' : 'R'), name: `Wiper blade (${sx > 0 ? 'driver' : 'passenger'})`, kind: 'wiper', sys: 'body', mass: 0.2, price: volvo ? 129 : 249, clip: true, pos: [sx * 0.3, lay.hoodY + 0.06, zF - 0.98 + (volvo ? 0 : 0.08)], cond: { wear: 0.3 },
     g: [B(volvo ? 0.45 : 0.6, 0.015, 0.02, [0, 0, 0], 'rubber', [0, 0.15 * sx, 0.2])] });
@@ -416,11 +441,11 @@ function lights(A, volvo, zF, zR) {
   for (const sx of [1, -1]) {
     const S1 = sx > 0 ? 'L' : 'R';
     const hx = sx * (volvo ? 0.52 : 0.6), hy = volvo ? 0.72 : 0.78;
-    A.add({ id: 'headlamp' + S1, name: `${sx > 0 ? 'Left' : 'Right'} headlamp`, kind: 'headlamp', sys: 'light', fixed: true, pos: [hx, hy, front], g: [B(volvo ? 0.3 : 0.32, volvo ? 0.17 : 0.13, 0.08, [0, 0, -0.04], 'lens')] });
+    A.add({ id: 'headlamp' + S1, name: `${sx > 0 ? 'Left' : 'Right'} headlamp`, kind: 'headlamp', sys: 'light', fixed: true, pos: [hx, hy, front], g: [] });
     A.add({ id: 'cap' + S1, name: `${sx > 0 ? 'Left' : 'Right'} headlamp rear cover`, kind: 'lampcap', sys: 'light', clip: true, need: ['hood'], mass: 0.05, price: 95, pos: [hx, hy, front - 0.14], g: [C(0.045, 0.03, [0, 0, 0], 'z', 'rubber', { seg: 18 })] });
     A.add({ id: 'bulb' + S1, name: `${sx > 0 ? 'Left' : 'Right'} dipped-beam bulb (${A.spec.bulbs.head})`, kind: 'bulb', sys: 'light', clip: true, need: ['hood'], blockers: ['cap' + S1], mass: 0.02, price: volvo ? 89 : 119, partNo: A.spec.bulbs.head, pos: [hx, hy, front - 0.11],
       cond: { ok: true, circuit: 'head' }, info: 'Do not touch the glass: the oil of your skin burns into it', g: [C(0.009, 0.03, [0, 0, 0.02], 'z', 'bulbGlass'), C(0.016, 0.01, [0, 0, -0.005], 'z', 'steel')] });
-    A.add({ id: 'tail' + S1, name: `${sx > 0 ? 'Left' : 'Right'} tail lamp`, kind: 'taillamp', sys: 'light', fixed: true, pos: [sx * (d.width / 2 - 0.2), volvo ? 0.78 : 0.95, rear], g: [B(volvo ? 0.3 : 0.28, volvo ? 0.22 : 0.1, 0.05, [0, 0, 0.02], 'lensRed')] });
+    A.add({ id: 'tail' + S1, name: `${sx > 0 ? 'Left' : 'Right'} tail lamp`, kind: 'taillamp', sys: 'light', fixed: true, pos: [sx * (d.width / 2 - 0.2), volvo ? 0.78 : 0.95, rear], g: [] });
     A.add({ id: 'brakebulb' + S1, name: `${sx > 0 ? 'Left' : 'Right'} brake/tail bulb (${A.spec.bulbs.tail})`, kind: 'bulb', sys: 'light', clip: true, need: ['trunk'], mass: 0.01, price: 29, partNo: A.spec.bulbs.tail, pos: [sx * (d.width / 2 - 0.2), volvo ? 0.78 : 0.95, rear + 0.06],
       cond: { ok: true, circuit: 'brake' }, g: [S(0.012, [0, 0, 0], 'bulbGlass'), C(0.012, 0.015, [0, 0, 0.01], 'z', 'steel')] });
   }

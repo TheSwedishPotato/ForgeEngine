@@ -9,6 +9,7 @@
  */
 import { Group, Mesh, BoxGeometry, CylinderGeometry, CanvasTexture, SRGBColorSpace, MeshStandardMaterial, Color, PlaneGeometry, DoubleSide } from 'three';
 import { BodyShape } from '../car/body.js';
+import { bodyDetails, bumper } from '../car/details.js';
 import { meshGroup, splitGroups, fastenerGeometry } from './geo.js';
 import { paintMat } from './mats.js';
 
@@ -65,9 +66,7 @@ export class CarGL {
       { t: 'box', s: [d.width - 0.12, 0.02, P.cowl - P.trunkF - 0.1], p: [0, 0.25, (P.cowl + P.trunkF) / 2 - 0.05], m: 'carpet' },
       { t: 'box', s: [d.width - 0.15, 0.55, 0.02], p: [0, 0.55, P.cowl - 0.12], m: 'paintBlack' },
       ...[this.spec.dims.wheelbase / 2, -this.spec.dims.wheelbase / 2].flatMap((z) => [1, -1].map((sx) => ({ t: 'box', s: [0.02, 0.36, 0.78], p: [sx * (d.width / 2 - 0.3), this.spec.wheels.tyreR + 0.2, z], m: 'blackPlastic' }))),
-      ...(volvo
-        ? [{ t: 'box', s: [0.62, 0.22, 0.03], p: [0, 0.62, P.front + 0.005], m: 'chrome' }, { t: 'box', s: [0.58, 0.18, 0.03], p: [0, 0.62, P.front + 0.01], m: 'blackPlastic' }]
-        : [{ t: 'box', s: [0.6, 0.06, 0.03], p: [0, 0.64, P.front - 0.02], m: 'blackPlastic' }, { t: 'box', s: [0.7, 0.14, 0.04], p: [0, 0.42, P.front - 0.02], m: 'blackPlastic' }]),
+      ...bodyDetails(this.spec, B),
     ];
     shell.add(meshGroup(extra, this.mat));
     this._tagPick(shell, 'body');
@@ -88,9 +87,8 @@ export class CarGL {
       this.root.add(grp); this.groups.set(pid, grp);
     }
     // bumpers and plates
-    const bump = (z, dir) => [{ t: 'box', s: [d.width - 0.08, volvo ? 0.14 : 0.2, volvo ? 0.12 : 0.1], p: [0, volvo ? 0.44 : 0.4, z + dir * (volvo ? 0.05 : 0.0)], m: volvo ? 'blackPlastic' : 'paint' }];
     for (const [id, z, dir] of [['bumperF', P.front, 1], ['bumperR', P.rear, -1]]) {
-      const g = meshGroup([...bump(z, dir), { t: 'box', s: [0.52, 0.11, 0.01], p: [0, volvo ? 0.6 : (dir > 0 ? 0.42 : 0.62), z + dir * (volvo ? 0.115 : 0.055)], m: 'plateMat' }], (m) => (m === 'plateMat' ? this._plateMat() : this.mat(m)));
+      const g = meshGroup([...bumper(this.spec, B, dir > 0), { t: 'box', s: [0.52, 0.11, 0.01], p: [0, volvo ? 0.45 : (dir > 0 ? 0.42 : 0.62), z + dir * (volvo ? 0.145 : 0.065)], m: 'plateMat' }], (m) => (m === 'plateMat' ? this._plateMat() : this.mat(m)));
       this._tagPick(g, id); this.root.add(g); this.groups.set(id, g);
     }
   }
