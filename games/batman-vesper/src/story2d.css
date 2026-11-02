@@ -1,0 +1,53 @@
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; background: #0b0a0a; color: #f3eeea; font-family: "Lato", "Segoe UI", "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
+#page { position: fixed; inset: 0; display: grid; place-items: center; }
+#page::before { content: ''; position: absolute; inset: -40px; background: var(--bgimg) center / cover; filter: blur(28px) brightness(.45); }
+#stage { position: relative; height: 100dvh; aspect-ratio: 9 / 19.5; max-width: 100vw; overflow: hidden; background: #000; box-shadow: 0 0 80px #000; }
+@media (max-aspect-ratio: 9/19.5) { #stage { width: 100vw; height: auto; min-height: 100dvh; aspect-ratio: auto; } }
+.st-bg, .st-bg2 { position: absolute; inset: 0; background: center / cover no-repeat; }
+.st-bg2 { opacity: 0; pointer-events: none; }
+.st-vignette { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%); pointer-events: none; }
+.st-char { position: absolute; left: 50%; bottom: -4%; height: 92%; transform: translateX(-50%); opacity: 0; transition: opacity .45s; pointer-events: none; filter: drop-shadow(0 10px 30px rgba(0,0,0,.6)); }
+.st-pill { position: absolute; right: 7%; top: 16%; background: rgba(30,30,32,.78); border-radius: 30px; padding: 8px 22px 8px 12px; display: flex; align-items: center; gap: 14px; font-size: 22px; font-weight: 600; }
+.st-icon { width: 30px; height: 30px; background: radial-gradient(circle at 50% 50%, #8fd1ff 0 22%, transparent 24%), conic-gradient(from 0deg, #2a8bff, #7fd0ff, #2a8bff); border-radius: 50%; -webkit-mask: radial-gradient(circle, #000 0 30%, transparent 31% 44%, #000 45%); mask: radial-gradient(circle, #000 0 30%, transparent 31% 44%, #000 45%); }
+.st-meter { position: absolute; left: 6%; top: 16%; background: rgba(30,30,32,.78); border-radius: 18px; padding: 8px 14px; font-size: 13px; letter-spacing: .08em; opacity: 0; transition: opacity .4s; }
+.st-meter.on { opacity: 1; } .st-meter b { font-size: 18px; margin: 0 4px; } .st-meter small { display: block; color: #bdb5ae; font-size: 11px; }
+.st-card { position: absolute; left: 3%; right: 3%; bottom: 23.5%; min-height: 10%; background: rgba(36,30,30,.86); border-radius: 12px; padding: 22px 22px 22px; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.st-card.radio .st-text { font-style: italic; }
+.st-card.thinking .st-text { opacity: .55; }
+.st-more { position: absolute; right: 6px; top: -36px; width: 40px; height: 40px; border-radius: 10px; background: rgba(36,30,30,.86); border: 0; color: #ddd; font-size: 20px; cursor: pointer; }
+.st-who { font-size: 15px; font-weight: 700; letter-spacing: .02em; margin-bottom: 6px; }
+.st-text { font-size: 22px; line-height: 1.32; }
+.st-input { position: absolute; left: 5%; right: 5%; bottom: 3.5%; background: rgba(30,25,25,.94); border-radius: 18px; padding: 16px 16px 14px; }
+.st-field { display: flex; align-items: flex-start; gap: 10px; }
+.st-field textarea { flex: 1; background: transparent; border: 0; color: #f3eeea; font: 20px/1.35 inherit; resize: none; outline: none; min-height: 54px; }
+.st-field textarea::placeholder { color: #9b928c; }
+.st-send { background: transparent; border: 0; color: #9b928c; font-size: 26px; cursor: pointer; padding: 6px; }
+.st-send:not(:disabled):hover { color: #fff; }
+.st-chips { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-top: 6px; }
+.st-chips::-webkit-scrollbar { display: none; }
+.st-chip { flex: none; border: 1px solid rgba(243,238,234,.45); background: rgba(70,58,56,.55); color: #e9e2dc; border-radius: 22px; padding: 11px 18px; font: 16px inherit; cursor: pointer; white-space: nowrap; max-width: 85%; overflow: hidden; text-overflow: ellipsis; }
+.st-chip:hover { background: rgba(120,100,96,.6); }
+.st-chip.danger { border-color: #ff8a80; }
+.st-chip.qte { position: relative; border-color: #8fd1ff; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; min-width: 60%; }
+.st-chip.qte i { position: absolute; left: 0; bottom: 0; height: 3px; background: #8fd1ff; width: 100%; }
+.st-title { position: absolute; inset: 0; background: rgba(0,0,0,.92); display: grid; place-items: center; text-align: center; opacity: 0; transition: opacity .8s; pointer-events: none; }
+.st-title.on { opacity: 1; }
+.st-title small { display: block; letter-spacing: .5em; color: #8fd1ff; font-size: 12px; }
+.st-title b { display: block; font-weight: 300; letter-spacing: .2em; font-size: 34px; margin: 14px 0; }
+.st-title span { color: #bdb5ae; font-size: 14px; letter-spacing: .1em; }
+.st-note { position: absolute; left: 50%; top: 24%; transform: translate(-50%, -8px); background: rgba(30,30,32,.86); border-radius: 18px; padding: 8px 16px; font-size: 14px; opacity: 0; transition: all .4s; white-space: nowrap; }
+.st-note.on { opacity: 1; transform: translate(-50%, 0); }
+.st-paper { position: absolute; left: 6%; right: 6%; top: 26%; background: #ece6d6; color: #16130f; padding: 18px 20px 22px; font-family: Georgia, serif; transform: rotate(-1.5deg) scale(.95); opacity: 0; transition: all .8s; box-shadow: 0 20px 60px #000; }
+.st-paper.on { opacity: 1; transform: rotate(-1.5deg); }
+.st-paper .mast { font: 900 28px Georgia, serif; text-align: center; border-bottom: 3px double #16130f; padding-bottom: 6px; }
+.st-paper h2 { font: 900 24px/1.1 Georgia, serif; margin: 14px 0 8px; } .st-paper p { font-style: italic; font-size: 13px; margin: 0; }
+#start { position: fixed; inset: 0; z-index: 5; display: grid; place-content: center; justify-items: center; gap: 22px; background: radial-gradient(circle at 50% 30%, rgba(40,60,90,.35), rgba(0,0,0,.92) 70%); text-align: center; padding: 20px; }
+#start.off { display: none; }
+#start h1 { font-weight: 300; letter-spacing: .18em; font-size: clamp(30px, 6vw, 56px); margin: 8px 0; }
+#start small { letter-spacing: .5em; color: #8fd1ff; font-size: 12px; }
+#start p { color: #bdb5ae; letter-spacing: .1em; }
+#go { background: #8fd1ff; color: #06121f; border: 0; border-radius: 26px; padding: 14px 44px; font: 600 16px inherit; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+#cstat { font-size: 13px; color: #bdb5ae; max-width: 420px; }
+#keyrow { font-size: 12px; color: #9b928c; display: flex; flex-direction: column; gap: 6px; }
+#keyrow input { background: #151212; border: 1px solid #3b3434; color: #eee; padding: 8px 10px; border-radius: 8px; width: 280px; }

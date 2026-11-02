@@ -52,7 +52,7 @@ export async function prologue(S) {
   await S.stage('cathedral', { time: 'night' });
   S.weather({ rain: 0.75, wind: 0.6, night: 1, overcast: 0.95, lightning: 0.25 });
   S.music('dread', 0.25);
-  S.place('batman', 'perch', 180);
+  S.place('batman', 'perch', 0);
   S.act('batman', { posture: 'perch', emote: 'grim' });
   // the city first: a crane down through the rain onto the gargoyle
   S.cut({ type: 'ews', on: 'batman', angle: 160, height: 6, lens: 24, move: 'drop', amount: 4, dur: 9, still: 'cathedral_wide' });
@@ -673,7 +673,7 @@ export async function epilogue(S) {
   S.weather({ rain: 0, wind: 0.3, lightning: 0, night: 0.1, overcast: 0.4, wetness: 0.8 });
   S.ambience({ city: 0.7 });
   S.music('dawn', 0.3);
-  S.place('batman', 'perch', 200);
+  S.place('batman', 'perch', 10);
   S.act('batman', { posture: 'perch', setVisible: true, emote: 'tired' });
   S.cut({ type: 'ews', on: 'batman', angle: 150, height: 4, lens: 24, move: 'crane', dur: 10, still: 'dawn_wide' });
   await S.wait(3);

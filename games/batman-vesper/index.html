@@ -1,1 +1,59 @@
-<!doctype html><html><head><meta charset="utf-8"><title>BATMAN: VESPER</title></head><body><script type="module" src="./src/main.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BATMAN: VESPER — First Night</title>
+</head>
+<body>
+<canvas id="film"></canvas>
+
+<div id="title">
+  <div class="logo">
+    <div class="kicker">EARTH-V</div>
+    <h1>BATMAN<span>:</span> VESPER</h1>
+    <div class="ep">EPISODE 1 · FIRST NIGHT</div>
+    <div class="tag">Every Earth gets a Batman. This one is just beginning.</div>
+  </div>
+  <div id="menu">
+    <button class="mbtn" id="new">New game</button>
+    <button class="mbtn" id="continue">Continue</button>
+    <button class="mbtn" id="chapters">Chapters</button>
+    <div id="chapter-list"></div>
+    <button class="mbtn" id="settings">Settings</button>
+    <button class="mbtn" id="about">About</button>
+    <div id="claude-status"></div>
+  </div>
+  <div id="credits">
+    <p><b>BATMAN: VESPER</b> is a fan-made interactive film: an original story on a new Earth. Batman is a DC character; this is a non-commercial fan project.</p>
+    <p>Engine: <b>Med Engine 2</b> (WebGL2, deferred PBR, tiled lights, skin scattering, rain, film camera). People built from the CC0 MakeHuman/MPFB assets (a few community garments CC-BY, see CREDITS.md); textures and props from Poly Haven (CC0). Sound and score synthesised live. Story by Claude; free text and Night Two written live by Claude.</p>
+    <p>Keys: <b>1–4</b> choose · type to say anything · letters when they appear on screen (QTE) · <b>WASD</b> explore · <b>E</b> examine · <b>Esc</b> pause · <b>F3</b> engine stats</p>
+  </div>
+</div>
+
+<div id="loading"><div class="lbl">Starting the Med Engine…</div><div class="bar"><div></div></div></div>
+
+<div id="settings-panel" class="panel">
+  <h2>Settings</h2>
+  <label>Graphics <select id="set-quality"><option value="ultra">Ultra</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+  <label><input type="checkbox" id="set-subs" /> Subtitles</label>
+  <label>Subtitle size <select id="set-subsize"><option value="0.85">Small</option><option value="1">Normal</option><option value="1.3">Large</option></select></label>
+  <label><input type="checkbox" id="set-voices" /> Voices (your browser's speech engine)</label>
+  <label>Volume <input type="range" id="set-volume" min="0" max="1" step="0.05" /></label>
+  <h3>Claude</h3>
+  <div class="note">Claude answers what you type, plays the people you talk to, and writes Night Two. On claude.ai it uses your account (you are asked once). Running locally, start the dev server with ANTHROPIC_API_KEY, or paste a key (kept only in this browser).</div>
+  <label id="claude-key-row">API key <input type="password" id="set-key" placeholder="sk-ant-…" autocomplete="off" /></label>
+  <button class="mbtn" id="settings-close">Done</button>
+</div>
+
+<div id="pause" class="panel">
+  <h2>Paused</h2>
+  <button class="mbtn" id="resume">Resume</button>
+  <button class="mbtn" id="pause-settings">Settings</button>
+  <button class="mbtn" id="pause-quit">Quit to title</button>
+</div>
+<pre id="stats"></pre>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

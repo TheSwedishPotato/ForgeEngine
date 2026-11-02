@@ -34,5 +34,5 @@ export default defineConfig(({ mode }) => ({
   worker: { format: 'es' },
   plugins: [claudeProxy(), ...(mode === 'single' ? [viteSingleFile()] : [])],
   build: { outDir: mode === 'single' ? 'dist-single' : 'dist', chunkSizeWarningLimit: 6000, assetsInlineLimit: 0,
-    rollupOptions: { input: { index: 'index.html', lab: 'lab.html' } } },
+    rollupOptions: { input: { index: 'index.html', story: 'story.html', lab: 'lab.html', stills: 'stills.html' } } },
 }));

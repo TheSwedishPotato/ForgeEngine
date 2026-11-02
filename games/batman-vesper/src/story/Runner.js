@@ -180,7 +180,7 @@ Reply as JSON: {"mapped": "<option id or null>", "speech": "<what Batman says, o
     for (let turn = 0; turn < (spec.turns ?? 3); turn++) {
       const opts = spec.options.filter((o) => (!o.need || this.has(o.need)) && !used.has(o.id));
       if (!opts.length) break;
-      const r = await this.T.choose({ id: spec.id + '_' + turn, prompt: m ? `${CAST[who].name} — ${m.label}` : `Talk to ${CAST[who].name}`, options: opts, allowFree: true, converse: true, timer: m ? 14 : 0 });
+      const r = await this.T.choose({ id: spec.id + '_' + turn, prompt: m ? `${CAST[who].name} — ${m.label}` : `Talk to ${CAST[who].name}`, options: opts, allowFree: true, converse: true, converseWho: who, timer: m ? 14 : 0 });
       let delta = 0, reply = null, emotion = null;
       if (r.free == null) {
         const o = opts.find((x) => x.id === r.id);

@@ -69,7 +69,7 @@ export class Director {
     // the lens
     const L = this.stage.lens;
     L.focal = (spec.lens ?? LENS[spec.type] ?? 40) / 1000;
-    L.aperture = spec.aperture ?? (spec.type === 'ecu' || spec.type === 'cu' ? 1.8 : spec.type === 'ews' || spec.type === 'ws' ? 5.6 : 2.8);
+    L.aperture = spec.aperture ?? (spec.type === 'ecu' || spec.type === 'cu' ? 1.8 : spec.type === 'ews' || spec.type === 'ws' || spec.type === 'free' ? 8 : 2.8);
     L.pull = spec.pull ?? 6;
     return this;
   }
@@ -191,7 +191,7 @@ export class Director {
         this.cur.fov = this.to.fov;
       }
       this.cur.roll = this.to.roll;
-      const fp = pointOf(this.shot.focus ?? this.shot.on, _c);
+      const fp = pointOf(this.shot.focus ?? this.shot.on, _c) ?? (this.shot.type === 'free' ? this.cur.target : null);
       if (fp) this.stage.lens.focus = this.cur.pos.distanceTo(fp);
     }
     if (this.mode === 'manual') return;

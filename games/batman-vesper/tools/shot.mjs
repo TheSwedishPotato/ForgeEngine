@@ -30,7 +30,7 @@ const sep = path.includes('?') ? '&' : '?';
 await page.goto(base + path + sep + 'frames=' + framesArg, { waitUntil: 'load' });
 const want = +framesArg;
 try {
-  await page.waitForFunction((n) => (window.__frames ?? 0) >= n || window.__shotReady, want, { timeout: 600000, polling: 500 });
+  await page.waitForFunction((n) => (window.__stopping ? window.__shotReady : (window.__frames ?? 0) >= n), want, { timeout: 600000, polling: 500 });
 } catch (e) { errors.push('timeout waiting for frames: ' + e.message); }
 for (const e of [...new Set(errors)].slice(0, 30)) console.log(e.slice(0, 800));
 errors.length = 0;

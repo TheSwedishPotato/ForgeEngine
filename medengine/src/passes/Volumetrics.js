@@ -34,6 +34,7 @@ uniform vec4 uSmokeColor[${MAX_SMOKE}]; // rgb albedo, density
 uniform int uVolCount;
 uniform int uVolIdx[8];
 uniform float uRainHaze;
+uniform vec3 uFogGlow;          // light-pollution radiance of the air itself (city nights)
 
 float hg(float c, float g) { float g2 = g * g; return (1.0 - g2) / (4.0 * PI * pow(1.0 + g2 - 2.0 * g * c, 1.5)); }
 
@@ -86,7 +87,7 @@ void main() {
     if (sigma < 1e-6) continue;
     float viewDepth = -(uView * vec4(p, 1.0)).z;
     float vis = sunShadowFast(p, viewDepth);
-    vec3 S = alb * sigma * (uSunIrradiance * vis * phase + uAmbient * (0.75 + 0.25 * saturate(p.y * 0.1)) / (4.0 * PI));
+    vec3 S = alb * sigma * (uSunIrradiance * vis * phase + uAmbient * (0.75 + 0.25 * saturate(p.y * 0.1)) / (4.0 * PI) + uFogGlow);
     // local lights in the medium: lamp cones in the rain, headlight beams
     for (int k = 0; k < 8; k++) {
       if (k >= uVolCount) break;
@@ -122,7 +123,7 @@ void main() {
     float od = uFogDensity * exp(-h0 * b) * (abs(dy * b) > 1e-4 ? (1.0 - exp(-b * dy * L)) / (b * dy) : L);
     od = max(od, 0.0);
     float tr = exp(-od);
-    vec3 S = 0.9 * (uSunIrradiance * phase + uAmbient / (4.0 * PI));
+    vec3 S = 0.9 * (uSunIrradiance * phase + uAmbient / (4.0 * PI) + uFogGlow);
     scat += T * S * (1.0 - tr);
     T *= tr;
   }
@@ -230,7 +231,7 @@ export class Volumetrics {
       .set('uShadowMap', sh.map).set('uShadowMatrix', sh.matrices).set('uShadowSplits', sh.splits.map((s, i) => (i < sh.n ? s : 0))).set('uShadowTexel', sh.texel).set('uShadowSize', sh.size);
     const vol = r.lightGrid?.volumetric ?? [];
     const vi = new Int32Array(8); vol.forEach((x, i) => { vi[i] = x; });
-    M.set('uVolCount', vol.length).set('uVolIdx', vi).set('uRainHaze', (r.rain ?? 0) * (F.rainHaze ?? 0.012));
+    M.set('uFogGlow', F.glow ?? [0, 0, 0]).set('uVolCount', vol.length).set('uVolIdx', vi).set('uRainHaze', (r.rain ?? 0) * (F.rainHaze ?? 0.012));
     r.lightGrid?.bind(M);
     fullscreen(gl);
     this.a.bind();
