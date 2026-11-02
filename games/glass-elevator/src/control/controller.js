@@ -308,8 +308,9 @@ export class Controller {
         }
       }
       // in the last 15 cm the leveling sensor reads the car's true height against the floor's magnets
+      // (a re-levelling move already aims at the averaged error: steering it by the bouncing car would chase the bounce)
       const err = floorY(this.target) - h.yc;
-      if (Math.abs(err) < 0.15) {
+      if (Math.abs(err) < 0.15 && P.kind !== 'relevel') {
         const want = h.enc + err;
         dr.target += (want - dr.target) * Math.min(1, dt / 0.12);
         // pre-opening: the doors start to open as the car levels

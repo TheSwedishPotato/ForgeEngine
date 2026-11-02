@@ -252,6 +252,8 @@ export class Player {
     const acc = this.grounded ? 12 : 1.5;
     this.v[0] += (want[0] - this.v[0]) * Math.min(1, acc * dt);
     this.v[2] += (want[1] - this.v[2]) * Math.min(1, acc * dt);
+    // standing in the car you go with it, however far it went since the last frame (10 m/s at a phone's 20 fps is 0.5 m)
+    if (this.onCar && this.grounded && !this.rope) { const h = this.game.sim.hoist; p[1] = h.yc + (this.carDy ?? 0); this.v[1] = 0; }
     const boxes = this._boxes();
     const n = Math.max(1, Math.ceil((Math.abs(this.v[1]) * dt) / 0.12), Math.ceil((Math.hypot(this.v[0], this.v[2]) * dt) / 0.08));
     const h = dt / n;

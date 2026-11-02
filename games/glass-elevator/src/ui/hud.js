@@ -85,7 +85,8 @@ export class HUD {
     if (!A) return '';
     const inCar = this.game.player.inCar?.() ?? false;
     const p = inCar && A.cab ? A.cab : A.p(y);
-    return `<span>${Math.round(y)} m · ${A.T(y).toFixed(1)} °C · ${p.toFixed(1)} hPa${inCar ? ' (car)' : ''}</span><span>Wind ${A.mean(y).toFixed(0)} m/s, now ${A.wind(y).toFixed(0)} from ${A.dirName}</span><span>Sway ${(A.sway * 100).toFixed(0)} cm · ${A.peak.toFixed(1)} mg</span>${A.inCloud(y) ? '<span>IN CLOUD</span>' : ''}${inCar ? `<span>Ride ${A.car.peak.toFixed(1)} mg sideways${A.ice > 0.5 ? ` · ice ${A.ice.toFixed(0)} kg` : ''}</span>` : ''}${s.ctl.windOp ? `<span>STRONG-WIND OP ${s.ctl.windOp === 2 ? '(parked)' : '(½ speed)'}</span>` : ''}${s.ctl.mrTemp ? '<span>MACHINE ROOM TEMP!</span>' : ''}`;
+    // (phones get one short line: the long ones on a wide screen)
+    return `<span class="airs">${Math.round(y)} m · ${A.T(y).toFixed(0)}° · ${p.toFixed(0)} hPa · ${A.wind(y).toFixed(0)} m/s${A.inCloud(y) ? ' · cloud' : ''}</span><span class="air">${Math.round(y)} m · ${A.T(y).toFixed(1)} °C · ${p.toFixed(1)} hPa${inCar ? ' (car)' : ''}</span><span class="air">Wind ${A.mean(y).toFixed(0)} m/s, now ${A.wind(y).toFixed(0)} from ${A.dirName}</span><span class="air">Sway ${(A.sway * 100).toFixed(0)} cm · ${A.peak.toFixed(1)} mg</span>${A.inCloud(y) ? '<span class="air">IN CLOUD</span>' : ''}${inCar ? `<span class="air">Ride ${A.car.peak.toFixed(1)} mg sideways${A.ice > 0.5 ? ` · ice ${A.ice.toFixed(0)} kg` : ''}</span>` : ''}${s.ctl.windOp ? `<span>STRONG-WIND OP ${s.ctl.windOp === 2 ? '(parked)' : '(½ speed)'}</span>` : ''}${s.ctl.mrTemp ? '<span>MACHINE ROOM TEMP!</span>' : ''}`;
   }
 
   update(dt) {

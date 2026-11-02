@@ -84,6 +84,9 @@ export class Game {
     this.repair();
     Object.assign(I, { mains: true, mainSwitch: true, mrStop: false, pitStop: false, carTopStop: false, insp: false, eeo: false, fire1: 'off', fire2: 'off', independent: false, brkDoor: false, brkLight: false, seismic: false, inspUp: false, inspDown: false, inspCommon: false, eeoUp: false, eeoDown: false, eeoRun: false });
     c.lockout = false; c.quake = false; c.fire.latched = false; c.fire.recalled = false;
+    // the weather back to a mild autumn day, the tower still, the machine room warm, the ice off
+    const A = s.atmos; A.setWeather({ v10: 5.5, season: 'autumn' }); A.x = [0, 0]; A.v = [0, 0]; A.u = [0, 0]; A.ud = [0, 0]; A.peak = 0; A.mr.T = Math.max(A.mr.T, 12); h.load = Math.max(0, h.load - A.ice); A.ice = 0;
+    c.windOp = 0; c.mrTemp = false; c.calmT = 0;
     c.faults.ucm = false; c.faults.brake = false; c.driveHold = false;
     if (c.phase === 'idle') { s.drive.off(); h.motor.enabled = false; }
     d.hatchCmd = 0; d.hatch = 0; d.curtainFail = false;
