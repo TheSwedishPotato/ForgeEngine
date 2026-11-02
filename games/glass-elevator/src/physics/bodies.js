@@ -85,7 +85,24 @@ export class World {
     this.after = [];             // called after each step (the car reads what its surfaces carried)
   }
   add(b) { this.bodies.push(b); return b; }
-  solid(min, max, opts = {}) { const s = { min, max, mu: 0.6, ...opts }; this.solids.push(s); return s; }
+  solid(min, max, opts = {}) { const s = { min, max, mu: 0.6, ...opts }; this.solids.push(s); this._grid = null; return s; }
+
+  /** The fixed boxes that may touch the box [lo, hi] (a 4 m grid over them, built when first asked). */
+  near(lo, hi, pad = 0) {
+    const C = 4, key = (i, j, k) => i * 73856093 ^ j * 19349663 ^ k * 83492791;
+    if (!this._grid) {
+      const g = (this._grid = new Map()), big = (this._big = []);
+      for (const s of this.solids) {
+        const i0 = Math.floor(s.min[0] / C), i1 = Math.floor(s.max[0] / C), j0 = Math.floor(s.min[1] / C), j1 = Math.floor(s.max[1] / C), k0 = Math.floor(s.min[2] / C), k1 = Math.floor(s.max[2] / C);
+        if ((i1 - i0 + 1) * (j1 - j0 + 1) * (k1 - k0 + 1) > 64) { big.push(s); continue; }     // the ground and other huge boxes: always checked
+        for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) for (let k = k0; k <= k1; k++) { const kk = key(i, j, k); let c = g.get(kk); if (!c) g.set(kk, (c = [])); c.push(s); }
+      }
+    }
+    const out = new Set(this._big);
+    const i0 = Math.floor((lo[0] - pad) / C), i1 = Math.floor((hi[0] + pad) / C), j0 = Math.floor((lo[1] - pad) / C), j1 = Math.floor((hi[1] + pad) / C), k0 = Math.floor((lo[2] - pad) / C), k1 = Math.floor((hi[2] + pad) / C);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) for (let k = k0; k <= k1; k++) { const c = this._grid.get(key(i, j, k)); if (c) for (const s of c) out.add(s); }
+    return out;
+  }
   mover(m) { const o = { mu: 0.6, ...m }; this.movers.push(o); return o; }
 
   step(dt) {
@@ -127,7 +144,7 @@ export class World {
     for (const b of B) {
       if (b.asleep) continue;
       const bb = b.aabb();
-      for (const s of this.solids) if (overlap(bb, [s.min, s.max], 0.02)) this._vsBox(C, b, s.min, s.max, null, s.mu);
+      for (const s of this.near(bb[0], bb[1], 0.05)) if (overlap(bb, [s.min, s.max], 0.02)) this._vsBox(C, b, s.min, s.max, null, s.mu);
       for (const m of this.movers) if (m.active && !m.cyl && overlap(bb, m.box, 0.02)) this._vsBox(C, b, m.box[0], m.box[1], m, m.mu);
     }
     const boxes = B.map((b) => b.aabb());
@@ -210,7 +227,7 @@ export class World {
    * goes back out the side it came in from, and stops moving into it.
    */
   _unstick(b, p0) {
-    const boxes = this.solids.map((s) => [s.min, s.max]);
+    const boxes = [...this.near(b.p, b.p, 0.1)].map((s) => [s.min, s.max]);
     for (const m of this.movers) if (m.active && !m.maxPush) boxes.push(m.box);
     for (const [lo, hi] of boxes) {
       const P = b.p;

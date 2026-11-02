@@ -196,8 +196,8 @@ export class BuildingGL {
 
     this.spots.push({ kind: 'stairs', floor: n, pos: [L.x0 + 0.5, y0, 12.2], label: n === FLOORS ? 'stairs: E up to the machine room, Q down' : n === 1 ? 'stairs: E up a floor' : 'stairs: E up a floor, Q down a floor' });
     // the floor's number, big, beside the door
-    const fl = this.labels.text('F' + n, String(n), { w: 96, h: 96, size: 64, weight: 300 });
-    const fm = this.labels.quad(fl, 0.42, 0.42); fm.position.set(-1.6, y0 + 1.55, z0 - 0.005); fm.rotation.y = Math.PI; this.root.add(fm);
+    const fl = this.labels.text('F' + n, String(n), { w: 112, h: 64, size: 50, weight: 300 });
+    const fm = this.labels.quad(fl, 0.6, 0.34); fm.position.set(-1.6, y0 + 1.55, z0 - 0.005); fm.rotation.y = Math.PI; this.root.add(fm);
     // ---- the hall station ----
     const C = this.controls, ctl = this.sim.ctl;
     const st = new Object3D(); st.position.set(1.05, y0 + 1.0, z0 - 0.005); st.rotation.y = Math.PI; this.root.add(st);
@@ -324,7 +324,7 @@ export class BuildingGL {
     b.box(M.lampPanel, 0.4, y + MR.h - 0.01, 16.5, 1.6, y + MR.h, 17.0);
     // the door from the roof stairs
     b.box(M.paintGrey, 1.4, y, MR.z0, 2.4, y + 2.1, MR.z0 + 0.04);
-    this.spots.push({ kind: 'mrDoor', pos: [1.9, y, MR.z0 + 0.6], label: 'the machine room door: E or Q down the stairs to floor 30' });
+    this.spots.push({ kind: 'mrDoor', pos: [1.9, y, MR.z0 + 0.6], label: 'the machine room door: E or Q down the stairs to the top floor' });
     // ---- the machine: bedplate on its plinth, the motor, the sheave, the brake drum and its two brakes
     const zc = SHEAVE.z, sx = SHEAVE.x;
     this.wall(b, M.concrete, -1.4, y, zc - 1.1, 0.8, y + 0.25, zc + 0.9);
@@ -481,6 +481,24 @@ export class BuildingGL {
   }
 
   // -------------------------------------------------------------------------------------------
+  /** 150 floors of doors, buttons and labels: the small things far from the camera are not drawn (they would be specks). */
+  cull(cam) {
+    if (!this._cull) {
+      this._cull = [];
+      this.root.updateMatrixWorld(true);
+      this.root.traverse((m) => {
+        if (!m.isMesh || m.isInstancedMesh) return;
+        m.geometry.computeBoundingSphere?.();
+        const r = m.geometry.boundingSphere?.radius ?? 1e9;
+        if (r > 4) return;
+        const p = m.getWorldPosition(new m.position.constructor());
+        this._cull.push({ m, p });
+      });
+    }
+    const c = cam.position;
+    for (const o of this._cull) { const dx = o.p.x - c.x, dy = o.p.y - c.y, dz = o.p.z - c.z; o.m.visible = dx * dx + dy * dy + dz * dz < 80 * 80; }
+  }
+
   update() {
     const sim = this.sim, ctl = sim.ctl, d = sim.doors, h = sim.hoist, T = SPEC.doors.panelTravel;
     for (let n = 1; n <= FLOORS; n++) {

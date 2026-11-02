@@ -146,7 +146,7 @@ export class Player {
       // your hand stops at the wall: it cannot push what it holds through one
       let reach = H.dist;
       const o = cam.position, W = this.game.world, r = Math.min(...H.body.half);
-      const boxes = W.solids.map((s) => [s.min, s.max]);
+      const p0 = [o.x, o.y, o.z], boxes = [...W.near(p0, p0, reach + 0.5)].map((s) => [s.min, s.max]);
       for (const m of W.movers) if (m.active && !m.maxPush && m.box) boxes.push(m.box);
       for (const [lo, hi] of boxes) {
         let t0 = 0, t1 = reach;
@@ -207,7 +207,7 @@ export class Player {
       if (dir > 0 && s.floor === FLOORS) { this.teleport([1.9, MR.floor, MR.z0 + 0.7], Math.PI / 2); say('Up the last flight and out onto the roof, into the machine room.'); }
       else if (dir > 0) { stairs(s.floor + 1); say(`Up the stairs to floor ${s.floor + 1}.`); }
       else if (s.floor > 1) { stairs(s.floor - 1); say(`Down the stairs to floor ${s.floor - 1}.`); }
-    } else if (s.kind === 'mrDoor') { stairs(FLOORS); say('Down from the machine room to floor 30.'); }
+    } else if (s.kind === 'mrDoor') { stairs(FLOORS); say(`Down from the machine room to floor ${FLOORS}.`); }
     else if (s.kind === 'pitDoor' && dir > 0) { this.teleport([PIT.x1 - 0.3, PIT_Y, PIT.z1 - 0.55], -Math.PI / 2); say('Through the pit door and down the ladder into the pit. (The pit STOP switch is on the wall by the ladder.)'); }
     else if (s.kind === 'pitLadder') { this.teleport([PIT.x1 + 0.6, 0, FACADE + 1.8], 0); say('Up the pit ladder, out onto the plaza.'); }
   }
@@ -220,7 +220,7 @@ export class Player {
   _boxes() {
     const W = this.game.world, out = [];
     const lo = [this.p[0] - 3, this.p[1] - 6, this.p[2] - 3], hi = [this.p[0] + 3, this.p[1] + 4, this.p[2] + 3];
-    for (const s of W.solids) if (overlap([s.min, s.max], [lo, hi])) out.push({ min: s.min, max: s.max, v: null });
+    for (const s of W.near(lo, hi)) if (overlap([s.min, s.max], [lo, hi])) out.push({ min: s.min, max: s.max, v: null });
     for (const m of W.movers) { if (m === this.body) continue; const box = m.bounds(); if (box && overlap(box, [lo, hi])) out.push({ min: box[0], max: box[1], v: m.vel ? m.vel() : null, car: m.car }); }
     for (const b of W.bodies) if (b.mass >= 40 && b !== this.held?.body) { const [a, c] = b.aabb(); if (overlap([a, c], [lo, hi])) out.push({ min: a, max: c, v: b.v }); }
     return out;

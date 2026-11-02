@@ -153,7 +153,7 @@ export class ToolBelt {
     if (tg === 'ropes') {
       if (h.ropesLeft <= 0) return this.say('There is no rope left to hit.');
       h.ropesLeft -= 1; if (h.ropesLeft === 0) h.ropesCut = true;
-      return this.say(h.ropesCut ? 'The last hoist rope parts under the hammer.' : `A hoist rope's strands burst: ${h.ropesLeft} of 8 still hold the car.`);
+      return this.say(h.ropesCut ? 'The last hoist rope parts under the hammer.' : `A hoist rope's strands burst: ${h.ropesLeft} of ${SPEC.ropes.n} still hold the car.`);
     }
     if (tg === 'brakes') { for (const k of h.brakes) k.fail = true; return this.say('The brake linings shatter: the brakes no longer hold (E602).'); }
     if (tg === 'governor') { h.gov.tripped = true; h.gov.switchOpen = true; return this.say('The governor\'s jaws are knocked shut and its switch is open (E202).'); }
@@ -201,11 +201,11 @@ export class ToolBelt {
         if (locked()) return;
         if (h.ropesCut) {
           h.ropesCut = false; h.ropesLeft = 1; h.yw = cwYForCar(h.yc); h.vw = 0; h.ts = TS_Y0; h.vts = 0; h.buf.cw = 0; h.vu = 0; h.vs = 0; h.stick = true; h._settle();
-          return this.say('With the counterweight jacked back into place, the first new rope is reeved over the sheave and socketed at both hitches. 1 of 8: keep going.');
+          return this.say(`With the counterweight jacked back into place, the first new rope is reeved over the sheave and socketed at both hitches. 1 of ${SPEC.ropes.n}: keep going.`);
         }
         if (h.ropesLeft >= SPEC.ropes.n) return this.say('All eight ropes are in place; their tensions are even.');
         h.ropesLeft += 1;
-        return this.say(`A new rope reeved, socketed and its tension matched to the others: ${h.ropesLeft} of 8.`);
+        return this.say(`A new rope reeved, socketed and its tension matched to the others: ${h.ropesLeft} of ${SPEC.ropes.n}.`);
       }
       return this.say('Nothing here to undo with a spanner.');
     }

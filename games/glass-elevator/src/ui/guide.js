@@ -53,8 +53,8 @@ export class Guide {
     if (!I.mains) return { problem: 'Mains supply lost: the building\'s power is off (brakes set, car on its battery lighting).', step: 'Restore the mains: the AC switch on the yellow simulator panel in the machine room.', pos: mr('mains') };
     // ---- repairs that need the power locked off ---------------------------------------------
     if (h.ropesCut || h.ropesLeft < SPEC.ropes.n) {
-      const lo = lockout(`Hoist ropes: ${h.ropesCut ? 'all parted' : `${h.ropesLeft} of 8 left`}.`); if (lo) return lo;
-      return { problem: `Hoist ropes: ${h.ropesCut ? 'all parted (the car stands on its safety gear)' : `${h.ropesLeft} of 8 left`}.`, step: 'Re-hang the ropes one at a time: the spanner set on the traction sheave (or the car\'s rope hitch).', ...tool('spanner', 'Spanner set'), pos: sheave };
+      const lo = lockout(`Hoist ropes: ${h.ropesCut ? 'all parted' : `${h.ropesLeft} of ${SPEC.ropes.n} left`}.`); if (lo) return lo;
+      return { problem: `Hoist ropes: ${h.ropesCut ? 'all parted (the car stands on its safety gear)' : `${h.ropesLeft} of ${SPEC.ropes.n} left`}.`, step: 'Re-hang the ropes one at a time: the spanner set on the traction sheave (or the car\'s rope hitch).', ...tool('spanner', 'Spanner set'), pos: sheave };
     }
     if (h.brakes.some((b) => b.fail)) {
       const lo = lockout('Brakes: the linings will not hold (brake torque test fails).'); if (lo) return lo;
@@ -115,7 +115,7 @@ export class Guide {
     this.edge.hidden = true;
     if (!r) return;
     const toolLine = r.tool ? `<p class="tool">Tool: <b>${r.toolName}</b>${r.missing ? ' — it is not in your bag: pick it up where you left it' : g.tools.tool?.tool === r.tool ? ' (in your hand)' : ` (${g.touch ? 'Tool' : 'I'}: choose it, then ${g.touch ? 'Apply' : 'R'} on the marked part)`}</p>` : '';
-    const where = r.pos && r.pos.y > MR.floor - 0.5 && cam.position.y < MR.floor - 0.5 ? '<p class="dim">It is in the machine room on the roof: G → Machine room, or the stairs from floor 30.</p>' : '';
+    const where = r.pos && r.pos.y > MR.floor - 0.5 && cam.position.y < MR.floor - 0.5 ? '<p class="dim">It is in the machine room on the roof: G → Machine room, or the stairs from the top floor.</p>' : '';
     this.box.innerHTML = `<b>Repair guide</b><p class="prob">${r.problem}</p><p>${r.step}</p>${toolLine}${where}`;
     if (!r.pos) return;
     this.arrow.position.copy(r.pos).add(_v.set(0, 0.25 + Math.abs(Math.sin(performance.now() / 300)) * 0.12, 0));

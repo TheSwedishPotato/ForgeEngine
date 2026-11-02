@@ -5,7 +5,7 @@
  * commands a technician has: clear the log, reset faults, re-learn the encoder, reset the governor.
  */
 import { fmt } from '../sim.js';
-import { floorY } from '../data/spec.js';
+import { floorY, SPEC } from '../data/spec.js';
 
 // event text -> fault code (this installation's own numbering)
 const CODES = [
@@ -59,7 +59,7 @@ export class Laptop {
     if (smashed) active.push(['E810', `Damaged devices: ${smashed} (no response)`]);
     if (c.quake) active.push(['E450', 'Seismic operation: sensor tripped (check the hoistway, then FLT reset)']);
     if (c.inputs.lwBypass) active.push(['W110', 'Load weighing bypassed (overload ignored)']);
-    if (h.ropesLeft < 8) active.push(['E703', `Hoist ropes: ${h.ropesLeft} of 8 (rope monitor)`]);
+    if (h.ropesLeft < 8) active.push(['E703', `Hoist ropes: ${h.ropesLeft} of ${SPEC.ropes.n} (rope monitor)`]);
     d.landing.forEach((L, n) => { if (L?.broken) active.push(['E504', `Landing door ${n}: lock contact open (forced)`]); });
     if (h.gov.tripped) active.push(['E202', 'Governor tripped: reset required']);
     if (h.sg.set) active.push(['E203', 'Safety gear set: move car up on EEO to release']);

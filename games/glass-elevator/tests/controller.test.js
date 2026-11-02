@@ -43,7 +43,7 @@ test('inspection from the car roof: hold-to-run at 0.3 m/s, the brakes drop as s
   assert.ok(vmax <= 0.63 && vmax > 0.25, `inspection speed ${vmax.toFixed(2)} m/s`);
   Object.assign(s.ctl.inputs, { inspUp: false });
   run(s, 1.5);
-  assert.ok(Math.abs(s.hoist.vc) < 0.01);
+  assert.ok(Math.abs(s.hoist.vs) < 0.01, 'the sheave has stopped (the car may still bounce on the long ropes)');
   assert.ok(s.hoist.brakes.every((b) => b.lift === 0));
 });
 

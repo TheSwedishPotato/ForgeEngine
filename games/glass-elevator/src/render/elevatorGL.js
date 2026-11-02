@@ -109,13 +109,29 @@ export class ElevatorGL {
       const lab = L.quad(cell, 0.026, 0.026, L.glow); lab.position.set(x, y, 0.0235); cop.add(lab);
       return C.add([ring, face, lab], { litMesh: face, litMat: M.btnLit, offMat: M.btnOff, ...spec });
     };
-    for (let n = 1; n <= FLOORS; n++) {
-      const col = (n - 1) % 5, row = Math.floor((n - 1) / 5);
-      btn(-0.16 + col * 0.08, 0.95 + row * 0.068, L.text('B' + n, String(n), { w: 64, h: 64, size: 40, weight: 600 }), {
-        id: `car.${n}`, label: `Car call: floor ${n}`, floor: n,
-        down: () => ctl.pressCar(n), lit: () => ctl.calls.car[n],
+    // 150 floors do not fit as buttons: a keypad, as in real supertall cars (type the floor, then GO,
+    // or wait two seconds); the display shows what you type
+    this.entry = ''; this._entryT = 0;
+    const go = () => {
+      const n = Number(this.entry); this.entry = '';
+      if (n >= 1 && n <= FLOORS) { ctl.pressCar(n); this.sim.sfx('beep'); this.sim.say(`Car call registered: floor ${n}.`, 'Car'); }
+      else if (n) { this.sim.sfx('beep2'); this.sim.say(`There is no floor ${n} (1 to ${FLOORS}).`, 'Car'); }
+    };
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'GO'];
+    keys.forEach((k, i) => {
+      const col = i % 3, row = 3 - Math.floor(i / 3);
+      btn(-0.1 + col * 0.1, 0.96 + row * 0.085, L.text('K' + k, k, { w: 64, h: 64, size: k === 'GO' ? 28 : 40, weight: 700 }), {
+        id: `car.key${k}`, label: k === 'GO' ? 'Keypad: GO (send the car)' : k === 'C' ? 'Keypad: clear' : `Keypad: ${k}`,
+        down: () => {
+          if (k === 'GO') return go();
+          if (k === 'C') { this.entry = ''; return; }
+          if (this.entry.length < 3) this.entry += k;
+          this._entryT = performance.now();
+        },
+        lit: () => k !== 'C' && k !== 'GO' && this.entry.endsWith(k) && performance.now() - this._entryT < 250,
       });
-    }
+    });
+    this._go = go;
     btn(-0.12, 0.855, L.symbol('open'), { id: 'car.open', label: 'Door open', kind: 'hold', down: () => (ctl.inputs.open = true), up: () => (ctl.inputs.open = false), lit: () => ctl.inputs.open });
     btn(0.0, 0.855, L.symbol('close'), { id: 'car.close', label: 'Door close', kind: 'hold', down: () => (ctl.inputs.close = true), up: () => (ctl.inputs.close = false), lit: () => ctl.inputs.close });
     btn(0, 0.785, L.text('ROPE', 'R', { w: 64, h: 64, size: 40, weight: 700 }), {
@@ -124,9 +140,9 @@ export class ElevatorGL {
         if (h.ropesCut || h.ropesLeft <= 0) return;
         h.ropesLeft -= 1; this.sim.sfx('snap');
         if (h.ropesLeft === 0) { h.ropesCut = true; this.sim.say('The last hoist rope has parted.', 'Simulator'); }
-        else this.sim.say(`One hoist rope has parted: ${h.ropesLeft} of 8 still hold the car (safety factor now ${h.ropeSafety.toFixed(1)}).`, 'Simulator');
+        else this.sim.say(`One hoist rope has parted: ${h.ropesLeft} of ${SPEC.ropes.n} still hold the car (safety factor now ${h.ropeSafety.toFixed(1)}).`, 'Simulator');
       },
-      hint: () => `Part one hoist rope (${this.sim.hoist.ropesLeft} of 8 holding) · click`,
+      hint: () => `Part one hoist rope (${this.sim.hoist.ropesLeft} of ${SPEC.ropes.n} holding) · click`,
     });
     btn(0.12, 0.855, L.symbol('bell'), { id: 'car.alarm', label: 'Alarm (hold a second)', kind: 'hold', down: () => (ctl.inputs.alarm = true), up: () => (ctl.inputs.alarm = false), lit: () => ctl.inputs.alarm, litMat: M.amberLit });
     const disp = new Mesh(new PlaneGeometry(0.3, 0.15), this.display.mat); disp.position.set(0, 1.47, 0.0125); cop.add(disp);
@@ -374,7 +390,8 @@ export class ElevatorGL {
     this.doorPanels[1].position.x = PW / 2 + dx;
     this.glass.carY = h.yc; this.glass.doorX = dx;
     const D = ctl.display;
-    this.display.draw(D.text, D.dir, D.msg);
+    if (this.entry && performance.now() - this._entryT > 2000) this._go();
+    this.display.draw(D.text, D.dir, this.entry ? `Floor ${this.entry}_` : D.msg);
     // the safety gear's wedges ride up the rails as it sets; the linkage lever follows the governor rope
     for (const w of this.wedges) w.position.y = CAR.plank - 0.36 + 0.05 * h.sg.engage;
     this.linkLever.rotation.x = Math.min(0.5, h.gov.link * 6);

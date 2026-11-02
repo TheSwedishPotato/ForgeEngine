@@ -33,13 +33,13 @@ export const G = 9.80665;
 // ---------------------------------------------------------------------------------------------
 // The tower
 
-export const FLOORS = 30;
+export const FLOORS = 150;
 export const LOBBY_H = 6.0;             // the lobby storey (floor 1)
-export const STOREY = 3.9;              // floor to floor above it
-/** Finished floor level of floor n (1 = lobby .. 30). */
+export const STOREY = 4.5;              // floor to floor above it (a tall office storey)
+/** Finished floor level of floor n (1 = lobby .. 150). */
 export const floorY = (n) => (n <= 1 ? 0 : LOBBY_H + (n - 2) * STOREY);
-export const TOP_Y = floorY(FLOORS);              // 115.2 m
-export const ROOF_Y = TOP_Y + STOREY;              // 119.1 m
+export const TOP_Y = floorY(FLOORS);              // 672 m
+export const ROOF_Y = TOP_Y + STOREY;              // 676.5 m
 export const TOWER = { x0: -18, x1: 18, z0: -15, z1: 15, top: ROOF_Y + 1.2 };
 export const FACADE = TOWER.z1;                    // the south face, where the landing doors are
 
@@ -70,31 +70,33 @@ export const GOVERNOR = { x: 1.02, y: MR.floor + 0.55, z: CAR.zc + 0.55, r: 0.15
 // ---------------------------------------------------------------------------------------------
 // The elevator
 
-const ropeN = 8, ropeD = 0.013;
+const ropeN = 10, ropeD = 0.016;   // a 672 m rise: ten 16 mm ropes keep the safety factor over 12 with 6 t of rope hanging
 export const SPEC = {
   ratedLoad: 1600,          // Q (kg): 21 persons
   persons: 21,
-  ratedSpeed: 4.0,          // m/s
+  ratedSpeed: 10.0,         // m/s: a supertall's express car
   accel: 1.0,               // m/s²
   jerk: 1.2,                // m/s³
   carMass: 2100,            // P (kg): car, sling, laminated glass walls, doors, operator, travelling cable share
   balance: 0.45,            // counterweight = P + 0.45 Q
-  // hoist ropes: 8 x 13 mm, 8x19 Seale with fibre core, dual tensile 1370/1770 (EN 12385-5)
-  ropes: { n: ropeN, d: ropeD, kgPerM: 0.59 * ropeN, mbf: 87e3, EA: 90e9 * 0.384 * ropeD * ropeD * ropeN, damping: 0.02 },
+  // hoist ropes: 10 x 16 mm, 8x19 Seale with fibre core, dual tensile 1370/1770 (EN 12385-5)
+  ropes: { n: ropeN, d: ropeD, kgPerM: 0.90 * ropeN, mbf: 132e3, EA: 90e9 * 0.384 * ropeD * ropeD * ropeN, damping: 0.02 },
   // compensating ropes: 4 x 18 mm, the same weight a metre as the hoist ropes (full compensation)
-  comp: { n: 4, d: 0.018, kgPerM: 0.59 * ropeN, EA: 90e9 * 0.384 * 0.018 * 0.018 * 4, sheaveMass: 1000, sheaveR: 0.8, tieDown: true },
+  comp: { n: 6, d: 0.024, kgPerM: 0.90 * ropeN, EA: 90e9 * 0.384 * 0.024 * 0.024 * 6, sheaveMass: 1000, sheaveR: 0.8, tieDown: true },
   machine: {
     // gearless permanent-magnet synchronous machine, 20 poles, sheave on the rotor
     J: 32,                  // kg·m², rotor, sheave and brake drums
-    ratedTorque: 3800, maxTorque: 6800, ratedRpm: 119.4, poles: 20, ratedPower: 48e3,
+    ratedTorque: 9000, maxTorque: 18000, ratedRpm: 298.4, poles: 20, ratedPower: 280e3,   // ~30 t moving with 12 t of hoist rope and 12 t of compensation
     torqueLag: 0.004,       // the current loop (s)
     efficiency: 0.93,
   },
-  brakes: { n: 2, torque: 4300, lift: 0.25, drop: 0.15 },   // each set (N·m)
+  brakes: { n: 2, torque: 12000, lift: 0.25, drop: 0.15 },   // each set (N·m)
   traction: { wrapDeg: 160, grooveDeg: 30, undercutDeg: 95 },
-  governor: { trip: 4.80, overspeedSwitch: 4.40, ropeD: 0.008, tension: 60 * G, linkTravel: 0.03 },
+  governor: { trip: 11.8, overspeedSwitch: 11.2, ropeD: 0.008, tension: 60 * G, linkTravel: 0.03 },
   safetyGear: { force: 3700 * G * 1.5, engageTime: 0.05 },     // progressive: ~0.5 gn on P + Q in free fall
-  buffers: { stroke: 1.10, runby: 0.30, designSpeed: 1.15 * 4.0, decel: G },
+  buffers: { stroke: 1.10, runby: 0.30, designSpeed: 1.15 * 4.0, decel: G },   // reduced stroke: the ETSL holds the impact to 4 m/s
+  // emergency terminal speed limiting (EN 81-20 5.12.1.3): near a terminal floor the car must be slowing, or it is stopped
+  etsl: { impact: 4.0, decel: 1.6 },
   doors: {
     panelTravel: 0.55,      // each panel of the centre-opening door
     carPanel: 52, landingPanel: 42,         // kg each

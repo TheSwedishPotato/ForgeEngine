@@ -134,7 +134,9 @@ export class Controller {
     const h = this.h, d = this.d, dr = this.dr, I = this.inputs;
     this.time += dt;
     // load weighing: the hitch load cells, read while the car stands
-    if (Math.abs(h.vc) < 0.02 && this.phase !== 'run') this.loadKg += (h.measuredLoad() - this.loadKg) * Math.min(1, dt / 0.35);
+    // (filtered over a second: on long ropes the car bounces for a while after people step in)
+    if (!this.pending || this.pending.kind === 'relevel') this.loadKg += (h.measuredLoad() - this.loadKg) * Math.min(1, dt / 1.0);
+    this.levelErr = (this.levelErr ?? 0) + ((h.yc - floorY(nearestFloor(h.yc))) - (this.levelErr ?? 0)) * Math.min(1, dt / 0.8);
     const ol = !I.lwBypass && this.loadKg > SPEC.ratedLoad * SPEC.overload;   // the technician's bypass switch ignores it
     if (ol !== this.overload) { this.overload = ol; if (ol) this.say(`Overload: ${Math.round(this.loadKg)} kg in a ${SPEC.ratedLoad} kg car. The doors stay open.`); }
     this.fullLoad = this.loadKg > SPEC.ratedLoad * SPEC.fullLoad;
@@ -158,6 +160,11 @@ export class Controller {
     // ---- the safety chain and the supply while moving ------------------------------------------
     const moving = this.phase === 'start' || this.phase === 'run' || this.phase === 'stop';
     const supplied = this.powered || mode === 'ard';
+    // ETSL: approaching a terminal floor faster than the slowdown curve allows (the buffers are reduced-stroke)
+    if (moving && this.mode !== 'eeo') {
+      const E = SPEC.etsl, toward = h.vc > 0 ? LIMITS.top - h.yc : h.yc - LIMITS.bottom;
+      if (Math.abs(h.vc) > Math.sqrt(E.impact * E.impact + 2 * E.decel * Math.max(0, toward)) + 0.3) this._estop(`emergency terminal speed limiting: ${Math.abs(h.vc).toFixed(1)} m/s with ${toward.toFixed(1)} m to the terminal floor`);
+    }
     if (moving && (!this.chainOK || !supplied)) this._estop(!supplied ? 'mains supply lost' : `${open[1]} opened`);
     // standstill monitoring: the car creeping with the brakes set and the motor off
     if (this.phase === 'idle' && !h.motor.enabled && this.powered && Math.abs(h.vs) > 0.01 && !this.faults.ucm) this._holdByDrive('the car is creeping at standstill');
@@ -172,7 +179,7 @@ export class Controller {
     dr.step(dt, this.loadKg);
     // ---- what the mode does with the car at rest -----------------------------------------------
     if (this.phase === 'idle') {
-      if (Math.abs(h.vc) < 0.003) this.stillT += dt; else this.stillT = 0;
+      if (Math.abs(h.vs) < 0.003) this.stillT += dt; else this.stillT = 0;          // the sheave at rest (the car may still bounce on the ropes)
       if (mode === 'normal' || mode === 'independent' || mode === 'fire1' || mode === 'fire2') this._service(dt, mode);
       else if (mode === 'inspection' || mode === 'eeo') this._jogControl(mode);
       else if (mode === 'power' || mode === 'ard') this._powerFail(dt);
@@ -363,11 +370,13 @@ export class Controller {
       else if (this.door === 'closed' && this.chainOK && !this.faulted && !this.overload) this._trip(1, 'fire');
       return;
     }
-    if (here && this.stillT > 0.6 && Math.abs(h.yc - floorY(here)) > Z.relevel && this.chainCore && !this.faulted) {
+    if (here && this.stillT > 0.6 && Math.abs(this.levelErr) > Z.relevel && Math.abs(h.yc - floorY(here)) > Z.relevel && this.chainCore && !this.faulted) {
       this.bridge = true;
-      if (this._start({ kind: 'relevel', floor: here, enc: h.enc + floorY(here) - h.yc, vmax: SPEC.speeds.relevel })) { this.say(`Re-levelling ${((floorY(here) - h.yc) * 1000).toFixed(0)} mm with the doors open (rope stretch).`); }
+      if (this._start({ kind: 'relevel', floor: here, enc: h.enc - this.levelErr, vmax: SPEC.speeds.relevel })) { this.say(`Re-levelling ${(-this.levelErr * 1000).toFixed(0)} mm with the doors open (rope stretch).`); }
       return;
     }
+    // overloaded with the doors already shut (the weighing caught up late): open them again, do not start
+    if (this.overload && here && this.door === 'closed' && mode === 'normal') { this._open(); this.idleT = 0; return; }
     if (this.door !== 'closed' || !this.chainOK || this.overload || this.faulted) { this.idleT = 0; return; }
     // the next stop in the direction of travel, reversing at the last call
     let dir = this.dir;
