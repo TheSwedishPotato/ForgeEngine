@@ -244,7 +244,7 @@ vec3 localLights(vec3 wpos, vec3 N, vec3 V, vec3 diffuseColor, vec3 F0, float ro
     if (matType == 1) {
       // skin: wrapped diffuse with a red scattering tint past the terminator
       float w = saturate((NoLraw + 0.5) / 1.5);
-      diff += diffuseColor * INV_PI * vec3(0.95, 0.32, 0.16) * max(w - NoL, 0.0);
+      diff += diffuseColor * INV_PI * vec3(0.6, 0.2, 0.1) * max(w - NoL, 0.0);
     }
     diffOut += diff * col;
     sum += (diff + sp) * col;

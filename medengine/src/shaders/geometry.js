@@ -154,6 +154,7 @@ in vec4 vPrev;
 
 uniform vec3 uBaseColor;
 uniform float uOpacity, uRoughness, uMetalness, uMatType, uMatParam, uSpecular, uAlphaTest, uUnlitScale, uWetFactor;
+uniform vec3 uDetail;
 uniform vec3 uEmissive;
 uniform vec2 uNormalScale;
 uniform sampler2D uMap, uNormalMap, uRoughMap, uEmissiveMap;
@@ -210,21 +211,21 @@ void main() {
   mapN.xy *= uNormalScale;
   N = perturb(N, vWorld, uvN, normalize(mapN));
 #endif
-#ifdef SKIN_DETAIL
+#ifdef DETAIL
   {
-    // pores and fine wrinkles: two octaves of cellular-ish noise in uv space, strongest
-    // where the camera is close (they would alias at a distance)
+    // micro detail in uv space: skin pores and fine lines, leather grain, fabric weave;
+    // faded with distance (it would only alias far away)
     float dist = length(uCameraPos - vWorld);
-    float k = 1.0 - smoothstep(0.6, 3.0, dist);
+    float k = 1.0 - smoothstep(0.8, 4.0, dist);
     if (k > 0.0) {
-      vec2 q = vUv * 900.0;
+      vec2 q = vUv * uDetail.x;
       float e = 0.35;
       float h0 = vnoise(q), hx = vnoise(q + vec2(e, 0.0)), hy = vnoise(q + vec2(0.0, e));
-      vec2 q2 = vUv * 2600.0;
+      vec2 q2 = q * 2.9;
       float g0 = vnoise(q2), gx = vnoise(q2 + vec2(e, 0.0)), gy = vnoise(q2 + vec2(0.0, e));
-      vec3 bump = vec3((h0 - hx) * 0.55 + (g0 - gx) * 0.3, (h0 - hy) * 0.55 + (g0 - gy) * 0.3, 1.0);
+      vec3 bump = vec3(((h0 - hx) * 0.65 + (g0 - gx) * 0.35) * uDetail.y, ((h0 - hy) * 0.65 + (g0 - gy) * 0.35) * uDetail.y, 1.0);
       N = perturb(N, vWorld, vUv, normalize(mix(vec3(0, 0, 1), bump, k)));
-      rough = clamp(rough + (h0 - 0.5) * 0.12 * k, 0.25, 0.8);
+      rough = clamp(rough + (h0 - 0.5) * uDetail.z * 2.0 * k, 0.04, 1.0);
     }
   }
 #endif

@@ -160,7 +160,7 @@ function makeGeometry({ count, pos, faces, uv, tidx, joints, weights, morphUnits
         id = vi++; key.set(kk, id);
         outP.push(P[p * 3], P[p * 3 + 1], P[p * 3 + 2]);
         outN.push(normals[p * 3], normals[p * 3 + 1], normals[p * 3 + 2]);
-        outUV.push(UV ? UV[tt * 2] : 0, UV ? 1 - UV[tt * 2 + 1] : 0);
+        outUV.push(UV ? UV[tt * 2] : 0, UV ? UV[tt * 2 + 1] : 0);
         outJ.push(J[p * 4], J[p * 4 + 1], J[p * 4 + 2], J[p * 4 + 3]);
         outW.push(W[p * 4], W[p * 4 + 1], W[p * 4 + 2], W[p * 4 + 3]);
         outSrc.push(p);
@@ -237,7 +237,8 @@ function recolor(url, color, { contrast = 1.3, keep = 0.0 } = {}) {
     const mean = Math.max(8, sum / (p.length / 64));
     const lin = color.map((x) => Math.pow(x, 1 / 2.2) * 255);
     for (let i = 0; i < p.length; i += 4) {
-      const l = (0.2126 * p[i] + 0.7152 * p[i + 1] + 0.0722 * p[i + 2]) / mean;
+      // clamp: printed logos, reflective strips and white trim must not survive the dye
+      const l = Math.min(1.25, (0.2126 * p[i] + 0.7152 * p[i + 1] + 0.0722 * p[i + 2]) / mean);
       const s = Math.max(0, 1 + (l - 1) * contrast);
       for (let k = 0; k < 3; k++) p[i + k] = Math.min(255, lin[k] * s * (1 - keep) + p[i + k] * keep);
     }
@@ -254,7 +255,7 @@ export function humanMaterial(desc, root, opts = {}) {
   const m = new MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0 });
   const url = (p) => root + '/' + p;
   if (desc.map && !desc.color) m.map = tex(url(desc.map), true);
-  if (desc.map && desc.color) m.map = recolor(url(desc.map), desc.color, { contrast: k === 'leather' ? 1.6 : 1.2 });
+  if (desc.map && desc.color) m.map = recolor(url(desc.map), desc.color, { contrast: k === 'leather' ? 0.9 : 0.8 });
   else if (desc.color && !desc.map) m.color.setRGB(...desc.color);
   if (desc.normalMap) { m.normalMap = tex(url(desc.normalMap), false); }
   m.userData.medType = 'default';
@@ -264,17 +265,17 @@ export function humanMaterial(desc, root, opts = {}) {
       if (opts.skinTint) m.color.setRGB(...opts.skinTint);
       m.userData.detail = 'pores';
       break;
-    case 'eye': m.roughness = 0.04; m.userData.medType = 'eye'; m.specularIntensity = 1.0; break;
+    case 'eye': m.roughness = 0.05; m.userData.medType = 'eye'; m.specularIntensity = 1.0; m.alphaTest = 0.5; break;
     case 'brow': case 'lash':
       m.alphaTest = 0.35; m.side = DoubleSide; m.roughness = 0.7; m.userData.medType = 'hair'; m.userData.dither = true; break;
     case 'hair':
       m.alphaTest = 0.4; m.side = DoubleSide; m.roughness = 0.45; m.userData.medType = 'hair'; m.userData.dither = true; m.sheen = 0.6; break;
     case 'teeth': m.roughness = 0.25; m.userData.medType = 'skin'; m.sheen = 0.15; break;
     case 'tongue': m.roughness = 0.3; m.userData.medType = 'skin'; break;
-    case 'leather': m.roughness = desc.rough ?? 0.42; m.clearcoat = 0.35; m.userData.medType = 'coat'; break;
-    case 'wool': m.roughness = 0.85; m.sheen = 0.5; m.userData.medType = 'cloth'; break;
+    case 'leather': m.roughness = desc.rough ?? 0.5; m.clearcoat = 0.12; m.userData.medType = 'coat'; m.userData.detail = 'leather'; break;
+    case 'wool': m.roughness = 0.85; m.sheen = 0.5; m.userData.medType = 'cloth'; m.userData.detail = 'fabric'; break;
     case 'batsuit': m.roughness = 0.5; m.userData.medType = 'batsuit'; m.color.setRGB(1, 1, 1); break;
-    default: m.roughness = 0.75; m.sheen = 0.25; m.userData.medType = 'cloth';
+    default: m.roughness = 0.75; m.sheen = 0.25; m.userData.medType = 'cloth'; m.userData.detail = 'fabric';
   }
   m.userData.wetFactor = k === 'skin' ? 0.6 : k === 'eye' ? 0 : 1;
   return m;
@@ -318,7 +319,7 @@ export class Human {
     this.meshes = [];
     this.materials = {};
     const mats = C.materials;
-    const getMat = (name) => (this.materials[name] ??= humanMaterial(mats[name], root, { skinTint: this.meta.skinTint }));
+    const getMat = (name) => (this.materials[name] ??= humanMaterial(mats[name].kind === 'hair' && this.meta.hairColor ? { ...mats[name], color: this.meta.hairColor } : mats[name], root, { skinTint: this.meta.skinTint }));
 
     // ---- body
     const bodyPos = view(ch.buf, C.body);
@@ -354,6 +355,13 @@ export class Human {
       mesh.renderOrder = p.zDepth ?? 0;
       (this.parts[p.kind] ??= []).push(mesh);
     }
+    // ---- garment layers: outer clothes sit a little further out than inner ones (no poke-through)
+    const cloth = this.meshes.filter((m) => m.userData.kind === 'cloth' && !/shoe|boot/i.test(m.name)).sort((a, b) => a.renderOrder - b.renderOrder);
+    cloth.forEach((m, rank) => {
+      if (!rank) return;
+      const P = m.geometry.attributes.position.array, N = m.geometry.attributes.normal.array;
+      for (let i = 0; i < P.length; i++) P[i] += N[i] * 0.0045 * rank;
+    });
     // ---- the face: one weight per unit, shared by every mesh that has shapes
     this.face = new Float32Array(FACE_UNITS.length);
     this.facePrev = new Float32Array(FACE_UNITS.length);

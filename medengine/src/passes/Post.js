@@ -282,7 +282,7 @@ void main() {
     col *= mix(0.04, 1.0, open);
   }
   col += uFlash * vec3(1.0, 0.95, 0.9);
-  col *= 1.0 - uVignette * smoothstep(0.3, 0.9, r * vec2(aspect / 1.78, 1.0).x * 1.0 + r * 0.0);
+  col *= 1.0 - uVignette * smoothstep(0.3, 0.9, r);
   col = mix(col, uFadeColor, uFade);
   // grain: finer, and stronger in the mids than in the blacks and whites (like film)
   float gl = luma(col);

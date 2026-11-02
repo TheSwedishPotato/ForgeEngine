@@ -162,7 +162,7 @@ void main() {
     // (wrapped diffuse with a scattering tint).
     float wrap = 0.5;
     float w = saturate((NoLraw + wrap) / (1.0 + wrap));
-    vec3 sss = vec3(0.95, 0.32, 0.16) * max(w - NoL, 0.0) * mix(0.35, 1.0, vis);
+    vec3 sss = vec3(0.6, 0.2, 0.1) * max(w - NoL, 0.0) * mix(0.35, 1.0, vis);
     direct += diffuseColor * INV_PI * sss * uSunIrradiance;
     skinDiffuse += diffuseColor * INV_PI * sss * uSunIrradiance;
   } else if (type == 2) {

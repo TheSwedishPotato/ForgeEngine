@@ -19,7 +19,7 @@ import { COMMON } from '../shaders/common.js';
  * shadows and has motion vectors like everything else.
  */
 
-const W = 14, H = 20;      // particles across, down
+const W = 20, H = 30;      // particles across, down
 
 const STEP_FS = /* glsl */`
 in vec2 vUv; out vec4 o;
@@ -109,8 +109,15 @@ const GBUFFER_FS = /* glsl */`
 ${COMMON}
 in vec3 vWorld; in vec3 vNormal; in vec2 vUv; in vec4 vCur; in vec4 vPrev;
 uniform vec3 uColor, uTrim;
+uniform float uScallops, uScallopDepth, uRough;
 layout(location = 0) out vec4 g0; layout(location = 1) out vec4 g1; layout(location = 2) out vec4 g2; layout(location = 3) out vec4 g3;
 void main() {
+  // a scalloped hem: arcs between points (the bat-wing edge)
+  if (uScallops > 0.0) {
+    float f = fract(vUv.x * uScallops) - 0.5;
+    float arc = uScallopDepth * (1.0 - 4.0 * f * f);
+    if (vUv.y > 1.0 - arc) discard;
+  }
   vec3 N = normalize(vNormal);
   if (!gl_FrontFacing) N = -N;
   // wool: a faint twill and a woven border at the hem
@@ -118,7 +125,7 @@ void main() {
   vec3 base = (vUv.y > 0.95 || vUv.x < 0.03 || vUv.x > 0.97 ? uTrim : uColor) * tw;
   vec2 motion = (vCur.xy / vCur.w - vPrev.xy / vPrev.w) * 0.5;
   g0 = vec4(saturate(base), 0.5);
-  g1 = vec4(encodeNormal(N), 0.92, 0.0);
+  g1 = vec4(encodeNormal(N), uRough, 0.0);
   g2 = vec4(motion, 3.0, 0.6);        // cloth sheen
   g3 = vec4(0.0, 0.0, 0.0, 1.0);
 }`;
@@ -243,7 +250,7 @@ export class GPUCloth extends Object3D {
     const gl = r.gl;
     p.use().set('uPos', this.pos.tex).set('uPrevPos', this.last.tex).set('uViewProj', vp)
       .set('uViewProjFlat', kind === 'gbuffer' ? r.viewProj : vp).set('uPrevViewProj', kind === 'gbuffer' ? r.prevViewProj : vp);
-    if (kind === 'gbuffer') p.set('uColor', this.color).set('uTrim', this.trim);
+    if (kind === 'gbuffer') p.set('uColor', this.color).set('uTrim', this.trim).set('uScallops', this.scallops ?? 0).set('uScallopDepth', this.scallopDepth ?? 0).set('uRough', this.roughness ?? 0.92);
     gl.disable(gl.CULL_FACE);
     gl.bindVertexArray(this.vao);
     gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);

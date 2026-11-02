@@ -99,7 +99,7 @@ export function parseMhclo(path) {
         else if (p.length === 9) out.refs.push({ v: [+p[0], +p[1], +p[2]], w: [+p[3], +p[4], +p[5]], o: [+p[6], +p[7], +p[8]] });
         continue;
       }
-      mode = null;
+      // a key line inside the vertex list (e.g. "material ..."): parse it, stay in verts mode
     }
     if (mode === 'delete') {
       if (/^[0-9]/.test(s)) {

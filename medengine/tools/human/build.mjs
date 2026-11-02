@@ -286,7 +286,7 @@ export function buildCharacter(r, outDir) {
 function dirnameOf(p) { return p.slice(0, p.lastIndexOf('/')); }
 
 function materialFor(kind, mat, outDir, opts) {
-  const alpha = kind === 'hair' || kind === 'brow' || kind === 'lash';
+  const alpha = kind === 'hair' || kind === 'brow' || kind === 'lash' || kind === 'eye';
   const m = { kind };
   const big = kind === 'skin' ? 2048 : kind === 'eye' ? 512 : kind === 'brow' || kind === 'lash' || kind === 'teeth' || kind === 'tongue' ? 512 : 1024;
   if (mat.diffuseTexture) m.map = texture(mat.diffuseTexture, outDir, { keepAlpha: alpha, maxSize: big, quality: kind === 'skin' ? 90 : 86 });

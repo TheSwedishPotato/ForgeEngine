@@ -353,7 +353,7 @@ export class SceneAdapter {
       USE_MAP: !!map, USE_NORMALMAP: !!nmap, USE_ROUGHMAP: !!rmap, USE_EMISSIVEMAP: !!emap,
       FLAT: !!mat.flatShading, DOUBLE_SIDED: mat.side === 2, BACK_SIDE: mat.side === 1, UNLIT: unlit,
       ALPHA_TEST: mat.alphaTest > 0, ALPHA_DITHER: !!ud.dither,
-      SKIN_DETAIL: ud.detail === 'pores', BATSUIT: ud.medType === 'batsuit', WET_SURFACE: ud.wetFactor !== 0 && !unlit,
+      DETAIL: !!ud.detail, BATSUIT: ud.medType === 'batsuit', WET_SURFACE: ud.wetFactor !== 0 && !unlit,
       PUDDLES: !!ud.puddles, RAIN_STREAKS: !!ud.streaks,
     };
     m.transparent = !!mat.transparent;
@@ -377,6 +377,8 @@ export class SceneAdapter {
       uSpecular: mat.specularIntensity ?? 1,
       uAlphaTest: mat.alphaTest ?? 0,
       uWetFactor: ud.wetFactor ?? 1,
+      // micro detail: (uv frequency, normal strength, roughness variation)
+      uDetail: ud.detail === 'pores' ? [900, 0.55, 0.12] : ud.detail === 'leather' ? [260, 0.9, 0.25] : ud.detail === 'fabric' ? [700, 0.35, 0.05] : [0, 0, 0],
       uMap: map ?? this.white,
       uNormalMap: nmap ?? this.flatNormal,
       uRoughMap: rmap ?? this.white,
