@@ -143,7 +143,7 @@ function buildRoadCar(A) {
   const volvo = s.id === 'volvo240';
   const lay = volvo
     ? { engZ: zF - 0.12, engY: 0.56, hoodY: 0.92, fire: zF - 0.62, radZ: zF + 0.62, batt: [0.5, 0.62, zF - 0.45], air: [-0.48, 0.66, zF + 0.32], resv: [-0.42, 0.8, zF - 0.5], fuse: [0.3, 0.55, zF - 0.95], exp: [0.55, 0.78, zF - 0.1], diag: [0.62, 0.72, zF + 0.15] }
-    : { engZ: zF + 0.12, engY: 0.52, hoodY: 0.88, fire: zF - 0.42, radZ: zF + 0.7, batt: [0.5, 0.6, zF + 0.05], air: [0.25, 0.72, zF + 0.5], resv: [0.48, 0.8, zF - 0.32], fuse: [0.62, 0.62, zF - 0.95], exp: [-0.5, 0.74, zF + 0.05], obd: [0.38, 0.5, zF - 1.0] };
+    : { engZ: zF + 0.12, engY: 0.42, hoodY: 0.88, fire: zF - 0.42, radZ: zF + 0.7, batt: [0.5, 0.6, zF + 0.05], air: [0.25, 0.72, zF + 0.5], resv: [0.48, 0.8, zF - 0.32], fuse: [0.62, 0.62, zF - 0.95], exp: [-0.5, 0.74, zF + 0.05], obd: [0.38, 0.5, zF - 1.0] };
   A.layout = lay;
   const rimR = (W.rim * 0.0254) / 2;
 

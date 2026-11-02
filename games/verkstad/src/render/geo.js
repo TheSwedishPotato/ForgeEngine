@@ -104,7 +104,7 @@ export function splitGroups(geo) {
       const a = geo.attributes[name]; if (!a) continue;
       g.setAttribute(name, new Float32BufferAttribute(a.array.slice(gr.start * a.itemSize, (gr.start + gr.count) * a.itemSize), a.itemSize));
     }
-    out.push({ geo: normalise(g), mat: gr.mat });
+    out.push({ geo: normalise(g), mat: gr.materialIndex });
   }
   return out;
 }

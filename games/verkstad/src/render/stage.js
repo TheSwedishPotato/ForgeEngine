@@ -22,6 +22,7 @@ import { Target, postProgram, fullscreen, state } from '../../../duel1403/src/en
 import { SKY_GLSL, SkyLUT, sunTransmittance, SUN_E0 } from '../../../gotthard-pullman/src/render/sky.js';
 import { sunPosition, sunVector } from '../../../gotthard-pullman/src/render/sun.js';
 import { patchLighting } from '../../../glass-elevator/src/render/stage.js';
+import { CarGlass } from './carGlass.js';
 
 export const PLACE = { lat: 57.721, lon: 11.94, name: 'Hisingen, Göteborg' };
 export const HALL = { x0: -9, x1: 9, z0: -7, z1: 7, h: 5.2 };
@@ -84,6 +85,7 @@ export class Stage {
     this.screen = r.addPass(new ScreenSpace());
     this.taa = r.addPass(new TAA());
     r.addPass(new Upscale());
+    this.carGlass = r.addPass(new CarGlass());
     this.exposure = r.addPass(new Exposure());
     this.exposure.minEV = -9; this.exposure.maxEV = 7; this.exposure.key = 0.15;
     this.bloom = r.addPass(new Bloom());

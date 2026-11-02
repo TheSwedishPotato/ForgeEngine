@@ -81,6 +81,7 @@ export class Game {
     this.loose = []; this.held = null;
     this.carGL = new CarGL(c, this.M);
     this.stage.scene.add(this.carGL.root);
+    this.stage.carGlass.set(this.carGL.glassMeshes);
     this.carPos = { t: 0, from: YARD, to: [BAY.x, 0, BAY.z] };
     this.workshop.lift.arms = [false, false, false, false];
     for (const a of this.workshop.arms) a.userData.target = 0;
@@ -425,6 +426,7 @@ export class Game {
       for (const f of A.fasteners.values()) if (f.oiled > 0 && f.oiled < 1) soak(f, (dt * CLOCK_SCALE) / 60);
       S.step(dt * this.timeScale, { throttle: this.throttle ?? 0 });
       this._carPlace(dt);
+      this.stage.carGlass.indoor = this.carGL.root.position.z < 7.2 ? 1 : 0;
       this.carGL.update(dt);
     }
     this.workshop.update(dt);

@@ -24,6 +24,7 @@ export class CarGL {
     this.groups = new Map();        // partId -> Group
     this.fastMeshes = new Map();    // fastId -> Mesh
     this.pickables = [];
+    this.glassMeshes = [];          // drawn by render/carGlass.js, see-through, not by the deferred pass
     this.mat = (m) => (m === 'paint' ? this.paint : m === 'clusterScreen' ? this.clusterMat : this.M[m] ?? this.M.steel);
     this._cluster();
     this.engineGroup = new Group();
@@ -48,7 +49,8 @@ export class CarGL {
     const add = (geo, grp, partId) => {
       for (const { geo: g, mat } of splitGroups(geo)) {
         const m = new Mesh(g, mat === 1 ? glass : paint);
-        m.castShadow = true; m.receiveShadow = true; m.userData.partId = partId;
+        m.castShadow = mat !== 1; m.receiveShadow = true; m.userData.partId = partId;
+        if (mat === 1) { m.userData.forgeSkip = true; this.glassMeshes.push(m); }
         grp.add(m); this.pickables.push(m);
       }
     };
