@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { textToVisemes, visemeTrack, speechDuration, EMOTIONS, VISEMES } from '../src/human/Face.js';
 import { blendPose, completePose, addPose, NEUTRAL } from '../src/human/Rig.js';
-import { parseJSON } from '../src/ai/Claude.js';
+import { parseJSON, sampleOptions } from '../src/ai/Claude.js';
 import { FACE_UNITS, toHalf, tuckUnder } from '../src/human/Human.js';
 
 test('visemes: closed lips for p/b/m, open for vowels, pauses at punctuation', () => {
@@ -63,4 +63,12 @@ test('layered clothes: what an outer layer covers is drawn in under it, the rest
   assert.ok(Math.abs(z(11) + 0.016) < 1e-6, 'within reach of the edge: tucked');
   assert.equal(z(15), 0, 'open: untouched');
   assert.ok(outer.attributes.position.array.every((v, i) => i % 3 !== 2 || Math.abs(v - 0.005) < 1e-9), 'the outer layer never moves');
+});
+
+test('artifact sample options: only members that are set, never cached', () => {
+  assert.deepEqual(sampleOptions({ modelTier: 'quick' }), { modelTier: 'quick', cache: false });
+  const ctl = new AbortController(), onText = () => {};
+  assert.deepEqual(sampleOptions({ modelTier: 'default', onText, signal: ctl.signal }), { modelTier: 'default', cache: false, onText, signal: ctl.signal });
+  assert.ok(!('signal' in sampleOptions({ modelTier: 'quick', signal: undefined })));
+  assert.ok(!('onText' in sampleOptions({ modelTier: 'quick', onText: undefined })));
 });

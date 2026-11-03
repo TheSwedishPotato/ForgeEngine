@@ -63,7 +63,7 @@ export class Claude {
     if (this.mode === 'artifact') {
       const input = system ? [{ role: 'user', content: system + '\n\n' + prompt }] : prompt;
       try {
-        const r = await this.sample(input, { modelTier: tier, onText, signal, cache: false });
+        const r = await this.sample(input, sampleOptions({ modelTier: tier, onText, signal }));
         return r.text;
       } catch (e) {
         this.lastError = e?.code ?? 'error';
@@ -103,7 +103,7 @@ export class Claude {
   /** JSON from Claude (tolerant parse). */
   async json(prompt, opts = {}) {
     if (this.mode === 'artifact' && this.sample.json) {
-      try { return await this.sample.json(opts.system ? opts.system + '\n\n' + prompt : prompt, { modelTier: opts.tier ?? 'default', signal: opts.signal, cache: false }); } catch (e) {
+      try { return await this.sample.json(opts.system ? opts.system + '\n\n' + prompt : prompt, sampleOptions({ modelTier: opts.tier ?? 'default', signal: opts.signal })); } catch (e) {
         this.lastError = e?.code ?? 'error';
         this._permanent(e);
         throw e;
@@ -112,6 +112,15 @@ export class Claude {
     const text = await this.ask(prompt + '\n\nReply with only the JSON value, no other text.', opts);
     return parseJSON(text);
   }
+}
+
+/** Options for the artifact's `sample`: only members that are set (an undefined `signal` or
+ *  `onText` is a malformed call there), and never cached: every story beat must be asked afresh. */
+export function sampleOptions({ modelTier, onText, signal }) {
+  const o = { modelTier, cache: false };
+  if (typeof onText === 'function') o.onText = onText;
+  if (signal) o.signal = signal;
+  return o;
 }
 
 export function parseJSON(text) {

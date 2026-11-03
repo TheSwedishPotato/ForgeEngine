@@ -54,7 +54,7 @@ function updateClaudeStatus() {
   const s = $('#claude-status');
   s.textContent = claude.available ? `● ${claude.status}` : '○ Claude offline: the story plays from its script. Free text needs Claude.';
   s.className = claude.available ? 'ok' : '';
-  $('#claude-key-row').style.display = claude.mode === 'artifact' || claude.mode === 'proxy' ? 'none' : '';
+  $('#claude-key-row').style.display = claude.mode === 'artifact' || claude.mode === 'proxy' || window.claude ? 'none' : '';   // hosted pages cannot reach the API directly
 }
 
 // ---------------------------------------------------------------- play

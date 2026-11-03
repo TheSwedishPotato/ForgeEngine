@@ -17,8 +17,8 @@ bgObserver.observe(T.bg, { attributes: true, attributeFilter: ['style'] });
 
 const cstat = document.getElementById('cstat');
 claude.ready.then(() => {
-  cstat.textContent = claude.available ? `● ${claude.status}: type anything, and the story answers.` : 'Claude is offline: tap the suggestions to play. Add a key to type your own.';
-  document.getElementById('keyrow').style.display = claude.mode === 'artifact' || claude.mode === 'proxy' ? 'none' : '';
+  cstat.textContent = claude.available ? `● ${claude.status}: type anything, and the story answers.` : (window.claude ? 'Claude is offline here: tap the suggestions to play.' : 'Claude is offline: tap the suggestions to play. Add a key to type your own.');
+  document.getElementById('keyrow').style.display = claude.mode === 'artifact' || claude.mode === 'proxy' || window.claude ? 'none' : '';   // hosted pages cannot reach the API directly
 });
 document.getElementById('key').addEventListener('change', (e) => { claude.setKey(e.target.value.trim()); cstat.textContent = claude.available ? `● ${claude.status}` : 'Claude is offline.'; });
 
