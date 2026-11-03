@@ -38,3 +38,24 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; color:
 .panel .note { font-size: 12px; color: var(--dim); line-height: 1.5; }
 #stats { position: fixed; left: 10px; top: 10px; z-index: 50; font: 11px/1.4 ui-monospace, monospace; color: #9cf; background: rgba(0,0,0,.6); padding: 8px 10px; display: none; pointer-events: none; }
 #stats.on { display: block; }
+
+/* small windows (claude.ai's side panel, phones): the title and menu stack and scroll instead of overlapping */
+@media (max-height: 560px), (max-width: 700px) {
+  #title:not(.hidden) { pointer-events: auto; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; padding: 3vh 6vw 3vh; gap: 1.5vh; }
+  .logo { position: static; }
+  .logo .kicker, .logo .ep { font-size: 10px; letter-spacing: .35em; }
+  .logo h1 { font-size: clamp(24px, min(9vh, 11vw), 60px); margin: 4px 0; }
+  .logo .tag { margin-top: 4px; font-size: 11px; }
+  #menu { position: static; min-width: 0; gap: 0; }
+  .mbtn { font-size: 13px; padding: 4px 10px; letter-spacing: .14em; }
+  .mbtn.small { font-size: 11px; padding: 3px 10px; }
+  #chapter-list { margin-left: 10px; }
+  #claude-status { margin-top: 4px; font-size: 10px; }
+  #credits { position: fixed; inset: 4vh 4vw; width: auto; overflow: auto; font-size: 11px; padding: 10px 14px; }
+  #loading { left: 6vw; bottom: 3vh; width: 60vw; }
+  .panel { padding: 12px 16px; max-height: 94vh; overflow-y: auto; }
+  .panel h2 { font-size: 15px; margin: 0 0 8px; }
+  .panel h3 { margin: 10px 0 4px; }
+  .panel label { margin: 5px 0; font-size: 12px; }
+}
+@media (max-height: 360px) { .logo .tag, .logo .kicker { display: none; } }

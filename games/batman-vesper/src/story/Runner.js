@@ -98,9 +98,12 @@ export class Runner {
    */
   async choose(spec) {
     const options = spec.options.filter((o) => !o.need || this.has(o.need));
+    // every choice takes free text: where the script gives no context, the prompt is the context
+    const free = spec.free ?? { who: 'batman', context: spec.prompt ?? 'Batman has to decide what to do next.' };
+    spec = { ...spec, free };
     let attempts = 0;
     for (;;) {
-      const r = await this.T.choose({ ...spec, options, allowFree: !!spec.free && attempts < 2 });
+      const r = await this.T.choose({ ...spec, options, allowFree: true });
       if (r.free == null) {
         this._record(spec, options, r.id);
         return r.id;
@@ -116,7 +119,7 @@ export class Runner {
       // improvised, then the choice comes back
       if (res.speech && spec.free.who) await this.say(spec.free.who, res.speech, { emo: res.emotion });
       if (res.reply?.text) await this.say(res.reply.who, res.reply.text, { emo: res.reply.emotion });
-      if (attempts >= 2) {
+      if (attempts >= 3) {
         const d = spec.default ?? options[0].id;
         this._record(spec, options, d, r.free);
         return d;

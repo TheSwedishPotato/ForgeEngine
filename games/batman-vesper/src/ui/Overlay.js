@@ -85,6 +85,31 @@ const CSS = `
 .ov-spot.near .dot { background: var(--accent); }
 .ov-spot.done { opacity: .35; }
 @media (max-width: 700px) { .ov-choice { grid-template-columns: 1fr; bottom: 12vh; } .ov-sub { bottom: 9vh; } }
+/* small windows (claude.ai's side panel, phones): everything compact, choices scroll, nothing leaves the window */
+@media (max-height: 560px), (max-width: 700px) {
+  .ov-choice { grid-template-columns: 1fr; bottom: 2vh; gap: 4px; width: 94vw; max-height: 80vh; overflow-y: auto; }
+  .ov-choice .prompt { font-size: 10px; margin: 0; letter-spacing: .1em; }
+  .ov-opt { padding: 5px 10px; font-size: 12px; gap: 8px; }
+  .ov-opt kbd { width: 18px; height: 18px; font-size: 10px; }
+  .ov-opt small { font-size: 10px; margin-top: 1px; }
+  .ov-free input { padding: 6px 10px; font-size: 13px; }
+  .ov-free button { padding: 0 12px; }
+  #ov:has(.ov-choice.on) .ov-sub { opacity: 0; }
+  .ov-sub { bottom: 3vh; font-size: 13px; width: 94vw; }
+  .ov-sub.big { font-size: 14px; }
+  .ov-cap { font-size: 14px; letter-spacing: .2em; }
+  .ov-qte { gap: 10px; }
+  .ov-key { width: 44px; height: 44px; font-size: 15px; }
+  .ov-key svg { inset: -5px; width: 54px; height: 54px; }
+  .ov-qte-label { font-size: 10px; margin-top: 8px; }
+  .ov-meter { top: 10vh; } .ov-meter .n { font-size: 28px; } .ov-meter .l { font-size: 9px; }
+  .ov-obj, .ov-notes { top: 4vh; } .ov-obj { font-size: 10px; } .ov-note { font-size: 11px; padding: 4px 8px; }
+  .ov-card .t { font-size: 24px; margin: 8px 0; } .ov-card .s, .ov-card .k { font-size: 10px; }
+  .ov-paper { padding: 10px 14px; max-height: 92vh; overflow: auto; } .ov-paper .mast { font-size: 22px; } .ov-paper h2 { font-size: 18px; }
+  .ov-flow { padding: 3vh 4vw; } .ov-flow h1 { font-size: 18px; } .ov-btn { padding: 7px 12px; font-size: 11px; }
+  .ov-hint { bottom: 1vh; font-size: 10px; }
+  .ov-think { bottom: 2vh; font-size: 10px; }
+}
 `;
 
 const el = (cls, parent, tag = 'div') => { const e = document.createElement(tag); if (cls) e.className = cls; parent?.appendChild(e); return e; };
@@ -175,25 +200,28 @@ export class Overlay {
         go.onclick = send;
         input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') send(); });
       }
-      let timer = null;
+      let timer = null, userFocused = false;
+      input?.addEventListener('pointerdown', () => { userFocused = true; });
       if (spec.timer) {
         const tb = el('ov-timer', C), bar = el('', tb);
         let elapsed = 0, lastT = performance.now();
         timer = setInterval(() => {
           const now = performance.now(), step = now - lastT; lastT = now;
-          if (this.paused || (input && document.activeElement === input && input.value)) return;   // pause and typing stop the clock
+          if (this.paused || (input && (input.value || userFocused))) return;   // pause, clicking into the box and typing stop the clock
           elapsed += step;
-          const k = 1 - elapsed / (spec.timer * 1000);
+          const k = 1 - elapsed / (spec.timer * (input ? 1.6 : 1) * 1000);   // time to read, and to start writing
           bar.style.width = Math.max(0, k * 100) + '%';
           if (k <= 0) finish({ id: spec.default ?? spec.options[0].id, timedOut: true });
         }, 50);
       }
       const onKey = (e) => {
+        // number keys pick an option, unless the player is writing something of their own
+        if (input && e.target === input && input.value) return;
         const n = Number(e.key);
-        if (n >= 1 && n <= spec.options.length) { e.preventDefault(); finish({ id: spec.options[n - 1].id }); }
+        if (n >= 1 && n <= spec.options.length && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); finish({ id: spec.options[n - 1].id }); }
       };
       addEventListener('keydown', onKey, true);
-      requestAnimationFrame(() => C.classList.add('on'));
+      requestAnimationFrame(() => { C.classList.add('on'); input?.focus({ preventScroll: true }); });
       this._pendingChoice = { finish, spec };
     });
   }
