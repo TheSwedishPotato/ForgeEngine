@@ -56,7 +56,11 @@ npm test                            # 1,500 random playthroughs + engine tests
 npm run build                       # dist/
 ```
 
-On claude.ai (published as an artifact) Claude runs on the viewer's own account, with no key.
+On claude.ai (published as an artifact) Claude runs on the viewer's own account, with no key:
+[the film](https://claude.ai/artifact/AL9ReyHU79hj5yf7JGxNSL) ·
+[the illustrated story](https://claude.ai/artifact/6RhX5eAbZhrVwyGS2XSRma) (private until shared).
+`npm run build:artifact` packs both pages (`dist-artifact/`): artifacts serve no raw binary, so
+the cast and model buffers travel as base64 text that the engine decodes (`medengine/src/world/Packed.js`).
 Offline, the authored options carry the whole episode; free text falls back to a keyword match.
 
 Development flags: `?auto=1` (plays itself), `?chapter=ch1`, `?q=ultra|high|medium|low`,
@@ -68,6 +72,7 @@ Development flags: `?auto=1` (plays itself), `?chapter=ch1`, `?q=ultra|high|medi
 node tools/shot.mjs "index.html?auto=1&chapter=ch1&stopAt=5" shots/x.jpg     # a frame of the film, headless
 node tools/stills.mjs                                                       # the illustrated story's pictures
 npm run humans                                                              # rebuild the cast (MakeHuman data)
+node tools/hosted.mjs . story shots/hosted.png                              # a packed page under artifact-host conditions
 ```
 
 ## Structure
