@@ -51,10 +51,14 @@ export class Theatre3D {
     if (this.running) return;
     this.running = true;
     let last = performance.now();
+    // minFrame (ms): while loading, draw only now and then so the loading work gets the machine
+    this.minFrame = this.minFrame ?? 0;
     const frame = (now) => {
+      if (this.running) requestAnimationFrame(frame);
+      if (now - last < this.minFrame) return;
       const real = Math.min(0.1, (now - last) / 1000); last = now;
       this.step(real);
-      if (this.running) requestAnimationFrame(frame);
+      this.onFrame?.(real);
     };
     requestAnimationFrame(frame);
   }

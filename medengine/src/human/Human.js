@@ -340,7 +340,10 @@ export class Human {
 
   static async load(baseUrl, id, o = {}) {
     const [base, ch] = await Promise.all([fetchPair(baseUrl + '/human-base'), fetchPair(baseUrl + '/' + id)]);
-    return new Human(base, ch, baseUrl, o);
+    globalThis.__mark?.(id + ' downloaded');
+    const h = new Human(base, ch, baseUrl, o);
+    globalThis.__mark?.(id + ' constructed');
+    return h;
   }
 
   constructor(base, ch, root, { levels = 1 } = {}) {

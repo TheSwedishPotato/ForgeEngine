@@ -13,7 +13,10 @@ import './style.css';
 const P = new URLSearchParams(location.search);
 const auto = P.get('auto') === '1';
 const LS = 'vesper.settings';
-const settings = Object.assign({ quality: 'high', subtitles: true, subSize: 1, voices: false, volume: 0.9 }, (() => { try { return JSON.parse(localStorage.getItem(LS) ?? '{}'); } catch { return {}; } })());
+// first visit: phones and tablets start low, computers high; the title then steps it down if the
+// frames are slow (until the player picks a quality in Settings)
+const MOBILE = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+const settings = Object.assign({ quality: MOBILE ? 'low' : 'high', autoQuality: true, subtitles: true, subSize: 1, voices: false, volume: 0.9 }, (() => { try { return JSON.parse(localStorage.getItem(LS) ?? '{}'); } catch { return {}; } })());
 if (P.get('q')) settings.quality = P.get('q');
 const saveSettings = () => { try { localStorage.setItem(LS, JSON.stringify(settings)); } catch { /* */ } };
 
@@ -33,22 +36,28 @@ const menu = $('#menu'), loading = $('#loading'), bar = $('#loading .bar div'), 
 let castReady = Promise.resolve(), castDone = true;
 const castCheck = () => castDone;
 async function boot() {
+  T.minFrame = 250;   // a few frames a second while the city and Batman are built
   T.start();
   // the title backdrop: the cathedral at night
   lbl.textContent = 'Building Vesper…';
+  window.__mark?.('js running');
   await T.stage('cathedral');
+  window.__mark?.('set staged');
   T.cut({ type: 'free', pos: [-2.2, 2.9, -1.6], target: [45, -6, 130] });
   if (P.get('nocast') !== '1') {
     // the title needs only Batman: the menu opens as soon as he is built, the rest of the cast
     // downloads in parallel and is built in the background (play() waits for it if it must)
     const ids = P.get('cast')?.split(',') ?? ['batman', 'rook', 'nadia', 'cruz', 'marrow', 'kow', 'dez', 'deckhand'];
     await T.loadCast((k, name) => { bar.style.width = `${Math.round(k * 100)}%`; lbl.textContent = `Casting ${name}…`; }, ids.slice(0, 1));
+    window.__mark?.('batman built');
     castDone = false;
-    castReady = T.loadCast(null, ids).then(() => { castDone = true; });
+    T.minFrame = 120;   // the rest of the cast builds behind the menu
+    castReady = T.loadCast(null, ids).then(() => { castDone = true; T.minFrame = 0; if (settings.autoQuality) watchFrames(); });
     T.place('batman', 'perch', 0);
     T.act('batman', { posture: 'perch' });
     T.cut({ type: 'free', pos: [-2.2, 2.9, -1.6], target: [45, -6, 130], focus: 'batman' });
   }
+  if (castDone) T.minFrame = 0;
   loading.classList.add('done');
   window.__ready = true;
   if (auto) { $('#title').classList.add('hidden'); play(P.get('chapter')); return; }
@@ -62,6 +71,24 @@ function updateClaudeStatus() {
   s.textContent = claude.available ? `● ${claude.status}` : '○ Claude offline: the story plays from its script. Free text needs Claude.';
   s.className = claude.available ? 'ok' : '';
   $('#claude-key-row').style.display = claude.mode === 'artifact' || claude.mode === 'proxy' || window.claude ? 'none' : '';   // hosted pages cannot reach the API directly
+}
+
+/** Steps the quality down while the title runs slowly (average frame over a second > 45 ms). */
+function watchFrames() {
+  const ladder = ['ultra', 'high', 'medium', 'low'];
+  let sum = 0, n = 0;
+  T.onFrame = (dt) => {
+    if (!settings.autoQuality) { T.onFrame = null; return; }
+    sum += dt; n++;
+    if (sum < 1) return;
+    const avg = sum / n; sum = 0; n = 0;
+    const i = ladder.indexOf(settings.quality);
+    if (avg > 0.045 && i >= 0 && i < ladder.length - 1) {
+      settings.quality = ladder[i + 1];
+      T.stageE.setQuality(settings.quality);
+      try { localStorage.setItem(LS, JSON.stringify(settings)); } catch { /* private mode */ }
+    } else if (avg <= 0.045) T.onFrame = null;   // fast enough: stop watching
+  };
 }
 
 // ---------------------------------------------------------------- play
@@ -134,6 +161,7 @@ function openSettings() {
   updateClaudeStatus();
 }
 $('#settings-close').onclick = () => {
+  if ($('#set-quality').value !== settings.quality) settings.autoQuality = false;
   settings.quality = $('#set-quality').value;
   settings.subtitles = $('#set-subs').checked; settings.subSize = Number($('#set-subsize').value);
   settings.voices = $('#set-voices').checked; settings.volume = Number($('#set-volume').value);
