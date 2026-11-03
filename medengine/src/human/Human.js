@@ -3,6 +3,7 @@ import {
   Vector3, Color, TextureLoader, SRGBColorSpace, RepeatWrapping, CanvasTexture, DoubleSide,
 } from 'three';
 import { subdivideLevels, applyStencils, applyStencilsSkin } from './Subdivision.js';
+import { fetchBytes } from '../world/Packed.js';
 
 /**
  * Med Engine digital humans.
@@ -41,10 +42,7 @@ async function fetchPair(url) {
 
 /** The character's binary: .binz (gzip, inflated in the browser) or plain .bin. */
 async function fetchBinary(url) {
-  let r = await fetch(url + '.binz');
-  if (!r.ok) r = await fetch(url + '.bin');
-  if (!r.ok) throw new Error(`${url}: ${r.status}`);
-  const buf = await r.arrayBuffer();
+  const buf = await fetchBytes(url + '.binz').catch(() => fetchBytes(url + '.bin'));
   const u = new Uint8Array(buf, 0, 2);
   if (u[0] === 0x1f && u[1] === 0x8b) {
     // gzip: a server that did not decode it for us

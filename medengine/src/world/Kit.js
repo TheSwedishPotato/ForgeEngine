@@ -5,6 +5,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { isPacked, fetchBytes, toGLB } from './Packed.js';
 
 /**
  * Med Engine 2 world kit: what sets are built from.
@@ -117,7 +118,12 @@ export function setModelRoot(r) { MODEL_ROOT = r; }
 export async function prop(name, { scale = 1, wet = 1 } = {}) {
   let p = propCache.get(name);
   if (!p) {
-    p = gltf.loadAsync(`${MODEL_ROOT}/${name}/${name}_1k.gltf`).then((g) => {
+    const dir = `${MODEL_ROOT}/${name}/`, file = `${dir}${name}_1k.gltf`;
+    // packed pages carry the buffer as text: the glTF is assembled into a GLB in memory
+    const load = isPacked()
+      ? fetch(file).then((r) => r.json()).then(async (j) => gltf.parseAsync(toGLB(j, await fetchBytes(dir + j.buffers[0].uri)), dir))
+      : gltf.loadAsync(file);
+    p = load.then((g) => {
       g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; if (o.material) o.material.userData.wetFactor = wet; } });
       return g.scene;
     });

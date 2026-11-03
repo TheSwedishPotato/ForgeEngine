@@ -72,3 +72,17 @@ test('artifact sample options: only members that are set, never cached', () => {
   assert.ok(!('signal' in sampleOptions({ modelTier: 'quick', signal: undefined })));
   assert.ok(!('onText' in sampleOptions({ modelTier: 'quick', onText: undefined })));
 });
+
+test('packed binaries: base64 round trip and an in-memory GLB', async () => {
+  const { encodeBase64, decodeBase64, toGLB } = await import('../src/world/Packed.js');
+  const bytes = Uint8Array.from({ length: 100000 }, (_, i) => (i * 7919) & 255);
+  assert.deepEqual(new Uint8Array(decodeBase64(encodeBase64(bytes))), bytes);
+  const glb = toGLB({ asset: { version: '2.0' }, buffers: [{ uri: 'a.bin', byteLength: 5 }] }, new Uint8Array([1, 2, 3, 4, 5]).buffer);
+  const v = new DataView(glb), jLen = v.getUint32(12, true);
+  assert.equal(v.getUint32(0, true), 0x46546c67);
+  assert.equal(v.getUint32(8, true), glb.byteLength);
+  assert.equal(glb.byteLength % 4, 0);
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jLen)));
+  assert.deepEqual(json.buffers, [{ byteLength: 5 }]);
+  assert.deepEqual([...new Uint8Array(glb, 28 + jLen, 5)], [1, 2, 3, 4, 5]);
+});
