@@ -264,6 +264,37 @@ function recolor(url, color, { contrast = 1.3, keep = 0.0 } = {}) {
   return t;
 }
 
+/**
+ * Layered clothes: wherever an outer garment lies over an inner one (any of its vertices within
+ * `reach`), the inner one is drawn in under it by `depth` along its own normals. A long coat over a
+ * bulky suit jacket otherwise shows the jacket through it in patches; an open front, a collar or a
+ * cuff with nothing over it stays exactly where it was. `geoms` are ordered inner to outer.
+ */
+export function tuckUnder(geoms, { reach = 0.03, depth = 0.016 } = {}) {
+  const cell = reach, key = (x, y, z) => (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+  for (let o = 1; o < geoms.length; o++) {
+    const Q = geoms[o].attributes.position.array, grid = new Map();
+    for (let j = 0; j < Q.length; j += 3) {
+      const k = key(Math.floor(Q[j] / cell), Math.floor(Q[j + 1] / cell), Math.floor(Q[j + 2] / cell));
+      let b = grid.get(k); if (!b) grid.set(k, b = []); b.push(j);
+    }
+    const r2 = reach * reach;
+    for (let i = 0; i < o; i++) {
+      const attr = geoms[i].attributes.position, P = attr.array, N = geoms[i].attributes.normal.array;
+      for (let v = 0; v < P.length; v += 3) {
+        const cx = Math.floor(P[v] / cell), cy = Math.floor(P[v + 1] / cell), cz = Math.floor(P[v + 2] / cell);
+        let covered = false;
+        for (let dx = -1; dx <= 1 && !covered; dx++) for (let dy = -1; dy <= 1 && !covered; dy++) for (let dz = -1; dz <= 1 && !covered; dz++) {
+          const b = grid.get(key(cx + dx, cy + dy, cz + dz));
+          if (b) for (const j of b) { const ex = Q[j] - P[v], ey = Q[j + 1] - P[v + 1], ez = Q[j + 2] - P[v + 2]; if (ex * ex + ey * ey + ez * ez < r2) { covered = true; break; } }
+        }
+        if (covered) for (let c = 0; c < 3; c++) P[v + c] -= N[v + c] * depth;
+      }
+      attr.needsUpdate = true;
+    }
+  }
+}
+
 /** Material for one part, in the engine's material language (userData.medType). */
 export function humanMaterial(desc, root, opts = {}) {
   const k = desc.kind;
@@ -377,6 +408,7 @@ export class Human {
       const P = m.geometry.attributes.position.array, N = m.geometry.attributes.normal.array;
       for (let i = 0; i < P.length; i++) P[i] += N[i] * 0.0045 * rank;
     });
+    tuckUnder(cloth.map((m) => m.geometry));
     // ---- the face: one weight per unit, shared by every mesh that has shapes
     this.face = new Float32Array(FACE_UNITS.length);
     this.facePrev = new Float32Array(FACE_UNITS.length);

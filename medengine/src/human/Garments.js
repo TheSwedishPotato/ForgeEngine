@@ -299,6 +299,10 @@ export class Cape {
     this.caps = Array.from({ length: 9 }, () => ({ a: new Vector3(), b: new Vector3(), r: 0.1 }));
     this.wind = new Vector3();
     this._t = performance.now();
+    // the cloth is simulated in world space, so it hangs beside its wearer rather than under it:
+    // it has to leave (and rejoin) the scene whenever the wearer does
+    h.root.addEventListener('removed', () => this.mesh.removeFromParent());
+    h.root.addEventListener('added', () => h.root.parent?.add(this.mesh));
   }
   get visible() { return this.mesh.visible; }
   set visible(v) { this.mesh.visible = v; }

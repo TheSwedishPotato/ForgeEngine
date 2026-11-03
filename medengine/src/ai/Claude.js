@@ -12,6 +12,7 @@
  *   const data = await claude.json(prompt, { tier });
  */
 const LS = 'medengine.claude';
+const PERMANENT = new Set(['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed']);
 const MODELS = { quick: 'claude-haiku-5-5', default: 'claude-sonnet-5-5', complex: 'claude-opus-5-5' };
 
 function load() { try { return JSON.parse(localStorage.getItem(LS) ?? '{}'); } catch { return {}; } }
@@ -52,6 +53,11 @@ export class Claude {
     if (this.mode !== 'artifact' && this.mode !== 'proxy') { this.mode = key ? 'key' : 'offline'; this.status = key ? 'Claude (your API key)' : 'offline'; }
   }
 
+  /** A failure that holds for the rest of this view: stop asking and use the authored content. */
+  _permanent(e) {
+    if (PERMANENT.has(e?.code)) { this.mode = 'offline'; this.status = 'offline (Claude not allowed here)'; }
+  }
+
   /** Free text from Claude. Rejects on failure (callers fall back). */
   async ask(prompt, { tier = 'default', onText, signal, maxTokens = 900, system } = {}) {
     if (this.mode === 'artifact') {
@@ -61,7 +67,7 @@ export class Claude {
         return r.text;
       } catch (e) {
         this.lastError = e?.code ?? 'error';
-        if (e?.code === 'not_granted' || e?.code === 'sampling_disabled') { this.mode = 'offline'; this.status = 'offline (Claude not allowed)'; }
+        this._permanent(e);
         throw e;
       }
     }
@@ -99,7 +105,7 @@ export class Claude {
     if (this.mode === 'artifact' && this.sample.json) {
       try { return await this.sample.json(opts.system ? opts.system + '\n\n' + prompt : prompt, { modelTier: opts.tier ?? 'default', signal: opts.signal, cache: false }); } catch (e) {
         this.lastError = e?.code ?? 'error';
-        if (e?.code === 'not_granted' || e?.code === 'sampling_disabled') { this.mode = 'offline'; this.status = 'offline (Claude not allowed)'; }
+        this._permanent(e);
         throw e;
       }
     }

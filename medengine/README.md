@@ -17,7 +17,7 @@ medengine/
       Rig.js                the pose language and its solver (two-bone IK, pole vectors, hands)
       Moves.js              the pose and clip library (guards, punches, falls, perches, steering...)
       Face.js               emotions, blinks, saccades, lip-sync from text (52 ARKit units)
-      Actor.js              posture -> gait -> clips -> breathing -> look-at -> face, garments
+      Actor.js              posture -> gait -> clips -> breathing -> look-at -> face, garments, hand props (phone, pistol)
       Garments.js           cowl, belt, sigil, buzz cut built from the body surface; the cape
       Cloth.js              CPU Verlet cloth (capes, coat tails)
     lights/LightGrid.js   tiled point / spot / tube lights, spot-shadow atlas, volumetric lights

@@ -67,6 +67,7 @@ const head = human.bonePos('head');
 const shot = P.get('shot') ?? 'mcu';
 const eye = human.bonePos('eye_l').add(human.bonePos('eye_r')).multiplyScalar(0.5);
 if (shot === 'cu') { camera.fov = 18; camera.position.set(eye.x + 0.25, eye.y + 0.02, eye.z + 1.6); camera.lookAt(eye.x, eye.y - 0.04, eye.z); }
+else if (shot === 'chest') { camera.fov = 16; camera.position.set(eye.x + 0.3, eye.y - 0.3, eye.z + 1.7); camera.lookAt(eye.x, eye.y - 0.38, eye.z); }
 else if (shot === 'full') { camera.fov = 30; camera.position.set(0.8, 1.4, 4.6); camera.lookAt(0, 0.95, 0); }
 else { camera.fov = 24; camera.position.set(eye.x + 0.4, eye.y, eye.z + 2.2); camera.lookAt(eye.x, eye.y - 0.18, eye.z); }
 camera.updateProjectionMatrix();

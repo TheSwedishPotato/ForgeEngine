@@ -42,16 +42,16 @@ export const RECIPES = [
     macro: { gender: 0, age: 0.66, muscle: 0.55, weight: 0.5, heightM: 1.69, proportions: 0.7, race: { caucasian: 0.55, african: 0.2, asian: 0.25 } },
     details: { 'nose/nose-hump-incr': 0.3 },
     skin: 'middleage_caucasian_female', brows: 'eyebrow009', lashes: 'eyelashes03', eyes: { material: 'brownlight' }, hair: 'rehmanpolanski_hair_bun_brown',
-    clothes: ['toigo_female_suit', { name: 'mindfront_cardigan_long_open_front', material: wool([0.42, 0.33, 0.22]) }, 'mindfront_shoes_biker_boots_female'],
+    clothes: [{ name: 'toigo_female_suit', material: wool([0.07, 0.07, 0.08]) }, { name: 'mindfront_cardigan_long_open_front', material: wool([0.42, 0.33, 0.22]) }, 'mindfront_shoes_biker_boots_female'],
     meta: { skinTint: [0.93, 0.85, 0.76], voice: { pitch: 0.98, rate: 1.0 } },
   },
   {
     id: 'marrow', name: 'Silas Marrow',
     macro: { gender: 1, age: 0.8, muscle: 0.35, weight: 0.22, heightM: 1.87, proportions: 0.6, race: { caucasian: 1 } },
     details: { 'cheek/l-cheek-inner-decr': 0.6, 'cheek/r-cheek-inner-decr': 0.6, 'nose/nose-scale-vert-incr': 0.4, 'chin/chin-prominent-incr': 0.3 },
-    skin: 'old_caucasian_male', brows: 'eyebrow002', lashes: 'eyelashes01', eyes: { material: 'ice' }, hair: 'short02',
-    clothes: ['toigo_male_double-breasted_suit', { name: 'mindfront_cardigan_long_open_front', material: wool([0.03, 0.03, 0.035]) }, { name: 'fedora01', material: wool([0.05, 0.05, 0.055]) }, 'mindfront_shoes_oxford_male'],
-    meta: { voice: { pitch: 0.75, rate: 0.86 } },
+    skin: 'old_caucasian_male', brows: 'eyebrow002', lashes: 'eyelashes01', eyes: { material: 'ice' },   // no hair mesh: it pokes through the fedora; a cropped scalp layer instead
+    clothes: [{ name: 'toigo_male_double-breasted_suit', material: wool([0.09, 0.085, 0.08]) }, { name: 'mindfront_cardigan_long_open_front', material: wool([0.03, 0.03, 0.035]) }, { name: 'fedora01', material: wool([0.05, 0.05, 0.055]) }, 'mindfront_shoes_oxford_male'],
+    meta: { garments: ['buzzcut'], voice: { pitch: 0.75, rate: 0.86 } },
   },
   {
     id: 'kow', name: 'Kowalski',
