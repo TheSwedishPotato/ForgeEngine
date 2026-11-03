@@ -42,7 +42,7 @@ medengine/
 | **People** | capsule mannequins: no faces, ball hands | full digital humans from CC0 MakeHuman data: shaped bodies (age, sex, build, height in metres, 600+ detail targets), skins, eyes, brows, lashes, teeth, hair, fitted clothes, a 55-bone rig, **subdivided at load** (13k → 53k vertices) |
 | **Faces** | none | the **52 ARKit face shapes** as GPU morph targets; emotions, blinks, saccades, **lip-sync from text** |
 | **Animation** | physics ragdolls, a walker | a **pose language** with two-bone IK and pole vectors, a clip system, procedural gait with planted feet, look-at with eyes, breathing |
-| **Garments** | banners, knight capes on GPU cloth | layered fitted clothes, re-dyed materials (leather, wool), the **cowl / belt / sigil** cut from the body surface, CPU cloth capes |
+| **Garments** | banners, knight capes on GPU cloth | layered fitted clothes (whatever an outer layer covers is **tucked under it**: no poke-through), re-dyed materials (leather, wool), the **cowl / belt / sigil** cut from the body surface, CPU cloth capes, **hand props** (phone, pistol) on the hand bone |
 | **Local lights** | 8 unshadowed point lights | **256 point, spot and fluorescent-tube lights**, culled per 32-px tile; **16 shadowed spots** in a 4096² atlas; lights scatter in fog and rain |
 | **Skin** | wrapped diffuse | **separable subsurface scattering** (sum-of-Gaussians skin profile, world-scaled), pores and micro-normals, eye and hair shading |
 | **Weather** | fog, mist | **rain** (40k GPU streaks lit by the tile lights, depth-buffer splashes), **wet surfaces** (porosity darkening, puddles with raindrop ripples, water running down walls), **lightning** with delayed thunder, light-pollution haze |
@@ -51,7 +51,7 @@ medengine/
 | **Camera** | an orbit rig | a **virtual cinematographer**: ECU→EWS, OTS, two-shots, POV, inserts; lenses in mm; push/pull/orbit/crane/track; handheld; focus pulls |
 | **Story & AI** | per-game | a branching **story runner** (choices, timers, QTEs, negotiations with a meter, exploration, flowchart, saves) and **Claude** for free text, characters and endless continuation |
 | **Sound** | per-game | an engine module: ambience beds, 25 sfx, generative score, reverb per place, optional voices |
-| **Tests** | physics suites | subdivision tests; 1,500 random full playthroughs of the story per run |
+| **Tests** | physics suites | subdivision, face, pose, layering and Claude-bridge unit tests; 1,500 random full playthroughs of the story per run; headless renders and full auto playthroughs |
 
 ## How good is it — honestly
 
