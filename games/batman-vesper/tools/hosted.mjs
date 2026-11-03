@@ -69,10 +69,12 @@ if (name === 'story') {
   await tab.waitForTimeout(1500);
   await tab.screenshot({ path: out });
 } else {
-  await tab.waitForTimeout(+secs * 1000);
+  const t0 = Date.now();
+  await tab.waitForFunction(() => document.getElementById('menu')?.classList.contains('on'), null, { timeout: +secs * 1000 }).catch(() => {});
+  console.log('menu after', ((Date.now() - t0) / 1000).toFixed(1), 's');
   const state = await tab.evaluate(() => ({ title: document.title, menu: document.getElementById('menu')?.classList.contains('on'), loading: document.getElementById('loading')?.className, claude: document.getElementById('claude-status')?.textContent, keyRowHidden: document.getElementById('claude-key-row')?.style.display === 'none' }));
   console.log('film state:', JSON.stringify(state));
-  if (process.env.PLAY) { await tab.click('#new'); await tab.waitForTimeout(+process.env.PLAY * 1000); console.log('subtitle:', await tab.evaluate(() => document.querySelector('[class*=sub]')?.textContent?.slice(0, 120))); }
+  if (process.env.PLAY) { await tab.click('#new', { timeout: 300000 }); await tab.waitForTimeout(+process.env.PLAY * 1000); console.log('subtitle:', await tab.evaluate(() => document.querySelector('[class*=sub]')?.textContent?.slice(0, 120))); }
   const jpg = await tab.evaluate(() => window.__capture());
   (await import('node:fs')).writeFileSync(out, Buffer.from(jpg.split(',')[1], 'base64'));
 }

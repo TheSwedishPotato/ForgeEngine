@@ -30,6 +30,8 @@ const $ = (s) => document.querySelector(s);
 const menu = $('#menu'), loading = $('#loading'), bar = $('#loading .bar div'), lbl = $('#loading .lbl');
 
 // ---------------------------------------------------------------- start-up
+let castReady = Promise.resolve(), castDone = true;
+const castCheck = () => castDone;
 async function boot() {
   T.start();
   // the title backdrop: the cathedral at night
@@ -37,7 +39,12 @@ async function boot() {
   await T.stage('cathedral');
   T.cut({ type: 'free', pos: [-2.2, 2.9, -1.6], target: [45, -6, 130] });
   if (P.get('nocast') !== '1') {
-    await T.loadCast((k, name) => { bar.style.width = `${Math.round(k * 100)}%`; lbl.textContent = `Casting ${name}…`; }, P.get('cast')?.split(','));
+    // the title needs only Batman: the menu opens as soon as he is built, the rest of the cast
+    // downloads in parallel and is built in the background (play() waits for it if it must)
+    const ids = P.get('cast')?.split(',') ?? ['batman', 'rook', 'nadia', 'cruz', 'marrow', 'kow', 'dez', 'deckhand'];
+    await T.loadCast((k, name) => { bar.style.width = `${Math.round(k * 100)}%`; lbl.textContent = `Casting ${name}…`; }, ids.slice(0, 1));
+    castDone = false;
+    castReady = T.loadCast(null, ids).then(() => { castDone = true; });
     T.place('batman', 'perch', 0);
     T.act('batman', { posture: 'perch' });
     T.cut({ type: 'free', pos: [-2.2, 2.9, -1.6], target: [45, -6, 130], focus: 'batman' });
@@ -64,6 +71,11 @@ async function play(fromChapter = null, resume = null) {
   audio.volume.master = settings.volume;
   $('#title').classList.add('hidden');
   menu.classList.remove('on');
+  if (!castCheck()) {
+    loading.classList.remove('done'); lbl.textContent = 'Casting…'; bar.style.width = '100%';
+    await castReady;
+    loading.classList.add('done');
+  }
   runner = new Runner(T, claude);
   if (resume) { runner.state = resume.state; runner.flowchart = resume.flowchart ?? []; }
   window.vesper.runner = runner;

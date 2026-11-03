@@ -333,6 +333,11 @@ export class Human {
    * @param id      character id
    * @param o       { levels: subdivision levels for body/clothes (0..2) }
    */
+  /** Starts downloading characters (all at once) so later load() calls only build them. */
+  static prefetch(baseUrl, ids) {
+    for (const u of ['/human-base', ...ids.map((id) => '/' + id)]) fetchPair(baseUrl + u).catch(() => {});
+  }
+
   static async load(baseUrl, id, o = {}) {
     const [base, ch] = await Promise.all([fetchPair(baseUrl + '/human-base'), fetchPair(baseUrl + '/' + id)]);
     return new Human(base, ch, baseUrl, o);

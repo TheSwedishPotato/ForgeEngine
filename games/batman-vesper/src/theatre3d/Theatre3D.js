@@ -1,5 +1,6 @@
 import { Vector3, MathUtils } from 'three';
 import { Stage } from '../../../../medengine/src/Stage.js';
+import { Human } from '../../../../medengine/src/human/Human.js';
 import { Actor } from '../../../../medengine/src/human/Actor.js';
 import { Director } from '../../../../medengine/src/cinema/Director.js';
 import { Weather } from '../../../../medengine/src/weather/Weather.js';
@@ -37,7 +38,9 @@ export class Theatre3D {
   /** Loads every member of the cast (progress 0..1 to the callback). */
   async loadCast(onProgress, ids = ['batman', 'rook', 'nadia', 'cruz', 'marrow', 'kow', 'dez', 'deckhand']) {
     let n = 0;
+    Human.prefetch(HUMANS, ids);   // every download in flight at once; building stays one by one
     for (const id of ids) {
+      if (this.actors[id]) { onProgress?.(++n / ids.length, CAST[id]?.name); continue; }
       this.actors[id] = await Actor.load(this.stageE, HUMANS, id, { levels: this.stageE.r.q.renderScale < 0.6 ? 0 : 1 });
       onProgress?.(++n / ids.length, CAST[id]?.name);
       await sleep(0);
