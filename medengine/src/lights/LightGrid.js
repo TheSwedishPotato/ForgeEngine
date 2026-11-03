@@ -15,7 +15,7 @@ import { Texture, Target } from '../gl/GL.js';
  *    cone, shadow matrix);
  *  - every light's bounding sphere is projected to the screen and added to the lists of the
  *    32x32-pixel tiles it covers (a "tiled forward+" grid, here used by the deferred pass);
- *  - shadowed spot lights render their depth into one 4096² atlas (16 tiles of 1024²).
+ *  - shadowed spot lights render their depth into one atlas (16 tiles: 4096², or 2048² at low quality).
  */
 export const MAX_LIGHTS = 256;
 export const MAX_PER_TILE = 32;
@@ -25,12 +25,12 @@ const SHADOW_TILES = 4;   // 4x4 atlas
 const _v = new Vector3(), _d = new Vector3(), _c = new Vector4(), _m = new Matrix4(), _bias = new Matrix4();
 
 export class LightGrid {
-  constructor(gl) {
+  constructor(gl, { shadowSize = 4096 } = {}) {
     this.gl = gl;
     this.data = new Float32Array(MAX_LIGHTS * 8 * 4);
     this.tex = new Texture(gl, { width: 8, height: MAX_LIGHTS, format: 'rgba32f', filter: 'nearest' });
     this.count = 0;
-    this.shadowSize = 4096;
+    this.shadowSize = shadowSize;   // 16 tiles: 4096² on computers, 2048² at low quality (phones)
     this.shadowMap = new Texture(gl, { width: this.shadowSize, height: this.shadowSize, format: 'depth32f', filter: 'linear', compare: true });
     this.shadowTarget = new Target(gl, { width: this.shadowSize, height: this.shadowSize, depth: this.shadowMap });
     this.cam = new PerspectiveCamera();
@@ -179,7 +179,7 @@ float spotShadow(int i, int idx, vec3 wpos, vec3 N, float dist, float rot) {
   vec2 t0 = vec2(float(idx % 4), float(idx / 4)) * 0.25;
   if (any(lessThan(p.xy, t0)) || any(greaterThan(p.xy, t0 + 0.25)) || p.z > 1.0) return 1.0;
   float s = 0.0;
-  float r = 1.6 / 4096.0;
+  float r = 1.6 / float(textureSize(uSpotShadow, 0).x);
   for (int k = 0; k < 8; k++) {
     float a = rot + float(k) * 2.39996;
     float rr = sqrt((float(k) + 0.5) / 8.0);

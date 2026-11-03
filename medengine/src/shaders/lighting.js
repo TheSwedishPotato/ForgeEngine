@@ -20,14 +20,20 @@ vec3 viewFromDepth(vec2 uv, float d) {
 
 /** Ambient light from the probe volume (irradiance SH per probe, trilinear). */
 export const PROBES_GLSL = /* glsl */`
+#ifndef NO_PROBES
 uniform sampler2D uProbes;      // width = probe count, height = 9 (SH coefficients, RGB)
+#endif
 uniform vec3 uProbeMin, uProbeMax;
 uniform ivec3 uProbeDims;
 uniform float uProbeWeight;     // 0 = sky only
 uniform vec3 uSkySH[9];
 vec3 probeSH(int index, vec3 n) {
   vec3 c[9];
+#ifdef NO_PROBES
+  for (int k = 0; k < 9; k++) c[k] = uSkySH[k];
+#else
   for (int k = 0; k < 9; k++) c[k] = texelFetch(uProbes, ivec2(index, k), 0).rgb;
+#endif
   return shIrradiance(n, c);
 }
 /** Irradiance E(n) at a world position (W/m^2-like, divide by PI for radiance). */
@@ -83,7 +89,9 @@ uniform float uFrame;
 uniform vec3 uSunIrradiance;    // sun colour * intensity
 uniform float uShadowsOn;
 uniform float uContact;         // contact-shadow ray length (m), 0 = off
-uniform highp sampler2D uRTShadow;   // ray-traced sun visibility (passes/RayTracing.js)
+#ifndef NO_RT
+uniform highp sampler2D uRTShadow;
+#endif   // ray-traced sun visibility (passes/RayTracing.js)
 uniform float uRTOn, uRTDist;
 
 /**
@@ -149,7 +157,9 @@ void main() {
   vec3 L = uSunDir;
   float NoLraw = dot(N, L);
   float vis = uShadowsOn > 0.5 ? sunShadow(wpos, N, viewDepth, rot) : 1.0;
+#ifndef NO_RT
   if (uRTOn > 0.5) vis *= mix(1.0, texture(uRTShadow, vUv).r, 1.0 - smoothstep(uRTDist * 0.85, uRTDist, viewDepth));
+#endif
   if (vis > 0.02 && NoLraw > 0.0) vis *= contactShadow(wpos, L, viewDepth, fract(rot * 0.159155 + 0.37));
   vec3 diffBrdf;
   vec3 spec = brdfDirect(N, V, L, diffuseColor, F0, rough, diffBrdf);

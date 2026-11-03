@@ -38,6 +38,7 @@ const errors = [];
 tab.on('pageerror', (e) => errors.push(e.message));
 tab.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 200)); });
 await tab.addInitScript(() => {
+  globalThis.MED_TEXTURE_UNIT_LIMIT = 16;   // what Chrome on Windows (Direct3D) and many phones allow
   const calls = (window.__calls = []);
   const TIERS = ['quick', 'default', 'complex'];
   const check = (input, o) => {
@@ -55,9 +56,11 @@ await tab.addInitScript(() => {
     return { mapped: null, speech: 'Not tonight.', emotion: 'grim', reply: { who: 'rook', text: 'MOCK REPLY FROM CLAUDE', emotion: 'afraid' } };
   };
   sample.limits = async () => ({ maxPromptBytes: 262144 });
-  Object.defineProperty(window, 'claude', { value: Object.freeze({ use: async (n) => (n === 'sample' ? sample : null) }) });
+  const store = (window.__db = {});
+  const db = { doc: (path) => ({ set: async (d) => { if (JSON.stringify(d).length > 262144) throw { code: 'invalid_argument' }; store[path] = d; } }) };
+  Object.defineProperty(window, 'claude', { value: Object.freeze({ use: async (n) => (n === 'sample' ? sample : n === 'db' ? db : null) }) });
 });
-await tab.goto(url + (name === 'film' ? '?q=low' : ''), { waitUntil: 'load' });
+await tab.goto(url + (name === 'film' ? '?q=' + (process.env.Q ?? 'low') : ''), { waitUntil: 'load' });
 if (name === 'story') {
   await tab.waitForFunction(() => document.getElementById('cstat')?.textContent.includes('Claude'), null, { timeout: 30000 });
   console.log('status:', await tab.textContent('#cstat'), '| key row hidden:', await tab.$eval('#keyrow', (e) => e.style.display === 'none'));
@@ -80,6 +83,8 @@ if (name === 'story') {
 }
 console.log('sample calls:', JSON.stringify(await tab.evaluate(() => window.__calls)));
 console.log('packed binaries fetched:', served.filter((x) => x.endsWith('.b64.txt')).length, served.filter((x) => x.endsWith('.b64.txt')).map((x) => x.split('/').pop().replace('.b64.txt', '')).join(' '));
+const dbDocs = await tab.evaluate(() => window.__db).catch(() => ({}));
+for (const [k, v] of Object.entries(dbDocs ?? {})) console.log('db', k, JSON.stringify({ ready: v.ready, gl: v.gl, steps: v.steps, errors: v.errors }).slice(0, 900));
 console.log('missing files:', missing.length ? missing.slice(0, 10) : 'none');
 console.log('errors:', errors.length ? errors.slice(0, 8) : 'none');
 await browser.close(); srv.close();

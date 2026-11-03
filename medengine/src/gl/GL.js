@@ -58,6 +58,9 @@ export class Program {
       }
       this.uniforms.set(base, u);
     }
+    this.textureUnits = unit;
+    const limit = globalThis.MED_TEXTURE_UNIT_LIMIT;
+    if (limit && unit > limit) throw new Error(`${name}: uses ${unit} textures, more than the ${limit} many GPUs allow`);
     this.attribs = new Map();
     const na = gl.getProgramParameter(p, gl.ACTIVE_ATTRIBUTES);
     for (let i = 0; i < na; i++) { const a = gl.getActiveAttrib(p, i); this.attribs.set(a.name, gl.getAttribLocation(p, a.name)); }

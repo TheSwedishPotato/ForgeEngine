@@ -206,13 +206,16 @@ float shadowFocus(vec3 wpos, vec3 n, float rot, out float w) {
 // ---- virtual shadow maps (passes/VirtualShadows.js) ----
 uniform float uVsmOn;
 uniform mat4 uVsmLight;
+#ifndef NO_VSM
 uniform highp sampler2D uVsmTable;
 uniform highp sampler2DShadow uVsmAtlas;
+#endif
 uniform vec4 uVsmLevel[3];     // page size (m), window centre page x, y
 /** Visibility from the finest resident virtual page, or false where none is resident. */
 bool vsmShadow(vec3 wpos, vec3 n, float rot, out float vis) {
   vis = 1.0;
   if (uVsmOn < 0.5) return false;
+#ifndef NO_VSM
   for (int l = 0; l < 3; l++) {
     float P = uVsmLevel[l].x, texel = P / 128.0;
     vec3 lp = (uVsmLight * vec4(wpos + n * texel * 2.0, 1.0)).xyz;
@@ -237,6 +240,7 @@ bool vsmShadow(vec3 wpos, vec3 n, float rot, out float vis) {
     vis = sum / 12.0;
     return true;
   }
+#endif
   return false;
 }
 /** Sun visibility at a world position; viewDepth is positive distance along the view axis. */

@@ -1,3 +1,4 @@
+import { mark, fail, ready as bootReady } from './diag.js';   // first: it watches everything after it
 import { Theatre3D } from './theatre3d/Theatre3D.js';
 import { Runner } from './story/Runner.js';
 import { TITLE, CHAPTERS, EPISODE } from './story/episode1.js';
@@ -25,6 +26,7 @@ const audio = new Audio();
 const claude = new Claude();
 const T = new Theatre3D(canvas, { audio, quality: settings.quality, auto });
 window.vesper = { T, claude, audio };
+mark('renderer created');
 window.__capture = () => { T.step(1 / 60); return canvas.toDataURL('image/jpeg', 0.92); };
 T.stopAt = Number(P.get('stopAt') ?? 0) || null;
 T.ui.subtitles = settings.subtitles; T.ui.subSize = settings.subSize; T.voices = settings.voices;
@@ -61,9 +63,11 @@ async function boot() {
   loading.classList.add('done');
   window.__ready = true;
   if (auto) { $('#title').classList.add('hidden'); play(P.get('chapter')); return; }
+  mark('waiting for Claude');
   await claude.ready;
   updateClaudeStatus();
   menu.classList.add('on');
+  bootReady();
 }
 
 function updateClaudeStatus() {
@@ -198,4 +202,4 @@ setInterval(() => {
 
 document.title = `${TITLE.name} — ${TITLE.episodeTitle}`;
 void EPISODE;
-boot().catch((e) => { console.error(e); lbl.textContent = 'Could not start: ' + e.message; });
+boot().catch((e) => { console.error(e); fail(e?.message ?? e); lbl.textContent = 'Could not start: ' + (e?.message ?? e); });

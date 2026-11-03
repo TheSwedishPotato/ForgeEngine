@@ -31,6 +31,14 @@ function page(src, title) {
   return `<title>${title}</title>\n<style>${css.join('\n')}</style>\n${body}\n${tags}\n`;
 }
 
+// runs before the game's code: marks the page as packed, and if that code cannot even start (a
+// file that fails to load, a browser too old for it) says so instead of an endless loading bar
+const PACKED_JS = `globalThis.MED_PACKED = true;
+const say = (m) => { const l = document.querySelector('#loading .lbl'); if (l) { l.textContent = m; l.style.color = '#ff9b8a'; } };
+addEventListener('error', (e) => { if (!globalThis.__step) say('Could not load the film: ' + (e.message || (e.target && (e.target.src || e.target.href)) || 'a file')); }, true);
+setTimeout(() => { if (!globalThis.__step) say('The film did not start: this browser may be too old for it. Try the illustrated version.'); }, 30000);
+`;
+
 const js = walk(join(DIST, 'assets')).filter((p) => p.endsWith('.js') && !/\/(lab|stills)-/.test(p));
 const targets = {
   film: { src: 'index.html', title: 'Batman: Vesper', dirs: ['assets/humans', 'assets/tex', 'assets/models'] },
@@ -40,7 +48,7 @@ for (const [name, t] of Object.entries(targets)) {
   writeFileSync(join(OUT, `${name}.html`), page(t.src, t.title));
   const dir = join(OUT, name), list = [];
   const put = (rel, write) => { const to = join(dir, rel); mkdirSync(dirname(to), { recursive: true }); write(to); const e = { path: rel }; if (TYPE[extname(rel)]) e.contentType = TYPE[extname(rel)]; list.push(e); };
-  put('packed.js', (to) => writeFileSync(to, 'globalThis.MED_PACKED = true;\n'));
+  put('packed.js', (to) => writeFileSync(to, PACKED_JS));
   for (const f of [...js, ...t.dirs.flatMap((d) => walk(join(DIST, d)))]) {
     const rel = relative(DIST, f);
     if (BINARY.has(extname(f))) put(rel + '.b64.txt', (to) => writeFileSync(to, encodeBase64(new Uint8Array(readFileSync(f)))));

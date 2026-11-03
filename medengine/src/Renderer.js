@@ -21,7 +21,7 @@ export const QUALITY = {
   ultra: { renderScale: 1.0, shadowSize: 4096, cascades: 4, ssao: true, ssgi: true, ssr: true, volumetrics: 'high', probes: true, bloom: true, dof: true, motionBlur: true, maxDpr: 2, envSize: 256 },
   high: { renderScale: 0.77, shadowSize: 2048, cascades: 4, ssao: true, ssgi: true, ssr: true, volumetrics: 'high', probes: true, bloom: true, dof: true, motionBlur: true, maxDpr: 2, envSize: 256 },
   medium: { renderScale: 0.67, shadowSize: 2048, cascades: 3, ssao: true, ssgi: false, ssr: true, volumetrics: 'low', probes: true, bloom: true, dof: false, motionBlur: true, maxDpr: 1.5, envSize: 128, rtShadows: false },
-  low: { renderScale: 0.5, shadowSize: 1024, cascades: 2, ssao: false, ssgi: false, ssr: false, volumetrics: 'off', probes: false, bloom: true, dof: false, motionBlur: false, maxDpr: 1, envSize: 128, focusShadows: false, contactShadows: false, vsm: false, rtShadows: false },
+  low: { renderScale: 0.5, shadowSize: 1024, spotAtlas: 2048, cascades: 2, ssao: false, ssgi: false, ssr: false, volumetrics: 'off', probes: false, bloom: true, dof: false, motionBlur: false, maxDpr: 1, envSize: 128, focusShadows: false, contactShadows: false, vsm: false, rtShadows: false },
 };
 
 export class Renderer {
@@ -63,11 +63,19 @@ export class Renderer {
     this.shadows = new Shadows(gl, { size: this.q.shadowSize, cascades: 4 });
     this.shadowFocus = null;          // {center, radius}: a sharper shadow map around what matters (see Shadows)
     this.contactShadowLength = 0.35;  // metres of screen-space ray toward the sun
-    this.lighting = postProgram(gl, LIGHTING_FS, {}, 'lighting');
+    // the lighting pass reads 18 textures with every feature on; many GPUs (Chrome on Windows,
+    // phones) allow 16. Features the scene can do without are compiled out until it fits:
+    // ray-traced sun shadows, then virtual shadow maps (both sun-only), then the probe volume.
+    const units = Math.min(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS), globalThis.MED_TEXTURE_UNIT_LIMIT ?? Infinity);
+    const drop = [['NO_RT', 1], ['NO_VSM', 2], ['NO_PROBES', 1]], defs = {};
+    let need = 18;
+    for (const [d, n] of drop) if (need > units) { defs[d] = true; need -= n; }
+    this.lightingFeatures = defs;
+    this.lighting = postProgram(gl, LIGHTING_FS, defs, 'lighting');
     this.black = new Texture(gl, { width: 1, height: 1, format: 'rgba16f', data: new Uint16Array([0, 0, 0, 0]) });
     this.whiteF = new Texture(gl, { width: 1, height: 1, format: 'rgba8', data: new Uint8Array([255, 255, 255, 255]) });
     this.dummyProbes = new Texture(gl, { width: 1, height: 9, format: 'rgba16f', filter: 'nearest' });
-    this.lightGrid = new LightGrid(gl);
+    this.lightGrid = new LightGrid(gl, { shadowSize: this.q.spotAtlas ?? 4096 });
     this.resize();
     this._envDirty = true;
     this.glCheck = !!new URLSearchParams(location.search).get('glcheck');
