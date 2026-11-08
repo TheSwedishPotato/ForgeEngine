@@ -1,7 +1,12 @@
 import { Engine, Mesh, PlaneGeometry, BoxGeometry, SphereGeometry, StandardMaterial, DirectionalLight, BrowserPlatform } from './engine.min.js';
+import { start2D } from './fallback2d.js';
 
 const canvas = document.querySelector('canvas'), hud = document.getElementById('hud'), msg = document.getElementById('msg');
-const engine = await Engine.create({ platform: new BrowserPlatform({ canvas }), quality: new URLSearchParams(location.search).get('q') || 'low' });
+let engine = null;
+try { if (!navigator.gpu || !(await navigator.gpu.requestAdapter())) throw new Error('no WebGPU'); engine = await Engine.create({ platform: new BrowserPlatform({ canvas }), quality: new URLSearchParams(location.search).get('q') || 'low' }); } catch (err) { console.warn('3D unavailable, using 2D:', err); engine = null; }
+if (!engine) {
+  const c2 = canvas.cloneNode(false); canvas.replaceWith(c2); start2D(c2, hud, msg);
+} else {
 const { scene, camera, input } = engine;
 const showErr = (m) => { console.error(m); hud.textContent = 'Error: ' + String(m?.message ?? m).split('\n')[0].slice(0, 160); };
 engine.stage.renderer.gpu.onError = (m) => showErr('[webgpu] ' + m);
@@ -62,3 +67,4 @@ engine.add({
 });
 canvas.focus(); canvas.addEventListener("pointerdown", () => canvas.focus());
 window.__e = engine; engine.start();
+}
