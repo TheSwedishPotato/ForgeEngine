@@ -22,16 +22,23 @@ for (let i = 0; i < 12; i++) {
 let score = 0, left = 30, state = 'ready';
 const vel = { x: 0, z: 0 };
 const key = (...k) => k.some((c) => input.keyDown(c));
+// touch: drag anywhere to steer (relative to where the finger went down); tap to start
+const touch = { id: null, x0: 0, y0: 0, ax: 0, az: 0, tap: false };
+canvas.style.touchAction = 'none';
+canvas.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') return; touch.id = e.pointerId; touch.x0 = e.clientX; touch.y0 = e.clientY; touch.tap = true; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => { if (e.pointerId !== touch.id) return; const dx = (e.clientX - touch.x0) / 50, dy = (e.clientY - touch.y0) / 50; touch.ax = Math.max(-1, Math.min(1, dx)); touch.az = Math.max(-1, Math.min(1, dy)); });
+const end = (e) => { if (e.pointerId === touch.id) { touch.id = null; touch.ax = touch.az = 0; } };
+canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
 
 engine.add({
   update(dt) {
     if (state === 'ready' || state === 'over') {
-      if (key('Space')) { state = 'play'; score = 0; left = 30; msg.hidden = true; }
+      if (key('Space') || touch.tap) { state = 'play'; score = 0; left = 30; msg.hidden = true; }
     }
     coins.forEach((c) => { c.rotation.y += dt * 2; });
     if (state === 'play') {
-      const ax = (key('KeyD', 'ArrowRight') ? 1 : 0) - (key('KeyA', 'ArrowLeft') ? 1 : 0);
-      const az = (key('KeyS', 'ArrowDown') ? 1 : 0) - (key('KeyW', 'ArrowUp') ? 1 : 0);
+      const ax = touch.ax || ((key('KeyD', 'ArrowRight') ? 1 : 0) - (key('KeyA', 'ArrowLeft') ? 1 : 0));
+      const az = touch.az || ((key('KeyS', 'ArrowDown') ? 1 : 0) - (key('KeyW', 'ArrowUp') ? 1 : 0));
       vel.x += ax * 40 * dt; vel.z += az * 40 * dt;
       const damp = Math.exp(-3 * dt); vel.x *= damp; vel.z *= damp;
       player.position.x = Math.max(-R - 1, Math.min(R + 1, player.position.x + vel.x * dt));
@@ -44,6 +51,7 @@ engine.add({
       left -= dt;
       if (left <= 0) { left = 0; state = 'over'; msg.hidden = false; msg.innerHTML = `<div>Time! Score ${score}<small>Space to play again</small></div>`; }
     }
+    touch.tap = false;
     hud.textContent = `Score ${score}   Time ${left.toFixed(1)}`;
     camera.position.set(player.position.x * 0.6, 14, player.position.z * 0.6 + 10);
     camera.lookAt(player.position);
