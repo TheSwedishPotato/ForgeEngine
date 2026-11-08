@@ -1,8 +1,11 @@
 import { Engine, Mesh, PlaneGeometry, BoxGeometry, SphereGeometry, StandardMaterial, DirectionalLight, BrowserPlatform } from './engine.min.js';
 
 const canvas = document.querySelector('canvas'), hud = document.getElementById('hud'), msg = document.getElementById('msg');
-const engine = await Engine.create({ platform: new BrowserPlatform({ canvas }) });
+const engine = await Engine.create({ platform: new BrowserPlatform({ canvas }), quality: new URLSearchParams(location.search).get('q') || 'low' });
 const { scene, camera, input } = engine;
+const showErr = (m) => { console.error(m); hud.textContent = 'Error: ' + String(m?.message ?? m).split('\n')[0].slice(0, 160); };
+engine.stage.renderer.gpu.onError = (m) => showErr('[webgpu] ' + m);
+engine.on('error', showErr);
 
 const ground = new Mesh(new PlaneGeometry(30, 30), new StandardMaterial({ color: 0x4f7f55, roughness: 0.95 }));
 ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
@@ -58,4 +61,4 @@ engine.add({
   },
 });
 canvas.focus(); canvas.addEventListener("pointerdown", () => canvas.focus());
-engine.start();
+window.__e = engine; engine.start();
