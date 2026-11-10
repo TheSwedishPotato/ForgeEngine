@@ -22,7 +22,8 @@ export function c172Config() {
   const xs = [0, 0.55, 1.25, 1.95, 2.65, 3.30, 3.95, 4.55, 5.00, 5.50];
   const wingAt = (x) => {
     const ax = Math.abs(x);
-    return { p: [x, 2.0 + ax * Math.tan(1.73 * DEG), 1.02], chord: ax <= brk ? 1.63 : lerp(1.63, 1.13, (ax - brk) / (half - brk)), inc: (1.5 - 3.0 * ax / half) * DEG };
+    // (the left wing is rigged a twentieth of a degree "washed in", as the factory does, to balance the engine's torque in cruise)
+    return { p: [x, 2.0 + ax * Math.tan(1.73 * DEG), 1.02], chord: ax <= brk ? 1.63 : lerp(1.63, 1.13, (ax - brk) / (half - brk)), inc: (1.5 - 3.0 * ax / half - Math.sign(x) * 0.055) * DEG };
   };
   const wing = {
     name: 'wing', section: wingSec, fuselageUpwash: { radius: 0.6, height: 0.75 },
@@ -44,7 +45,7 @@ export function c172Config() {
   const fy = [2.72, 2.30, 1.85, 1.35];
   const fin = {
     name: 'fin', section: tailSec,
-    stations: fy.map((y) => { const t = (y - 1.35) / 1.37; return { p: [0, y, lerp(5.55, 6.35, t)], chord: lerp(1.65, 0.80, t), inc: 0 }; }),
+    stations: fy.map((y) => { const t = (y - 1.35) / 1.37; return { p: [0, y, lerp(5.55, 6.35, t)], chord: lerp(1.65, 0.80, t), inc: -0.5 * DEG }; }),      // offset to counter the slipstream in cruise
     controls(s) { s.ctrl = 5; s.cf = 0.40; },
   };
   const P = (x, y, z) => ({ x, y, z });

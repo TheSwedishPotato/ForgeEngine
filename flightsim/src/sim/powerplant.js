@@ -182,11 +182,11 @@ export class Powerplant {
     this.suction += (Math.min(5.05, 5 * Math.abs(rpm) / 1500) - this.suction) * lag(dt, 0.4);
 
     // ---- carburettor ice: the venturi and the evaporating fuel chill the air well below outside temperature
-    const drop = (1 - Math.pow(pm / pin, 0.2857)) * Tin * 0.35 + 12 * sat(mfCarb / (mair * 0.07 + 1e-9));
+    const drop = (1 - Math.pow(pm / pin, 0.2857)) * Tin * 0.2 + 10 * sat(mfCarb / (mair * 0.07 + 1e-9));
     this.carbT = Tin - 273.15 - (mair > 1e-3 ? drop : 0);
-    if (mair > 2e-3 && this.carbT < 0.5 && this.carbT > -18 && air.rh > 0.45) {
+    if (mair > 2e-3 && this.carbT < 0.5 && this.carbT > -25 && air.rh > 0.45) {
       const water = Math.min(1.5, air.rh * esat(air.tC) / esat(15));
-      this.ice = Math.min(1, this.ice + dt * ((air.rh - 0.45) / 0.55) * water * Math.max(0.2, 1 - Math.abs(this.carbT + 4) / 16) / 150);
+      this.ice = Math.min(1, this.ice + dt * ((air.rh - 0.45) / 0.55) * water * Math.max(0.25, 1 - Math.abs(this.carbT + 6) / 22) / 150);
     } else if (this.carbT > 1) this.ice = Math.max(0, this.ice - dt * this.carbT / 400);
 
     // ---- the plugs foul when it idles rich and cool, and burn clean when worked lean and hot

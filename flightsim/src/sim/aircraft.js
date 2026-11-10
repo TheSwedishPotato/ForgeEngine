@@ -16,6 +16,7 @@ import { Gear } from './gear.js';
 import { Instruments } from './instruments.js';
 import { Radios } from './radios.js';
 import { c172Config, LIMITS } from './c172.js';
+import { altimeterHeight } from './atmosphere.js';
 
 const SUB = 4;
 const FLAT = { h: 0, mu: 0.8, rr: 0.02, rough: 0 };
@@ -262,7 +263,8 @@ export class Aircraft {
     i.aiSpin = i.dgSpin = running ? 1 : 0; i.tcSpin = running ? 1 : 0; i.aiTumble = 0;
     if (running) { Object.assign(i.aiAxis, UP); i.dg = wrap360(at.heading - i.magVar / DEG); }
     i.compassAz = i.magVar; i.compassV = 0; i._hdg = null;
-    i.pitotP = i.staticP = i.caseP = this.weather.air(this.pos.y - this.cg.y).p;
+    i.pitotP = i.staticP = i.caseP = this.weather.air(this.pos.y - this.cg.y).p; i.vs = 0; i.ias = sp;
+    i.alt = altimeterHeight(i.staticP, i.kollsman * 3386.389);
     this.radios.com.on = this.radios.nav.on = running; this.radios.xpdr.mode = flying ? 3 : running ? 1 : 0;
     this.cabinT = oat; this.horn = 0; this.kind = kind;
     this.air = this.weather.air(this.pos.y - this.cg.y);

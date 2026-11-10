@@ -65,6 +65,6 @@ export class Electrical {
     this.volts += (Math.max(v, 0) - this.volts) * lag(dt, 0.03);
     this.altAmps = iAlt; this.loadAmps = iLoad; this.battAmps = iBatt;
     this.soc = clamp(this.soc + iBatt * (iBatt > 0 ? 0.9 : 1) * dt / this.capacity, 0, 1);
-    this.lowVolt = this.volts < 24.6;
+    this.lowVolt = this.volts < 25.6;                 // the red light: the alternator is not carrying the load
   }
 }

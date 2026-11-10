@@ -14,7 +14,7 @@ const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const canvas = $('view'), params = new URLSearchParams(location.search);
 const hud = $('hud'), tip = $('tip'), side = $('side'), caption = $('caption'), banner = $('banner'), status = $('status'), fly = $('fly');
-let engine = null, game = null, panel = null, hudOn = true;
+let engine = null, game = null, panel = null, hudOn = true, flying = false;
 
 for (const name of Object.keys(WEATHER_PRESETS)) $('sWx').append(el('option', { value: name, textContent: name }));
 $('sWx').value = params.get('wx') ?? 'Fair, light wind';
@@ -94,7 +94,7 @@ function show(which) {
 }
 $('bCheck').onclick = () => show('check'); $('bSet').onclick = () => show('set'); $('bKeys').onclick = () => show('keys');
 window.addEventListener('keydown', (e) => {
-  if (!game || $('splash').isConnected) return;
+  if (!game || !flying) return;
   if (e.code === 'KeyC') show('check'); else if (e.code === 'KeyM') show('set'); else if (e.code === 'F1') { show('keys'); e.preventDefault(); } else if (e.code === 'KeyH') { hudOn = !hudOn; }
   if (['Space', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.code)) e.preventDefault();
 });
@@ -152,7 +152,7 @@ function begin() {
   game.setWeather($('sWx').value); game.weather.hour = +$('sHour').value;
   game.reset(kind);
   game.sound.start();
-  $('splash').remove(); $('bar').hidden = false; hud.hidden = false;
+  $('splash').remove(); $('bar').hidden = false; hud.hidden = false; flying = true;
   canvas.focus();
   engine.start();
   if (kind === 'cold') show('check');
