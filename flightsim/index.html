@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skyhawk — a Cessna 172 simulator on Med Engine 3</title>
+<style>
+  :root { --ink: #e9ecef; --dim: #9aa3ad; --glass: rgba(14, 18, 22, 0.78); --line: rgba(255, 255, 255, 0.12); --accent: #ffb347; --bad: #ff6b5a; }
+  html, body { margin: 0; height: 100%; background: #0b0d10; color: var(--ink); font: 14px/1.45 system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }
+  canvas#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; outline: none; cursor: crosshair; }
+  .panel { position: fixed; background: var(--glass); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(6px); }
+  #hud { top: 12px; left: 12px; padding: 8px 12px; font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre; pointer-events: none; min-width: 250px; }
+  #hud b { color: var(--accent); font-weight: 600; } #hud .warn { color: var(--bad); }
+  #tip { position: fixed; padding: 4px 9px; background: rgba(8, 10, 12, 0.92); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; pointer-events: none; max-width: 420px; display: none; z-index: 5; }
+  #caption { left: 50%; bottom: 18px; transform: translateX(-50%); max-width: min(900px, 86vw); padding: 8px 14px; text-align: center; display: none; pointer-events: none; }
+  #banner { left: 50%; top: 16px; transform: translateX(-50%); padding: 10px 18px; display: none; border-color: var(--bad); text-align: center; }
+  #banner b { color: var(--bad); } #banner button { margin: 6px 4px 0; }
+  #bar { top: 12px; right: 12px; padding: 6px; display: flex; gap: 6px; }
+  button, select, input[type=number] { font: inherit; color: var(--ink); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 7px; padding: 5px 11px; cursor: pointer; }
+  button:hover { background: rgba(255, 255, 255, 0.16); } button.primary { background: var(--accent); color: #1a1205; border-color: transparent; font-weight: 600; }
+  select option { background: #14181c; }
+  #side { top: 62px; right: 12px; width: 360px; max-height: calc(100vh - 86px); overflow: auto; padding: 12px 14px; display: none; }
+  #side h3 { margin: 12px 0 6px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); } #side h3:first-child { margin-top: 0; }
+  #side ol { margin: 0; padding-left: 20px; } #side li { margin: 2px 0; } #side li i { color: var(--dim); font-style: normal; }
+  #side label { display: grid; grid-template-columns: 118px 1fr 64px; gap: 8px; align-items: center; margin: 4px 0; } #side label span:last-child { text-align: right; color: var(--dim); font-variant-numeric: tabular-nums; }
+  #side input[type=range] { width: 100%; } .row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+  kbd { font: 12px ui-monospace, Consolas, monospace; background: rgba(255, 255, 255, 0.1); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
+  table.keys { border-collapse: collapse; width: 100%; } table.keys td { padding: 2px 0; vertical-align: top; } table.keys td:first-child { white-space: nowrap; padding-right: 12px; }
+  #splash { position: fixed; inset: 0; display: grid; place-items: center; background: radial-gradient(1200px 700px at 50% 30%, #23364a, #0b0d10 70%); z-index: 10; }
+  #splash .card { width: min(680px, 92vw); padding: 26px 30px; background: var(--glass); border: 1px solid var(--line); border-radius: 14px; }
+  #splash h1 { margin: 0 0 4px; font-size: 30px; font-weight: 650; letter-spacing: -0.01em; } #splash p { color: var(--dim); margin: 6px 0 14px; }
+  #splash .grid { display: grid; grid-template-columns: 130px 1fr; gap: 10px 14px; align-items: center; margin: 14px 0 18px; }
+  #status { color: var(--dim); min-height: 1.4em; } #status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<canvas id="view" tabindex="0"></canvas>
+<div id="hud" class="panel" hidden></div>
+<div id="bar" class="panel" hidden>
+  <button id="bCheck" title="C">Checklists</button><button id="bSet" title="M">Flight &amp; weather</button><button id="bKeys" title="F1">Keys</button>
+</div>
+<div id="side" class="panel"></div>
+<div id="tip"></div>
+<div id="caption" class="panel"></div>
+<div id="banner" class="panel"></div>
+<div id="splash">
+  <div class="card">
+    <h1>Skyhawk</h1>
+    <p>A Cessna 172P, simulated from the airflow up, on Med Engine 3. Every switch, knob and lever in the cockpit works and is operated with the mouse.</p>
+    <div class="grid">
+      <span>Start</span>
+      <select id="sStart">
+        <option value="cold">Cold and dark on the apron — tied down, do everything yourself</option>
+        <option value="ready">Engine running on the apron</option>
+        <option value="runway">Lined up on the runway, ready for take-off</option>
+        <option value="final">Four miles out on final approach, runway 27</option>
+        <option value="cruise">In cruise at 3000 ft</option>
+      </select>
+      <span>Weather</span><select id="sWx"></select>
+      <span>Local time</span><span><input id="sHour" type="range" min="0" max="23.75" step="0.25" value="14" style="width:70%"> <span id="sHourV">14:00</span></span>
+    </div>
+    <button id="fly" class="primary" disabled>Loading…</button>
+    <span id="status"></span>
+    <p style="margin-top:14px">Left mouse: operate a control (click, or drag up and down; the wheel turns knobs). Right mouse drag: look around. <kbd>C</kbd> opens the checklists, <kbd>F1</kbd> lists the keys.</p>
+  </div>
+</div>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
