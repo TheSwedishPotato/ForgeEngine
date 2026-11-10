@@ -240,7 +240,8 @@ export function buildCockpit(ac, root, fx = () => {}, { registration = 'SE-MED' 
   // ---- yokes, and the control lock through the pilot's one
   const yokes = [-0.255, 0.255].map((x) => {
     const y = new Group(); y.position.set(x, 1.10, PZ + 0.25); g.add(y); const b = new Batch();
-    b.add(tube([0, 0, -0.26], [0, 0, 0], 0.012), chrome).add(box(0.22, 0.032, 0.032, 0, 0, 0), black).add(box(0.032, 0.11, 0.034, -0.115, 0.045, 0.005), black).add(box(0.032, 0.11, 0.034, 0.115, 0.045, 0.005), black);
+    b.add(tube([0, 0, -0.26], [0, 0, 0], 0.012), chrome).add(box(0.06, 0.05, 0.03, 0, 0, 0.005), black).add(tube([-0.125, 0, 0.005], [0.125, 0, 0.005], 0.013), black)
+      .add(tube([-0.125, -0.01, 0.005], [-0.14, 0.10, 0.012], 0.015), black).add(tube([0.125, -0.01, 0.005], [0.14, 0.10, 0.012], 0.015), black);
     b.build(y, { cast: false });
     return y;
   });

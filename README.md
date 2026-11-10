@@ -1,3 +1,13 @@
+# Forge Engine
+
+This repository now holds two things besides the original Forge Engine sources below:
+
+- **[flightsim/](flightsim/README.md) — Skyhawk**, a Cessna 172P flight simulator: flown by hand, simulated from the airflow up,
+  with a cockpit in which every control works. `cd flightsim && npm start`, then open http://localhost:8080/.
+- **[medengine/](medengine/README.md) — Med Engine 3**, the WebGPU game engine it is built on.
+
+---
+
 # Forge Engine - Medieval Life Simulation
 
 ## Overview

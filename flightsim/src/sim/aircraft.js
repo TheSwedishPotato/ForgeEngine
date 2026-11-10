@@ -232,7 +232,7 @@ export class Aircraft {
     const cfg = this.cfg, c = this.ctl, e = this.elec, eng = this.eng, i = this.inst, L = c.lights, oat = this.weather.oat;
     const running = kind !== 'cold', flying = kind === 'final' || kind === 'cruise';
     this.massProps();
-    Object.assign(this.q, quatFromHPB(at.heading, flying ? 2 : 0, 0));
+    Object.assign(this.q, quatFromHPB(at.heading, kind === 'final' ? -0.5 : kind === 'cruise' ? 1.5 : 0, 0));
     const hd = at.heading * DEG, sp = kind === 'final' ? 72 * KT : kind === 'cruise' ? 105 * KT : 0;
     this.pos.x = at.x; this.pos.z = at.z; this.pos.y = flying ? at.alt + this.cg.y : this.ground(at.x, at.z).h + this.cg.y + 0.0;
     this.vel.x = Math.sin(hd) * sp; this.vel.z = -Math.cos(hd) * sp; this.vel.y = kind === 'final' ? -sp * 0.052 : 0;
@@ -242,14 +242,14 @@ export class Aircraft {
     this.crashed = null; this.gear.damage = null; this.gear.touchdown = null; this.gear.hardest = 0; eng.damaged = false;
     for (const w of this.gear.wheels) { w.collapsed = false; w.dLon = w.dLat = 0; w.comp = 0; w.load = 0; }
     // switches and levers
-    Object.assign(c, { pitch: 0, roll: 0, yaw: 0, brakeL: 0, brakeR: 0, parkBrake: !flying, controlLock: !running, trim: flying ? 0.12 : 0,
+    Object.assign(c, { pitch: 0, roll: 0, yaw: 0, brakeL: 0, brakeR: 0, parkBrake: !flying, controlLock: !running, trim: kind === 'final' ? 0.15 : kind === 'cruise' ? -0.25 : 0,
       flapLever: kind === 'final' ? 2 : 0, magKey: running ? 3 : 0, primer: 0, primerLocked: true, pitotHeat: false,
       panelLights: 0, radioLights: 0, cabinHeat: 0, cabinAir: 0.3 });
     L.beacon = running; L.nav = false; L.strobe = flying; L.land = flying; L.taxi = false; L.dome = false;
     this.flapDeg = c.flapLever * 10; this._primer = 0;
     e.masterBat = e.masterAlt = running; e.avionics = running; e.volts = running ? 28 : 0; e.battTemp = oat;
     for (const k in e.breaker) e.breaker[k] = true;
-    eng.throttle = kind === 'cruise' ? 0.72 : kind === 'final' ? 0.33 : running ? 0.1 : 0;
+    eng.throttle = kind === 'cruise' ? 0.65 : kind === 'final' ? 0.30 : running ? 0.1 : 0;
     eng.mixture = running ? 1 : 0; eng.carbHeat = 0; eng.ice = 0; eng.film = running ? 0.0004 : 0; eng.bowl = 0.055; eng.foul = [0, 0];
     eng.omega = (kind === 'cruise' ? 2350 : kind === 'final' ? 1800 : running ? 900 : 0) * DEG * 6;
     eng.setTemps(oat);
@@ -268,6 +268,30 @@ export class Aircraft {
     this.radios.com.on = this.radios.nav.on = running; this.radios.xpdr.mode = flying ? 3 : running ? 1 : 0;
     this.cabinT = oat; this.horn = 0; this.kind = kind;
     this.air = this.weather.air(this.pos.y - this.cg.y);
+    if (flying) {
+      // hand it over the way an instructor would: flown for half a minute until it is steady and trimmed, then put back where it started
+      const s = { i: 0, ip: 0 }, dt = 1 / 60, y0 = this.pos.y;
+      for (let n = 0; n < 60 * 28; n++) {
+        let th;
+        if (kind === 'final') { const e = this.inst.kias - 68; s.i = clamp(s.i + e * dt * 0.25, -12, 14); th = clamp(e * 0.6 + s.i, -15, 18); }
+        else { const e = (y0 - this.pos.y) / FT; s.i = clamp(s.i + e * dt * 0.004, -6, 14); th = clamp(e * 0.03 + s.i - this.vel.y / FT * 60 * 0.004, -8, 16); }
+        const pe = th - this.pitch; s.ip = clamp(s.ip + pe * dt * 0.25, -1, 1);
+        c.pitch = clamp(pe * 0.12 + s.ip - this.om.x / DEG * 0.03, -1, 1);
+        c.roll = clamp(-this.bank * 0.03 + this.om.z / DEG * 0.01, -1, 1); c.yaw = clamp(this.beta * 0.05 + this.om.y / DEG * 0.03, -1, 1);
+        c.trim = clamp(c.trim + c.pitch * 0.004, -1, 1);
+        this.step(dt);
+      }
+      c.pitch = c.roll = c.yaw = 0;
+      // back onto the heading and the spot asked for
+      const th = -(((at.heading - this.heading + 540) % 360) - 180) * DEG, ch = Math.cos(th / 2), sh = Math.sin(th / 2), q = this.q, v = this.vel;
+      const qx = ch * q.x + sh * q.z, qy = ch * q.y + sh * q.w, qz = ch * q.z - sh * q.x, qw = ch * q.w - sh * q.y;
+      q.x = qx; q.y = qy; q.z = qz; q.w = qw;
+      const vx = v.x * Math.cos(th) + v.z * Math.sin(th), vz = -v.x * Math.sin(th) + v.z * Math.cos(th); v.x = vx; v.z = vz;
+      i.dg = wrap360(at.heading - i.magVar / DEG); i._hdg = null; i.compassAz = i.magVar; i.compassV = 0;
+      this.pos.x = at.x; this.pos.z = at.z; this.pos.y = at.alt + this.cg.y;
+      Object.assign(this.posPrev, this.pos); Object.assign(this.qPrev, this.q);
+      this.crashed = null; this.gear.touchdown = null; this.gear.hardest = 0;
+    }
   }
 
   /** Numbers for a read-out or a test. */

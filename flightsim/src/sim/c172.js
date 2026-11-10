@@ -22,8 +22,8 @@ export function c172Config() {
   const xs = [0, 0.55, 1.25, 1.95, 2.65, 3.30, 3.95, 4.55, 5.00, 5.50];
   const wingAt = (x) => {
     const ax = Math.abs(x);
-    // (the left wing is rigged a twentieth of a degree "washed in", as the factory does, to balance the engine's torque in cruise)
-    return { p: [x, 2.0 + ax * Math.tan(1.73 * DEG), 1.02], chord: ax <= brk ? 1.63 : lerp(1.63, 1.13, (ax - brk) / (half - brk)), inc: (1.5 - 3.0 * ax / half - Math.sign(x) * 0.055) * DEG };
+    // (the left wing is rigged a few hundredths of a degree "washed in", as the factory does, to balance the engine's torque in cruise)
+    return { p: [x, 2.0 + ax * Math.tan(1.73 * DEG), 1.02], chord: ax <= brk ? 1.63 : lerp(1.63, 1.13, (ax - brk) / (half - brk)), inc: (1.5 - 3.0 * ax / half - Math.sign(x) * 0.030) * DEG };
   };
   const wing = {
     name: 'wing', section: wingSec, fuselageUpwash: { radius: 0.6, height: 0.75 },
@@ -90,6 +90,6 @@ export function c172Config() {
       tie: [P(-2.55, 1.9, 1.05), P(2.55, 1.9, 1.05), P(0, 1.0, 6.3)],
     },
     prop: { diameter: 1.905, blades: 2, pitch: 1.448, hub: P(0, 1.25, -0.97) },
-    eye: P(-0.25, 1.62, 0.93),
+    eye: P(-0.25, 1.66, 0.95),
   };
 }

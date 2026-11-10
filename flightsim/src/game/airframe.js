@@ -54,7 +54,7 @@ export function buildAirframe(cfg, { registration = 'SE-MED' } = {}) {
   const fuv = (p) => { const h = Math.min(1, Math.max(0, (p[1] - Y0) / YH)) * 0.5; return [(p[2] - Z0) / ZL, p[0] >= 0 ? h : 1 - h]; };
 
   // ---- fuselage: cowl, cabin tub (open above the window sills), tail cone
-  B.add(loft([ring(-1.03, 1.24, 0.20, 0.17, 0.19), ring(-0.98, 1.22, 0.40, 0.26, 0.31), ring(-0.80, 1.20, 0.47, 0.29, 0.38), ring(-0.40, 1.16, 0.51, 0.33, 0.44),
+  B.add(loft([ring(-1.03, 1.24, 0.20, 0.14, 0.19), ring(-0.98, 1.20, 0.40, 0.20, 0.29), ring(-0.80, 1.18, 0.47, 0.23, 0.36), ring(-0.40, 1.16, 0.51, 0.27, 0.44),
     ring(0, 1.10, 0.53, 0.35, 0.46), ring(0.30, 1.07, 0.545, 0.365, 0.46)], { capStart: true, uv: fuv }), skin);
   const tub = (inset) => [[0.30, 0.545, 0.79], [0.9, 0.57, 0.84], [1.8, 0.57, 0.84], [2.7, 0.50, 0.80]].map(([z, hw, hb]) => ring(z, 1.40, hw - inset, 0, hb - inset, 16, 5, -180, 0));
   B.add(loft(tub(0), { closed: false, uv: fuv }), skin);
@@ -62,7 +62,7 @@ export function buildAirframe(cfg, { registration = 'SE-MED' } = {}) {
   B.add(loft([ring(2.7, 1.02, 0.50, 0.45, 0.42), ring(3.3, 1.22, 0.36, 0.40, 0.50), ring(4.5, 1.28, 0.22, 0.27, 0.36), ring(5.6, 1.34, 0.12, 0.18, 0.22),
     ring(6.6, 1.40, 0.04, 0.10, 0.10)], { capStart: true, capEnd: true, uv: fuv }), skin);
   // cowl details: cooling inlets, the spinner's back plate
-  B.add(box(0.13, 0.09, 0.03, -0.11, 1.30, -1.035), dark).add(box(0.13, 0.09, 0.03, 0.11, 1.30, -1.035), dark).add(box(0.2, 0.07, 0.03, 0, 1.08, -1.03), dark);
+  B.add(box(0.12, 0.07, 0.03, -0.11, 1.305, -1.035), dark).add(box(0.12, 0.07, 0.03, 0.11, 1.305, -1.035), dark).add(box(0.2, 0.07, 0.03, 0, 1.08, -1.03), dark);
 
   // ---- wing: NACA 2412, the forward 70 % as one box from tip to tip, then the fixed and moving trailing edges
   const W = (x) => {
@@ -160,8 +160,8 @@ export function buildAirframe(cfg, { registration = 'SE-MED' } = {}) {
   };
   const spot = (p, pitch, angle, dist) => { const l = new SpotLight(0xfff1dc, 0, dist, angle, 0.5); l.position.set(...p); l.target.position.set(p[0], p[1] - Math.tan(pitch) * 10, p[2] - 10); root.add(l, l.target); return l; };
   const lights = { land: spot([-0.07, 0.98, -1.05], 4 * DEG, 0.20, 260), taxi: spot([0.07, 0.98, -1.05], 9 * DEG, 0.45, 70),
-    beacon: new PointLight(0xff2010, 0, 18), strobe: new PointLight(0xffffff, 0, 30), dome: new PointLight(0xffe6c0, 0, 2.2), panel: new PointLight(0xffd9a0, 0, 1.4) };
-  lights.beacon.position.set(0, 2.9, 6.5); lights.strobe.position.set(0, 2.4, 1.0); lights.dome.position.set(0, 1.86, 1.25); lights.panel.position.set(-0.1, 1.47, 0.62);
+    beacon: new PointLight(0xff2010, 0, 9), strobe: new PointLight(0xffffff, 0, 7), dome: new PointLight(0xffe6c0, 0, 2.2), panel: new PointLight(0xffd9a0, 0, 1.4) };
+  lights.beacon.position.set(0, 3.0, 6.6); lights.strobe.position.set(-5.9, 2.2, 1.05);        // (only the left tip's flash lights the ground; the lenses themselves do the rest) lights.dome.position.set(0, 1.86, 1.25); lights.panel.position.set(-0.1, 1.47, 0.62);
   root.add(lights.beacon, lights.strobe, lights.dome, lights.panel);
 
   // ---- things you take off before flight: pitot cover, chocks, tie-down ropes
@@ -207,7 +207,7 @@ export function buildAirframe(cfg, { registration = 'SE-MED' } = {}) {
     lamps.navL.material.emissiveIntensity = lamps.navR.material.emissiveIntensity = nav * 14; lamps.navT.material.emissiveIntensity = nav * 9;
     lamps.beacon.material.emissiveIntensity = bcn * 60; lamps.strobeL.material.emissiveIntensity = lamps.strobeR.material.emissiveIntensity = stb * 400;
     lamps.land.material.emissiveIntensity = land * 220; lamps.taxi.material.emissiveIntensity = taxi * 90;
-    lights.land.intensity = land * 9000; lights.taxi.intensity = taxi * 1200; lights.beacon.intensity = bcn * 60; lights.strobe.intensity = stb * 700;
+    lights.land.intensity = land * 9000; lights.taxi.intensity = taxi * 1200; lights.beacon.intensity = bcn * 20; lights.strobe.intensity = stb * 60;
     lights.dome.intensity = on(L.dome, 'NAV_LT') * 1.6; lights.panel.intensity = on(ac.ctl.panelLights > 0.02, 'INST_LTS') * ac.ctl.panelLights * 0.5;
     pre.cover.visible = ac.inst.pitotCover; pre.chocks.visible = ac.gear.chocks; pre.ropes.visible = ac.gear.tiedown;
   }

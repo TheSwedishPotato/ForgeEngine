@@ -109,7 +109,9 @@ export function buildWorld(weather) {
   // VOR on the north side: a counterpoise with a cone on it
   const vorAt = { a: -180, c: -330 };
   B.add(new CylinderGeometry(9, 9, 0.4, 28).translate(vorAt.c, 3.4, -vorAt.a), wall).add(new CylinderGeometry(2.4, 3, 3.2, 16).translate(vorAt.c, 1.6, -vorAt.a), wall).add(new ConeGeometry(1.6, 3.4, 16).translate(vorAt.c, 5.3, -vorAt.a), mat({ color: 0xf2f2f0, roughness: 0.5 }));
-  B.build(field, { cast: true });
+  const built = B.build(field, { cast: true });
+  // surfaces that lie on one another: seen from far away they are spread apart a little, so they never share a depth
+  const hardLayer = built.filter((m) => [asphalt, taxiM, concrete].includes(m.material)), paintLayer = [...built.filter((m) => [whiteP, yellowP].includes(m.material)), n09, n27];
 
   // ---- lights
   const lampM = (color) => mat({ color: 0x222222, emissive: color, emissiveIntensity: 1, roughness: 0.4 });
@@ -201,6 +203,10 @@ export function buildWorld(weather) {
     const rr = stage?.renderer;
     if (rr) { rr.cloudCover = Math.min(0.95, cloud); rr.weather.night = night; rr.weather.overcast = Math.max(0, (cloud - 0.7) / 0.3) * 0.9; rr.wetness = weather.rain; rr.rain = weather.rain; }
     // lamps come up as the light goes
+    const lift = Math.min(1.5, Math.max(0, (cam.y - 2) * 0.0025));
+    for (const m of hardLayer) m.position.y = lift * 0.5;
+    for (const m of paintLayer) m.position.y = lift + (m === n09 || m === n27 ? M : 0);
+    land.position.y = -0.45 - lift * 2;
     const glow = 0.15 + 26 * Math.max(night, cloud > 0.9 ? 0.25 : 0);
     edgeL.material.emissiveIntensity = glow; thrL.material.emissiveIntensity = glow * 1.4;
     const f = toField(cam.x, cam.z);
