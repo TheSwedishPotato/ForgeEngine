@@ -1,0 +1,116 @@
+{
+  "name": "medengine",
+  "version": "3.0.0",
+  "description": "Med Engine 3: a WebGPU game engine with its own math, scene graph, renderer, animation, physics, input, assets and platform layer. No dependencies.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "sideEffects": false,
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./math": {
+      "types": "./types/math/index.d.ts",
+      "default": "./src/math/index.js"
+    },
+    "./scene": {
+      "types": "./types/scene/index.d.ts",
+      "default": "./src/scene/index.js"
+    },
+    "./anim": {
+      "types": "./types/anim/index.d.ts",
+      "default": "./src/anim/index.js"
+    },
+    "./physics": {
+      "types": "./types/physics/index.d.ts",
+      "default": "./src/physics/index.js"
+    },
+    "./input": {
+      "types": "./types/input/index.d.ts",
+      "default": "./src/input/index.js"
+    },
+    "./assets": {
+      "types": "./types/assets/index.d.ts",
+      "default": "./src/assets/index.js"
+    },
+    "./story": {
+      "types": "./types/story/index.d.ts",
+      "default": "./src/story/index.js"
+    },
+    "./human": {
+      "types": "./types/human/index.d.ts",
+      "default": "./src/human/index.js"
+    },
+    "./cinema": {
+      "types": "./types/cinema/index.d.ts",
+      "default": "./src/cinema/index.js"
+    },
+    "./audio": {
+      "types": "./types/audio/index.d.ts",
+      "default": "./src/audio/index.js"
+    },
+    "./ai": {
+      "types": "./types/ai/index.d.ts",
+      "default": "./src/ai/index.js"
+    },
+    "./platform/browser": {
+      "types": "./types/platform/browser.d.ts",
+      "default": "./src/platform/browser.js"
+    },
+    "./platform/node": {
+      "types": "./types/platform/node.d.ts",
+      "default": "./src/platform/node.js"
+    },
+    "./platform/deno": {
+      "types": "./types/platform/deno.d.ts",
+      "default": "./src/platform/deno.js"
+    },
+    "./bundle": {
+      "types": "./types/bundle.d.ts",
+      "default": "./dist/medengine.min.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "types",
+    "dist",
+    "assets",
+    "demo",
+    "bench",
+    "native",
+    "docs",
+    "tools",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:gpu": "MED_GPU=1 node --test tests/gpu/*.test.js",
+    "test:browser": "node --test tests/browser/*.test.js",
+    "test:deno": "deno test -A --unstable-webgpu --no-check tests/deno/",
+    "demo": "node tools/serve.mjs demo",
+    "bench": "node bench/bench.mjs",
+    "shots": "node demo/screenshot.mjs",
+    "native": "deno run -A --unstable-webgpu native/main.js",
+    "build": "node tools/build.mjs",
+    "types": "node tools/types.mjs",
+    "bake:anim": "node tools/bake-anim.mjs"
+  },
+  "peerDependencies": {
+    "webgpu": ">=0.3"
+  },
+  "peerDependenciesMeta": {
+    "webgpu": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.3",
+    "webgpu": "^0.6.2"
+  }
+}

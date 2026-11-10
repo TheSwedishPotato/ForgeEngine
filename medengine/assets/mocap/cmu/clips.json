@@ -1,0 +1,15 @@
+{
+  "credit": "The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217.",
+  "license": "CMU places no restrictions on the use of the original dataset, and I (Bruce) place no additional restrictions on the use of this particular BVH conversion. (cgspeed, MotionBuilder-friendly BVH release of the CMU Graphics Lab Motion Capture Database.)",
+  "clips": {
+    "bow":   { "source": "bow_113_02.bvh",   "description": "A formal bow, standing start and end", "rootMotion": "none", "credit": "CMU 113_02" },
+    "idle":  { "procedural": { "type": "idle", "from": "bow", "time": 0.1, "duration": 4, "lookAhead": true }, "description": "Calm standing with breath and weight shift (a held pose from the bow with the head turned to the front, animated by code)" },
+    "walk":  { "source": "walk_07_01.bvh",   "loop": { "phase": "left-foot-forward", "minDuration": 0.7 }, "events": ["footsteps"], "description": "Walk cycle, one stride starting on the left heel strike", "credit": "CMU 07_01" },
+    "run":   { "source": "run_09_01.bvh",    "loop": { "phase": "left-foot-forward", "minDuration": 0.4 }, "events": ["footsteps"], "description": "Run cycle, one stride starting on the left heel strike", "credit": "CMU 09_01" },
+    "jump":  { "source": "jump_16_01.bvh",   "crop": [0.3, 2.1], "events": [{ "time": 0.7, "name": "takeoff" }, { "time": 1.2, "name": "land" }], "description": "Standing jump: crouch, take off, land, recover", "credit": "CMU 16_01" },
+    "getup": { "source": "getup_139_16.bvh", "description": "Getting up from lying face down", "credit": "CMU 139_16" },
+    "punch": { "source": "fight_141_14.bvh", "crop": [0.7, 2.0], "events": [{ "reach": ["hand_l", "hand_r"], "name": "hit" }], "description": "A straight punch with the left hand and back to guard", "credit": "CMU 141_14" },
+    "kick":  { "source": "fight_141_14.bvh", "crop": [1.9, 3.0], "events": [{ "reach": ["foot_l", "foot_r"], "name": "hit" }], "description": "A high front kick", "credit": "CMU 141_14" },
+    "wave":  { "source": "wave_141_16.bvh",  "description": "Waving hello with the right arm (play on an upper-body layer to walk and wave)", "credit": "CMU 141_16" }
+  }
+}

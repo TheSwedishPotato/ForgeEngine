@@ -1,0 +1,154 @@
+{
+ "credit": "The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217.",
+ "license": "CMU places no restrictions on the use of the original dataset, and I (Bruce) place no additional restrictions on the use of this particular BVH conversion. (cgspeed, MotionBuilder-friendly BVH release of the CMU Graphics Lab Motion Capture Database.)",
+ "skeleton": "medengine-humanoid",
+ "clips": {
+  "bow": {
+   "file": "bow.medclip",
+   "duration": 4.367,
+   "loop": false,
+   "rootTravel": 0.034,
+   "events": [],
+   "bytes": 50976,
+   "description": "A formal bow, standing start and end",
+   "credit": "CMU 113_02"
+  },
+  "idle": {
+   "file": "idle.medclip",
+   "duration": 4,
+   "loop": true,
+   "rootTravel": 0,
+   "events": [],
+   "bytes": 46928,
+   "description": "Calm standing with breath and weight shift (a held pose from the bow with the head turned to the front, animated by code)",
+   "credit": ""
+  },
+  "walk": {
+   "file": "walk.medclip",
+   "duration": 1.067,
+   "loop": true,
+   "rootTravel": 1.51,
+   "events": [
+    {
+     "time": 0.433,
+     "name": "footstep",
+     "data": {
+      "foot": "r"
+     }
+    },
+    {
+     "time": 0.967,
+     "name": "footstep",
+     "data": {
+      "foot": "l"
+     }
+    }
+   ],
+   "bytes": 15132,
+   "description": "Walk cycle, one stride starting on the left heel strike",
+   "credit": "CMU 07_01"
+  },
+  "run": {
+   "file": "run.medclip",
+   "duration": 0.733,
+   "loop": true,
+   "rootTravel": 2.584,
+   "events": [
+    {
+     "time": 0.267,
+     "name": "footstep",
+     "data": {
+      "foot": "r"
+     }
+    },
+    {
+     "time": 0.65,
+     "name": "footstep",
+     "data": {
+      "foot": "l"
+     }
+    }
+   ],
+   "bytes": 11472,
+   "description": "Run cycle, one stride starting on the left heel strike",
+   "credit": "CMU 09_01"
+  },
+  "jump": {
+   "file": "jump.medclip",
+   "duration": 1.8,
+   "loop": false,
+   "rootTravel": 0.063,
+   "events": [
+    {
+     "time": 0.7,
+     "name": "takeoff"
+    },
+    {
+     "time": 1.2,
+     "name": "land"
+    }
+   ],
+   "bytes": 22972,
+   "description": "Standing jump: crouch, take off, land, recover",
+   "credit": "CMU 16_01"
+  },
+  "getup": {
+   "file": "getup.medclip",
+   "duration": 5.4,
+   "loop": false,
+   "rootTravel": 0.562,
+   "events": [],
+   "bytes": 62252,
+   "description": "Getting up from lying face down",
+   "credit": "CMU 139_16"
+  },
+  "punch": {
+   "file": "punch.medclip",
+   "duration": 1.3,
+   "loop": false,
+   "rootTravel": 0.023,
+   "events": [
+    {
+     "time": 0.2,
+     "name": "hit",
+     "data": {
+      "bone": "hand_r",
+      "reach": 0.8537827466619557
+     }
+    }
+   ],
+   "bytes": 17556,
+   "description": "A straight punch with the left hand and back to guard",
+   "credit": "CMU 141_14"
+  },
+  "kick": {
+   "file": "kick.medclip",
+   "duration": 1.1,
+   "loop": false,
+   "rootTravel": 0.171,
+   "events": [
+    {
+     "time": 0.233,
+     "name": "hit",
+     "data": {
+      "bone": "foot_r",
+      "reach": 0.8923477411255463
+     }
+    }
+   ],
+   "bytes": 15332,
+   "description": "A high front kick",
+   "credit": "CMU 141_14"
+  },
+  "wave": {
+   "file": "wave.medclip",
+   "duration": 2.433,
+   "loop": false,
+   "rootTravel": 0.026,
+   "events": [],
+   "bytes": 29880,
+   "description": "Waving hello with the right arm (play on an upper-body layer to walk and wave)",
+   "credit": "CMU 141_16"
+  }
+ }
+}

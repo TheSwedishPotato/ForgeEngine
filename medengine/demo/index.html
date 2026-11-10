@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>The Ford · Med Engine 3</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314110e'/%3E%3Cpath d='M7 23V9l9 8 9-8v14' fill='none' stroke='%23ffb060' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --ink: #120f0c;
+    --panel: rgba(18, 15, 12, 0.84);
+    --line: rgba(255, 176, 96, 0.26);
+    --paper: #f2e9d8;
+    --muted: #a99d88;
+    --amber: #ffb060;
+    --amber-deep: #c4691d;
+    --danger: #e0674f;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: var(--ink); color: var(--paper); font: 15px/1.45 var(--sans); }
+  canvas#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; cursor: crosshair; }
+  [hidden] { display: none !important; }
+
+  /* ---- heads-up display */
+  #hud { position: fixed; top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); max-width: calc(100vw - 24px); overflow-wrap: anywhere; padding: 9px 13px 8px; border-radius: 10px; background: rgba(18, 15, 12, 0.6); border: 1px solid rgba(255, 176, 96, 0.16); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); pointer-events: none; font: 12px/1.55 var(--mono); color: var(--muted); }
+  #hud b { display: block; font: 700 11px/1 var(--sans); letter-spacing: 0.22em; color: var(--amber); margin-bottom: 6px; }
+  #hud span { color: var(--paper); }
+  #hint { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 7px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; letter-spacing: 0.01em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; transition: opacity .25s; }
+  #hint em { font-style: normal; color: var(--amber); }
+  #toast { position: fixed; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translate(-50%, -8px); max-width: min(560px, calc(100vw - 32px)); padding: 9px 16px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.bad { border-color: rgba(224, 103, 79, .6); }
+
+  /* ---- the conversation */
+  #story { position: fixed; left: 50%; bottom: max(52px, calc(env(safe-area-inset-bottom) + 40px)); transform: translateX(-50%); width: min(780px, calc(100vw - 24px)); max-height: calc(100vh - 110px); overflow: auto; padding: 18px 22px 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 20px 60px #000a; }
+  #story h2 { margin: 0 0 8px; font: 700 11px/1 var(--sans); letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber); }
+  #story .lines { font: 17px/1.55 var(--serif); }
+  #story .lines p { margin: 0 0 8px; }
+  #story .lines .who { font: 700 11px/1 var(--sans); letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); margin-right: 8px; }
+  #story .note { margin: 4px 0 8px; font-size: 13px; color: var(--amber); }
+  #story .bar { position: relative; height: 5px; margin: 8px 0 12px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+  #story .bar > i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--amber); border-radius: 3px; }
+  #story .bar.warn > i { background: var(--danger); }
+  #story .meter { position: relative; height: 8px; margin: 14px 0 6px; border-radius: 4px; background: linear-gradient(90deg, rgba(224,103,79,.35), rgba(255,255,255,.08) 50%, rgba(255,176,96,.4)); }
+  #story .meter u { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--muted); }
+  #story .meter i { position: absolute; top: -4px; width: 4px; height: 16px; margin-left: -2px; border-radius: 2px; background: var(--paper); transition: left .25s; }
+  #story .meterlabel { display: flex; justify-content: space-between; font: 11px/1 var(--mono); color: var(--muted); margin-bottom: 10px; }
+  #story .qte { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0 4px; font-size: 13px; color: var(--muted); }
+  #story kbd { min-width: 34px; padding: 6px 10px; border-radius: 7px; text-align: center; font: 700 14px/1 var(--mono); color: var(--paper); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-bottom-width: 3px; }
+  #story kbd.done { opacity: .35; }
+  #story kbd.now { color: var(--ink); background: var(--amber); border-color: var(--amber-deep); }
+  #story .choices { display: grid; gap: 6px; margin-top: 10px; }
+  #story .choice { display: flex; gap: 12px; align-items: baseline; padding: 9px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); cursor: pointer; user-select: none; }
+  #story .choice:hover { background: rgba(255,176,96,.12); border-color: var(--line); }
+  #story .choice.sel { border-color: var(--amber); background: rgba(255,176,96,.14); }
+  #story .choice.off { opacity: .45; cursor: not-allowed; }
+  #story .choice .n { flex: none; width: 1.5em; font: 700 12px/1 var(--mono); color: var(--amber); }
+  #story .choice .hintx { margin-left: auto; font-size: 12px; color: var(--muted); }
+  #story .end { margin: 10px 0 2px; font: italic 15px/1.4 var(--serif); color: var(--amber); }
+
+  /* ---- the start card */
+  #splash { position: fixed; inset: 0; display: flex; overflow: auto; padding: 20px; background: radial-gradient(120% 90% at 50% 100%, rgba(196,105,29,.28), transparent 60%), rgba(12, 10, 8, 0.74); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+  /* margin:auto centres the card while it fits and lets the splash scroll (instead of clipping the top) when the window is too short */
+  #splash .card { flex: none; margin: auto; width: min(640px, 100%); padding: 30px 32px 26px; border-radius: 20px; background: rgba(20, 16, 12, .92); border: 1px solid var(--line); box-shadow: 0 30px 90px #000b; }
+  #splash .eyebrow { font: 700 11px/1 var(--sans); letter-spacing: 0.28em; color: var(--amber); text-transform: uppercase; }
+  #splash h1 { margin: 10px 0 6px; font: 600 clamp(34px, 6vw, 52px)/1.02 var(--serif); letter-spacing: -0.01em; }
+  #splash p { margin: 0 0 18px; color: var(--muted); max-width: 52ch; }
+  #splash .keys { display: grid; grid-template-columns: auto 1fr; gap: 7px 18px; margin: 0 0 22px; padding: 14px 0; border-block: 1px solid rgba(255,255,255,.09); font-size: 13.5px; }
+  #splash .keys dt { color: var(--amber); font: 700 11px/1.9 var(--sans); letter-spacing: .14em; text-transform: uppercase; }
+  #splash .keys dd { margin: 0; color: var(--paper); }
+  #splash .keys kbd { padding: 1px 6px; border-radius: 5px; font: 12px/1.5 var(--mono); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); }
+  #splash .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  #play { appearance: none; border: 0; cursor: pointer; padding: 13px 26px; border-radius: 12px; font: 700 15px/1 var(--sans); letter-spacing: .04em; color: var(--ink); background: var(--amber); box-shadow: 0 6px 24px rgba(255,176,96,.28); transition: transform .12s, box-shadow .12s, opacity .2s; }
+  #play:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 30px rgba(255,176,96,.4); }
+  #play:focus-visible { outline: 2px solid var(--paper); outline-offset: 3px; }
+  #play:disabled { opacity: .45; cursor: progress; }
+  #status { font: 12.5px/1.4 var(--mono); color: var(--muted); }
+  #status.bad { color: var(--danger); white-space: pre-wrap; }
+  #splash .fine { margin: 18px 0 0; font-size: 12px; color: var(--muted); }
+  @media (max-height: 640px) {
+    #splash { padding: 12px; }
+    #splash .card { padding: 18px 24px 16px; }
+    #splash h1 { margin: 6px 0 4px; font-size: 34px; }
+    #splash p { margin-bottom: 10px; }
+    #splash .keys { margin-bottom: 12px; padding: 8px 0; gap: 2px 16px; font-size: 13px; }
+    #splash .fine { display: none; }
+  }
+  @media (max-height: 460px) { #splash .lede { display: none; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 560px) { #splash .card { padding: 22px 18px; } #splash .keys { grid-template-columns: 1fr; gap: 2px; } #splash .keys dd { margin-bottom: 8px; } #hud { font-size: 11px; } }
+</style>
+</head>
+<body>
+<canvas id="view" tabindex="0" aria-label="The Ford, a small playable level"></canvas>
+
+<div id="hud" hidden aria-hidden="true"><b>MED ENGINE 3</b><div id="hud-gpu"></div><div id="hud-perf"></div><div id="hud-times" hidden></div><div id="hud-state"></div></div>
+<div id="hint" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<section id="story" hidden aria-live="polite" aria-label="Conversation"></section>
+
+<main id="splash">
+  <div class="card">
+    <div class="eyebrow">Med Engine 3 · demo level</div>
+    <h1>The Ford</h1>
+    <p class="lede">A meadow, a stone terrace, a hut with a lantern and a ferryman who has a story to tell. Everything here is drawn by the engine's own WebGPU renderer, with no three.js and no other library underneath.</p>
+    <dl class="keys">
+      <dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows · left stick &nbsp; <kbd>Shift</kbd> walk</dd>
+      <dt>Look</dt><dd>mouse (click the view to capture it) · right stick</dd>
+      <dt>Act</dt><dd><kbd>Space</kbd> jump · <kbd>F</kbd> or left click punch · <kbd>G</kbd> or right click kick</dd>
+      <dt>Talk</dt><dd>walk up to the ferryman in the hut on the left, then <kbd>E</kbd></dd>
+      <dt>Other</dt><dd><kbd>C</kbd> film cameras · <kbd>R</kbd> reset · <kbd>P</kbd> pause</dd>
+    </dl>
+    <div class="row">
+      <button id="play" type="button" disabled>Loading…</button>
+      <div id="status" role="status">starting the renderer</div>
+    </div>
+    <p class="fine">Needs a browser with WebGPU and a keyboard or gamepad. Options: <code>?quality=low|medium|high|ultra</code> (default: high, lowered automatically if the frame rate is poor) · <code>?scale=0.6</code> render scale · <code>?gpu=1</code> time the GPU passes (browsers round the timestamps to 0.1 ms; start Chrome with <code>--enable-webgpu-developer-features</code> for exact ones).</p>
+  </div>
+</main>
+
+<script>
+  // main.js is an ES module. Opened straight from disk (file://) a browser refuses to load it, and nothing on the page would say why.
+  (function () {
+    var say = function (text) {
+      var s = document.getElementById('status'), b = document.getElementById('play');
+      if (s) { s.className = 'bad'; s.textContent = text; }
+      if (b) { b.textContent = 'Not started'; b.disabled = true; }
+    };
+    if (location.protocol === 'file:') say('Opened from disk. Run "npm run demo" in the medengine folder and open http://localhost:8080/ instead.');
+    else setTimeout(function () { if (!window.__medengineBooted) say('The scripts did not start (see the browser console).'); }, 8000);
+  })();
+</script>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

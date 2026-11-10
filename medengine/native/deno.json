@@ -1,0 +1,14 @@
+{
+  "desktop": {
+    "backend": "raw"
+  },
+  "unstable": [
+    "webgpu"
+  ],
+  "tasks": {
+    "ford": "deno run -A --unstable-webgpu main.js",
+    "shot": "deno run -A --unstable-webgpu main.js --headless --frames 120 --png ford.png",
+    "compile": "deno compile --no-check -A --unstable-webgpu --include ../assets --output ../dist/ford main.js",
+    "app": "deno desktop --no-check -A --include ../assets main.js"
+  }
+}

@@ -42,3 +42,6 @@ packages/
 # OS-specific files
 .DS_Store
 Thumbs.db
+
+# Node
+node_modules/

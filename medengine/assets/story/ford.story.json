@@ -1,0 +1,229 @@
+{
+  "title": "The Ford at Dawn",
+  "start": "camp",
+  "vars": { "gold": 8, "trust": 0, "wounds": 0, "read_seal": false },
+  "items": { "letter": 1 },
+  "nodes": {
+    "camp": {
+      "speaker": "Narrator",
+      "text": [
+        "Grey light creeps over the river Wend. You are Mara, courier of the Salt Guild, and the sealed letter in your coat must reach Fort Harrow before its gates open at dawn.",
+        "You have {gold} coins and a long walk behind you."
+      ],
+      "choices": [
+        { "text": "Go down to the ford", "goto": "ford" },
+        { "text": "Look around the riverside village first", "goto": "village" },
+        { "text": "Study the letter's seal", "once": true, "do": ["read_seal = true"], "say": "The seal is the Guild's salt crystal, but beside it is a second mark you do not know." }
+      ]
+    },
+
+    "village": {
+      "type": "explore",
+      "text": "A dozen huts around a well. The smithy chimney is already smoking.",
+      "spots": [
+        { "text": "Draw water from the well", "once": true, "do": ["wounds = max(0, wounds - 1)"], "say": "Cold, sweet water. You feel steadier." },
+        { "text": "Search the empty hut", "once": true, "do": ["give rope"], "say": "Under a loose board you find a coil of good rope." },
+        { "text": "Talk to the smith", "goto": "smith" },
+        { "text": "Head down to the ford", "goto": "ford" }
+      ]
+    },
+
+    "smith": {
+      "speaker": "Smith",
+      "text": "Nobody crosses the Wend in spring without a fright. Mind the stones; the ferryman likes a kind word more than coin.",
+      "choices": [
+        { "text": "Buy a lantern (3 gold)", "if": "gold >= 3", "show": "disabled", "hint": "You need 3 gold.", "once": true, "do": ["gold -= 3", "give lantern"], "say": "The lantern is warm in your hand.", "goto": "smith" },
+        { "text": "Ask about the ferryman's family", "once": true, "do": ["know_daughter = true"], "say": "'His girl was taken ill last winter,' says the smith. 'He has not been the same.'", "goto": "smith" },
+        { "text": "Thank him and go", "goto": "village" }
+      ]
+    },
+
+    "ford": {
+      "text": [
+        "The Wend runs fast and brown over the stones. On the far bank a ferryman's lantern swings.",
+        { "if": "wounds > 0", "text": "Your bruises ache in the cold." }
+      ],
+      "choices": [
+        { "text": "Haggle with the ferryman", "goto": "parley" },
+        { "text": "Hop across the stepping stones", "goto": "stones" },
+        { "text": "Wade through the shallows", "goto": "wade" },
+        { "text": "Wait for the mist to thin", "goto": "mist" }
+      ]
+    },
+
+    "parley": {
+      "type": "negotiation",
+      "speaker": "Ferryman",
+      "text": "The ferryman leans on his pole and squints at you. 'The river's up. Why should I risk the boat?'",
+      "meter": { "name": "trust", "min": -6, "max": 6, "start": 0 },
+      "win": 4,
+      "lose": -4,
+      "rounds": 5,
+      "options": [
+        { "text": "Admire his boat", "delta": 1, "risk": 0.25, "riskDelta": -2, "reply": "He grunts, pleased, then suspicious.", "failText": "'Don't flatter me, girl.'" },
+        { "text": "Offer two coins", "if": "gold >= 2", "show": "disabled", "hint": "You need 2 gold.", "delta": 2, "do": ["gold -= 2"], "reply": "The coins vanish into his sleeve." },
+        { "text": "Show him the Guild seal", "delta": 2, "risk": 0.5, "riskDelta": -3, "reply": "His eyes widen at the crystal.", "failText": "'Guild men took my brother's barge,' he spits." },
+        { "text": "Ask after his daughter", "if": "know_daughter", "delta": 3, "reply": "His face softens. 'She is mending, thank you for asking.'" },
+        { "text": "Threaten him", "delta": -2, "risk": 0.5, "riskDelta": 3, "reply": "He laughs. 'Bold. I like that.'", "failText": "He spits in the river. 'Swim, then.'" }
+      ],
+      "onWin": "ferry",
+      "onLose": "ferry_refused",
+      "onTimeout": "ferry_refused"
+    },
+
+    "ferry": {
+      "text": "The ferryman poles you across in silence. On the far bank he nods once, and that is all the thanks he wants.",
+      "goto": "fort_road"
+    },
+
+    "ferry_refused": {
+      "speaker": "Ferryman",
+      "text": "'Not for all the salt in the Guild,' he says, and turns his back.",
+      "choices": [
+        { "text": "Try the stepping stones", "goto": "stones" },
+        { "text": "Give up and turn back", "goto": "end_gave_up" }
+      ]
+    },
+
+    "stones": {
+      "type": "qte",
+      "text": "Left foot, right foot. The stones are slick and the water is loud.",
+      "keys": ["KeyA", "KeyD", "KeyA", "KeyD", "KeyA"],
+      "window": 1.0,
+      "allowMisses": 1,
+      "success": "fort_road",
+      "fail": "swept"
+    },
+
+    "wade": {
+      "type": "random",
+      "options": [
+        { "weight": 3, "goto": "fort_road", "do": ["wounds += 1"] },
+        { "weight": 1, "goto": "swept" }
+      ]
+    },
+
+    "mist": {
+      "type": "timed",
+      "text": "Somewhere upstream a bell tolls. The sluice is opening: in a few breaths the ford will be a torrent.",
+      "seconds": 8,
+      "choices": [
+        { "text": "Run for the stepping stones", "goto": "stones" },
+        { "text": "Shout for the ferryman", "goto": "parley" },
+        { "text": "Climb the willow", "goto": "willow" }
+      ],
+      "timeout": "swept"
+    },
+
+    "willow": {
+      "text": "You scramble into the branches as the flood roars underneath, and wait until the water eases enough to cross.",
+      "choices": [{ "text": "Climb down and cross", "do": ["wounds += 1"], "goto": "fort_road" }]
+    },
+
+    "swept": {
+      "on": ["wounds += 1", "gold = max(0, gold - 3)"],
+      "text": "The current takes your feet. Brown water fills your mouth and the coins in your purse spin away.",
+      "choices": [
+        {
+          "text": "Fight for the bank",
+          "check": "d(20) - wounds + (has('rope') ? 4 : 0) + (has('lantern') ? 1 : 0) >= 10",
+          "success": "ashore",
+          "fail": "end_drowned",
+          "passText": "You claw onto the mud.",
+          "failText": "The river is stronger than you."
+        }
+      ]
+    },
+
+    "ashore": {
+      "type": "branch",
+      "cases": [{ "if": "chance(0.3)", "goto": "ashore_lost" }],
+      "else": "fort_road"
+    },
+
+    "ashore_lost": {
+      "on": ["take letter"],
+      "text": "You drag yourself out, coughing, and your hand goes to your coat. The pocket is empty. The letter is somewhere in the Wend.",
+      "goto": "fort_road"
+    },
+
+    "fort_road": {
+      "text": [
+        "Fort Harrow stands against the paling sky, torches guttering along its walls.",
+        { "if": "wounds >= 2", "text": "You limp the last mile, soaked and aching." },
+        { "if": "has('lantern')", "text": "Your lantern is hardly needed now." }
+      ],
+      "choices": [
+        { "text": "Walk to the main gate", "goto": "gate" },
+        { "text": "Circle round to the postern", "goto": "postern" }
+      ]
+    },
+
+    "postern": {
+      "speaker": "Hooded stranger",
+      "text": [
+        "A hooded figure waits in the shadow of the postern.",
+        { "if": "read_seal", "text": "'That second mark on your seal,' he says softly, 'is mine.'" },
+        "'Twenty gold for the letter. Nobody will ever know.'"
+      ],
+      "choices": [
+        { "text": "Sell the letter", "if": "has('letter')", "do": ["gold += 20", "take letter"], "goto": "end_sold" },
+        { "text": "Refuse and go to the main gate", "goto": "gate" },
+        { "text": "Shove him aside", "goto": "scuffle" }
+      ]
+    },
+
+    "scuffle": {
+      "type": "qte",
+      "text": "He grabs your coat! Break free!",
+      "mash": { "key": "Space", "count": 8, "seconds": 3 },
+      "success": "gate",
+      "fail": "end_beaten"
+    },
+
+    "gate": {
+      "type": "branch",
+      "cases": [{ "if": "not has('letter')", "goto": "end_empty_handed" }],
+      "else": "gate_guard"
+    },
+
+    "gate_guard": {
+      "speaker": "Sergeant Voll",
+      "text": "'Halt. State your business at Fort Harrow.' The gates are still shut, but the horizon is turning gold.",
+      "choices": [
+        { "text": "Hand over the letter", "do": ["take letter"], "goto": "end_delivered" }
+      ]
+    },
+
+    "end_delivered": {
+      "type": "end",
+      "ending": "delivered",
+      "text": "The sergeant breaks the seal as the first light touches the walls. By noon the garrison is marching, and nobody remembers the courier who carried the news, except you."
+    },
+    "end_empty_handed": {
+      "type": "end",
+      "ending": "empty_handed",
+      "text": "You reach the gate with nothing to give. The sergeant listens to your story, nods slowly, and does not believe a word."
+    },
+    "end_drowned": {
+      "type": "end",
+      "ending": "drowned",
+      "text": "The Wend keeps what it takes. Downstream, a fisherman finds a salt-crusted coat, and wonders."
+    },
+    "end_sold": {
+      "type": "end",
+      "ending": "sold",
+      "text": "{gold} coins weigh more than a letter. You walk away from the fort before the sun is up, and do not look back."
+    },
+    "end_gave_up": {
+      "type": "end",
+      "ending": "gave_up",
+      "text": "You turn back. Fort Harrow's gates open on an empty road."
+    },
+    "end_beaten": {
+      "type": "end",
+      "ending": "beaten",
+      "text": "You wake in the ditch at sunrise. Your pockets are light, and the postern is closed."
+    }
+  }
+}
