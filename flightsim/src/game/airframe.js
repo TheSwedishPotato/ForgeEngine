@@ -150,6 +150,14 @@ export function buildAirframe(cfg, { registration = 'SE-MED' } = {}) {
   const pedals = [];
   for (const x of [-0.34, -0.16, 0.16, 0.34]) { const p = new Mesh(box(0.08, 0.12, 0.02, 0, 0.06, 0, -0.5), metal); p.position.set(x, 0.74, 0.20); root.add(p); pedals.push(p); }
   B.build(root);
+  // ---- glazing: the engine has no blended transparency, so the panes are a faint stochastic tint
+  {
+    const glass = mat({ color: 0x9fb4c0, roughness: 0.05, transparent: true, opacity: 0.07, dither: true, side: 2 });
+    const pane = (a, b) => { const m = new Mesh(loft([a, b], { closed: false }), glass); root.add(m); };
+    pane([[-0.54, 1.42, 0.31], [0, 1.44, 0.29], [0.54, 1.42, 0.31]], [[-0.50, 2.0, 0.86], [0, 2.02, 0.84], [0.50, 2.0, 0.86]]);
+    for (const s of [-1, 1]) pane([[s * 0.555, 1.40, 0.31], [s * 0.57, 1.40, 1.82], [s * 0.50, 1.41, 2.68]], [[s * 0.50, 2.0, 0.86], [s * 0.56, 1.95, 1.82], [s * 0.47, 1.97, 2.28]]);
+    pane([[-0.47, 1.985, 2.26], [0.47, 1.985, 2.26]], [[-0.31, 1.61, 3.27], [0.31, 1.61, 3.27]]);
+  }
 
   // ---- lamps: each is a small glowing lens, and the bright ones also light the ground
   const lens = (color, p, r = 0.03) => { const m = new Mesh(new SphereGeometry(r, 10, 8), mat({ color: 0x222222, emissive: color, emissiveIntensity: 0, roughness: 0.3 })); m.position.set(...p); root.add(m); return m; };
