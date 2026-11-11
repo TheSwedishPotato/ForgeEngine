@@ -7,7 +7,7 @@
  * Map coordinates: x east, y north, z height above sea level (m). The
  * renderer's world is three.js-style: X = east, Y = up, Z = -north.
  */
-import { extensionSamples } from './testline.js';
+import { extensionSamples, TEST_STATIONS } from './testline.js';
 import ROUTE from '../data/route.js';
 import { gunzipBase64 } from '../data/decode.js';
 
@@ -137,6 +137,8 @@ export class Route {
       all.set(base); all.set(ext, base.length);
       this.testFrom = this.run.length;
       this.run = new Track(all, R.step, 'run');
+      // the made-up halts on the test tracks: a 120 m platform on the left
+      this.testStations = TEST_STATIONS.map(([name, u]) => ({ name, s: this.testFrom + u }));
     }
     this.left = new Track(await gunzipBase64(R.left.xyz), R.step, 'left');
     this.right = new Track(await gunzipBase64(R.right.xyz), R.step, 'right');
@@ -159,6 +161,11 @@ export class Route {
       }
       return { ref: p.ref, s0, s1, side: Math.sign(side), xy: p.xy };
     });
+    for (const st of this.testStations ?? []) {
+      const xy = [];
+      for (const [a, b] of [[-60, 1.9], [60, 1.9], [60, 6], [-60, 6]]) { const p = this.run.pos(st.s + a), h = this.run.headingAt(st.s + a); xy.push([p.x - Math.cos(h) * b, p.y + Math.sin(h) * b]); }
+      this.platforms.push({ ref: 'test', s0: st.s - 60, s1: st.s + 60, side: -1, xy });
+    }
     this.stations = R.stations.map((st) => ({ name: st.name, s: st.sRun, km: st.km, z: st.z ?? st.zFit }));
     this._stops();
     // names OpenStreetMap leaves out, where the order and lengths of the line's structures make

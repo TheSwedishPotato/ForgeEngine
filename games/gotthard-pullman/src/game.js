@@ -92,6 +92,7 @@ export class Game {
 
   /** Map position of the player's car (for the floating origin). */
   _carMap() {
+    if (this.player.mode === 'other') { const h = this.trafficGL.sets[this.player.other]?.[0]; if (h?.visible) return this.stage.toMap(h.position); }
     const m = this.player.car();
     const p = this.route.run.pos(m ? m.v.s : this.sim.train.front);
     return p;

@@ -56,8 +56,10 @@ export class Player {
     window.addEventListener('blur', () => this.keys.clear());
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
+      if (e.code === 'KeyE' && this.mode === 'other') { this.mode = 'seated'; this.other = null; return; }
       if (e.code === 'KeyE' && this.mode !== 'cab') this.toggleStand();
       if (e.code === 'KeyV') this.setOutside(this.mode !== 'outside', this.orbit ?? {});
+      if (e.code === 'KeyO') this.rideOther();
       if (this.mode === 'outside' && !this.game.driving?.on && e.code === 'BracketRight') this.orbit.vehicle = Math.min(this.game.trainGL.vehicles.length - 1, this.orbit.vehicle + 1);
       if (this.mode === 'outside' && !this.game.driving?.on && e.code === 'BracketLeft') this.orbit.vehicle = Math.max(0, this.orbit.vehicle - 1);
     });
@@ -78,7 +80,7 @@ export class Player {
   _look(dx, dy) {
     if (this.mode === 'outside') { this.orbit.yaw -= dx * 0.004; this.orbit.pitch = Math.max(-0.1, Math.min(1.4, this.orbit.pitch + dy * 0.004)); return; }
     if (this.mode === 'walking') { this.walk.yaw -= dx * this.sensitivity; this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch - dy * this.sensitivity)); return; }
-    const yl = this.mode === 'cab' ? 2.8 : 1.95;
+    const yl = this.mode === 'cab' || this.mode === 'other' ? 2.8 : 1.95;
     this.yaw = Math.max(-yl, Math.min(yl, this.yaw - dx * this.sensitivity));
     this.pitch = Math.max(-1.2, Math.min(1.2, this.pitch - dy * this.sensitivity));
   }
@@ -89,7 +91,7 @@ export class Player {
 
   /** Out in the open air: the outside camera, or standing on the observation car's open platform. */
   exposed() {
-    if (this.mode === 'outside' || this.mode === 'cab') return true;
+    if (this.mode === 'outside' || this.mode === 'cab' || this.mode === 'other') return true;
     if (this.mode !== 'walking') return false;
     const m = this.car();
     return !!m?.info?.openRear && this.walk.x < -(BODY.bodyHalf - 1.3);
@@ -170,8 +172,37 @@ export class Player {
     camera.quaternion.multiply(_q);
   }
 
+  /**
+   * Into the front of another train on the line (the next one that is out on it now, by turns;
+   * after the last, back to your seat): behind its windscreen, looking ahead as its driver does.
+   */
+  rideOther() {
+    const G = this.game, live = G.traffic.at(G.sim.clock).map((a) => G.traffic.trains.indexOf(a.train)).filter((i) => i >= 0).sort((a, b) => a - b);
+    if (G.driving?.on) return;
+    const cur = this.mode === 'other' ? this.other : -1, next = live.find((i) => i > cur);
+    if (next == null) { this.mode = 'seated'; this.other = null; G.sim.log?.(live.length ? 'Back in your seat.' : 'No other train is out on the line just now.'); return; }
+    this.mode = 'other'; this.other = next; this.yaw = 0; this.pitch = -0.05;
+    const tr = G.traffic.trains[next];
+    G.sim.log?.(`You ride in the ${tr.kind.name} (${tr.kind.what}). O for the next train, E back to your seat.`);
+  }
+
+  /** Where you ride in the other train: its first vehicle, behind the windscreen (its frame: x forward). */
+  _other(camera) {
+    const G = this.game, tr = G.traffic.trains[this.other], holder = G.trafficGL.sets[this.other]?.[0];
+    if (!tr || !holder || !G.traffic.at(G.sim.clock).some((a) => a.train === tr)) { this.rideOther(); return; }
+    const [kind, len] = tr.kind.cars[0], sleek = tr.kind.nose === 'sleek';
+    const x = kind === 'cab' ? len / 2 - (sleek ? 5.6 : 3.2) + 0.4 : len / 2 - 1.4;
+    holder.updateMatrixWorld();
+    camera.position.set(x, 2.5, -0.55).applyMatrix4(holder.matrixWorld);
+    _e.set(this.pitch, this.yaw - Math.PI / 2, 0, 'YXZ');
+    _q.setFromEuler(_e);
+    holder.getWorldQuaternion(camera.quaternion);
+    camera.quaternion.multiply(_q);
+  }
+
   /** Places the camera (call after the train's poses are up to date). */
   update(dt, camera) {
+    if (this.mode === 'other') return this._other(camera);
     if (this.mode === 'outside') return this._outside(camera);
     if (this.mode === 'cab') return this._cab(dt, camera);
     if (this.mode === 'walking') return this._walking(dt, camera);

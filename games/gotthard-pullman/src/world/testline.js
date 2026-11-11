@@ -11,6 +11,8 @@
 const KNOTS = [[0, 0], [150, 0], [300, -0.10], [1500, -0.10], [1700, -0.035], [11700, -0.035], [12000, 0.035], [18000, 0.035], [18150, 0]];
 /** Where the start screen sets the train down (the engine's front, metres beyond Göschenen): the top of each test track. */
 export const TEST_STARTS = { steep: 120, long: 1760 };
+/** Made-up halts along the test tracks (metres beyond Göschenen): a platform and the name boards, no timetable. */
+export const TEST_STATIONS = [['Steilhang', 160], ['Lawinenwald', 1780], ['Talboden', 11850], ['Gipfelblick', 18250]];
 export const gradeAt = (u) => {
   for (let i = 0; i + 1 < KNOTS.length; i++) {
     const [a, ga] = KNOTS[i], [b, gb] = KNOTS[i + 1];

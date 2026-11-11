@@ -167,6 +167,11 @@ export class Traffic {
     this.trains.push(new Scheduled(north, { name: 'goods train (northbound)', type: 'freight', start: hm(10, 16), vEnter: 12 }));
     this.trains.push(new Scheduled(north, { name: 'Astoro (northbound)', type: 'astoro', start: hm(10, 50, 30), vEnter: 16 }));
     this.trains.push(new Scheduled(north, { name: 'Giruno (northbound)', type: 'giruno', start: hm(11, 11), vEnter: 16 }));
+    // and the goods trains of the other companies, and a EuroCity
+    this.trains.push(new Scheduled(north, { name: 'DB Cargo goods train (northbound)', type: 'db', start: hm(10, 26), vEnter: 12 }));
+    this.trains.push(new Scheduled(north, { name: 'BLS Cargo goods train (northbound)', type: 'bls', start: hm(10, 38), vEnter: 12 }));
+    this.trains.push(new Scheduled(north, { name: 'EuroCity (northbound)', type: 'ec', start: hm(11, 22), vEnter: 14 }));
+    this.trains.push(new Scheduled(north, { name: 'Astoro (northbound, the next)', type: 'astoro', start: hm(11, 34), vEnter: 16 }));
   }
 
   /** The live runs (made on first use): the trains driving under the signals. */

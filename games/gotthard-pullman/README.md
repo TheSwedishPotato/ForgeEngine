@@ -145,6 +145,9 @@ types, each built from its entry in the roster:
 | Goods train | SBB Cargo Re 620 + Re 420 with container and tank wagons | 10:31, on the climb to Gurtnellen |
 | Astoro | SBB RABe 503 (ETR 610), the tilting train, 7 cars, 187.4 m | 10:58, above Gurtnellen |
 | Giruno | SBB RABe 501 (Stadler SMILE), the 250 km/h high-speed train, 11 cars, 202 m, 380 t | 11:16, past the Wassen photo stop |
+| DB Cargo goods train | DB class 193 Vectron with tank wagons | 10:39, at Gurtnellen |
+| BLS Cargo goods train | BLS Re 475 Vectron with a container train | 10:51, toward Wassen |
+| EuroCity | SBB Re 460 with seven EW IV coaches | 11:25, toward Göschenen |
 | InterRegio | SBB Re 420 with five EW IV coaches, an extra train | follows the special up after 11:31 |
 
 On this line the curves hold every one of them to about 80 km/h. The Giruno normally runs
@@ -153,6 +156,9 @@ Times and consists are estimates. Sources: [SBB RABe 501 Giruno](https://www.wik
 [Stadler SMILE data sheet](https://www.stadlerrail.com/api/docs/x/a56791c29b/smile_sbb_en.pdf).
 
 Every station has its name on SBB-blue boards beside the line, with a platform lamp by each.
+The test tracks have four made-up halts (Steilhang, Lawinenwald, Talboden, Gipfelblick), each
+with a platform and boards. Press O (or tap Other train) to ride at the front of any other train
+that is out on the line; O again for the next, E back to your seat.
 
 **The other trains** (`src/world/traffic.js`). The hourly Treno Gottardo is the Südostbahn's
 copper-red "Traverso": eight articulated cars, 150.2 m. Going south it overtakes the special at

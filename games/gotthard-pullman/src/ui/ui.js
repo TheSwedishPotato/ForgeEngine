@@ -322,6 +322,7 @@ export class Help {
       <dt>Mouse</dt><dd>look around: click the view to hold the mouse (Esc lets it go), or drag</dd>
       <dt>E</dt><dd>get up and walk the train (W A S D, Shift a bit quicker); E by your seat to sit down</dd>
       <dt>V</dt><dd>step outside: orbit the train (drag, wheel to zoom)</dd>
+      <dt>O</dt><dd>ride in another train on the line (again for the next one; E back to your seat)</dd>
       <dt>[ &nbsp;]</dt><dd>outside: the vehicle to look at</dd>
       <dt>M</dt><dd>your phone, with the map (wheel to zoom it)</dd>
       <dt>+ &nbsp;−</dt><dd>time faster or slower (the physics keeps up)</dd>
@@ -349,6 +350,7 @@ export class TouchControls {
     this.out = btn('Outside', () => P.setOutside(P.mode !== 'outside', P.orbit ?? {}));
     btn('Map', () => phone.toggle());
     this.drive = btn('Drive', () => game.driving.toggle());
+    btn('Other train', () => P.rideOther());
     // hold to walk on (or back) the way you look; drag the view to turn
     this.pad = el('div', 'walkpad');
     for (const [label, code] of [['&#9650;', 'KeyW'], ['&#9660;', 'KeyS']]) {

@@ -494,7 +494,7 @@ export class Places {
    */
   _stationSigns() {
     const R = this.route, L = R.run;
-    for (const st of R.stations) {
+    for (const st of [...R.stations, ...(R.testStations ?? [])]) {
       // the board's face: the name in white on SBB blue
       const c = document.createElement('canvas'); c.width = 512; c.height = 128;
       const g = c.getContext('2d');

@@ -11,6 +11,9 @@
  *              Milan trains over the mountain before 2016. 7 cars, 187.4 m, 250 km/h.
  *  - ir        an SBB Re 420 (Re 4/4 II: 15.41 m, 80 t, 4.7 MW, 140 km/h) with five EW IV
  *              coaches (26.4 m each): the classic Gotthard InterRegio, today an extra train.
+ *  - bls, db    BLS Cargo's Re 475 and DB Cargo's class 193, both Siemens Vectrons (18.98 m, 90 t,
+ *              6.4 MW), with container and tank trains: the international goods traffic.
+ *  - ec        an SBB Re 460 (18.5 m, 84 t, 6.1 MW) with seven EW IV coaches.
  *  - freight   two SBB Cargo engines, an Re 620 (Re 6/6: 19.31 m, 120 t, 7.85 MW) leading an
  *              Re 420 (the "Re 10/10" of the Gotthard), with container and tank wagons.
  *
@@ -50,6 +53,24 @@ export const ROSTER = {
     cars: [['loco6', 19.31], ['loco', 15.41], ...rep(4, ['container', 19.6]), ...rep(4, ['tank', 16.4]), ...rep(4, ['container', 19.6])],
     livery: { body: '#c1121f', band: '#17191c', skirt: '#2a2c30', roof: '#8f9397', loco: '#c1121f', cargo: '#1f4e9a' },
     mass: 200e3 + 12 * 70e3, power: 12.5e6, fmax: 650e3, vmax: 70 / 3.6,
+  },
+  bls: {
+    name: 'BLS Cargo goods train', what: 'BLS Cargo Re 475 (Siemens Vectron) with a container train',
+    cars: [['loco', 18.98], ...rep(14, ['container', 19.6])],
+    livery: { body: '#3f8a2f', band: '#17191c', skirt: '#2a2c30', roof: '#8f9397', loco: '#3f8a2f', cargo: '#d8d9d4' },
+    mass: 90e3 + 14 * 62e3, power: 6.4e6, fmax: 300e3, vmax: 70 / 3.6,
+  },
+  db: {
+    name: 'DB Cargo goods train', what: 'DB Cargo class 193 (Siemens Vectron) with tank wagons',
+    cars: [['loco', 18.98], ...rep(16, ['tank', 16.4])],
+    livery: { body: '#c4161c', band: '#17191c', skirt: '#2a2c30', roof: '#8f9397', loco: '#c4161c', cargo: '#c4161c' },
+    mass: 90e3 + 16 * 70e3, power: 6.4e6, fmax: 300e3, vmax: 70 / 3.6,
+  },
+  ec: {
+    name: 'EuroCity', what: 'SBB Re 460 with seven EW IV coaches',
+    cars: [['loco', 18.5], ...rep(7, ['coach', 26.4])],
+    livery: { body: '#f0f0ee', band: '#17191c', skirt: '#2a2c30', roof: '#8f9397', door: '#c8102e', loco: '#c1121f' },
+    mass: 84e3 + 7 * 43e3, power: 6.1e6, fmax: 275e3, vmax: 80 / 3.6,
   },
 };
 
