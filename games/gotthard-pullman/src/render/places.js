@@ -107,6 +107,7 @@ export class Places {
     this._roads();
     this._water();
     this._platforms();
+    this._stationSigns();
     for (const [k, t] of this.tiles) {
       const g = t.b.build(this.M);
       g.name = `places-${k}`;
@@ -480,6 +481,52 @@ export class Places {
         const [ax, ay] = pts[i], [bx, by] = pts[j], [cx2, cy2] = pts[k];
         if ((bx - ax) * (cy2 - ay) - (by - ay) * (cx2 - ax) < 0) [j, k] = [k, j];      // (counter-clockwise from above: facing up)
         b.tri('platform', this._v(t, pts[i][0], pts[i][1], top[i]), this._v(t, pts[j][0], pts[j][1], top[j]), this._v(t, pts[k][0], pts[k][1], top[k]));
+      }
+    }
+  }
+
+  // ---- station name boards ---------------------------------------------------------------------
+
+  /**
+   * Every station's name, as the SBB signs it: white on blue boards on two posts beside the line,
+   * one toward each end of the station, on whichever side has room clear of every track, with a
+   * platform lamp by each.
+   */
+  _stationSigns() {
+    const R = this.route, L = R.run;
+    for (const st of R.stations) {
+      // the board's face: the name in white on SBB blue
+      const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+      const g = c.getContext('2d');
+      g.fillStyle = '#2d327d'; g.fillRect(0, 0, 512, 128);
+      g.fillStyle = '#fff'; g.font = '600 64px Helvetica, Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      let size = 64; while (g.measureText(st.name).width > 470 && size > 30) { size -= 4; g.font = `600 ${size}px Helvetica, Arial, sans-serif`; }
+      g.fillText(st.name, 256, 66);
+      const face = new CanvasTexture(c); face.anisotropy = 8;
+      const key = `sign-${st.name}`;
+      this.M[key] = new MeshStandardMaterial({ map: face, roughness: 0.5 });
+      this.M.signpost ??= new MeshStandardMaterial({ color: new Color(0.55, 0.57, 0.58), roughness: 0.4, metalness: 0.8 });
+      this.M.signlamp ??= new MeshStandardMaterial({ color: new Color(1, 1, 1), emissive: new Color(1, 0.95, 0.85), emissiveIntensity: 1.5 });
+      for (const ds of [-45, 45]) {
+        const s = Math.max(5, Math.min(L.length - 5, st.s + ds)), p = L.pos(s), h = L.headingAt(s), rx = Math.cos(h), ry = -Math.sin(h), fx = Math.sin(h), fy = Math.cos(h);
+        // the nearest spot beside the line with no track within 3.3 m (and not on a platform's edge)
+        let spot = null;
+        for (let off = 3.6; off <= 14 && !spot; off += 0.6) for (const side of [st.platformSide || -1, -(st.platformSide || -1)]) {
+          const x = p.x + rx * side * off, y = p.y + ry * side * off;
+          if (this._nearTrack(x, y) > 3.3) { spot = { x, y, side }; break; }
+        }
+        if (!spot) continue;
+        const t = this._tile(spot.x, spot.y), b = t.b, z0 = Math.max(this.T.heightAt(spot.x, spot.y), p.z - 0.3);
+        const P = (along, up, out = 0) => this._v(t, spot.x + fx * along + rx * spot.side * out, spot.y + fy * along + ry * spot.side * out, z0 + up);
+        for (const a of [-1.0, 1.0]) b.cylinder('signpost', P(a, 0), P(a, 3.0), 0.04, 0.04, { segs: 6 });
+        // the board (2.4 m by 0.6 m), read from the track and from behind
+        const q = [P(-1.2, 2.3), P(1.2, 2.3), P(1.2, 2.9), P(-1.2, 2.9)];
+        if (spot.side > 0) { b.quad(key, q[0], q[1], q[2], q[3], [1, 0, 0, 1]); b.quad(key, q[1], q[0], q[3], q[2], [0, 0, 1, 1]); }
+        else { b.quad(key, q[1], q[0], q[3], q[2], [1, 0, 0, 1]); b.quad(key, q[0], q[1], q[2], q[3], [0, 0, 1, 1]); }
+        // a lamp on a mast beside it
+        b.cylinder('signpost', P(2.2, 0), P(2.2, 4.6), 0.05, 0.04, { segs: 6 });
+        b.cylinder('signpost', P(2.2, 4.6), P(2.2, 4.6, -0.9), 0.03, 0.03, { segs: 5 });
+        b.box('signlamp', [P(2.2, 4.5, -0.9).x - 0.18, P(2.2, 4.5, -0.9).y - 0.06, P(2.2, 4.5, -0.9).z - 0.18], [P(2.2, 4.5, -0.9).x + 0.18, P(2.2, 4.5, -0.9).y, P(2.2, 4.5, -0.9).z + 0.18]);
       }
     }
   }

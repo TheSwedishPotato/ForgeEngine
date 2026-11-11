@@ -1,3 +1,4 @@
+import { ROSTER } from './roster.js';
 /**
  * The other trains on the line: the hourly Treno Gottardo, run by the Südostbahn with its
  * "Traverso" (RABe 526, Stadler, a FLIRT derivative: eight cars in two permanently coupled
@@ -74,8 +75,10 @@ export class PathLine {
 
 /** A train running to a schedule on a path: stops (u, dwell) and a start time. */
 class Scheduled {
-  constructor(path, { name, start, stops = [], vEnter = 0, length = 150.2, mass = 330e3, power = 5.2e6, fmax = 300e3, vmax = 80 / 3.6 }) {
-    this.name = name; this.path = path; this.length = length;
+  constructor(path, { name, type = 'traverso', dir = 'north', start, stops = [], vEnter = 0 }) {
+    // what it is (roster.js): its length, and what its running needs
+    const K = ROSTER[type], { length, mass, power, fmax, vmax } = K;
+    this.name = name; this.type = type; this.kind = K; this.dir = dir; this.path = path; this.length = length;
     const n = path.n;
     const u = (i) => i * STEP;
     // the speed limit along the path: the line, the curves, a stop at each station
@@ -145,7 +148,7 @@ export class Traffic {
     const uErst = uOf(south, 'left', on('left', 'Erstfeld')), uGoe = uOf(south, 'left', on('left', 'Göschenen'));
     // (estimated times) at Erstfeld 10:32-10:33, at Göschenen a minute, then into the summit tunnel
     this.trains = [
-      new Scheduled(south, { name: 'Treno Gottardo (southbound)', start: hm(10, 31, 20), vEnter: 14, stops: [{ u: uErst, dwell: 50, dep: hm(10, 33) }, { u: uGoe, dwell: 60 }] }),
+      new Scheduled(south, { name: 'Treno Gottardo (southbound)', dir: 'south', start: hm(10, 31, 20), vEnter: 14, stops: [{ u: uErst, dwell: 50, dep: hm(10, 33) }, { u: uGoe, dwell: 60 }] }),
     ];
     // northbound: out of the summit tunnel at Göschenen, down the right-hand line
     const north = new PathLine(route, [{ track: 'right', s0: R.length, s1: 0 }], { name: 'IR 26 north' });
@@ -157,7 +160,13 @@ export class Traffic {
     this.trains.push(new Scheduled(north, { name: 'Treno Gottardo (northbound, an hour earlier)', start: hm(10, 2, 40), vEnter: 12, stops: [{ u: nGoe, dwell: 50, dep: hm(10, 4) }, { u: nErst, dwell: 60 }] }));
     const south2 = new PathLine(route, [{ track: 'left', s0: 0, s1: L.length }], { name: 'IR 26 south (next)' });
     const u2E = uOf(south2, 'left', on('left', 'Erstfeld')), u2G = uOf(south2, 'left', on('left', 'Göschenen'));
-    this.trains.push(new Scheduled(south2, { name: 'Treno Gottardo (southbound, the next hour)', start: hm(11, 31, 20), vEnter: 14, stops: [{ u: u2E, dwell: 50, dep: hm(11, 33) }, { u: u2G, dwell: 60 }] }));
+    this.trains.push(new Scheduled(south2, { name: 'InterRegio (southbound, an extra train)', type: 'ir', dir: 'south', start: hm(11, 31, 20), vEnter: 14, stops: [{ u: u2E, dwell: 50, dep: hm(11, 33) }, { u: u2G, dwell: 60 }] }));
+    // the rest of the morning's traffic down the right-hand line (estimated times), none of them stopping:
+    // a goods train; the Astoro; and the Giruno, sent over the mountain while the base tunnel is shut,
+    // which comes past the photo stop at Wassen
+    this.trains.push(new Scheduled(north, { name: 'goods train (northbound)', type: 'freight', start: hm(10, 16), vEnter: 12 }));
+    this.trains.push(new Scheduled(north, { name: 'Astoro (northbound)', type: 'astoro', start: hm(10, 50, 30), vEnter: 16 }));
+    this.trains.push(new Scheduled(north, { name: 'Giruno (northbound)', type: 'giruno', start: hm(11, 11), vEnter: 16 }));
   }
 
   /** The live runs (made on first use): the trains driving under the signals. */

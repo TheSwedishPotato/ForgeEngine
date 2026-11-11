@@ -153,7 +153,7 @@ export class Sim {
    * the rails. Afterwards the other train stands where it was struck.
    */
   _collisions() {
-    const T = this.train, M = 290e3;
+    const T = this.train;
     for (const r of this.traffic.runs) {
       if (!r.onMap || r.done) continue;
       for (const [track, a0, b0] of r.occupies()) {
@@ -166,8 +166,8 @@ export class Sim {
         const k = ahead ? 0 : T.veh.length - 1, v = T.veh[k];
         const closing = ahead ? v.v - vr : vr - v.v;
         if (closing <= 0.05) continue;
-        const m = v.mNow ?? v.mass, vc = (m * v.v + M * vr) / (m + M), first = !r.crashed;
-        if (first) this.log(`COLLISION with the ${r.train.name.includes('south') ? 'southbound' : 'northbound'} Treno Gottardo at ${(closing * 3.6).toFixed(0)} km/h!`);
+        const m = v.mNow ?? v.mass, M = r.train.mass, vc = (m * v.v + M * vr) / (m + M), first = !r.crashed;
+        if (first) this.log(`COLLISION with the ${r.train.dir}bound ${r.train.kind.name} at ${(closing * 3.6).toFixed(0)} km/h!`);
         r.crashed = true; r.v = 0;
         // the impact shares the momentum; after it the wreck of the other train is a dead weight in the way
         v.v = first ? vc : ahead ? Math.min(v.v, 0) : Math.max(v.v, 0);

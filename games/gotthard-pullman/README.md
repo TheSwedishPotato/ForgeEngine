@@ -136,6 +136,24 @@ doze, drink coffee in the diner, and photograph the gorges from the window. You 
 too: walk the aisles and corridors, through the gangways, out onto the observation car's open
 platform.
 
+**The roster** (`src/world/roster.js`, `src/render/trafficGL.js`). The other trains are real
+types, each built from its entry in the roster:
+
+| Train | What it is | When it passes |
+| --- | --- | --- |
+| Treno Gottardo | SOB RABe 526 Traverso, 8 cars, 150.2 m, copper | 10:22, overtakes at Gurtnellen 10:43, 11:10 |
+| Goods train | SBB Cargo Re 620 + Re 420 with container and tank wagons | 10:31, on the climb to Gurtnellen |
+| Astoro | SBB RABe 503 (ETR 610), the tilting train, 7 cars, 187.4 m | 10:58, above Gurtnellen |
+| Giruno | SBB RABe 501 (Stadler SMILE), the 250 km/h high-speed train, 11 cars, 202 m, 380 t | 11:16, past the Wassen photo stop |
+| InterRegio | SBB Re 420 with five EW IV coaches, an extra train | follows the special up after 11:31 |
+
+On this line the curves hold every one of them to about 80 km/h. The Giruno normally runs
+through the base tunnel; it comes over the mountain when the tunnel is shut, as in 2023–24.
+Times and consists are estimates. Sources: [SBB RABe 501 Giruno](https://www.wikiwand.com/en/articles/Giruno),
+[Stadler SMILE data sheet](https://www.stadlerrail.com/api/docs/x/a56791c29b/smile_sbb_en.pdf).
+
+Every station has its name on SBB-blue boards beside the line, with a platform lamp by each.
+
 **The other trains** (`src/world/traffic.js`). The hourly Treno Gottardo is the Südostbahn's
 copper-red "Traverso": eight articulated cars, 150.2 m. Going south it overtakes the special at
 Gurtnellen on the other main line, crossing over before the station and back after; the

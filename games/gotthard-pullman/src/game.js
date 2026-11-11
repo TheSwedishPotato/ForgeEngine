@@ -110,7 +110,8 @@ export class Game {
     if (this._passed.has(tr)) return;
     this._passed.add(tr);
     const standing = Math.abs(this.sim.train.speed) < 0.2;
-    this.sim.log(tr.name.includes('south') ? (standing ? 'The Treno Gottardo overtakes us on the other track.' : 'The Treno Gottardo goes by on the other track.') : 'The northbound Treno Gottardo comes down past us.');
+    const what = tr.type === 'traverso' ? 'Treno Gottardo' : `${tr.kind.name} (${tr.kind.what})`;
+    this.sim.log(tr.dir === 'south' ? (standing ? `The ${what} overtakes us on the other track.` : `The ${what} goes by on the other track.`) : `The northbound ${what} comes down past us.`);
   }
 
   /** One frame of real time dt (s). */
