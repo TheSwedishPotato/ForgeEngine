@@ -160,6 +160,12 @@ The test tracks have four made-up halts (Steilhang, Lawinenwald, Talboden, Gipfe
 with a platform and boards. Press O (or tap Other train) to ride at the front of any other train
 that is out on the line; O again for the next, E back to your seat.
 
+The start screen can also put you aboard one of them as a passenger: Ride the Giruno, the Astoro,
+the Treno Gottardo, the EuroCity or the InterRegio. You sit in a window seat of its second car,
+in a simple cabin (seats either side of the aisle, light strips, the window band clear); E to
+stand and walk the aisle through the cars with W/S, E again to sit. When the train leaves the
+line you are back aboard the steam special.
+
 **The other trains** (`src/world/traffic.js`). The hourly Treno Gottardo is the Südostbahn's
 copper-red "Traverso": eight articulated cars, 150.2 m. Going south it overtakes the special at
 Gurtnellen on the other main line, crossing over before the station and back after; the

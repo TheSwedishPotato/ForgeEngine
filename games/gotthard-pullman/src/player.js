@@ -56,6 +56,7 @@ export class Player {
     window.addEventListener('blur', () => this.keys.clear());
     window.addEventListener('keydown', (e) => {
       this.keys.add(e.code);
+      if (e.code === 'KeyE' && this.mode === 'other' && this.inside) { this._toggleInside(); return; }
       if (e.code === 'KeyE' && this.mode === 'other') { this.mode = 'seated'; this.other = null; return; }
       if (e.code === 'KeyE' && this.mode !== 'cab') this.toggleStand();
       if (e.code === 'KeyV') this.setOutside(this.mode !== 'outside', this.orbit ?? {});
@@ -180,10 +181,60 @@ export class Player {
     const G = this.game, live = G.traffic.at(G.sim.clock).map((a) => G.traffic.trains.indexOf(a.train)).filter((i) => i >= 0).sort((a, b) => a - b);
     if (G.driving?.on) return;
     const cur = this.mode === 'other' ? this.other : -1, next = live.find((i) => i > cur);
-    if (next == null) { this.mode = 'seated'; this.other = null; G.sim.log?.(live.length ? 'Back in your seat.' : 'No other train is out on the line just now.'); return; }
-    this.mode = 'other'; this.other = next; this.yaw = 0; this.pitch = -0.05;
+    if (next == null) { this.mode = 'seated'; this.other = null; this.inside = null; G.sim.log?.(live.length ? 'Back in your seat.' : 'No other train is out on the line just now.'); return; }
+    this.mode = 'other'; this.other = next; this.yaw = 0; this.pitch = -0.05; this.inside = null;
     const tr = G.traffic.trains[next];
     G.sim.log?.(`You ride in the ${tr.kind.name} (${tr.kind.what}). O for the next train, E back to your seat.`);
+  }
+
+  /**
+   * Aboard another train as a passenger: in a window seat of one of its cars (the start screen's
+   * choice), facing the way it goes; E to stand up and walk the aisle through the cars (W/S), E
+   * again to sit down in the nearest seat.
+   */
+  rideIn(i) {
+    const G = this.game, I = G.trafficGL.interior(i), first = I.seats[Math.min(1, I.seats.length - 1)];
+    if (!first) return this.rideOther();
+    this.mode = 'other'; this.other = i; this.yaw = 0.9; this.pitch = -0.08;      // (half toward the window)
+    this.inside = { k: first.k, x: first.xs[Math.floor(first.xs.length / 2)], z: -1.0, seated: true };
+    const tr = G.traffic.trains[i];
+    G.sim.log?.(`You are aboard the ${tr.kind.name} (${tr.kind.what}). E to stand up and walk the aisle (W/S), E again to sit down.`);
+  }
+
+  _inside(dt, camera) {
+    const G = this.game, tr = G.traffic.trains[this.other], set = G.trafficGL.sets[this.other], I = set?.interior, A = this.inside;
+    if (!tr || !set || !G.traffic.at(G.sim.clock).some((a) => a.train === tr)) {
+      this.mode = 'seated'; this.other = null; this.inside = null;
+      G.sim.log?.(`The ${tr?.kind.name ?? 'train'} has gone off the line; you are back aboard the steam special.`);
+      return;
+    }
+    if (!A.seated) {
+      // along the aisle, through the gangways from car to car
+      let fwd = 0;
+      if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) fwd += 1;
+      if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) fwd -= 1;
+      const dir = Math.cos(this.yaw) >= 0 ? 1 : -1;
+      A.x += fwd * dir * 1.2 * dt;
+      const S = I.seats.find((q) => q.k === A.k);
+      if (A.x > S.x1 - 0.3) { const nx = I.seats.find((q) => q.k === A.k - 1); if (nx) { A.k = nx.k; A.x = nx.x0 + 0.4; } else A.x = S.x1 - 0.3; }
+      if (A.x < S.x0 + 0.3) { const nx = I.seats.find((q) => q.k === A.k + 1); if (nx) { A.k = nx.k; A.x = nx.x1 - 0.4; } else A.x = S.x0 + 0.3; }
+      A.z = 0;
+    }
+    const holder = set[A.k];
+    holder.updateMatrixWorld();
+    camera.position.set(A.seated ? A.x - 0.05 : A.x, A.seated ? 2.05 : 2.55, A.z).applyMatrix4(holder.matrixWorld);
+    _e.set(this.pitch, this.yaw - Math.PI / 2, 0, 'YXZ');
+    _q.setFromEuler(_e);
+    holder.getWorldQuaternion(camera.quaternion);
+    camera.quaternion.multiply(_q);
+  }
+
+  _toggleInside() {
+    const A = this.inside, I = this.game.trafficGL.sets[this.other].interior;
+    if (A.seated) { A.seated = false; return; }
+    const S = I.seats.find((q) => q.k === A.k);
+    A.x = S.xs.reduce((a, x) => (Math.abs(x - A.x) < Math.abs(a - A.x) ? x : a), S.xs[0]);
+    A.z = -1.0; A.seated = true;
   }
 
   /** Where you ride in the other train: its first vehicle, behind the windscreen (its frame: x forward). */
@@ -202,7 +253,7 @@ export class Player {
 
   /** Places the camera (call after the train's poses are up to date). */
   update(dt, camera) {
-    if (this.mode === 'other') return this._other(camera);
+    if (this.mode === 'other') return this.inside ? this._inside(dt, camera) : this._other(camera);
     if (this.mode === 'outside') return this._outside(camera);
     if (this.mode === 'cab') return this._cab(dt, camera);
     if (this.mode === 'walking') return this._walking(dt, camera);

@@ -40,7 +40,8 @@ async function ride() {
   loading('Laying the line…');
   // a test track: the trip run ahead a little, then the train set down at the top of it
   const test = opts.t?.startsWith('test') ? (opts.t === 'test-long' ? 'long' : 'steep') : null;
-  const join = hms(test ? '10:20' : opts.t);
+  const rideType = opts.t?.startsWith('ride-') ? opts.t.slice(5) : null;     // aboard one of the other trains
+  const join = hms(test ? '10:20' : rideType ? '10:12' : opts.t);
   const game = await Game.create(canvas, {
     weather: opts.weather, quality: opts.quality, startClock: Math.min(join, hms('10:12')),
     seat: { car: opts.car, chair: opts.chair }, onProgress: (t) => loading(t),
@@ -51,6 +52,19 @@ async function ride() {
     loading(`Running ahead to ${opts.t}…`);
     await new Promise((r) => setTimeout(r, 30));
     while (game.sim.clock < join) { game.sim.advance(Math.min(30, join - game.sim.clock)); if ((game.sim.clock | 0) % 120 < 30) { loading(`Running ahead to ${opts.t}… ${fmt(game.sim.clock)}`); await new Promise((r) => setTimeout(r, 0)); } }
+  }
+  if (rideType) {
+    // the first of that type out on the line after 10:12: run ahead until it is under way, then board it
+    const trains = game.traffic.trains, i = trains.findIndex((tr) => tr.type === rideType && tr.t[0] >= hms('10:12'));
+    if (i >= 0) {
+      const when = trains[i].t[0] + 30;
+      loading(`Running ahead to the ${trains[i].kind.name}…`);
+      await new Promise((r) => setTimeout(r, 30));
+      while (game.sim.clock < when) { game.sim.advance(Math.min(30, when - game.sim.clock)); if ((game.sim.clock | 0) % 120 < 30) { loading(`Running ahead to the ${trains[i].kind.name}… ${fmt(game.sim.clock)}`); await new Promise((r) => setTimeout(r, 0)); } }
+      game.trafficGL.update(game.sim.clock, game.stage.camera);
+      game.player.rideIn(i);
+      game._recentre(0);
+    }
   }
   if (test) {
     // standing at the top of the test track, brakes on, you at the controls

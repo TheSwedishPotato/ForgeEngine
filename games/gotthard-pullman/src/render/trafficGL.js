@@ -203,6 +203,61 @@ export class TrafficGL {
     });
   }
 
+  /**
+   * The inside of train i's passenger cars (made the first time someone rides in it): floor,
+   * walls below and above the window band (the band itself is the glass, clear from inside),
+   * ceiling with its light strips, end walls with the gangway door, and pairs of seats either
+   * side of the aisle at a metre's pitch, all in the car's own frame. Returns where its seats are.
+   */
+  interior(i) {
+    const set = this.sets[i], tr = this.traffic.trains[i], T = ROSTER[tr.type];
+    if (set.interior) return set.interior;
+    const M = mats(tr.type);
+    M.seat ??= new MeshStandardMaterial({ color: new Color(tr.type === 'giruno' || tr.type === 'astoro' ? '#3b3f46' : tr.type === 'traverso' ? '#5a2a22' : '#2c4a7a'), roughness: 0.85 });
+    M.floor ??= new MeshStandardMaterial({ color: new Color('#4a4c50'), roughness: 0.9, emissive: new Color('#4a4c50'), emissiveIntensity: 0.25 });
+    M.wall ??= new MeshStandardMaterial({ color: new Color('#e4e2dc'), roughness: 0.7, emissive: new Color('#e4e2dc'), emissiveIntensity: 0.3 });
+    // (the cabin lamps: the light strips above, and their glow on everything in the car)
+    M.seat.emissive = M.seat.color.clone(); M.seat.emissiveIntensity = 0.3;
+    const seats = [];
+    set.forEach((holder, k) => {
+      const [kind, len] = T.cars[k];
+      if (!['cab', 'cabR', 'car', 'coach'].includes(kind)) return;
+      const b = new Builder(), h = len / 2, w = HALF - 0.08, FL = 0.9, CE = 3.2;
+      const nose = kind === 'cab' || kind === 'cabR' ? (T.nose === 'sleek' ? 5.6 : 3.2) + 1.4 : 0;
+      // in the holder's frame (x toward the train's front): the rear cab's nose is at -x
+      const x0 = -h + 0.45 + (kind === 'cabR' ? nose : 0), x1 = h - 0.45 - (kind === 'cab' ? nose : 0);
+      b.box('floor', [x0, FL - 0.08, -w], [x1, FL, w]);
+      b.box('wall', [x0, CE, -w], [x1, CE + 0.05, w]);
+      for (const z of [-w, w]) {
+        b.box('wall', [x0, FL, z - 0.03], [x1, 1.28, z + 0.03]);
+        b.box('wall', [x0, 2.37, z - 0.03], [x1, CE, z + 0.03]);
+      }
+      for (const x of [x0, x1]) {                                                   // end walls, a door in the middle
+        b.box('wall', [x - 0.03, FL, -w], [x + 0.03, CE, -0.45]);
+        b.box('wall', [x - 0.03, FL, 0.45], [x + 0.03, CE, w]);
+        b.box('wall', [x - 0.03, 2.95, -0.45], [x + 0.03, CE, 0.45]);
+      }
+      for (const z of [-0.75, 0.75]) b.box('light', [x0 + 0.3, CE - 0.02, z - 0.08], [x1 - 0.3, CE, z + 0.08]);
+      const list = [];
+      for (let x = x1 - 1.2; x > x0 + 0.8; x -= 1.0) {
+        for (const z of [-1.0, -0.5, 0.5, 1.0]) {
+          b.box('seat', [x - 0.25, FL + 0.4, z - 0.24], [x + 0.25, FL + 0.48, z + 0.24]);                 // the cushion
+          b.box('seat', [x - 0.32, FL + 0.48, z - 0.24], [x - 0.24, FL + 1.05, z + 0.24]);                // the back (facing forward)
+          b.box('seat', [x - 0.04, FL, z - 0.06], [x + 0.04, FL + 0.4, z + 0.06]);
+        }
+        list.push(x);
+      }
+      // (the dim panel behind the glass that stands for the interior from outside: not when one is inside)
+      for (const m of holder.children[0].children) if (m.name === 'light') m.visible = false;
+      const g = b.build(M);
+      g.name = `${tr.type}-interior-${k}`;
+      holder.add(g);
+      seats.push({ k, xs: list, x0, x1 });
+    });
+    set.interior = { seats };
+    return set.interior;
+  }
+
   /** The nearest point of any of these trains to p (world) and its speed: for the sound. */
   nearest(p) {
     let best = null;
